@@ -1,0 +1,50 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    @apply bg-[#f1f5f9] text-[#0f172a] transition-colors duration-300 antialiased;
+  }
+  /* Professional Dark Mode (Slate-900) */
+  :root.dark body {
+    @apply bg-[#0f172a] text-[#e2e8f0];
+  }
+}
+
+/* Card Styling - Glassmorphic hint in Dark Mode */
+.monday-card {
+  @apply bg-white border border-slate-200 rounded-lg shadow-sm transition-all duration-300;
+}
+:root.dark .monday-card {
+  @apply bg-[#1e293b] border-slate-700 shadow-none;
+}
+
+/* Clean Input Fields */
+.input-field {
+  @apply w-full px-3 py-2 text-sm rounded border border-slate-300 bg-white focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all;
+}
+:root.dark .input-field {
+  @apply bg-[#334155] border-slate-600 text-white placeholder-slate-400 focus:ring-blue-400;
+}
+
+/* Professional Table Styles */
+.admin-table-header {
+  @apply px-4 py-3 text-left text-xs font-bold text-slate-500 uppercase tracking-wider bg-slate-50 border-b border-slate-200;
+}
+:root.dark .admin-table-header {
+  @apply bg-[#0f172a] text-slate-400 border-slate-700;
+}
+
+.admin-table-row {
+  @apply border-b border-slate-100 hover:bg-slate-50 transition-colors;
+}
+:root.dark .admin-table-row {
+  @apply border-slate-700 hover:bg-slate-800/50;
+}
+
+/* Scrollbars */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 3px; }
+:root.dark ::-webkit-scrollbar-thumb { background: #475569; }

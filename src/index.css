@@ -1,0 +1,45 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  font-family: Inter, system-ui, Avenir, Helvetica, Arial, sans-serif;
+  line-height: 1.5;
+  font-weight: 400;
+  color-scheme: light dark;
+  
+  /* Safe Area Variables */
+  --safe-area-inset-left: env(safe-area-inset-left);
+  --safe-area-inset-right: env(safe-area-inset-right);
+  
+  background-color: #f8fafc; 
+}
+
+html.dark {
+  background-color: #0f172a; 
+}
+
+/* FIX: Changed height to min-height to allow scrolling */
+html, body {
+  width: 100%;
+  min-height: 100dvh; /* Allows growing if content is tall */
+  overflow-x: hidden; /* Keeps the horizontal fix */
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  display: flex;
+  flex-direction: column;
+}
+
+#root {
+  width: 100%;
+  max-width: 100%;
+  min-height: 100dvh;
+  margin: 0;
+  padding: 0;
+  text-align: left;
+  display: flex;
+  flex-direction: column;
+}
