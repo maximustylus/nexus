@@ -80,7 +80,7 @@ export default function AuraPulseBot({ user }) {
     const { isDemo } = useNexus();
 
     // ── State ─────────────────────────────────────────────────────────────────
-    const [,          set]          = useState(false);
+    const [isOpen, setIsOpen] = useState(false);
     const [view,            setView]            = useState('SELECT');
     const [selectedPersona, setSelectedPersona] = useState(null);
     const [messages,        setMessages]        = useState([]);
