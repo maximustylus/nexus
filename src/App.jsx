@@ -244,34 +244,33 @@ function NexusApp() {
     return [tasks, projects];
   };
 
-  // 4. CLINICAL LOAD (Fixes the Empty Bar Graphs)
+ // 4. CLINICAL LOAD (Fixes the Empty Bar Graphs)
   const getClinicalData = (staffId) => {
-    const isArchive = currentView === 'archive' && archiveYear === '2025';
+    // Force string comparison to guarantee it activates in Archive Mode
+    const isArchive = currentView === 'archive' && String(archiveYear) === '2025';
 
     if (isArchive) {
-      // Find the staff member from the imported JSON
-      const staffMember = teamData.find(s => 
-        s.id === staffId || (s.staff_name && s.staff_name.toLowerCase() === staffId.toLowerCase())
+      // 1. Hunt down the staff member in the proven filteredTeamData
+      const staffMember = filteredTeamData.find(s => 
+        (s.id && String(s.id).toLowerCase() === String(staffId).toLowerCase()) || 
+        (s.staff_name && String(s.staff_name).toLowerCase() === String(staffId).toLowerCase())
       );
 
-      // Search their projects for the specific clinical metric
-      const clinicalProject = staffMember?.projects?.find(p => 
-        p.name === "Clinical Load Fulfillment" || 
-        (p.title && p.title.toLowerCase().includes("clinical load")) ||
-        (p.metric && (p.metric.includes('hrs/week') || p.metric.includes('%')))
+      // 2. Find the exact task handling the clinical load
+      const clinicalItem = staffMember?.projects?.find(p => 
+        p.title && String(p.title).toLowerCase().includes("clinical load")
       );
 
-      if (clinicalProject && clinicalProject.metric) {
-        // Extract the raw number (e.g., pulling "15" out of "15%")
-        const match = clinicalProject.metric.match(/(\d+(\.\d+)?)/);
-        const metricValue = match ? parseFloat(match[0]) : 0;
-        
-        // Spread that single yearly metric across all 12 bars so the graph renders
-        return MONTHS.map(m => ({ name: m, value: metricValue }));
+      // 3. If it finds our new JSON array, map those exact 12 numbers to the bars
+      if (clinicalItem && Array.isArray(clinicalItem.monthly_hours)) {
+        return MONTHS.map((m, i) => ({ 
+            name: m, 
+            value: clinicalItem.monthly_hours[i] || 0 
+        }));
       }
     }
 
-    // Live Mode Fallback
+    // Live Mode Fallback (2026)
     const data = staffLoads[staffId] || Array(12).fill(0);
     return MONTHS.map((m, i) => ({ name: m, value: data[i] || 0 }));
   };
