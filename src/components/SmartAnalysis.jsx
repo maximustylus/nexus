@@ -2,10 +2,12 @@ import React, { useState } from 'react';
 import { db } from '../firebase'; 
 import { doc, setDoc } from 'firebase/firestore'; 
 import { X, ShieldCheck, Sparkles } from 'lucide-react';
+// 1. IMPORT SECURE CLOUD FUNCTIONS
+import { getFunctions, httpsCallable } from 'firebase/functions';
 
-// --- CONFIGURATION ---
-// FIX: Use the secure environment variable
-const API_KEY = import.meta.env.VITE_GEMINI_API_KEY;
+// 2. CONNECT TO BACKEND (No API Keys here!)
+const functions = getFunctions(undefined, 'us-central1');
+const generateSmartAnalysis = httpsCallable(functions, 'generateSmartAnalysis');
 
 const STAFF_PROFILES = {
     "Alif":      { role: "Senior CEP", grade: "JG14", focus: "Leadership, Management, Clinical, Education, Research, " },
@@ -34,62 +36,21 @@ const SmartAnalysis = ({ teamData, staffLoads, onClose }) => {
                 projects: (staff.projects || []).filter(p => (p.year || '2026') === targetYear)
             }));
 
-            // 2. CONNECT TO GEMINI
-            setStatus('Connecting to Gemini...');
-            const listUrl = `https://generativelanguage.googleapis.com/v1beta/models?key=${API_KEY}`;
-            const listResponse = await fetch(listUrl);
-            const listData = await listResponse.json();
-            if (!listResponse.ok) throw new Error(`Connection Error: ${listData.error?.message}`);
-
-            const chatModels = listData.models.filter(m => m.supportedGenerationMethods.includes("generateContent"));
-            let bestModel = chatModels.find(m => m.name.includes('flash')) || chatModels.find(m => m.name.includes('pro')) || chatModels[0];
-
-            // 3. SEND PROMPT
-            setStatus(`Analyzing ${targetYear} Performance...`);
-            const promptText = `
-                ACT AS: Senior Clinical Lead at KKH.
-                CONTEXT: Annual Performance Review for Year ${targetYear}.
-                DATA: ${JSON.stringify(STAFF_PROFILES)}
-                WORKLOAD: ${JSON.stringify(yearData)}
-                CLINICAL_LOADS: ${JSON.stringify(staffLoads)}
-
-                TASK: Generate TWO reports for ${targetYear}.
-                1. PRIVATE_EXECUTIVE_BRIEF (For Leads): Audit staff against their JG11-JG14 grades based on this year's data.
-                2. PUBLIC_TEAM_PULSE (For Staff): Celebrate ${targetYear} wins and "Joy at Work".
-
-                CRITICAL OUTPUT FORMAT:
-                Return ONLY valid JSON.
-                {
-                    "private": "Report text...",
-                    "public": "Report text..."
-                }
-            `;
-
-            const generateUrl = `https://generativelanguage.googleapis.com/v1beta/${bestModel.name}:generateContent?key=${API_KEY}`;
-            const genResponse = await fetch(generateUrl, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ contents: [{ parts: [{ text: promptText }] }] })
+            // 2. CONNECT TO SECURE FIREBASE VAULT
+            setStatus('Connecting to Secure Neural Link...');
+            
+            const response = await generateSmartAnalysis({
+                targetYear,
+                staffProfiles: STAFF_PROFILES,
+                yearData,
+                staffLoads
             });
 
-            const genData = await genResponse.json();
-            if (!genResponse.ok) throw new Error(genData.error?.message);
-
-            // 4. PARSE JSON
-            let rawText = genData.candidates[0].content.parts[0].text;
-            // Clean up any markdown code blocks
-            rawText = rawText.replace(/```json/g, '').replace(/```/g, '').trim();
-
-            const jsonMatch = rawText.match(/\{[\s\S]*\}/);
-            if (!jsonMatch) throw new Error("AI did not return valid JSON.");
-            
-            const parsedObj = JSON.parse(jsonMatch[0]);
-            
-            // Handle case sensitivity just in case
-            const privateText = parsedObj.private || parsedObj.Private || "Error generating private report.";
-            const publicText = parsedObj.public || parsedObj.Public || "Error generating public report.";
-
-            setResult({ private: privateText, public: publicText });
+            // 3. APPLY RESULTS
+            setResult({ 
+                private: response.data.private, 
+                public: response.data.public 
+            });
 
         } catch (err) {
             console.error(err);
@@ -149,7 +110,7 @@ const SmartAnalysis = ({ teamData, staffLoads, onClose }) => {
                                 
                                 <button onClick={handleAnalyze} disabled={loading} className="w-full py-4 bg-slate-900 text-white font-black rounded-xl uppercase tracking-tighter hover:bg-slate-800 transition-all flex justify-center items-center gap-2">
                                     {loading ? (
-                                        <><span>Running Analysis...</span> <Sparkles className="animate-spin" size={16}/></>
+                                        <><span>{status}</span> <Sparkles className="animate-spin" size={16}/></>
                                     ) : (
                                         `Generate ${targetYear} Report`
                                     )}
