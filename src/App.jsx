@@ -244,7 +244,7 @@ function NexusApp() {
     return [tasks, projects];
   };
 
-// 4. CLINICAL LOAD (Fixes Ying Xian's Blank Chart)
+// 4. CLINICAL LOAD 
   const getClinicalData = (staffId) => {
     // Force string comparison to guarantee it activates in Archive Mode
     const isArchive = currentView === 'archive' && String(archiveYear) === '2025';
@@ -452,71 +452,56 @@ function NexusApp() {
         </div>
       </div>
 
-      {/* Row 3: Individual Clinical Load (FIXED for both Live and Demo) */}
+{/* Row 3: Individual Clinical Load (UNIFIED & FIXED) */}
       <div className="md:col-span-2 bg-white dark:bg-slate-800 p-6 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-700 mt-6">
         <h2 className="text-sm font-bold text-slate-400 uppercase tracking-wider mb-6">Individual Clinical Load</h2>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           
-          {/* LOGIC SPLIT:
-              - LIVE: Iterate through TEAM_DIRECTORY (which has IDs)
-              - DEMO: Iterate through MOCK_STAFF (where Name = ID)
-          */}
-          {isDemo 
-            ? activeStaffList.map((mockName) => (
-                <div key={mockName} className="bg-slate-50 dark:bg-slate-900/50 p-4 rounded-xl border border-slate-200 dark:border-slate-700">
-                  <div className="flex justify-between items-center mb-4">
-                    <h3 className="font-bold text-slate-700 dark:text-slate-200">{mockName}</h3>
-                    <span className="text-xs font-bold px-2 py-1 bg-orange-100 text-orange-700 rounded">
-                      Total: {(staffLoads[mockName] || []).reduce((a, b) => a + b, 0)}
-                    </span>
-                  </div>
-                  <div className="h-32">
-                    <ResponsiveContainer width="100%" height="100%">
-                      <BarChart data={getClinicalData(mockName)}>
-                        <Tooltip content={<CustomBarTooltip />} cursor={{fill: 'rgba(0,0,0,0.05)', radius: 4}} />
-                        <Bar dataKey="value" radius={[4, 4, 0, 0]}>
-                          {getClinicalData(mockName).map((entry, index) => (
-                            <Cell key={`cell-${index}`} fill={CLINICAL_GRADIENT[index]} />
+          {/* UNIFIED LOGIC: Handles both Demo and Live perfectly */}
+          {(isDemo ? activeStaffList.map(name => ({ id: name, name })) : TEAM_DIRECTORY.filter(m => m.role === 'staff' || m.id === 'alif')).map((member) => {
+            
+            // 🧮 1. DO THE MATH INSIDE THE LOOP USING "member.id"
+            const chartData = getClinicalData(member.id);
+            const yearlyTotal = chartData.reduce((sum, month) => sum + (month.value || 0), 0);
+
+            // 🖼️ 2. RENDER THE CARD
+            return (
+              <div key={member.id} className="bg-slate-50 dark:bg-slate-900/50 p-4 rounded-xl border border-slate-200 dark:border-slate-700">
+                <div className="flex justify-between items-center mb-4">
+                  <h3 className="font-bold text-slate-700 dark:text-slate-200">{member.name}</h3>
+                  
+                  {/* 👇 THE DYNAMIC TOTAL BADGE */}
+                  <span className="text-[10px] font-black uppercase text-orange-500 bg-orange-50 dark:bg-orange-900/30 px-2 py-0.5 rounded-full">
+                    Total: {Math.round(yearlyTotal)} hours
+                  </span>
+                </div>
+                
+                <div className="h-32 mt-4">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={chartData}>
+                      
+                      {/* 🔒 THE Y-AXIS LOCK */}
+                      <YAxis domain={[0, 135]} hide={true} />
+                      
+                      {/* FIXED TOOLTIP */}
+                      <Tooltip cursor={{fill: 'rgba(0,0,0,0.05)', radius: 4}} content={<CustomBarTooltip />} />
+                      
+                      <Bar dataKey="value" radius={[4, 4, 0, 0]}>
+                          {chartData.map((entry, index) => (
+                              // FIXED COLORS (Using your existing CLINICAL_GRADIENT)
+                              <Cell key={`cell-${index}`} fill={CLINICAL_GRADIENT[index] || '#FFCC99'} />
                           ))}
-                        </Bar>
-                      </BarChart>
-                    </ResponsiveContainer>
-                  </div>
-                  <div className="flex justify-between mt-2 px-1">
-                    {['Jan', 'Apr', 'Jul', 'Oct'].map(m => <span key={m} className="text-[10px] text-slate-400 font-bold">{m}</span>)}
-                  </div>
+                      </Bar>
+                    </BarChart>
+                  </ResponsiveContainer>
                 </div>
-              ))
-            : TEAM_DIRECTORY.filter(m => m.role === 'staff' || m.id === 'alif').map((member) => (
-                <div key={member.id} className="bg-slate-50 dark:bg-slate-900/50 p-4 rounded-xl border border-slate-200 dark:border-slate-700">
-                  <div className="flex justify-between items-center mb-4">
-                    <h3 className="font-bold text-slate-700 dark:text-slate-200">{member.name}</h3>
-                    <span className="text-xs font-bold px-2 py-1 bg-orange-100 text-orange-700 rounded">
-                      Total: {(staffLoads[member.id] || []).reduce((a, b) => a + b, 0)}
-                    </span>
-                  </div>
-                 <div className="h-32 mt-4">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={getClinicalData(staff.id)}>
-                <YAxis domain={[0, 135]} hide={true} />
-                <Tooltip cursor={{fill: 'transparent'}} content={<CustomTooltip />} />
-                <Bar 
-                    dataKey="value" 
-                    radius={[4, 4, 0, 0]}
-                >
-                    {getClinicalData(staff.id).map((entry, index) => (
-                        <Cell key={`cell-${index}`} fill={getColorForValue(entry.value)} />
-                    ))}
-                </Bar>
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-                  <div className="flex justify-between mt-2 px-1">
-                    {['Jan', 'Apr', 'Jul', 'Oct'].map(m => <span key={m} className="text-[10px] text-slate-400 font-bold">{m}</span>)}
-                  </div>
+
+                <div className="flex justify-between mt-2 px-1">
+                  {['Jan', 'Apr', 'Jul', 'Oct'].map(m => <span key={m} className="text-[10px] text-slate-400 font-bold">{m}</span>)}
                 </div>
-              ))
-          }
+              </div>
+            );
+          })}
         </div>
       </div>
 
