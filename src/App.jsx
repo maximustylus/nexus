@@ -110,79 +110,28 @@ function NexusApp() {
   const activeStaffList = isDemo ? MOCK_STAFF_NAMES : STAFF_LIST;
   const activeStaffIds = isDemo ? MOCK_STAFF_NAMES : STAFF_IDS; // For mock, IDs are names.
 
-  // --- EFFECT: BROWSER TAB TITLE ---
-  useEffect(() => {
-    document.title = isDemo ? "NEXUS - Sandbox" : "NEXUS - Smart Dashboard";
-  }, [isDemo]);
-
-  // --- EFFECT: AUTH LISTENER ---
-  useEffect(() => {
-    const unsubscribe = auth.onAuthStateChanged((u) => {
-      if (u) {
-        // 🕵️‍♂️ Look up the user in our TEAM_DIRECTORY
-        const profile = checkAccess(u.email);
-        
-        if (profile) {
-          // ✅ They are on the list! Store the full profile (Role + Name)
-          setUser(profile);
-        } else {
-          // ❌ Not on the list? Boot them out just in case.
-          setUser(null);
-          signOut(auth);
-        }
-      } else {
-        setUser(null);
-      }
-      setAuthLoading(false);
-    });
-    return () => unsubscribe();
-  }, []);
-
-  // --- EFFECT: DATA FETCHING ---
+// --- EFFECT: DATA FETCHING (v1.5 Archive-Enabled) ---
   useEffect(() => {
     let unsubStaff, unsubAttendance;
     const unsubLoads = [];
 
     if (isDemo) {
       console.log("🧪 [NEXUS] Loading Marvel Universe...");
+      // ... (Keep your existing isDemo logic here)
       
-      // 1. Generate Team Data (WITH IDs)
-      const mockTeam = activeStaffList.map(name => {
-         const staffProjects = MOCK_PROJECTS.filter(p => p.lead === name);
-         return { 
-           id: name, // In Mock Mode, ID is the Name (e.g. 'Tony Stark')
-           staff_name: name, 
-           projects: staffProjects.map(p => ({
-             ...p,
-             item_type: 'Project',
-             domain_type: p.domain.toUpperCase(),
-             status_dots: p.progress > 90 ? 5 : p.progress > 50 ? 3 : 2
-           }))
-         };
-      });
-      setTeamData(mockTeam);
-
-      // 2. Generate Random Staff Loads
-      const mockLoads = {};
-      activeStaffList.forEach(staff => {
-        // In Mock Mode, ID is Name, so key by Name
-        mockLoads[staff] = Array.from({length: 12}, () => Math.floor(Math.random() * (120 - 60) + 60)); 
-      });
-      setStaffLoads(mockLoads);
-
-      // 3. Mock Attendance
-      setAttendanceData({ 
-        '2026': [150, 165, 180, 175, 190, 195, 200, 185, 190, 210, 205, 190] 
-      });
-
     } else {
       console.log("🔌 [NEXUS] Connecting to Live Firestore...");
       
-      // 1. Fetch Team & Project Data
-      unsubStaff = onSnapshot(collection(db, 'cep_team'), (snapshot) => {        
+      // 🕵️‍♂️ NEW: Check if we should pull ARCHIVE data instead of LIVE data
+      const isArchived2025 = currentView === 'archive' && archiveYear === '2025';
+      const targetCollection = isArchived2025 ? 'archive_2025' : 'cep_team';
+
+      console.log(`📡 [NEXUS] Fetching from: ${targetCollection}`);
+
+      // 1. Fetch Team & Project Data (Dynamic Collection)
+      unsubStaff = onSnapshot(collection(db, targetCollection), (snapshot) => {        
         const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
         
-        // 🕵️‍♂️ FIXED: We loop through TEAM_DIRECTORY and search by member.id (lowercase)
         const sortedData = TEAM_DIRECTORY.map(member => {
           return data.find(d => d.id === member.id) || { id: member.id, staff_name: member.name, projects: [] };
         });
@@ -190,17 +139,19 @@ function NexusApp() {
       });
 
       // 2. Fetch Individual Staff Loads
-      // 🕵️‍♂️ FIXED: We use activeStaffIds (lowercase IDs) for the database lookup
-      activeStaffIds.forEach(staffId => {
-        const u = onSnapshot(doc(db, 'staff_loads', staffId), (docSnap) => {
-          if (docSnap.exists()) {
-            setStaffLoads(prev => ({ ...prev, [staffId]: docSnap.data().data }));
-          } else {
-            setStaffLoads(prev => ({ ...prev, [staffId]: Array(12).fill(0) }));
-          }
+      // If archived, we only need to fetch once; if live, we track 2026 loads.
+      if (!isArchived2025) {
+        activeStaffIds.forEach(staffId => {
+          const u = onSnapshot(doc(db, 'staff_loads', staffId), (docSnap) => {
+            if (docSnap.exists()) {
+              setStaffLoads(prev => ({ ...prev, [staffId]: docSnap.data().data }));
+            } else {
+              setStaffLoads(prev => ({ ...prev, [staffId]: Array(12).fill(0) }));
+            }
+          });
+          unsubLoads.push(u);
         });
-        unsubLoads.push(u);
-      });
+      }
 
       // 3. Fetch Monthly Attendance
       unsubAttendance = onSnapshot(doc(db, 'system_data', 'monthly_attendance'), (docSnap) => {
@@ -213,8 +164,8 @@ function NexusApp() {
       if (unsubAttendance) unsubAttendance();
       unsubLoads.forEach(u => u());
     };
-  }, [isDemo, activeStaffList]);
-
+  }, [isDemo, activeStaffList, currentView, archiveYear]); // <--- MUST add these dependencies
+  
   // --- HELPERS & TRANSFORMERS ---
 
   const getFilteredData = () => {
