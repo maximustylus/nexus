@@ -193,14 +193,6 @@ function NexusApp() {
   
   // --- HELPERS & TRANSFORMERS ---
 
-  const getFilteredData = () => {
-    const targetYear = currentView === 'archive' ? archiveYear : '2026';
-    return teamData.map(staff => ({
-      ...staff,
-      projects: (staff.projects || []).filter(p => (p.year || '2026') === targetYear)
-    }));
-  };
-
 // 1. FILTER DATA (Fixes the Empty Department Overview & Tasks)
   const getFilteredData = () => {
     const targetYear = currentView === 'archive' ? archiveYear : '2026';
