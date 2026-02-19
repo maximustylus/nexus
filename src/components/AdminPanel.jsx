@@ -1,34 +1,29 @@
 import React, { useState, useEffect } from 'react';
 import { db } from '../firebase';
 import { 
-  updateDoc, doc, arrayUnion, arrayRemove, getDoc, setDoc, writeBatch, 
-  addDoc, collection 
+  updateDoc, doc, arrayUnion, arrayRemove, getDoc, setDoc, writeBatch 
 } from 'firebase/firestore';
 import { 
-  Sparkles, LayoutList, CalendarClock, FileJson, X, 
-  Users, Save, Briefcase, Activity, Calendar 
+  LayoutList, X, Save, Briefcase, Activity, Calendar 
 } from 'lucide-react';
 
 // Components
-import SmartAnalysis from './SmartAnalysis';
 import SmartReportView from './SmartReportView';
-import StaffLoadEditor from './StaffLoadEditor';
 import AdminWellbeingPanel from './AdminWellbeingPanel';
 
 // Utils & Data
 import { STAFF_LIST, STATUS_OPTIONS, DOMAIN_LIST } from '../utils';
-import { MOCK_STAFF_NAMES } from '../data/mockData'; // <--- IMPORT MARVEL NAMES
-import { useNexus } from '../context/NexusContext';   // <--- IMPORT CONTEXT
+import { MOCK_STAFF_NAMES } from '../data/mockData'; 
+import { useNexus } from '../context/NexusContext';   
 
 // Helper for Months
 const MONTH_LABELS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
-const AdminPanel = ({ teamData, staffLoads }) => {
+const AdminPanel = ({ teamData, staffLoads, user }) => {
     // --- CONTEXT ---
-    const { isDemo } = useNexus(); // <--- CHECK DEMO STATUS
+    const { isDemo } = useNexus(); 
 
     // --- DYNAMIC STAFF LIST SWITCHER ---
-    // If in Demo, use Marvel names. If Live, use Real names.
     const activeStaffList = isDemo ? MOCK_STAFF_NAMES : STAFF_LIST;
 
     // --- TABS STATE ---
@@ -50,12 +45,8 @@ const AdminPanel = ({ teamData, staffLoads }) => {
     const [localLoads, setLocalLoads] = useState({});
     const [loadYear, setLoadYear] = useState('2026');
     const [loadLoading, setLoadLoading] = useState(false);
-
-    // --- MODAL STATES ---
-    const [isAnalysisOpen, setIsAnalysisOpen] = useState(false);
-    const [isImportOpen, setIsImportOpen] = useState(false); 
-    const [jsonInput, setJsonInput] = useState('');
     
+    // --- SYSTEM STATE ---
     const [loading, setLoading] = useState(false);
     const [message, setMessage] = useState('');
 
@@ -72,7 +63,6 @@ const AdminPanel = ({ teamData, staffLoads }) => {
 
     // --- EFFECT: FETCH ATTENDANCE ---
     useEffect(() => {
-        // Only fetch real attendance if NOT in demo
         if (!isDemo) {
             const fetchAttendance = async () => {
                 setAttLoading(true);
@@ -93,7 +83,6 @@ const AdminPanel = ({ teamData, staffLoads }) => {
             };
             fetchAttendance();
         } else {
-            // Mock Attendance for Demo
             setAttValues([120, 145, 160, 155, 180, 190, 195, 185, 200, 210, 190, 180]);
         }
     }, [attYear, isDemo]);
@@ -235,36 +224,6 @@ const AdminPanel = ({ teamData, staffLoads }) => {
         finally { setLoading(false); }
     };
 
-    // --- BULK IMPORT ---
-    const handleBulkImport = async () => {
-        if (isDemo) {
-            setMessage('✅ (Sandbox) Bulk Import Simulated.');
-            setIsImportOpen(false);
-            setJsonInput('');
-            return;
-        }
-        setLoading(true);
-        try {
-            const data = JSON.parse(jsonInput);
-            let importedCount = 0;
-            // ... (Import logic kept same)
-            if (data.clinical) {
-                for (const [staffName, loads] of Object.entries(data.clinical)) {
-                    const loadRef = doc(db, 'staff_loads', staffName); 
-                    await setDoc(loadRef, { data: loads }, { merge: true });
-                    importedCount++;
-                }
-            }
-            setMessage(`✅ Import Processed: ${importedCount} items.`);
-            setIsImportOpen(false);
-            setJsonInput('');
-        } catch (error) {
-            alert("Import Failed: " + error.message);
-        } finally {
-            setLoading(false);
-        }
-    };
-
     return (
         <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
             
@@ -299,26 +258,22 @@ const AdminPanel = ({ teamData, staffLoads }) => {
             {activeTab === 'OPERATIONS' && (
                 <div className="animate-in fade-in">
                     
-                    {/* SUB-HEADER ACTIONS */}
-                    <div className="flex justify-between items-center mb-6">
-                         <div className="flex gap-2">
-                            <button onClick={() => setIsAnalysisOpen(true)} className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-purple-600 to-indigo-600 text-white text-xs font-bold rounded-lg hover:opacity-90 shadow-lg transition-transform hover:scale-105">
-                                <Sparkles size={14} /> GENERATE REPORT
-                            </button>
-                            <button onClick={() => setIsImportOpen(true)} className="flex items-center gap-2 px-4 py-2 bg-slate-700 text-white text-xs font-bold rounded-lg hover:bg-slate-600 shadow-lg transition-transform hover:scale-105">
-                                <FileJson size={14} /> BULK IMPORT
-                            </button>
+                    {/* MESSAGE BANNER (Moved from old Sub-Header) */}
+                    {message && (
+                        <div className="flex justify-end mb-4">
+                            <span className="text-xs font-bold px-4 py-2 bg-blue-100 text-blue-700 rounded-lg animate-pulse shadow-sm">
+                                {message}
+                            </span>
                         </div>
-                        {message && <span className="text-xs font-bold px-3 py-1 bg-blue-100 text-blue-700 rounded-lg animate-pulse">{message}</span>}
-                    </div>
+                    )}
 
-                    {/* SECTION 1: REPORT VIEW */}
+                    {/* SECTION 1: AI REPORT VIEW (With Deep Audit built-in) */}
                     <div className="mb-8">
-                        <SmartReportView year="2026" /> 
+                        <SmartReportView year="2026" teamData={teamData} staffLoads={staffLoads} user={user} /> 
                     </div>
 
                     {/* ================================================= */}
-                    {/* SECTION 2A: CLINICAL LOADS (UNIFIED STYLE)        */}
+                    {/* SECTION 2A: CLINICAL LOADS                        */}
                     {/* ================================================= */}
                     <div className={cardStyle}>
                         <div className={headerRowStyle}>
@@ -355,7 +310,6 @@ const AdminPanel = ({ teamData, staffLoads }) => {
                                 </tr>
                                 </thead>
                                 <tbody className="divide-y divide-slate-50 dark:divide-slate-800">
-                                {/* FIX: Using activeStaffList (Marvel vs Real) */}
                                 {activeStaffList.map(staff => (
                                     <tr key={staff} className="hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
                                     <td className="py-3 font-bold text-slate-700 dark:text-slate-300">{staff}</td>
@@ -377,7 +331,7 @@ const AdminPanel = ({ teamData, staffLoads }) => {
                     </div>
 
                     {/* ================================================= */}
-                    {/* SECTION 2B: PATIENT ATTENDANCE (UNIFIED STYLE)    */}
+                    {/* SECTION 2B: PATIENT ATTENDANCE                    */}
                     {/* ================================================= */}
                     <div className={cardStyle}>
                         <div className={headerRowStyle}>
@@ -420,7 +374,7 @@ const AdminPanel = ({ teamData, staffLoads }) => {
                     </div>
 
                     {/* ================================================= */}
-                    {/* SECTION 3: TASKS & PROJECTS (UNIFIED STYLE)       */}
+                    {/* SECTION 3: TASKS & PROJECTS                       */}
                     {/* ================================================= */}
                     <div className={cardStyle}>
                         <div className="mb-6">
@@ -445,7 +399,6 @@ const AdminPanel = ({ teamData, staffLoads }) => {
                                 <label className="text-[10px] font-bold text-slate-400 uppercase block mb-1">Owner</label>
                                 <select className={inputStyle} value={newOwner} onChange={(e)=>setNewOwner(e.target.value)}>
                                     <option value="">+ Assign...</option>
-                                    {/* FIX: Using activeStaffList (Marvel vs Real) */}
                                     {activeStaffList.map(n => <option key={n} value={n}>{n}</option>)}
                                 </select>
                             </div>
@@ -519,7 +472,6 @@ const AdminPanel = ({ teamData, staffLoads }) => {
                                                         value={staff.staff_name}
                                                         onChange={(e) => handleChangeOwner(staff.id, p, e.target.value)}
                                                     >
-                                                        {/* FIX: Using activeStaffList (Marvel vs Real) */}
                                                         {activeStaffList.map(n => <option key={n} value={n}>{n}</option>)}
                                                     </select>
                                                 </td>
@@ -573,32 +525,6 @@ const AdminPanel = ({ teamData, staffLoads }) => {
             {/* TAB 2: WELLBEING                          */}
             {/* ========================================= */}
             {activeTab === 'WELLBEING' && <AdminWellbeingPanel />}
-
-            {/* --- MODALS (SHARED) --- */}
-            {isAnalysisOpen && <SmartAnalysis teamData={teamData} staffLoads={staffLoads} onClose={() => setIsAnalysisOpen(false)} />}
-            
-            {isImportOpen && (
-                <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-md flex items-center justify-center z-[100] p-4">
-                    <div className="bg-white dark:bg-slate-800 w-full max-w-2xl rounded-2xl shadow-2xl p-6 border border-slate-200 dark:border-slate-700">
-                        <div className="flex justify-between items-center mb-4">
-                            <h3 className="text-xl font-black text-slate-800 dark:text-white uppercase tracking-tight">Agent Bulk Import</h3>
-                            <button onClick={() => setIsImportOpen(false)} className="text-slate-400 hover:text-red-500"><X size={24} /></button>
-                        </div>
-                        <p className="text-sm text-slate-500 mb-4">
-                            Paste the "Super JSON" generated by Gemini here.
-                        </p>
-                        <textarea 
-                            className="w-full h-64 bg-slate-900 text-emerald-400 font-mono text-xs p-4 rounded-xl border border-slate-700 mb-4 focus:outline-none focus:ring-2 focus:ring-emerald-500"
-                            placeholder='{ "tasks": [...], "attendance": [...], "clinical": {...} }'
-                            value={jsonInput}
-                            onChange={(e) => setJsonInput(e.target.value)}
-                        />
-                        <button onClick={handleBulkImport} disabled={loading || !jsonInput} className="w-full py-3 bg-emerald-600 text-white font-bold rounded-lg hover:bg-emerald-700 shadow-lg uppercase tracking-wider">
-                            {loading ? 'Processing Agent Data...' : 'Execute Import'}
-                        </button>
-                    </div>
-                </div>
-            )}
         </div>
     );
 };
