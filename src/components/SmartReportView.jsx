@@ -125,6 +125,7 @@ const SmartReportView = ({ year, teamData, staffLoads }) => {
 
           <div className="md:col-span-2 flex flex-col justify-between">
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-8">
+              
               {/* SMART WINS COLUMN */}
               <div>
                 <h3 className="text-[10px] font-black uppercase text-emerald-300 mb-3 flex items-center gap-2 tracking-[0.2em]">
@@ -172,21 +173,21 @@ const SmartReportView = ({ year, teamData, staffLoads }) => {
         </div>
       </div>
 
-      {/* FULL REPORT MODAL */}
+     {/* FULL REPORT MODAL */}
       {isFullReportOpen && (
         <div className="fixed inset-0 bg-slate-900/90 backdrop-blur-sm z-[150] flex items-center justify-center p-4">
-          <div className="bg-white dark:bg-slate-900 w-full max-w-2xl rounded-3xl shadow-2xl overflow-hidden animate-in fade-in zoom-in duration-200">
-            <div className="p-6 border-b border-slate-100 flex justify-between items-center bg-slate-50">
-              <h2 className="font-black uppercase text-sm tracking-tight text-slate-800">Performance Analysis: {year}</h2>
-              <button onClick={() => setIsFullReportOpen(false)}><X size={20} /></button>
+          <div className="bg-white dark:bg-slate-900 w-full max-w-2xl rounded-3xl shadow-2xl overflow-hidden animate-in fade-in zoom-in duration-200 border border-slate-200 dark:border-slate-800">
+            <div className="p-6 border-b border-slate-100 dark:border-slate-800 flex justify-between items-center bg-slate-50 dark:bg-slate-800/50">
+              <h2 className="font-black uppercase text-sm tracking-tight text-slate-800 dark:text-white">Performance Analysis: {year}</h2>
+              <button className="text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-white" onClick={() => setIsFullReportOpen(false)}><X size={20} /></button>
             </div>
             <div className="p-8 max-h-[60vh] overflow-y-auto">
-              <p className="text-slate-700 whitespace-pre-wrap leading-relaxed font-medium">
+              <p className="text-slate-700 dark:text-slate-300 whitespace-pre-wrap leading-relaxed font-medium">
                 {report?.summary.replace(/[#*]/g, '')}
               </p>
             </div>
-            <div className="p-6 bg-slate-50 text-center">
-              <button onClick={() => setIsFullReportOpen(false)} className="px-8 py-3 bg-slate-900 text-white font-black rounded-xl uppercase text-xs tracking-widest">Close</button>
+            <div className="p-6 bg-slate-50 dark:bg-slate-800/50 text-center border-t border-slate-100 dark:border-slate-800">
+              <button onClick={() => setIsFullReportOpen(false)} className="px-8 py-3 bg-slate-900 dark:bg-indigo-600 text-white font-black rounded-xl uppercase text-xs tracking-widest hover:bg-slate-800 dark:hover:bg-indigo-500 transition-colors">Close</button>
             </div>
           </div>
         </div>
