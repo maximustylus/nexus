@@ -203,30 +203,38 @@ function NexusApp() {
 
   const filteredTeamData = getFilteredData(); 
 
-  const getPieData = () => {
+const getPieData = () => {
     const counts = { MANAGEMENT: 0, CLINICAL: 0, EDUCATION: 0, RESEARCH: 0 };
     filteredTeamData.forEach(staff => {
       (staff.projects || []).forEach(p => {
-        const domain = p.domain_type || 'CLINICAL';
-        if (counts[domain] !== undefined) counts[domain]++;
+        let rawDomain = (p.domain_type || p.category || 'CLINICAL').toUpperCase();
+        
+        if (rawDomain === 'ADMIN' || rawDomain === 'COMMUNITY') rawDomain = 'MANAGEMENT';
+
+        if (counts[rawDomain] !== undefined) {
+            counts[rawDomain]++;
+        } else {
+            counts['CLINICAL']++;
+        }
       });
     });
     return Object.keys(counts)
-      .map(key => ({ 
-        name: key, 
-        value: counts[key], 
-        fill: DOMAIN_COLORS[key]
-      }))
+      .map(key => ({ name: key, value: counts[key], fill: DOMAIN_COLORS[key] }))
       .filter(d => d.value > 0);
   };
 
   const getStatusData = () => {
     const tasks = { name: 'Tasks', 1:0, 2:0, 3:0, 4:0, 5:0 };
     const projects = { name: 'Projects', 1:0, 2:0, 3:0, 4:0, 5:0 };
+    const isArchive = currentView === 'archive';
+
     filteredTeamData.forEach(staff => {
       (staff.projects || []).forEach(p => {
-        const status = p.status_dots || 2;
-        if (p.item_type === 'Project') projects[status]++; else tasks[status]++;
+        const status = p.status_dots || (isArchive ? 5 : 2);
+        const type = p.item_type || 'Project';
+        
+        if (type === 'Project') projects[status]++; 
+        else tasks[status]++;
       });
     });
     return [tasks, projects];
