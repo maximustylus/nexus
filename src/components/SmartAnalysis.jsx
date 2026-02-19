@@ -29,27 +29,59 @@ const SmartAnalysis = ({ teamData, staffLoads, onClose }) => {
         setLoading(true); setError('');
         
         try {
-            // 1. SELECT DATA SOURCE & FILTER
-            setStatus(`Filtering Data for ${targetYear}...`);
-            
-            // Check if we are using the Bulk Import or the Live Database
-            const sourceData = importedData || teamData || [];
+// --- 1. IMPROVED FILE UPLOAD ---
+    const handleFileUpload = (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
 
-            const yearData = sourceData.map(staff => ({
-                // Handle both "staff_name" from JSON and "name" from Database
-                name: staff.staff_name || staff.name || "Unknown", 
-                projects: (staff.projects || []).filter(p => String(p.year) === String(targetYear))
-            }));
+        const reader = new FileReader();
+        reader.onload = (event) => {
+            try {
+                const rawData = JSON.parse(event.target.result);
+                // Ensure we are grabbing the array regardless of format
+                const dataToLoad = Array.isArray(rawData) ? rawData : (rawData.staff || []);
+                
+                if (dataToLoad.length > 0) {
+                    setImportedData(dataToLoad);
+                    console.log("📂 [NEXUS] Data Loaded:", dataToLoad);
+                    alert(`✅ SUCCESS: Loaded ${dataToLoad.length} staff profiles.`);
+                } else {
+                    alert("⚠️ No staff data found in file.");
+                }
+            } catch (err) {
+                alert("❌ JSON Error: Ensure you used 'Straight Quotes' and not 'Slanted Quotes'.");
+            }
+        };
+        reader.readAsText(file);
+    };
 
-            // Safety Check: Stop if no data was found for the year
-            const totalProjects = yearData.reduce((acc, s) => acc + s.projects.length, 0);
-            if (totalProjects === 0) {
-                throw new Error(`No data found for ${targetYear}. If you imported a file, ensure the 'year' fields match.`);
+    // --- 2. IMPROVED ANALYSIS LOGIC ---
+    const handleAnalyze = async () => {
+        setLoading(true); setError('');
+        try {
+            // Determine which data to use
+            const source = importedData || teamData || [];
+            console.log("🧠 [NEXUS] Analyzing Source:", source);
+
+            const yearData = source.map(staff => {
+                const projects = (staff.projects || []).filter(p => 
+                    String(p.year) === String(targetYear)
+                );
+                return {
+                    name: staff.staff_name || staff.name,
+                    projects: projects
+                };
+            });
+
+            // Count total projects found
+            const count = yearData.reduce((acc, s) => acc + s.projects.length, 0);
+            console.log(`📊 [NEXUS] Found ${count} projects for ${targetYear}`);
+
+            if (count === 0) {
+                throw new Error(`No ${targetYear} projects found. Check if the 'year' in your JSON is exactly '${targetYear}'.`);
             }
 
-            // 2. CONNECT TO SECURE FIREBASE VAULT
             setStatus('Connecting to Secure Neural Link...');
-            
             const response = await generateSmartAnalysis({
                 targetYear,
                 staffProfiles: STAFF_PROFILES,
@@ -57,33 +89,12 @@ const SmartAnalysis = ({ teamData, staffLoads, onClose }) => {
                 staffLoads
             });
 
-            // 3. APPLY RESULTS
-            setResult({ 
-                private: response.data.private, 
-                public: response.data.public 
-            });
-
+            setResult({ private: response.data.private, public: response.data.public });
         } catch (err) {
-            console.error(err);
-            setError('Analysis Failed: ' + err.message);
+            setError(err.message);
         } finally {
             setLoading(false);
             setStatus('GENERATE ANALYSIS');
-        }
-    };
-
-    const handlePublish = async () => {
-        if (!result) return;
-        try {
-            await setDoc(doc(db, 'system_data', `reports_${targetYear}`), {
-                privateText: result.private,
-                publicText: result.public,
-                timestamp: new Date()
-            });
-            alert(`✅ SUCCESS: Reports published to ${targetYear} Archive!`);
-            onClose(); 
-        } catch (e) {
-            alert("❌ Error saving to database: " + e.message);
         }
     };
 
