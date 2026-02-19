@@ -33,7 +33,7 @@ const SmartAnalysis = ({ teamData, staffLoads, onClose }) => {
             try {
                 const json = JSON.parse(event.target.result);
                 setImportedData(json);
-                alert(`✅ SUCCESS: Loaded bulk data from ${file.name}`);
+                alert(`SUCCESS: Loaded bulk data from ${file.name}`);
             } catch (err) {
                 alert("❌ ERROR: The file is not a valid JSON format.");
             }
@@ -72,17 +72,35 @@ const SmartAnalysis = ({ teamData, staffLoads, onClose }) => {
     };
 
     const handlePublish = async () => {
-        if (!result) return;
+        if (!result || !importedData) return;
+        setLoading(true);
         try {
+            // 1. Save the AI Report Text (The Brief)
             await setDoc(doc(db, 'system_data', `reports_${targetYear}`), {
                 privateText: result.private,
                 publicText: result.public,
                 timestamp: new Date()
             });
-            alert(`✅ SUCCESS: Reports published to ${targetYear} Archive!`);
+
+            // 2. Save the RAW Workload Data (The Projects & Loads)
+            // This ensures the Archive graphs can pull the data next time you visit!
+            const batchPromises = importedData.map(staff => {
+                const staffId = staff.staff_name.toLowerCase();
+                return setDoc(doc(db, `archive_${targetYear}`, staffId), {
+                    staff_name: staff.staff_name,
+                    projects: staff.projects,
+                    year: targetYear
+                });
+            });
+
+            await Promise.all(batchPromises);
+
+            alert(`SUCCESS: Fully archived ${targetYear} data and report!`);
             onClose(); 
         } catch (e) {
-            alert("❌ Error: " + e.message);
+            alert("❌ Archive Error: " + e.message);
+        } finally {
+            setLoading(false);
         }
     };
 
