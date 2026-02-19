@@ -110,7 +110,28 @@ function NexusApp() {
   const activeStaffList = isDemo ? MOCK_STAFF_NAMES : STAFF_LIST;
   const activeStaffIds = isDemo ? MOCK_STAFF_NAMES : STAFF_IDS; // For mock, IDs are names.
 
-// --- EFFECT: DATA FETCHING (v1.5 STABILIZED) ---
+// --- EFFECT: AUTH LISTENER ---
+  useEffect(() => {
+    const unsubscribe = auth.onAuthStateChanged((u) => {
+      if (u) {
+        // Look up the user in our TEAM_DIRECTORY
+        const profile = checkAccess(u.email);
+        
+        if (profile) {
+          setUser(profile);
+        } else {
+          setUser(null);
+          signOut(auth);
+        }
+      } else {
+        setUser(null);
+      }
+      setAuthLoading(false); // <--- This is what tells your app to stop spinning!
+    });
+    return () => unsubscribe();
+  }, []);
+  
+  // --- EFFECT: DATA FETCHING (v1.5 STABILIZED) ---
   useEffect(() => {
     let unsubStaff, unsubAttendance;
     const unsubLoads = [];
