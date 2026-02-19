@@ -492,23 +492,25 @@ function NexusApp() {
                   <div className="flex justify-between items-center mb-4">
                     <h3 className="font-bold text-slate-700 dark:text-slate-200">{member.name}</h3>
                     <span className="text-xs font-bold px-2 py-1 bg-orange-100 text-orange-700 rounded">
-                      {/* Lookup using ID (lowercase) */}
                       Total: {(staffLoads[member.id] || []).reduce((a, b) => a + b, 0)}
                     </span>
                   </div>
-                  <div className="h-32">
-                    <ResponsiveContainer width="100%" height="100%">
-                      {/* Pass the ID to getClinicalData */}
-                      <BarChart data={getClinicalData(member.id)}>
-                        <Tooltip content={<CustomBarTooltip />} cursor={{fill: 'rgba(0,0,0,0.05)', radius: 4}} />
-                        <Bar dataKey="value" radius={[4, 4, 0, 0]}>
-                          {getClinicalData(member.id).map((entry, index) => (
-                            <Cell key={`cell-${index}`} fill={CLINICAL_GRADIENT[index]} />
-                          ))}
-                        </Bar>
-                      </BarChart>
-                    </ResponsiveContainer>
-                  </div>
+                 <div className="h-32 mt-4">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={getClinicalData(staff.id)}>
+                <YAxis domain={[0, 135]} hide={true} />
+                <Tooltip cursor={{fill: 'transparent'}} content={<CustomTooltip />} />
+                <Bar 
+                    dataKey="value" 
+                    radius={[4, 4, 0, 0]}
+                >
+                    {getClinicalData(staff.id).map((entry, index) => (
+                        <Cell key={`cell-${index}`} fill={getColorForValue(entry.value)} />
+                    ))}
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
                   <div className="flex justify-between mt-2 px-1">
                     {['Jan', 'Apr', 'Jul', 'Oct'].map(m => <span key={m} className="text-[10px] text-slate-400 font-bold">{m}</span>)}
                   </div>
