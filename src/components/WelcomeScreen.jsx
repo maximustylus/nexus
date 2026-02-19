@@ -176,9 +176,9 @@ const WelcomeScreen = (props) => {
                                 <img src="/nexus.png" alt="NEXUS" className="relative w-20 h-20 md:w-24 md:h-24 object-contain drop-shadow-xl transition-transform duration-500 group-hover:rotate-6 group-hover:scale-110" />
                             </div>
                             
-                            <h1 className="text-5xl md:text-8xl font-black tracking-tighter mb-2 leading-none bg-gradient-to-br from-slate-900 via-slate-700 to-slate-900 dark:from-white dark:via-slate-200 dark:to-slate-500 bg-clip-text text-transparent">
-                                NEXUS
-                            </h1>
+                            <h1 className="text-5xl md:text-8xl font-black tracking-tighter mb-2 leading-none bg-gradient-to-br from-slate-900 via-slate-700 to-slate-900 dark:from-white dark:via-slate-200 dark:to-slate-500 bg-clip-text text-transparent pr-2">
+                                    NEXUS
+                                </h1>
                             
                             <div className="flex items-center gap-3 mb-8 opacity-80">
                                 <div className="h-[1px] w-8 bg-indigo-500"></div>
