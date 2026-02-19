@@ -29,12 +29,23 @@ const SmartAnalysis = ({ teamData, staffLoads, onClose }) => {
         setLoading(true); setError('');
         
         try {
-            // 1. FILTER DATA FOR SELECTED YEAR
+            // 1. SELECT DATA SOURCE & FILTER
             setStatus(`Filtering Data for ${targetYear}...`);
-            const yearData = teamData.map(staff => ({
-                name: staff.staff_name,
-                projects: (staff.projects || []).filter(p => (p.year || '2026') === targetYear)
+            
+            // Check if we are using the Bulk Import or the Live Database
+            const sourceData = importedData || teamData || [];
+
+            const yearData = sourceData.map(staff => ({
+                // Handle both "staff_name" from JSON and "name" from Database
+                name: staff.staff_name || staff.name || "Unknown", 
+                projects: (staff.projects || []).filter(p => String(p.year) === String(targetYear))
             }));
+
+            // Safety Check: Stop if no data was found for the year
+            const totalProjects = yearData.reduce((acc, s) => acc + s.projects.length, 0);
+            if (totalProjects === 0) {
+                throw new Error(`No data found for ${targetYear}. If you imported a file, ensure the 'year' fields match.`);
+            }
 
             // 2. CONNECT TO SECURE FIREBASE VAULT
             setStatus('Connecting to Secure Neural Link...');
