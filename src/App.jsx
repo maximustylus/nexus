@@ -201,14 +201,24 @@ function NexusApp() {
     }));
   };
 
+// 1. FILTER DATA (Fixes the Empty Department Overview & Tasks)
+  const getFilteredData = () => {
+    const targetYear = currentView === 'archive' ? archiveYear : '2026';
+    return teamData.map(staff => ({
+      ...staff,
+      // Force String comparison so JSON (2025) and Dropdown ("2025") match perfectly
+      projects: (staff.projects || []).filter(p => String(p.year || targetYear) === String(targetYear))
+    }));
+  };
+
   const filteredTeamData = getFilteredData(); 
 
-const getPieData = () => {
+  // 2. PIE CHART DATA
+  const getPieData = () => {
     const counts = { MANAGEMENT: 0, CLINICAL: 0, EDUCATION: 0, RESEARCH: 0 };
     filteredTeamData.forEach(staff => {
       (staff.projects || []).forEach(p => {
         let rawDomain = (p.domain_type || p.category || 'CLINICAL').toUpperCase();
-        
         if (rawDomain === 'ADMIN' || rawDomain === 'COMMUNITY') rawDomain = 'MANAGEMENT';
 
         if (counts[rawDomain] !== undefined) {
@@ -223,6 +233,7 @@ const getPieData = () => {
       .filter(d => d.value > 0);
   };
 
+  // 3. TASK & PROJECT STATUS
   const getStatusData = () => {
     const tasks = { name: 'Tasks', 1:0, 2:0, 3:0, 4:0, 5:0 };
     const projects = { name: 'Projects', 1:0, 2:0, 3:0, 4:0, 5:0 };
@@ -231,7 +242,8 @@ const getPieData = () => {
     filteredTeamData.forEach(staff => {
       (staff.projects || []).forEach(p => {
         const status = p.status_dots || (isArchive ? 5 : 2);
-        const type = p.item_type || 'Project';
+        // Fallback: If item_type is missing in JSON, assume it's a Project
+        const type = p.item_type || 'Project'; 
         
         if (type === 'Project') projects[status]++; 
         else tasks[status]++;
@@ -240,11 +252,39 @@ const getPieData = () => {
     return [tasks, projects];
   };
 
+  // 4. CLINICAL LOAD (Fixes the Empty Bar Graphs)
   const getClinicalData = (staffId) => {
+    const isArchive = currentView === 'archive' && archiveYear === '2025';
+
+    if (isArchive) {
+      // Find the staff member from the imported JSON
+      const staffMember = teamData.find(s => 
+        s.id === staffId || (s.staff_name && s.staff_name.toLowerCase() === staffId.toLowerCase())
+      );
+
+      // Search their projects for the specific clinical metric
+      const clinicalProject = staffMember?.projects?.find(p => 
+        p.name === "Clinical Load Fulfillment" || 
+        (p.title && p.title.toLowerCase().includes("clinical load")) ||
+        (p.metric && (p.metric.includes('hrs/week') || p.metric.includes('%')))
+      );
+
+      if (clinicalProject && clinicalProject.metric) {
+        // Extract the raw number (e.g., pulling "15" out of "15%")
+        const match = clinicalProject.metric.match(/(\d+(\.\d+)?)/);
+        const metricValue = match ? parseFloat(match[0]) : 0;
+        
+        // Spread that single yearly metric across all 12 bars so the graph renders
+        return MONTHS.map(m => ({ name: m, value: metricValue }));
+      }
+    }
+
+    // Live Mode Fallback
     const data = staffLoads[staffId] || Array(12).fill(0);
     return MONTHS.map((m, i) => ({ name: m, value: data[i] || 0 }));
   };
 
+  // 5. ATTENDANCE CHART
   const getAttendanceForView = () => {
       const targetYear = currentView === 'archive' ? archiveYear : '2026';
       const rawValues = attendanceData[targetYear] || Array(12).fill(0);
