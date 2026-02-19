@@ -97,32 +97,36 @@ const SmartReportView = ({ year, teamData, staffLoads, user }) => {
   const activeReport = reports[viewMode] || reports.public;
   const isPrivateView = viewMode === 'private';
 
-  return (
+return (
     <div className="flex flex-col gap-4">
       <div className="bg-gradient-to-br from-indigo-600 to-violet-700 rounded-3xl p-8 text-white shadow-xl relative overflow-hidden group">
         
-        {/* BACKGROUND LOGO */}
-        <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
-            <img src="/nexus-n-icon.png" alt="Nexus AI" className="w-32 h-32" />
-        </div>
-
-        {/* 🕵️‍♂️ THE ADMIN TOGGLE SWITCH */}
-        {isAdmin && (
-            <div className="absolute top-6 right-8 z-20 flex bg-black/30 rounded-lg p-1 border border-white/20 backdrop-blur-md">
-                <button 
-                    onClick={() => setViewMode('private')}
-                    className={`flex items-center gap-2 px-4 py-1.5 rounded-md text-[10px] font-black uppercase transition-all ${isPrivateView ? 'bg-red-500 text-white shadow-lg' : 'text-white/50 hover:text-white'}`}
-                >
-                    <Lock size={12} /> Executive Brief
-                </button>
-                <button 
-                    onClick={() => setViewMode('public')}
-                    className={`flex items-center gap-2 px-4 py-1.5 rounded-md text-[10px] font-black uppercase transition-all ${!isPrivateView ? 'bg-emerald-500 text-white shadow-lg' : 'text-white/50 hover:text-white'}`}
-                >
-                    <Users size={12} /> Team Pulse
-                </button>
+        {/* AURA BRANDING & TOGGLE (Top Left) */}
+        <div className="relative z-20 flex flex-col gap-4 mb-8">
+            <div className="flex items-center gap-2 opacity-80">
+              <Sparkles size={16} className="text-yellow-300" />
+              <span className="text-[10px] font-black uppercase tracking-widest">
+                {isPrivateView ? 'AURA EXECUTIVE ANALYSIS' : 'AURA TEAM PULSE'}
+              </span>
             </div>
-        )}
+
+            {isAdmin && (
+                <div className="flex bg-black/30 w-fit rounded-lg p-1 border border-white/20 backdrop-blur-md">
+                    <button 
+                        onClick={() => setViewMode('private')}
+                        className={`flex items-center gap-2 px-4 py-1.5 rounded-md text-[10px] font-black uppercase transition-all ${isPrivateView ? 'bg-red-500 text-white shadow-lg' : 'text-white/50 hover:text-white'}`}
+                    >
+                        <Lock size={12} /> Executive Brief
+                    </button>
+                    <button 
+                        onClick={() => setViewMode('public')}
+                        className={`flex items-center gap-2 px-4 py-1.5 rounded-md text-[10px] font-black uppercase transition-all ${!isPrivateView ? 'bg-emerald-500 text-white shadow-lg' : 'text-white/50 hover:text-white'}`}
+                    >
+                        <Users size={12} /> Team Pulse
+                    </button>
+                </div>
+            )}
+        </div>
         
         <div className="relative z-10 grid grid-cols-1 md:grid-cols-3 gap-8 mt-4 md:mt-0">
           
