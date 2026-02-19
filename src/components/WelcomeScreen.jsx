@@ -109,7 +109,7 @@ const WelcomeScreen = (props) => {
             icon: <BrainCircuit className="text-pink-500" size={20} />,
             color: 'group-hover:border-pink-500/50',
             bg: 'bg-pink-500/10',
-            desc: 'Real-time Social Battery indexing using OARS protocols to prevent clinical burnout.',
+            desc: 'Real-time Social Battery indexing using Motivational Interviewing Techniques to prevent burnout.',
         },
         {
             title: 'Smart Workload',
@@ -118,7 +118,7 @@ const WelcomeScreen = (props) => {
             icon: <Activity className="text-indigo-500" size={20} />,
             color: 'group-hover:border-indigo-500/50',
             bg: 'bg-indigo-500/10',
-            desc: 'ML-driven case volume forecasting and skill-mix routing for cognitive load balancing.',
+            desc: 'Machine Learning driven case volume forecasting and skill-mix routing for cognitive load balancing.',
         },
         {
             title: 'Auto Rostering',
@@ -193,7 +193,7 @@ const WelcomeScreen = (props) => {
                         <div className={`w-full max-w-4xl transition-all duration-700 flex flex-col ${isSplitView ? 'opacity-0 h-0 overflow-hidden' : 'opacity-100 h-auto items-center'}`}>
                             <p className="text-lg md:text-xl text-slate-600 dark:text-slate-300 font-medium mb-10 leading-relaxed max-w-2xl text-center">
                                 Master the Grind • Protect the Pulse • Build the Future<br/>
-                                <span className="text-xs md:text-sm opacity-60 font-normal">Unified intelligence for the modern medical unit.</span>
+                                <span className="text-xs md:text-sm opacity-60 font-normal">Unified intelligence for the modern healthcare teams.</span>
                             </p>
 
                             <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-12 text-left w-full">
