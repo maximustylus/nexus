@@ -1,5 +1,14 @@
 {
   "projects": {
     "default": "idc-app-e0c59"
+  },
+  "targets": {
+    "idc-app-e0c59": {
+      "hosting": {
+        "production": [
+          "smartdashboard"
+        ]
+      }
+    }
   }
 }
