@@ -262,3 +262,75 @@ exports.chatWithAura = onCall({
         throw new HttpsError('internal', `Neural Link Unstable: ${error.message}`);
     }
 });
+
+// ============================================================================
+// 2. SMART ANALYSIS FUNCTION
+// ============================================================================
+exports.generateSmartAnalysis = onCall({ 
+    cors: true, 
+    secrets: ["GEMINI_API_KEY"] 
+}, async (request) => {
+    try {
+        const { targetYear, staffProfiles, yearData, staffLoads } = request.data;
+        const API_KEY = process.env.GEMINI_API_KEY;
+
+        if (!API_KEY) {
+            throw new HttpsError("failed-precondition", "Server missing Gemini API Key.");
+        }
+
+        // Use our bulletproof Auto-Discovery helper!
+        const modelName = await resolveModel(API_KEY);
+
+        const promptText = `
+            ACT AS: Senior Clinical Lead at KKH.
+            CONTEXT: Annual Performance Review for Year ${targetYear}.
+            DATA: ${JSON.stringify(staffProfiles)}
+            WORKLOAD: ${JSON.stringify(yearData)}
+            CLINICAL_LOADS: ${JSON.stringify(staffLoads)}
+
+            TASK: Generate TWO reports for ${targetYear}.
+            1. PRIVATE_EXECUTIVE_BRIEF (For Leads): Audit staff against their JG11-JG14 grades based on this year's data.
+            2. PUBLIC_TEAM_PULSE (For Staff): Celebrate ${targetYear} wins and "Joy at Work".
+
+            CRITICAL OUTPUT FORMAT:
+            Return ONLY valid JSON.
+            {
+                "private": "Report text...",
+                "public": "Report text..."
+            }
+        `;
+
+        const generateUrl = `https://generativelanguage.googleapis.com/v1beta/${modelName}:generateContent?key=${API_KEY}`;
+        const genResponse = await fetch(generateUrl, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ 
+                contents: [{ parts: [{ text: promptText }] }],
+                generationConfig: { temperature: 0.2 } // Keep it highly analytical
+            })
+        });
+
+        const genData = await genResponse.json();
+        if (!genResponse.ok) {
+            logger.error("[SmartAnalysis] Gemini API Error");
+            throw new HttpsError("internal", "Gemini API error.");
+        }
+
+        let rawText = genData.candidates[0].content.parts[0].text;
+        rawText = rawText.replace(/```json/g, '').replace(/```/g, '').trim();
+
+        const jsonMatch = rawText.match(/\{[\s\S]*\}/);
+        if (!jsonMatch) throw new HttpsError("internal", "AI did not return valid JSON.");
+
+        const parsedObj = JSON.parse(jsonMatch[0]);
+
+        return {
+            private: parsedObj.private || parsedObj.Private || "Error generating private report.",
+            public: parsedObj.public || parsedObj.Public || "Error generating public report."
+        };
+
+    } catch (error) {
+        logger.error("[SmartAnalysis] Fatal Error:", error);
+        throw new HttpsError("internal", error.message);
+    }
+});
