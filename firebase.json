@@ -1,6 +1,5 @@
 {
   "hosting": {
-    "target": "demo-site",
     "public": "dist",
     "ignore": [
       "firebase.json",
