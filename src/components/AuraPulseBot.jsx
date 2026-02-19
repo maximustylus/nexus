@@ -80,7 +80,7 @@ export default function AuraPulseBot({ user }) {
     const { isDemo } = useNexus();
 
     // ── State ─────────────────────────────────────────────────────────────────
-    const [isOpen,          setIsOpen]          = useState(false);
+    const [,          set]          = useState(false);
     const [view,            setView]            = useState('SELECT');
     const [selectedPersona, setSelectedPersona] = useState(null);
     const [messages,        setMessages]        = useState([]);
@@ -352,8 +352,8 @@ export default function AuraPulseBot({ user }) {
     // RENDER
     // ==========================================================================
     return (
-        <div className="fixed bottom-6 right-6 z-[9999] font-sans flex flex-col items-end">
-
+            <div className="fixed bottom-24 right-4 md:bottom-6 md:right-6 z-50 flex flex-col items-end drop-shadow-2xl">
+    
             {/* ── CHAT PANEL ─────────────────────────────────────────────────── */}
             {isOpen && (
                 <div
