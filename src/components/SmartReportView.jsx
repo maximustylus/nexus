@@ -41,30 +41,33 @@ const SmartReportView = ({ year, teamData, staffLoads, user }) => {
             // 2. PARSE: Turn the AI's stringified JSON back into a Javascript object
             let parsedData = { summary: "", wins: [], risks: [] };
             try {
-                parsedData = JSON.parse(rawText);
+                // 🧹 SCRUBBER: Strip rogue ```json and ``` tags the AI might sneak in
+                const cleanJsonString = rawText.replace(/```json/gi, '').replace(/```/g, '').trim();
+                parsedData = JSON.parse(cleanJsonString);
             } catch (e) {
-                // Fallback just in case the AI messed up the formatting
-                parsedData.summary = rawText;
+                console.error("AI JSON Parse Error. Falling back to extractor.", e);
+                
+                // Fallback: Clean the raw text of markdown symbols
+                const cleanRawText = (rawText || "").replace(/[#*]/g, '');
+                parsedData.summary = cleanRawText;
+                
+                // Fallback Extractor: Grab sentences for the lists so columns aren't empty
+                const sentences = cleanRawText.split(/(?<=[.!?])\s+/).filter(s => s.length > 20);
+                parsedData.wins = sentences.length > 1 ? sentences.slice(0, 2) : ["Review full report for specific wins."];
+                parsedData.risks = sentences.length > 3 ? sentences.slice(2, 4) : ["Review full report for specific priorities."];
             }
 
+            // UI Helper: One final scrub to ensure no rogue # or * make it to the screen
+            const cleanUIString = (str) => (str || "").replace(/[#*]/g, '');
+
             setReport({
-              score: 100, // Or dynamically calculate from live projects if needed
+              score: 100, 
               status: isAdmin ? 'PRIVATE ARCHIVE' : 'PUBLIC ARCHIVE',
-              summary: parsedData.summary || "No summary available.",
-              highlights: parsedData.wins?.length > 0 ? parsedData.wins : ["Historical data retrieved."],
-              risks: parsedData.risks?.length > 0 ? parsedData.risks : ["Read-only record loaded."],
+              summary: cleanUIString(parsedData.summary) || "No summary available.",
+              highlights: parsedData.wins?.length > 0 ? parsedData.wins.map(cleanUIString) : ["Historical data retrieved."],
+              risks: parsedData.risks?.length > 0 ? parsedData.risks.map(cleanUIString) : ["Read-only record loaded."],
               recommendation: isAdmin ? "Private: Monitor JG rubrics." : "Public: Focus on team alignment."
-            });
-          } else {
-            setReport({
-              score: 0,
-              status: 'PENDING',
-              summary: "No published report found for this year.",
-              highlights: ["Ready for analysis."],
-              risks: ["Awaiting data import."],
-              recommendation: isAdmin ? "Upload .json to generate your first audit." : "Awaiting Admin publication."
-            });
-          }
+            });          }
         }
       } catch (e) { console.error(e); } finally { setLoading(false); }
     };
