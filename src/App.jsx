@@ -110,53 +110,56 @@ function NexusApp() {
   const activeStaffList = isDemo ? MOCK_STAFF_NAMES : STAFF_LIST;
   const activeStaffIds = isDemo ? MOCK_STAFF_NAMES : STAFF_IDS; // For mock, IDs are names.
 
-// --- EFFECT: DATA FETCHING (v1.5 Archive-Enabled) ---
+// --- EFFECT: DATA FETCHING (v1.5 STABILIZED) ---
   useEffect(() => {
     let unsubStaff, unsubAttendance;
     const unsubLoads = [];
 
+    // Safety: If these aren't defined yet, don't try to fetch
+    if (!currentView || !archiveYear) return;
+
     if (isDemo) {
       console.log("🧪 [NEXUS] Loading Marvel Universe...");
-      // ... (Keep your existing isDemo logic here)
-      
+      // ... your demo logic ...
     } else {
       console.log("🔌 [NEXUS] Connecting to Live Firestore...");
       
-      // 🕵️‍♂️ NEW: Check if we should pull ARCHIVE data instead of LIVE data
+      // 1. Determine Target Collection
       const isArchived2025 = currentView === 'archive' && archiveYear === '2025';
       const targetCollection = isArchived2025 ? 'archive_2025' : 'cep_team';
 
       console.log(`📡 [NEXUS] Fetching from: ${targetCollection}`);
 
-      // 1. Fetch Team & Project Data (Dynamic Collection)
-      unsubStaff = onSnapshot(collection(db, targetCollection), (snapshot) => {        
-        const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-        
-        const sortedData = TEAM_DIRECTORY.map(member => {
-          return data.find(d => d.id === member.id) || { id: member.id, staff_name: member.name, projects: [] };
-        });
-        setTeamData(sortedData);
-      });
-
-      // 2. Fetch Individual Staff Loads
-      // If archived, we only need to fetch once; if live, we track 2026 loads.
-      if (!isArchived2025) {
-        activeStaffIds.forEach(staffId => {
-          const u = onSnapshot(doc(db, 'staff_loads', staffId), (docSnap) => {
-            if (docSnap.exists()) {
-              setStaffLoads(prev => ({ ...prev, [staffId]: docSnap.data().data }));
-            } else {
-              setStaffLoads(prev => ({ ...prev, [staffId]: Array(12).fill(0) }));
-            }
+      // 2. Fetch Team Data
+      try {
+        unsubStaff = onSnapshot(collection(db, targetCollection), (snapshot) => {        
+          const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+          
+          const sortedData = TEAM_DIRECTORY.map(member => {
+            return data.find(d => d.id === member.id) || { id: member.id, staff_name: member.name, projects: [] };
           });
-          unsubLoads.push(u);
-        });
-      }
+          setTeamData(sortedData);
+        }, (err) => console.error("Snapshot Error:", err));
 
-      // 3. Fetch Monthly Attendance
-      unsubAttendance = onSnapshot(doc(db, 'system_data', 'monthly_attendance'), (docSnap) => {
-          if (docSnap.exists()) { setAttendanceData(docSnap.data()); }
-      });
+        // 3. Fetch Loads (ONLY for live view, Archive data is inside the teamData projects)
+        if (!isArchived2025) {
+          activeStaffIds.forEach(staffId => {
+            const u = onSnapshot(doc(db, 'staff_loads', staffId), (docSnap) => {
+              if (docSnap.exists()) {
+                setStaffLoads(prev => ({ ...prev, [staffId]: docSnap.data().data }));
+              }
+            });
+            unsubLoads.push(u);
+          });
+        }
+
+        // 4. Fetch Attendance
+        unsubAttendance = onSnapshot(doc(db, 'system_data', 'monthly_attendance'), (docSnap) => {
+            if (docSnap.exists()) { setAttendanceData(docSnap.data()); }
+        });
+      } catch (error) {
+        console.error("🔥 NEXUS Connection Failed:", error);
+      }
     }
 
     return () => {
@@ -164,7 +167,8 @@ function NexusApp() {
       if (unsubAttendance) unsubAttendance();
       unsubLoads.forEach(u => u());
     };
-  }, [isDemo, activeStaffList, currentView, archiveYear]); // <--- MUST add these dependencies
+    // CRITICAL: Ensure all these are in the array!
+  }, [isDemo, currentView, archiveYear, activeStaffList, activeStaffIds]);
   
   // --- HELPERS & TRANSFORMERS ---
 
