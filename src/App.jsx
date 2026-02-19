@@ -162,7 +162,7 @@ function NexusApp() {
           setTeamData(sortedData);
         }, (err) => console.error("Snapshot Error:", err));
 
-        // 3. Fetch Loads (ONLY for live view, Archive data is inside the teamData projects)
+        // 3. Fetch Loads
         if (!isArchived2025) {
           activeStaffIds.forEach(staffId => {
             const u = onSnapshot(doc(db, 'staff_loads', staffId), (docSnap) => {
@@ -244,16 +244,19 @@ function NexusApp() {
     return [tasks, projects];
   };
 
- // 4. CLINICAL LOAD (Fixes the Empty Bar Graphs)
+// 4. CLINICAL LOAD (Fixes Ying Xian's Blank Chart)
   const getClinicalData = (staffId) => {
     // Force string comparison to guarantee it activates in Archive Mode
     const isArchive = currentView === 'archive' && String(archiveYear) === '2025';
 
     if (isArchive) {
-      // 1. Hunt down the staff member in the proven filteredTeamData
+      // 🧹 NORMALIZER: Strips spaces and underscores to fix Ying Xian
+      const normalize = (str) => String(str || "").toLowerCase().replace(/[\s_]/g, '');
+      const cleanStaffId = normalize(staffId);
+
+      // 1. Hunt down the staff member using the normalizer
       const staffMember = filteredTeamData.find(s => 
-        (s.id && String(s.id).toLowerCase() === String(staffId).toLowerCase()) || 
-        (s.staff_name && String(s.staff_name).toLowerCase() === String(staffId).toLowerCase())
+        normalize(s.id) === cleanStaffId || normalize(s.staff_name) === cleanStaffId
       );
 
       // 2. Find the exact task handling the clinical load
