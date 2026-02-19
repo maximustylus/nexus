@@ -329,13 +329,14 @@ const getPieData = () => {
         </div>
       )}
 
-      {/* AI Smart Report */}
+   {/* AI Smart Report */}
       <div className="md:col-span-2 mb-6">
         <SmartReportView 
-  year={isArchive ? archiveYear : '2026'} 
-  teamData={teamData} 
-  staffLoads={staffLoads} 
-/>
+          year={isArchive ? archiveYear : '2026'} 
+          teamData={teamData} 
+          staffLoads={staffLoads} 
+          user={user}
+        />
       </div>
 
       {/* PIE CHART SECTION */}
