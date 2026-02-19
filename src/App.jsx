@@ -347,7 +347,11 @@ function NexusApp() {
 
       {/* AI Smart Report */}
       <div className="md:col-span-2 mb-6">
-        <SmartReportView year={isArchive ? archiveYear : '2026'} />
+        <SmartReportView 
+  year={isArchive ? archiveYear : '2026'} 
+  teamData={teamData} 
+  staffLoads={staffLoads} 
+/>
       </div>
 
       {/* PIE CHART SECTION */}
