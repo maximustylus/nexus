@@ -46,9 +46,9 @@ const FeedbackWidget = ({ user }) => {
     return (
         <>
             {/* FLOATING BUTTON */}
-            <button 
+                       <button 
                 onClick={() => setIsOpen(true)}
-                className="fixed bottom-24 md:bottom-8 right-4 md:right-8 bg-indigo-600 hover:bg-indigo-700 text-white p-4 rounded-full shadow-[0_0_20px_rgba(79,70,229,0.4)] transition-all hover:scale-110 z-50 flex items-center justify-center group"
+                className="fixed bottom-24 md:bottom-28 right-4 md:right-8 bg-indigo-600 hover:bg-indigo-700 text-white p-4 rounded-full shadow-[0_0_20px_rgba(79,70,229,0.4)] transition-all hover:scale-110 z-50 flex items-center justify-center group"
             >
                 <MessageSquare size={24} />
             </button>
