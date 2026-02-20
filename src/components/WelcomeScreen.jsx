@@ -64,7 +64,7 @@ const WelcomeScreen = (props) => {
     };
 
     // --- 2. HANDLERS ---
-    const handleSandboxEnter = () => {
+    const handleDemoEnter = () => {
         setLoading(true);
         setTimeout(() => { toggleDemo(); }, 1200);
     };
@@ -246,7 +246,7 @@ const WelcomeScreen = (props) => {
                                 
                                 <div className="flex gap-3 w-full">
                                     <button 
-                                        onClick={handleSandboxEnter} 
+                                        onClick={handleDemoEnter} 
                                         className="flex-1 flex items-center justify-center gap-2 px-4 py-3 bg-emerald-50/50 dark:bg-emerald-900/10 text-emerald-700 dark:text-emerald-400 font-bold text-[9px] rounded-lg border border-emerald-200/60 dark:border-emerald-800/30 hover:bg-emerald-100 dark:hover:bg-emerald-900/30 transition-all uppercase tracking-widest backdrop-blur-sm"
                                     >
                                         {loading ? <ShieldAlert size={12} className="animate-spin" /> : <ShieldAlert size={12} />} 
