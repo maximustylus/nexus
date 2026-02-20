@@ -16,7 +16,6 @@ import { NexusProvider, useNexus } from './context/NexusContext';
 import { MOCK_STAFF, MOCK_PROJECTS, MOCK_STAFF_NAMES } from './data/mockData'; 
 import { MOCK_TEAM_DATA, MOCK_STAFF_LOADS } from './data/mockData';
 
-
 // --- COMPONENT IMPORTS ---
 import AdminPanel from './components/AdminPanel';
 import ResponsiveLayout from './components/ResponsiveLayout'; 
@@ -143,7 +142,7 @@ function NexusApp() {
 
     if (isDemo) {
       console.log("🧪 [NEXUS] Loading Marvel Universe...");
-      // ... your demo logic ...
+      // No firebase fetching occurs here.
     } else {
       console.log("🔌 [NEXUS] Connecting to Live Firestore...");
       
@@ -195,10 +194,14 @@ function NexusApp() {
   
   // --- HELPERS & TRANSFORMERS ---
 
-// 1. FILTER DATA (Fixes the Empty Department Overview & Tasks)
+  // 🛡️ THE DATA FIREWALL: Placed HERE so all charts use it!
+  const activeTeamData = isDemo ? MOCK_TEAM_DATA : teamData;
+  const activeStaffLoads = isDemo ? MOCK_STAFF_LOADS : staffLoads;
+
+  // 1. FILTER DATA (Fixes the Empty Department Overview & Tasks)
   const getFilteredData = () => {
     const targetYear = currentView === 'archive' ? archiveYear : '2026';
-    return teamData.map(staff => ({
+    return activeTeamData.map(staff => ({
       ...staff,
       // Force String comparison so JSON (2025) and Dropdown ("2025") match perfectly
       projects: (staff.projects || []).filter(p => String(p.year || targetYear) === String(targetYear))
@@ -271,15 +274,18 @@ const getClinicalData = (staffId) => {
       }
     }
 
-    // Live Mode Fallback (2026)
-    const data = staffLoads[staffId] || Array(12).fill(0);
+    // Live Mode Fallback (2026) using Data Firewall
+    const data = activeStaffLoads[staffId] || Array(12).fill(0);
     return MONTHS.map((m, i) => ({ name: m, value: data[i] || 0 }));
   };
 
   // 5. ATTENDANCE CHART
   const getAttendanceForView = () => {
       const targetYear = currentView === 'archive' ? archiveYear : '2026';
-      const rawValues = attendanceData[targetYear] || Array(12).fill(0);
+      // Fallback for demo attendance
+      const rawValues = isDemo 
+        ? [120, 145, 160, 155, 180, 190, 195, 185, 200, 210, 190, 180] 
+        : (attendanceData[targetYear] || Array(12).fill(0));
       return MONTHS.map((m, i) => ({ name: m, value: rawValues[i] }));
   };
   
@@ -364,8 +370,8 @@ const CustomBarTooltip = ({ active, payload, label }) => {
       <div className="md:col-span-2 mb-6">
         <SmartReportView 
           year={isArchive ? archiveYear : '2026'} 
-          teamData={teamData} 
-          staffLoads={staffLoads} 
+          teamData={activeTeamData} 
+          staffLoads={activeStaffLoads} 
           user={user}
         />
       </div>
@@ -455,7 +461,7 @@ const CustomBarTooltip = ({ active, payload, label }) => {
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           
           {/* UNIFIED LOGIC: Handles both Demo and Live perfectly */}
-          {(isDemo ? activeStaffList.map(name => ({ id: name, name })) : TEAM_DIRECTORY.filter(m => m.role === 'staff' || m.id === 'alif')).map((member) => {
+          {(isDemo ? activeStaffList.map(name => ({ id: name.toLowerCase(), name })) : TEAM_DIRECTORY.filter(m => m.role === 'staff' || m.id === 'alif')).map((member) => {
             
             // 🧮 1. DO THE MATH INSIDE THE LOOP USING "member.id"
             const chartData = getClinicalData(member.id);
@@ -557,10 +563,6 @@ const CustomBarTooltip = ({ active, payload, label }) => {
     </>
   );
 
-// 🛡️ THE DATA FIREWALL: If Demo Mode is ON, force Marvel data. Otherwise, use Real data.
-  const activeTeamData = isDemo ? MOCK_TEAM_DATA : teamData;
-  const activeStaffLoads = isDemo ? MOCK_STAFF_LOADS : staffLoads;
-  
 // --- MAIN RENDER RETURN ---
   return (
     <ResponsiveLayout activeTab={currentView} onNavigate={setCurrentView}>
@@ -662,13 +664,13 @@ const CustomBarTooltip = ({ active, payload, label }) => {
      {(isAdminOpen && (user?.role === 'admin' || isDemo)) ? (
        <div className="md:col-span-2">
          {/* 🛡️ FIREWALL APPLIED TO ADMIN */}
-         <AdminPanel teamData={activeTeamData} staffLoads={activeStaffLoads} />
+         <AdminPanel teamData={activeTeamData} staffLoads={activeStaffLoads} user={user} />
        </div>
      ) : (
        <div className="md:col-span-2 w-full animate-in fade-in duration-500">
-         {/* 🛡️ FIREWALL APPLIED TO DASHBOARDS */}
-         {currentView === 'dashboard' && <DashboardView teamData={activeTeamData} staffLoads={activeStaffLoads} />}
-         {currentView === 'archive' && <DashboardView isArchive={true} teamData={activeTeamData} staffLoads={activeStaffLoads} />}
+         {/* 🛡️ FIREWALL APPLIED TO DASHBOARDS (DashboardView now directly uses activeTeamData internally!) */}
+         {currentView === 'dashboard' && <DashboardView />}
+         {currentView === 'archive' && <DashboardView isArchive={true} />}
          {currentView === 'roster' && <RosterView />}
          {currentView === 'pulse' && <WellbeingView />}
        </div>
