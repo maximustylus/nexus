@@ -274,8 +274,10 @@ const getClinicalData = (staffId) => {
       }
     }
 
-    // Live Mode Fallback (2026) using Data Firewall
-    const data = activeStaffLoads[staffId] || Array(12).fill(0);
+// Live Mode Fallback (2026) using Data Firewall
+    // 🛡️ THE FIX: Find the correct name regardless of uppercase/lowercase
+    const staffKey = Object.keys(activeStaffLoads).find(k => k.toLowerCase() === staffId.toLowerCase()) || staffId;
+    const data = activeStaffLoads[staffKey] || Array(12).fill(0);
     return MONTHS.map((m, i) => ({ name: m, value: data[i] || 0 }));
   };
 
