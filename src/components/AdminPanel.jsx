@@ -66,10 +66,9 @@ const AdminPanel = ({ teamData, staffLoads, user }) => {
         if (staffLoads) setLocalLoads(staffLoads);
     }, [staffLoads]);
 
-   // --- EFFECT: FETCH CLINICAL LOADS & ATTENDANCE ---
+  // --- EFFECT: FETCH CLINICAL LOADS & ATTENDANCE ---
     useEffect(() => {
         if (isDemo) {
-            // Mock data for Sandbox
             setAttValues([120, 145, 160, 155, 180, 190, 195, 185, 200, 210, 190, 180]);
             return;
         }
@@ -77,30 +76,42 @@ const AdminPanel = ({ teamData, staffLoads, user }) => {
         const fetchData = async () => {
             setLoadLoading(true);
             try {
-                // 1. Determine Collection (Live vs 2025 Archive)
+                // 1. Determine Collection
                 const is2025 = loadYear === '2025';
                 const collectionName = is2025 ? 'archive_2025' : 'staff_loads';
                 
-                // 2. Fetch Clinical Loads for the selected year
                 const loadSnap = await getDocs(collection(db, collectionName));
                 const newLoads = {};
                 
+                // 🧹 NORMALIZER: Strips spaces and underscores
+                const normalize = (str) => String(str || "").toLowerCase().replace(/[\s_]/g, '');
+
                 loadSnap.forEach(doc => {
                     const data = doc.data();
-                    // If Archive, find the "Clinical Load Fulfillment" task array
+                    
+                    // 🔀 TRANSLATOR: Match database ID (ying_xian) to UI Name (Ying Xian)
+                    const matchingStaffName = CEP_STAFF.find(name => 
+                        normalize(name) === normalize(doc.id)
+                    ) || doc.id; // Fallback to doc.id if not found
+
+                    // 3. Extract the Data
                     if (is2025) {
                         const clinicalProject = (data.projects || []).find(p => 
                             p.title?.toLowerCase().includes("clinical load")
                         );
-                        if (clinicalProject) newLoads[doc.id] = clinicalProject.monthly_hours;
+                        if (clinicalProject && Array.isArray(clinicalProject.monthly_hours)) {
+                            // Save under the translated name!
+                            newLoads[matchingStaffName] = clinicalProject.monthly_hours;
+                        }
                     } else {
-                        // Live mode (staff_loads collection)
-                        newLoads[doc.id] = data.data;
+                        // Live mode
+                        newLoads[matchingStaffName] = data.data;
                     }
                 });
+                
                 setLocalLoads(newLoads);
 
-                // 3. Fetch Attendance for the selected year
+                // 4. Fetch Attendance
                 const attRef = doc(db, 'system_data', 'monthly_attendance');
                 const attSnap = await getDoc(attRef);
                 if (attSnap.exists()) {
@@ -114,8 +125,8 @@ const AdminPanel = ({ teamData, staffLoads, user }) => {
         };
 
         fetchData();
-    }, [loadYear, attYear, isDemo]);
-
+    }, [loadYear, attYear, isDemo, CEP_STAFF]);
+  
     // --- HANDLER: SAVE LOADS ---
     const saveLoads = async () => {
         if (isDemo) {
@@ -297,9 +308,8 @@ const AdminPanel = ({ teamData, staffLoads, user }) => {
                     )}
 
                     {/* SECTION 1: AI REPORT VIEW (With Deep Audit built-in) */}
-                    <div className="mb-8">
-                        <SmartReportView year="2026" teamData={teamData} staffLoads={staffLoads} user={user} /> 
-                    </div>
+                    <SmartReportView year={loadYear} teamData={teamData} staffLoads={localLoads} user={user} 
+                      />
 
                     {/* ================================================= */}
                     {/* SECTION 2A: CLINICAL LOADS                        */}
