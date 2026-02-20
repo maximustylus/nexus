@@ -131,8 +131,8 @@ return (
         <div className="relative z-10 grid grid-cols-1 md:grid-cols-3 gap-8 mt-4 md:mt-0">
           
           {/* SCORE AND SUMMARY COLUMN */}
-          <div className="md:col-span-1 border-r border-white/20 pr-6">
-            <div className="flex items-center gap-2 mb-2 opacity-80">
+              <div className="md:col-span-1 pr-6">            
+              <div className="flex items-center gap-2 mb-2 opacity-80">
               <Sparkles size={16} className="text-yellow-300" />
               <span className="text-[10px] font-black uppercase tracking-widest">
                 {isPrivateView ? 'AI Executive Analysis' : 'AI Team Pulse'}
