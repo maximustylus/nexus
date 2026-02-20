@@ -61,31 +61,55 @@ const AdminPanel = ({ teamData, staffLoads, user }) => {
         if (staffLoads) setLocalLoads(staffLoads);
     }, [staffLoads]);
 
-    // --- EFFECT: FETCH ATTENDANCE ---
+   // --- EFFECT: FETCH CLINICAL LOADS & ATTENDANCE ---
     useEffect(() => {
-        if (!isDemo) {
-            const fetchAttendance = async () => {
-                setAttLoading(true);
-                try {
-                    const docRef = doc(db, 'system_data', 'monthly_attendance');
-                    const snap = await getDoc(docRef);
-                    if (snap.exists()) {
-                        const data = snap.data();
-                        setAttValues(data[attYear] || Array(12).fill(0));
-                    } else {
-                        setAttValues(Array(12).fill(0));
-                    }
-                } catch (error) {
-                    console.error("Error fetching attendance:", error);
-                } finally {
-                    setAttLoading(false);
-                }
-            };
-            fetchAttendance();
-        } else {
+        if (isDemo) {
+            // Mock data for Sandbox
             setAttValues([120, 145, 160, 155, 180, 190, 195, 185, 200, 210, 190, 180]);
+            return;
         }
-    }, [attYear, isDemo]);
+
+        const fetchData = async () => {
+            setLoadLoading(true);
+            try {
+                // 1. Determine Collection (Live vs 2025 Archive)
+                const is2025 = loadYear === '2025';
+                const collectionName = is2025 ? 'archive_2025' : 'staff_loads';
+                
+                // 2. Fetch Clinical Loads for the selected year
+                const loadSnap = await getDocs(collection(db, collectionName));
+                const newLoads = {};
+                
+                loadSnap.forEach(doc => {
+                    const data = doc.data();
+                    // If Archive, find the "Clinical Load Fulfillment" task array
+                    if (is2025) {
+                        const clinicalProject = (data.projects || []).find(p => 
+                            p.title?.toLowerCase().includes("clinical load")
+                        );
+                        if (clinicalProject) newLoads[doc.id] = clinicalProject.monthly_hours;
+                    } else {
+                        // Live mode (staff_loads collection)
+                        newLoads[doc.id] = data.data;
+                    }
+                });
+                setLocalLoads(newLoads);
+
+                // 3. Fetch Attendance for the selected year
+                const attRef = doc(db, 'system_data', 'monthly_attendance');
+                const attSnap = await getDoc(attRef);
+                if (attSnap.exists()) {
+                    setAttValues(attSnap.data()[attYear] || Array(12).fill(0));
+                }
+            } catch (error) {
+                console.error("Fetch Error:", error);
+            } finally {
+                setLoadLoading(false);
+            }
+        };
+
+        fetchData();
+    }, [loadYear, attYear, isDemo]);
 
     // --- HANDLER: SAVE LOADS ---
     const saveLoads = async () => {
@@ -310,21 +334,25 @@ const AdminPanel = ({ teamData, staffLoads, user }) => {
                                 </tr>
                                 </thead>
                                 <tbody className="divide-y divide-slate-50 dark:divide-slate-800">
-                                {activeStaffList.map(staff => (
-                                    <tr key={staff} className="hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
-                                    <td className="py-3 font-bold text-slate-700 dark:text-slate-300">{staff}</td>
-                                    {(localLoads[staff] || Array(12).fill(0)).map((val, idx) => (
-                                        <td key={idx} className="p-1">
-                                            <input 
-                                                type="number" 
-                                                value={val}
-                                                onChange={(e) => handleLoadChange(staff, idx, e.target.value)}
-                                                className={inputStyle} 
-                                            />
-                                        </td>
-                                    ))}
-                                    </tr>
-                                ))}
+                                    {activeStaffList
+                                        // 🛡️ FILTER: Only include the 5 core CEP staff
+                                        .filter(staff => !['Ashik', 'Benny', 'Evelyn', 'Mini', 'Nisa'].includes(staff))
+                                        .map(staff => (
+                                            <tr key={staff} className="hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
+                                                <td className="py-3 font-bold text-slate-700 dark:text-slate-300">{staff}</td>
+                                                {(localLoads[staff] || Array(12).fill(0)).map((val, idx) => (
+                                                    <td key={idx} className="p-1">
+                                                        <input 
+                                                            type="number" 
+                                                            value={val}
+                                                            onChange={(e) => handleLoadChange(staff, idx, e.target.value)}
+                                                            className={inputStyle} 
+                                                        />
+                                                    </td>
+                                                ))}
+                                            </tr>
+                                        ))
+                                    }
                                 </tbody>
                             </table>
                         </div>
