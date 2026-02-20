@@ -244,32 +244,28 @@ function NexusApp() {
     return [tasks, projects];
   };
 
-// 4. CLINICAL LOAD 
-  const getClinicalData = (staffId) => {
-    // Force string comparison to guarantee it activates in Archive Mode
+const getClinicalData = (staffId) => {
     const isArchive = currentView === 'archive' && String(archiveYear) === '2025';
 
     if (isArchive) {
-      // 🧹 NORMALIZER: Strips spaces and underscores to fix Ying Xian
       const normalize = (str) => String(str || "").toLowerCase().replace(/[\s_]/g, '');
       const cleanStaffId = normalize(staffId);
 
-      // 1. Hunt down the staff member using the normalizer
       const staffMember = filteredTeamData.find(s => 
         normalize(s.id) === cleanStaffId || normalize(s.staff_name) === cleanStaffId
       );
 
-      // 2. Find the exact task handling the clinical load
       const clinicalItem = staffMember?.projects?.find(p => 
         p.title && String(p.title).toLowerCase().includes("clinical load")
       );
 
-      // 3. If it finds our new JSON array, map those exact 12 numbers to the bars
       if (clinicalItem && Array.isArray(clinicalItem.monthly_hours)) {
-        return MONTHS.map((m, i) => ({ 
-            name: m, 
-            value: clinicalItem.monthly_hours[i] || 0 
-        }));
+        return MONTHS.map((m, i) => {
+            const hours = clinicalItem.monthly_hours[i] || 0;
+            // 🛡️ SENSITIVE CONVERSION: Convert hours to percentage of 42hr week (168 total/mo)
+            const percentage = Math.round((hours / 168) * 100);
+            return { name: m, value: percentage };
+        });
       }
     }
 
@@ -310,9 +306,8 @@ function NexusApp() {
   };
 
   // --- NEW: CUSTOM BAR TOOLTIP (Solves the "0-11" issue) ---
-  const CustomBarTooltip = ({ active, payload, label }) => {
+const CustomBarTooltip = ({ active, payload, label }) => {
     if (active && payload && payload.length) {
-      // Month names hardcoded for speed, or import MONTHS
       const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
       const monthLabel = monthNames[label] || label; 
 
@@ -320,7 +315,7 @@ function NexusApp() {
         <div className="bg-slate-800 text-white p-3 rounded-xl shadow-2xl border border-slate-700">
           <p className="text-xs font-bold uppercase text-slate-400 mb-1">{monthLabel}</p>
           <p className="text-lg font-black text-emerald-400">
-            {payload[0].value} <span className="text-xs font-normal text-white">hours</span>
+            {payload[0].value}<span className="text-xs font-normal text-white ml-1">% Load</span>
           </p>
         </div>
       );
@@ -479,16 +474,18 @@ function NexusApp() {
                 <div className="h-32 mt-4">
                   <ResponsiveContainer width="100%" height="100%">
                     <BarChart data={chartData}>
+                      <YAxis domain={[0, 60]} hide={true} />
+                        <ReferenceLine 
+                        y={30} 
+                        stroke="#f59e0b" 
+                        strokeDasharray="3 3" 
+                        label={{ position: 'right', value: '30%', fill: '#f59e0b', fontSize: 10, fontWeight: 'bold' }} 
+                      />
                       
-                      {/* 🔒 THE Y-AXIS LOCK */}
-                      <YAxis domain={[0, 135]} hide={true} />
-                      
-                      {/* FIXED TOOLTIP */}
                       <Tooltip cursor={{fill: 'rgba(0,0,0,0.05)', radius: 4}} content={<CustomBarTooltip />} />
                       
                       <Bar dataKey="value" radius={[4, 4, 0, 0]}>
                           {chartData.map((entry, index) => (
-                              // FIXED COLORS (Using your existing CLINICAL_GRADIENT)
                               <Cell key={`cell-${index}`} fill={CLINICAL_GRADIENT[index] || '#FFCC99'} />
                           ))}
                       </Bar>
