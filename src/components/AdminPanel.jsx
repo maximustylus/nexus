@@ -346,9 +346,9 @@ const fetchData = async () => {
                     )}
 
                     {/* SECTION 1: AI REPORT VIEW (With Deep Audit built-in) */}
-                  <div className="mb-8">  
-                  <SmartReportView forceAdminView={true} year={loadYear} teamData={teamData} staffLoads={localLoads} user={user} 
-                      </div>
+                    <div className="mb-8">  
+                        <SmartReportView forceAdminView={true} year={loadYear} teamData={teamData} staffLoads={localLoads} user={user} /> 
+                    </div>
 
                     {/* ================================================= */}
                     {/* SECTION 2A: CLINICAL LOADS                        */}
