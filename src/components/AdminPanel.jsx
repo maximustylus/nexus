@@ -130,7 +130,7 @@ const fetchData = async () => {
         fetchData();
     }, [loadYear, attYear, isDemo, CEP_STAFF]);
   
-    // --- HANDLER: SAVE LOADS ---
+// --- HANDLER: SAVE LOADS (Smart Routing) ---
     const saveLoads = async () => {
         if (isDemo) {
             setMessage('✅ (Sandbox) Loads simulated save.');
@@ -138,14 +138,49 @@ const fetchData = async () => {
         }
         setLoadLoading(true);
         try {
-          const promises = Object.keys(localLoads).map(staff => 
-            updateDoc(doc(db, 'staff_loads', staff), { data: localLoads[staff] })
-          );
-          await Promise.all(promises);
-          setMessage('✅ Clinical Loads Updated!');
+            const is2025 = loadYear === '2025';
+
+            if (is2025) {
+                // 🛡️ ARCHIVE ROUTE (2025): Safely update deep inside the 'cep_team' projects array
+                const promises = Object.keys(localLoads).map(async (staffName) => {
+                    // Convert "Ying Xian" to "ying_xian" for the database ID
+                    const docId = staffName.toLowerCase().replace(' ', '_');
+                    const staffRef = doc(db, 'cep_team', docId);
+                    
+                    const snap = await getDoc(staffRef);
+                    if (snap.exists()) {
+                        let projects = snap.data().projects || [];
+                        let updated = false;
+                        
+                        // Map through projects and ONLY update the clinical load item
+                        projects = projects.map(p => {
+                            if (p.title?.toLowerCase().includes("clinical load")) {
+                                updated = true;
+                                return { ...p, monthly_hours: localLoads[staffName] };
+                            }
+                            return p;
+                        });
+
+                        if (updated) {
+                            await updateDoc(staffRef, { projects });
+                        }
+                    }
+                });
+                await Promise.all(promises);
+                setMessage(`✅ ${loadYear} Archive Loads Updated!`);
+
+            } else {
+                // 🟢 LIVE ROUTE (2026): Update the standard 'staff_loads' collection
+                const promises = Object.keys(localLoads).map(staffName => {
+                    const docId = staffName.toLowerCase().replace(' ', '_');
+                    return updateDoc(doc(db, 'staff_loads', docId), { data: localLoads[staffName] });
+                });
+                await Promise.all(promises);
+                setMessage(`✅ ${loadYear} Live Loads Updated!`);
+            }
         } catch (e) {
-          console.error(e);
-          setMessage('❌ Error saving loads');
+            console.error(e);
+            setMessage('❌ Error saving loads');
         }
         setLoadLoading(false);
     };
@@ -313,7 +348,7 @@ const fetchData = async () => {
                     {/* SECTION 1: AI REPORT VIEW (With Deep Audit built-in) */}
                   <div className="mb-8">  
                   <SmartReportView forceAdminView={true} year={loadYear} teamData={teamData} staffLoads={localLoads} user={user} 
-                      />
+                      </div>
 
                     {/* ================================================= */}
                     {/* SECTION 2A: CLINICAL LOADS                        */}
