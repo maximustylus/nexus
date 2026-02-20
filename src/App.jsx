@@ -1,4 +1,4 @@
-import DemoTour from './components/DemoTour';
+import AppGuide from './components/AppGuide';
 import FeedbackWidget from './components/FeedbackWidget';
 import React, { useState, useEffect } from 'react';
 import { db, auth } from './firebase';
@@ -10,7 +10,7 @@ import {
 } from 'recharts';
 import { 
   Sun, Moon, LogOut, LayoutDashboard, Archive, 
-  Calendar, Activity, Filter, ShieldAlert 
+  Calendar, Activity, Filter, ShieldAlert, BookOpen 
 } from 'lucide-react';
 
 // --- CONTEXT & DATA STRATEGY ---
@@ -31,7 +31,7 @@ import WelcomeScreen from './components/WelcomeScreen';
 import { STAFF_LIST, STAFF_IDS, MONTHS, checkAccess, TEAM_DIRECTORY } from './utils';
 
 // ==========================================
-// CONFIGURATION & CONSTANTS (v1.4 OFFICIAL)
+// CONFIGURATION & CONSTANTS
 // ==========================================
 
 // 1. Official SingHealth CDP Colors
@@ -98,6 +98,22 @@ function NexusApp() {
       setIsDark(!isDark);
       // Logic inside useEffect will handle the class toggling
   };
+
+  // 4. App Guide Pop-up
+  
+  const [isGuideOpen, setIsGuideOpen] = useState(false);
+// Auto-open guide ONLY when entering Demo Mode
+  useEffect(() => {
+    if (isDemo) setIsGuideOpen(true);
+  }, [isDemo]);
+
+  // Intercept the "guide" tab click, open the modal, and snap the view back to dashboard
+  useEffect(() => {
+    if (currentView === 'guide') {
+      setIsGuideOpen(true);
+      setCurrentView('dashboard');
+    }
+  }, [currentView]);
   
   // --- AUTH STATE ---
   const [user, setUser] = useState(null);
@@ -610,10 +626,10 @@ const CustomBarTooltip = ({ active, payload, label }) => {
           </div>
         </div>
 
-        {/* CENTER NAVIGATION (THE FIX: Hidden on MD, Visible only on LG+) */}
-        {/* Changed 'hidden md:flex' to 'hidden lg:flex' to prevent landscape cutoff */}
+        {/* CENTER NAVIGATION */}
         <div className="hidden lg:flex bg-slate-100 dark:bg-slate-900/50 p-1 rounded-lg shrink-0">
-           {['dashboard', 'archive', 'roster', 'pulse'].map(view => (
+           {/* 👇 ADDED 'guide' TO THIS ARRAY */}
+           {['dashboard', 'archive', 'roster', 'pulse', 'guide'].map(view => (
              <button 
                key={view} 
                onClick={() => setCurrentView(view)} 
@@ -623,11 +639,12 @@ const CustomBarTooltip = ({ active, payload, label }) => {
                {view === 'archive' && <Archive size={14} />}
                {view === 'roster' && <Calendar size={14} />}
                {view === 'pulse' && <Activity size={14} />}
+               {view === 'guide' && <BookOpen size={14} />} 
                {view}
              </button>
            ))}
         </div>
-
+          
         {/* ACTION BUTTONS (Always Visible) */}
         <div className="flex items-center gap-2 md:gap-3 shrink-0">
           
@@ -682,9 +699,9 @@ const CustomBarTooltip = ({ active, payload, label }) => {
        </div>
      )}
 
-      {/* Demo Tour Guide (Only shows in Demo Mode) */}
-      <DemoTour />
-
+      {/* App Guide */}
+      <AppGuide isOpen={isGuideOpen} onClose={() => setIsGuideOpen(false)} />
+      
       {/* Global Bot */}
       <AuraPulseBot user={user} />
 
