@@ -1,6 +1,6 @@
+import React, { useState, useEffect, useRef } from 'react';
 import AppGuide from './components/AppGuide';
 import FeedbackWidget from './components/FeedbackWidget';
-import React, { useState, useEffect } from 'react';
 import { db, auth } from './firebase';
 import { collection, onSnapshot, doc } from 'firebase/firestore';
 import { signOut } from 'firebase/auth';
@@ -102,16 +102,20 @@ function NexusApp() {
   // 4. App Guide Pop-up
   
   const [isGuideOpen, setIsGuideOpen] = useState(false);
-// Auto-open guide ONLY when entering Demo Mode
+  const previousView = useRef('dashboard');
+
+  // Auto-open guide ONLY when entering Demo Mode
   useEffect(() => {
     if (isDemo) setIsGuideOpen(true);
   }, [isDemo]);
 
-  // Intercept the "guide" tab click, open the modal, and snap the view back to dashboard
+  // Intercept the "guide" tab click
   useEffect(() => {
     if (currentView === 'guide') {
       setIsGuideOpen(true);
-      setCurrentView('dashboard');
+      setCurrentView(previousView.current);
+    } else {
+      previousView.current = currentView;
     }
   }, [currentView]);
   
