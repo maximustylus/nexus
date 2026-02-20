@@ -1,3 +1,4 @@
+import { useNexus } from '../context/NexusContext';
 import React, { useState, useRef } from 'react';
 import { db } from '../firebase'; 
 import { doc, setDoc } from 'firebase/firestore'; 
@@ -16,7 +17,16 @@ const STAFF_PROFILES = {
     "Nisa":      { role: "Administrator", grade: "Admin", focus: "Operations, Budget, Rostering" }
 };
 
+const MARVEL_PROFILES = {
+    "Steve": { role: "Senior Avenger", grade: "JG14", focus: "Leadership, Clinical" },
+    "Peter": { role: "Junior Avenger", grade: "JG11", focus: "Inpatient, Clinical" },
+    "Charles": { role: "Senior Principal Avenger Head of Department", grade: "JG16", focus: "Research" },
+    "Jean": { role: "Avenger Educator", grade: "JG13", focus: "Education" },
+    "Tony": { role: "Avenger Innovator", grade: "JG15", focus: "Management" }
+};
+
 const SmartAnalysis = ({ teamData, staffLoads, onClose }) => {
+    const { isDemo } = useNexus();
     const [targetYear, setTargetYear] = useState('2025'); 
     const [loading, setLoading] = useState(false);
     const [status, setStatus] = useState('GENERATE ANALYSIS');
@@ -54,7 +64,7 @@ const SmartAnalysis = ({ teamData, staffLoads, onClose }) => {
             setStatus('Connecting to Secure Neural Link...');
             const response = await generateSmartAnalysis({
                 targetYear,
-                staffProfiles: STAFF_PROFILES,
+                staffProfiles: activeProfiles,         
                 yearData,
                 staffLoads
             });
