@@ -1,9 +1,11 @@
-import { useNexus } from '../context/NexusContext';
 import React, { useState, useRef } from 'react';
 import { db } from '../firebase'; 
 import { doc, setDoc } from 'firebase/firestore'; 
 import { X, ShieldCheck, Sparkles, Upload, FileJson } from 'lucide-react';
 import { getFunctions, httpsCallable } from 'firebase/functions';
+
+// 🛡️ IMPORT CONTEXT
+import { useNexus } from '../context/NexusContext';
 
 const functions = getFunctions(undefined, 'us-central1');
 const generateSmartAnalysis = httpsCallable(functions, 'generateSmartAnalysis');
@@ -17,17 +19,18 @@ const STAFF_PROFILES = {
     "Nisa":      { role: "Administrator", grade: "Admin", focus: "Operations, Budget, Rostering" }
 };
 
+// 🦸‍♂️ MARVEL PROFILES
 const MARVEL_PROFILES = {
-    "Steve": { role: "Senior Avenger", grade: "JG14", focus: "Leadership, Clinical" },
-    "Peter": { role: "Junior Avenger", grade: "JG11", focus: "Inpatient, Clinical" },
-    "Charles": { role: "Senior Principal Avenger Head of Department", grade: "JG16", focus: "Research" },
-    "Jean": { role: "Avenger Educator", grade: "JG13", focus: "Education" },
-    "Tony": { role: "Avenger Innovator", grade: "JG15", focus: "Management" }
+    "Steve": { role: "Senior Principal", grade: "JG14", focus: "Leadership, Clinical" },
+    "Peter": { role: "Junior CEP", grade: "JG11", focus: "Inpatient, Clinical" },
+    "Charles": { role: "Master Expert", grade: "JG16", focus: "Research" },
+    "Jean": { role: "Principal", grade: "JG13", focus: "Education" },
+    "Tony": { role: "Tech Lead", grade: "JG15", focus: "Management" }
 };
 
 const SmartAnalysis = ({ teamData, staffLoads, onClose }) => {
-    const { isDemo } = useNexus();
-    const [targetYear, setTargetYear] = useState('2025'); 
+    const { isDemo } = useNexus(); // 👈 GRAB CONTEXT HERE
+    const [targetYear, setTargetYear] = useState('2026'); 
     const [loading, setLoading] = useState(false);
     const [status, setStatus] = useState('GENERATE ANALYSIS');
     const [result, setResult] = useState(null);
@@ -62,9 +65,13 @@ const SmartAnalysis = ({ teamData, staffLoads, onClose }) => {
             }));
 
             setStatus('Connecting to Secure Neural Link...');
+
+            // 🛡️ THE FIREWALL: Perfectly scoped inside the function
+            const activeProfiles = isDemo ? MARVEL_PROFILES : STAFF_PROFILES;
+
             const response = await generateSmartAnalysis({
                 targetYear,
-                staffProfiles: activeProfiles,         
+                staffProfiles: activeProfiles, // 👈 FEED THE CORRECT PROFILES TO AI
                 yearData,
                 staffLoads
             });
@@ -85,15 +92,12 @@ const SmartAnalysis = ({ teamData, staffLoads, onClose }) => {
         if (!result || !importedData) return;
         setLoading(true);
         try {
-            // 1. Save the AI Report Text (The Brief)
             await setDoc(doc(db, 'system_data', `reports_${targetYear}`), {
                 privateText: result.private,
                 publicText: result.public,
                 timestamp: new Date()
             });
 
-            // 2. Save the RAW Workload Data (The Projects & Loads)
-            // This ensures the Archive graphs can pull the data next time you visit!
             const batchPromises = importedData.map(staff => {
                 const staffId = staff.staff_name.toLowerCase();
                 return setDoc(doc(db, `archive_${targetYear}`, staffId), {
