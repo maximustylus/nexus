@@ -16,7 +16,7 @@ import { STAFF_LIST, STATUS_OPTIONS, DOMAIN_LIST } from '../utils';
 import { MOCK_STAFF_NAMES } from '../data/mockData'; 
 import { useNexus } from '../context/NexusContext';   
 
-// Helper for Months
+// STATIC VARIABLES
 const MONTH_LABELS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
 const AdminPanel = ({ teamData, staffLoads, user }) => {
@@ -25,6 +25,11 @@ const AdminPanel = ({ teamData, staffLoads, user }) => {
 
     // --- DYNAMIC STAFF LIST SWITCHER ---
     const activeStaffList = isDemo ? MOCK_STAFF_NAMES : STAFF_LIST;
+
+    // --- 🛡️ MOVED INSIDE: Safely filters the list after it is defined ---
+    const CEP_STAFF = activeStaffList.filter(name => 
+        !['Ashik', 'Benny', 'Evelyn', 'Mini', 'Nisa'].includes(name)
+    );
 
     // --- TABS STATE ---
     const [activeTab, setActiveTab] = useState('OPERATIONS'); 
