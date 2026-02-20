@@ -77,41 +77,42 @@ const fetchData = async () => {
             setLoadLoading(true);
             try {
                 const is2025 = loadYear === '2025';
-                
-                // 🎯 FIX: Look in 'cep_team' for 2025 data, 'staff_loads' for 2026
-                const collectionName = is2025 ? 'cep_team' : 'staff_loads';
-                const loadSnap = await getDocs(collection(db, collectionName));
                 const newLoads = {};
-                
                 const normalize = (str) => String(str || "").toLowerCase().replace(/[\s_]/g, '');
 
-                loadSnap.forEach(doc => {
-                    const data = doc.data();
-                    
-                    const matchingStaffName = CEP_STAFF.find(name => 
-                        normalize(name) === normalize(doc.id) || 
-                        normalize(name) === normalize(data.staff_name) ||
-                        normalize(name) === normalize(data.id)
-                    );
-                    const finalName = matchingStaffName || doc.id;
-
-                    if (is2025) {
-                        // 🎯 FIX: Dig into the projects array to find the 2025 hours
-                        const projects = data.projects || [];
-                        const clinicalProject = projects.find(p => 
-                            p.title?.toLowerCase().includes("clinical load")
+                if (is2025) {
+                    // 🎯 SILVER BULLET: Extract 2025 data directly from the existing teamData prop
+                    CEP_STAFF.forEach(staffName => {
+                        const cleanName = normalize(staffName);
+                        const staffDoc = teamData.find(s => 
+                            normalize(s.id) === cleanName || normalize(s.staff_name) === cleanName
                         );
-                        
-                        if (clinicalProject && Array.isArray(clinicalProject.monthly_hours)) {
-                            newLoads[finalName] = clinicalProject.monthly_hours;
+
+                        if (staffDoc && staffDoc.projects) {
+                            const clinicalProject = staffDoc.projects.find(p => 
+                                p.title?.toLowerCase().includes("clinical load")
+                            );
+                            newLoads[staffName] = clinicalProject?.monthly_hours || Array(12).fill(0);
+                        } else {
+                            newLoads[staffName] = Array(12).fill(0);
                         }
-                    } else {
-                        // Live mode
+                    });
+                    setLocalLoads(newLoads);
+                } else {
+                    // 🎯 LIVE MODE: Fetch 2026 from the staff_loads collection
+                    const loadSnap = await getDocs(collection(db, 'staff_loads'));
+                    loadSnap.forEach(doc => {
+                        const data = doc.data();
+                        const matchingStaffName = CEP_STAFF.find(name => 
+                            normalize(name) === normalize(doc.id) || 
+                            normalize(name) === normalize(data.staff_name) ||
+                            normalize(name) === normalize(data.id)
+                        );
+                        const finalName = matchingStaffName || doc.id;
                         newLoads[finalName] = data.data || Array(12).fill(0);
-                    }
-                });
-                
-                setLocalLoads(newLoads);
+                    });
+                    setLocalLoads(newLoads);
+                }
 
                 // Fetch Attendance
                 const attRef = doc(db, 'system_data', 'monthly_attendance');
@@ -125,7 +126,7 @@ const fetchData = async () => {
                 setLoadLoading(false);
             }
         };
-
+      
         fetchData();
     }, [loadYear, attYear, isDemo, CEP_STAFF]);
   
@@ -310,7 +311,8 @@ const fetchData = async () => {
                     )}
 
                     {/* SECTION 1: AI REPORT VIEW (With Deep Audit built-in) */}
-                    <SmartReportView forceAdminView={true} year={loadYear} teamData={teamData} staffLoads={localLoads} user={user} 
+                  <div className="mb-8">  
+                  <SmartReportView forceAdminView={true} year={loadYear} teamData={teamData} staffLoads={localLoads} user={user} 
                       />
 
                     {/* ================================================= */}
