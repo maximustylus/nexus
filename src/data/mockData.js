@@ -82,3 +82,38 @@ export const MOCK_PULSE_TRENDS = [
   { day: 'Thu', Steve: 82, Peter: 50, Charles: 89, Jean: 72, Tony: 93 }, // Recovery
   { day: 'Fri', Steve: 85, Peter: 55, Charles: 92, Jean: 80, Tony: 88 },
 ];
+
+// 7. FIREWALL ADAPTERS (For App.jsx Simulation)
+
+export const MOCK_STAFF_LOADS = {
+  'Steve': [40, 42, 38, 45, 50, 48, 42, 40, 44, 46, 42, 40],
+  'Peter': [35, 38, 40, 42, 38, 40, 45, 42, 38, 40, 42, 45],
+  'Charles': [45, 48, 50, 42, 40, 38, 40, 45, 48, 50, 45, 42],
+  'Jean': [20, 25, 30, 28, 35, 40, 38, 35, 30, 25, 20, 25],
+  'Tony': [50, 45, 40, 38, 35, 30, 25, 30, 35, 40, 45, 50]
+};
+
+export const MOCK_TEAM_DATA = MOCK_STAFF_NAMES.map((name) => {
+  const staffProjects = MOCK_PROJECTS.filter(p => p.lead === name).map(p => ({
+    title: p.title,
+    domain_type: p.domain.toUpperCase(),
+    item_type: 'Project',
+    status_dots: p.progress === 100 ? 5 : (p.progress > 50 ? 4 : 2),
+    year: p.year,
+    ...(p.domain === 'Clinical' && p.year === '2026' ? { monthly_hours: MOCK_STAFF_LOADS[name] } : {})
+  }));
+
+  // Guarantee a clinical load exists for the 2026 tables
+  if (!staffProjects.find(p => p.title.includes('Clinical Load'))) {
+      staffProjects.push({
+          title: 'Clinical Load 2026',
+          domain_type: 'CLINICAL',
+          item_type: 'Task',
+          status_dots: 4,
+          year: '2026',
+          monthly_hours: MOCK_STAFF_LOADS[name]
+      });
+  }
+
+  return { id: name.toLowerCase(), staff_name: name, projects: staffProjects };
+});
