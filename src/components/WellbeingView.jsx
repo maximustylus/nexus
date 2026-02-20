@@ -67,10 +67,7 @@ const WellbeingView = () => {
 
     const handleSavePulse = async () => {
         const timeString = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-        
-        // Translate the 0-10 slider back to a 0-100 value so the main capacity chart stays accurate
-        const savedEnergy = parseInt(newEnergy) * 10;
-        
+        const savedEnergy = parseInt(newEnergy) * 10;        
         const updatePayload = {
             energy: savedEnergy,
             focus: parseInt(newFocus),
@@ -79,7 +76,7 @@ const WellbeingView = () => {
         };
 
         if (isDemo) {
-            // 🛡️ FIREWALL: Update Sandbox State Only
+            // 🛡️ FIREWALL: Update Demo State Only
             const updatedData = { ...pulseData, [selectedStaff]: updatePayload };
             setPulseData(updatedData);
             calculateStats(updatedData);
