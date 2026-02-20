@@ -243,5 +243,6 @@ return (
       )}
     </div>
   );
+  };
 
   export default SmartReportView;
