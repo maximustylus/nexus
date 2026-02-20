@@ -14,6 +14,8 @@ import {
 // --- CONTEXT & DATA STRATEGY ---
 import { NexusProvider, useNexus } from './context/NexusContext';
 import { MOCK_STAFF, MOCK_PROJECTS, MOCK_STAFF_NAMES } from './data/mockData'; 
+import { MOCK_TEAM_DATA, MOCK_STAFF_LOADS } from './data/mockData';
+
 
 // --- COMPONENT IMPORTS ---
 import AdminPanel from './components/AdminPanel';
@@ -554,7 +556,11 @@ const CustomBarTooltip = ({ active, payload, label }) => {
       </div>
     </>
   );
-      
+
+// 🛡️ THE DATA FIREWALL: If Demo Mode is ON, force Marvel data. Otherwise, use Real data.
+  const activeTeamData = isDemo ? MOCK_TEAM_DATA : teamData;
+  const activeStaffLoads = isDemo ? MOCK_STAFF_LOADS : staffLoads;
+  
 // --- MAIN RENDER RETURN ---
   return (
     <ResponsiveLayout activeTab={currentView} onNavigate={setCurrentView}>
@@ -652,19 +658,21 @@ const CustomBarTooltip = ({ active, payload, label }) => {
         </div>
       </div>
       
-      {/* MAIN CONTENT AREA */}
-      {(isAdminOpen && (user?.role === 'admin' || isDemo)) ? (
-        <div className="md:col-span-2">
-          <AdminPanel teamData={teamData} staffLoads={staffLoads} />
-        </div>
-      ) : (
-        <div className="md:col-span-2 w-full animate-in fade-in duration-500">
-          {currentView === 'dashboard' && <DashboardView />}
-          {currentView === 'archive' && <DashboardView isArchive={true} />}
-          {currentView === 'roster' && <RosterView />}
-          {currentView === 'pulse' && <WellbeingView />}
-        </div>
-      )}
+     {/* MAIN CONTENT AREA */}
+     {(isAdminOpen && (user?.role === 'admin' || isDemo)) ? (
+       <div className="md:col-span-2">
+         {/* 🛡️ FIREWALL APPLIED TO ADMIN */}
+         <AdminPanel teamData={activeTeamData} staffLoads={activeStaffLoads} />
+       </div>
+     ) : (
+       <div className="md:col-span-2 w-full animate-in fade-in duration-500">
+         {/* 🛡️ FIREWALL APPLIED TO DASHBOARDS */}
+         {currentView === 'dashboard' && <DashboardView teamData={activeTeamData} staffLoads={activeStaffLoads} />}
+         {currentView === 'archive' && <DashboardView isArchive={true} teamData={activeTeamData} staffLoads={activeStaffLoads} />}
+         {currentView === 'roster' && <RosterView />}
+         {currentView === 'pulse' && <WellbeingView />}
+       </div>
+     )}
 
       {/* Global Bot */}
       <AuraPulseBot user={user} />
