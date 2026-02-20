@@ -308,7 +308,7 @@ const fetchData = async () => {
                     )}
 
                     {/* SECTION 1: AI REPORT VIEW (With Deep Audit built-in) */}
-                    <SmartReportView isAdmin={true} year={loadYear} teamData={teamData} staffLoads={localLoads} user={user} 
+                    <SmartReportView forceAdminView={true} year={loadYear} teamData={teamData} staffLoads={localLoads} user={user} 
                       />
 
                     {/* ================================================= */}
