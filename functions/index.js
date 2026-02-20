@@ -282,14 +282,14 @@ exports.generateSmartAnalysis = onCall({
         const modelName = await resolveModel(API_KEY);
 
         const promptText = `
-            ACT AS: Senior Clinical Lead at KKH.
+            ACT AS: Senior Clinical Lead at a Healthcare institution.
             CONTEXT: Annual Performance Review for Year ${targetYear}.
             DATA: ${JSON.stringify(staffProfiles)}
             WORKLOAD: ${JSON.stringify(yearData)}
             CLINICAL_LOADS: ${JSON.stringify(staffLoads)}
 
             TASK: Generate TWO reports for ${targetYear}.
-            1. PRIVATE_EXECUTIVE_BRIEF (For Leads): Audit staff against their JG11-JG14 grades based on this year's data.
+            1. PRIVATE_EXECUTIVE_BRIEF (For Leads): Audit staff against their JG11-JG16 grades based on this year's data.
             2. PUBLIC_TEAM_PULSE (For Staff): Celebrate ${targetYear} wins and "Joy at Work".
 
             CRITICAL OUTPUT FORMAT:
