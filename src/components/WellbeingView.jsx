@@ -1,27 +1,26 @@
 import React, { useEffect, useState } from 'react';
 import { db } from '../firebase';
-import { doc, onSnapshot } from 'firebase/firestore';
-import { Battery, BatteryCharging, BatteryWarning, BatteryFull, Users, Activity, Zap } from 'lucide-react';
+import { doc, onSnapshot, setDoc } from 'firebase/firestore';
+import { Battery, BatteryCharging, BatteryWarning, BatteryFull, Users, Activity, Zap, X, Save } from 'lucide-react';
 import { STAFF_LIST } from '../utils';
 
-// --- NEW IMPORTS ---
+// --- CONTEXT & DATA ---
 import { useNexus } from '../context/NexusContext';
 import { MOCK_STAFF } from '../data/mockData';
 
 const WellbeingView = () => {
-    const { isDemo } = useNexus(); // <--- 1. GET CONTEXT
+    const { isDemo } = useNexus(); 
     const [pulseData, setPulseData] = useState({});
     const [stats, setStats] = useState({ avg: 0, active: 0, zone: 'HEALTHY' });
 
-    // --- 2. DEFINE ACTIVE LIST (Real vs Marvel) ---
-    // If Demo, map the names from MOCK_STAFF. If Live, use the fixed STAFF_LIST.
+    // --- MODAL STATE ---
+    const [selectedStaff, setSelectedStaff] = useState(null);
+    const [newEnergy, setNewEnergy] = useState(50);
+
     const activeStaffList = isDemo ? MOCK_STAFF.map(s => s.name) : STAFF_LIST;
 
-    // --- 3. DATA FORKING LOGIC ---
     useEffect(() => {
         if (isDemo) {
-            // === SANDBOX MODE ===
-            // Transform MOCK_STAFF array into the object format expected by the view
             const mockPulse = {};
             MOCK_STAFF.forEach(char => {
                 mockPulse[char.name] = {
@@ -30,16 +29,12 @@ const WellbeingView = () => {
                     status: 'online'
                 };
             });
-            
-            // Set data immediately (no async needed)
             setPulseData(mockPulse);
             calculateStats(mockPulse);
-
         } else {
-            // === LIVE MODE (Original Firestore Logic) ===
-            const unsub = onSnapshot(doc(db, 'system_data', 'daily_pulse'), (doc) => {
-                if (doc.exists()) {
-                    const data = doc.data();
+            const unsub = onSnapshot(doc(db, 'system_data', 'daily_pulse'), (docSnap) => {
+                if (docSnap.exists()) {
+                    const data = docSnap.data();
                     setPulseData(data);
                     calculateStats(data);
                 }
@@ -60,7 +55,37 @@ const WellbeingView = () => {
         });
     };
 
-    // --- VISUAL HELPERS ---
+    // --- CLICK HANDLERS ---
+    const handleCardClick = (name, currentEnergy) => {
+        setSelectedStaff(name);
+        setNewEnergy(currentEnergy || 50);
+    };
+
+    const handleSavePulse = async () => {
+        const timeString = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        
+        if (isDemo) {
+            // 🛡️ FIREWALL: Update Sandbox State Only
+            const updatedData = {
+                ...pulseData,
+                [selectedStaff]: {
+                    energy: parseInt(newEnergy),
+                    lastUpdate: timeString,
+                    status: 'online'
+                }
+            };
+            setPulseData(updatedData);
+            calculateStats(updatedData);
+        } else {
+            // 📡 LIVE: Update Firebase
+            await setDoc(doc(db, 'system_data', 'daily_pulse'), {
+                [selectedStaff]: { energy: parseInt(newEnergy), lastUpdate: timeString, status: 'online' }
+            }, { merge: true });
+        }
+        
+        setSelectedStaff(null); // Close modal
+    };
+
     const getBatteryIcon = (level) => {
         if (level > 75) return <BatteryFull className="text-emerald-500" size={24} />;
         if (level > 40) return <BatteryCharging className="text-yellow-500" size={24} />;
@@ -76,10 +101,8 @@ const WellbeingView = () => {
     return (
         <div className="w-full max-w-[1600px] mx-auto p-6 md:p-10 space-y-10 animate-in fade-in duration-700">
             
-            {/* 1. HERO SECTION: Full Width Dashboard Strip */}
+            {/* 1. HERO SECTION */}
             <div className="w-full bg-slate-900 rounded-3xl p-8 lg:p-12 text-white shadow-2xl relative overflow-hidden border border-slate-800 flex flex-col xl:flex-row items-center justify-between gap-12">
-                
-                {/* Background Decor */}
                 <div className="absolute -top-40 -left-20 w-[600px] h-[600px] bg-indigo-600/20 rounded-full blur-[120px] pointer-events-none"></div>
                 <div className="absolute -bottom-40 -right-20 w-[500px] h-[500px] bg-emerald-600/10 rounded-full blur-[100px] pointer-events-none"></div>
 
@@ -93,9 +116,7 @@ const WellbeingView = () => {
                             {isDemo ? 'Simulated Capacity' : 'Department Capacity'}
                         </h2>
                         <div className="flex items-baseline justify-center sm:justify-start gap-2">
-                            <span className="text-7xl font-black tracking-tighter text-white drop-shadow-lg">
-                                {stats.avg}
-                            </span>
+                            <span className="text-7xl font-black tracking-tighter text-white drop-shadow-lg">{stats.avg}</span>
                             <span className="text-4xl font-bold text-slate-500">%</span>
                         </div>
                         
@@ -113,7 +134,7 @@ const WellbeingView = () => {
                     </div>
                 </div>
 
-                {/* MIDDLE: The Wide Progress Bar */}
+                {/* MIDDLE: Wide Progress Bar */}
                 <div className="w-full flex-1 max-w-4xl flex flex-col justify-center space-y-4 px-2 lg:px-8">
                     <div className="flex justify-between text-[10px] font-bold text-slate-500 uppercase tracking-widest px-1">
                         <span>Critical</span>
@@ -153,16 +174,17 @@ const WellbeingView = () => {
                 </div>
                 
                 <div className="w-full grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 lg:gap-8">
-                    {/* 4. MAP OVER ACTIVE LIST (Dynamic) */}
                     {activeStaffList.map((name) => {
-                        // Safe lookup for data (handles casing differences)
                         const dataKey = Object.keys(pulseData).find(k => k.toLowerCase().includes(name.toLowerCase()));
                         const staffData = pulseData[name] || pulseData[dataKey];
+                        const currentEnergy = staffData ? staffData.energy : 0;
                         
                         return (
-                            <div key={name} className="group bg-white dark:bg-slate-800 p-6 rounded-3xl border border-slate-100 dark:border-slate-700 shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all duration-300 flex flex-col justify-between h-[200px]">
-                                
-                                {/* Card Header */}
+                            <div 
+                                key={name} 
+                                onClick={() => handleCardClick(name, currentEnergy)}
+                                className="group cursor-pointer bg-white dark:bg-slate-800 p-6 rounded-3xl border border-slate-100 dark:border-slate-700 shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all duration-300 flex flex-col justify-between h-[200px]"
+                            >
                                 <div className="flex justify-between items-start">
                                     <div className="overflow-hidden">
                                         <h3 className="text-xl font-bold text-slate-800 dark:text-slate-100 group-hover:text-indigo-600 transition-colors truncate pr-2">
@@ -180,18 +202,17 @@ const WellbeingView = () => {
                                     </div>
                                 </div>
 
-                                {/* Battery Bar Section */}
                                 <div className="space-y-2 mt-auto">
                                     <div className="flex justify-between items-end">
                                         <span className="text-[10px] font-bold text-slate-400 uppercase">Energy</span>
                                         <span className={`text-2xl font-black ${staffData ? 'text-slate-800 dark:text-white' : 'text-slate-300'}`}>
-                                            {staffData ? staffData.energy : 0}%
+                                            {currentEnergy}%
                                         </span>
                                     </div>
                                     <div className="h-3.5 bg-slate-100 dark:bg-slate-700 rounded-full overflow-hidden">
                                         <div 
                                             className={`h-full rounded-full transition-all duration-700 ${staffData ? getBarColor(staffData.energy) : 'bg-slate-300'}`}
-                                            style={{ width: `${staffData ? staffData.energy : 0}%` }}
+                                            style={{ width: `${currentEnergy}%` }}
                                         />
                                     </div>
                                 </div>
@@ -200,6 +221,48 @@ const WellbeingView = () => {
                     })}
                 </div>
             </div>
+
+            {/* 3. INTERACTIVE UPDATE MODAL */}
+            {selectedStaff && (
+                <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center z-[100] p-4">
+                    <div className="bg-white dark:bg-slate-800 w-full max-w-sm rounded-3xl shadow-2xl p-6 border border-slate-200 dark:border-slate-700 animate-in zoom-in-95 duration-300">
+                        <div className="flex justify-between items-center mb-6">
+                            <h3 className="text-lg font-black text-slate-800 dark:text-white uppercase tracking-tight">Update Pulse</h3>
+                            <button onClick={() => setSelectedStaff(null)} className="text-slate-400 hover:text-slate-600 dark:hover:text-white transition-colors">
+                                <X size={24} />
+                            </button>
+                        </div>
+                        
+                        <div className="text-center mb-6">
+                            <div className="text-sm font-bold text-slate-500 uppercase mb-2">Staff Member</div>
+                            <div className="text-3xl font-black text-indigo-600 dark:text-indigo-400">{selectedStaff}</div>
+                        </div>
+
+                        <div className="mb-8">
+                            <div className="flex justify-between text-xs font-bold text-slate-400 uppercase mb-4">
+                                <span>Depleted</span>
+                                <span className="text-slate-800 dark:text-white text-2xl">{newEnergy}%</span>
+                                <span>Optimal</span>
+                            </div>
+                            <input 
+                                type="range" 
+                                min="0" max="100" 
+                                value={newEnergy} 
+                                onChange={(e) => setNewEnergy(e.target.value)}
+                                className="w-full h-3 bg-slate-200 dark:bg-slate-700 rounded-lg appearance-none cursor-pointer accent-indigo-600"
+                            />
+                        </div>
+
+                        <button 
+                            onClick={handleSavePulse}
+                            className="w-full py-4 bg-indigo-600 hover:bg-indigo-700 text-white font-black rounded-xl uppercase transition-colors shadow-lg flex items-center justify-center gap-2"
+                        >
+                            <Save size={20} />
+                            {isDemo ? 'Save Simulation' : 'Save Changes'}
+                        </button>
+                    </div>
+                </div>
+            )}
         </div>
     );
 };
