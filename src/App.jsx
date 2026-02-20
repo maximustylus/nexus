@@ -4,7 +4,7 @@ import { collection, onSnapshot, doc } from 'firebase/firestore';
 import { signOut } from 'firebase/auth';
 import { 
   BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, 
-  Tooltip, ResponsiveContainer, Cell, PieChart, Pie, Legend 
+  Tooltip, ResponsiveContainer, Cell, PieChart, Pie, Legend, ReferenceLine 
 } from 'recharts';
 import { 
   Sun, Moon, LogOut, LayoutDashboard, Archive, 
