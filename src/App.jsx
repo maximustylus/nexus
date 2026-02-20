@@ -1,3 +1,4 @@
+import DemoTour from './components/DemoTour';
 import FeedbackWidget from './components/FeedbackWidget';
 import React, { useState, useEffect } from 'react';
 import { db, auth } from './firebase';
@@ -572,7 +573,7 @@ const CustomBarTooltip = ({ active, payload, label }) => {
   return (
     <ResponsiveLayout activeTab={currentView} onNavigate={setCurrentView}>
       
-      {/* SANDBOX BANNER */}
+      {/* DEMO BANNER */}
       {isDemo && (
         <div className="md:col-span-2 bg-emerald-50 border border-emerald-200 rounded-lg p-3 mb-4 flex items-center justify-between animate-in slide-in-from-top">
           <div className="flex items-center gap-2">
@@ -601,7 +602,7 @@ const CustomBarTooltip = ({ active, payload, label }) => {
           
           <div className="hidden sm:block">
             <h1 className="text-lg md:text-2xl font-black text-slate-800 dark:text-white tracking-tight leading-none">
-              {isDemo ? 'NEXUS SANDBOX' : 'NEXUS'}
+              {isDemo ? 'NEXUS DEMO' : 'NEXUS'}
             </h1>
             <p className="text-[10px] md:text-xs font-bold text-slate-400 uppercase tracking-widest mt-1">
                 {isDemo ? 'Simulation Environment' : 'Smart Dashboard v1.4'}
@@ -630,10 +631,10 @@ const CustomBarTooltip = ({ active, payload, label }) => {
         {/* ACTION BUTTONS (Always Visible) */}
         <div className="flex items-center gap-2 md:gap-3 shrink-0">
           
-          {/* Sandbox Toggle - FIXED STRUCTURE */}
+          {/*  Toggle - FIXED STRUCTURE */}
           <div className="flex items-center gap-2 border-r border-slate-200 dark:border-slate-700 pr-2 mr-1">
             <span className={`text-[10px] font-bold uppercase ${isDemo ? 'text-emerald-600' : 'text-slate-400'}`}>
-               {isDemo ? 'Sandbox' : 'Live'}
+               {isDemo ? 'Demo' : 'Live'}
             </span>
             <button 
               onClick={toggleDemo} 
@@ -680,6 +681,9 @@ const CustomBarTooltip = ({ active, payload, label }) => {
          {currentView === 'pulse' && <WellbeingView />}
        </div>
      )}
+
+      {/* Demo Tour Guide (Only shows in Demo Mode) */}
+      <DemoTour />
 
       {/* Global Bot */}
       <AuraPulseBot user={user} />
