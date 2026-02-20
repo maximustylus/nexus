@@ -13,9 +13,10 @@ const WellbeingView = () => {
     const [pulseData, setPulseData] = useState({});
     const [stats, setStats] = useState({ avg: 0, active: 0, zone: 'HEALTHY' });
 
-    // --- MODAL STATE ---
+    // --- AURA MODAL STATE ---
     const [selectedStaff, setSelectedStaff] = useState(null);
-    const [newEnergy, setNewEnergy] = useState(50);
+    const [newEnergy, setNewEnergy] = useState(5); // 0-10 scale
+    const [newFocus, setNewFocus] = useState(5);   // 0-10 scale
 
     const activeStaffList = isDemo ? MOCK_STAFF.map(s => s.name) : STAFF_LIST;
 
@@ -24,7 +25,8 @@ const WellbeingView = () => {
             const mockPulse = {};
             MOCK_STAFF.forEach(char => {
                 mockPulse[char.name] = {
-                    energy: char.battery,
+                    energy: char.battery, // Stored as 0-100 for the main chart
+                    focus: 8,             // Default focus out of 10
                     lastUpdate: 'Just now',
                     status: 'online'
                 };
@@ -46,7 +48,7 @@ const WellbeingView = () => {
     const calculateStats = (data) => {
         const values = Object.values(data);
         if (values.length === 0) return;
-        const total = values.reduce((acc, curr) => acc + curr.energy, 0);
+        const total = values.reduce((acc, curr) => acc + (curr.energy || 0), 0);
         const avg = Math.round(total / values.length);
         setStats({
             avg,
@@ -56,36 +58,51 @@ const WellbeingView = () => {
     };
 
     // --- CLICK HANDLERS ---
-    const handleCardClick = (name, currentEnergy) => {
+    const handleCardClick = (name, currentEnergy, currentFocus) => {
         setSelectedStaff(name);
-        setNewEnergy(currentEnergy || 50);
+        // Translate 0-100 energy back to a 0-10 scale for the UI slider
+        setNewEnergy(currentEnergy ? Math.round(currentEnergy / 10) : 5);
+        setNewFocus(currentFocus || 5);
     };
 
     const handleSavePulse = async () => {
         const timeString = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
         
+        // Translate the 0-10 slider back to a 0-100 value so the main capacity chart stays accurate
+        const savedEnergy = parseInt(newEnergy) * 10;
+        
+        const updatePayload = {
+            energy: savedEnergy,
+            focus: parseInt(newFocus),
+            lastUpdate: timeString,
+            status: 'online'
+        };
+
         if (isDemo) {
             // 🛡️ FIREWALL: Update Sandbox State Only
-            const updatedData = {
-                ...pulseData,
-                [selectedStaff]: {
-                    energy: parseInt(newEnergy),
-                    lastUpdate: timeString,
-                    status: 'online'
-                }
-            };
+            const updatedData = { ...pulseData, [selectedStaff]: updatePayload };
             setPulseData(updatedData);
             calculateStats(updatedData);
         } else {
             // 📡 LIVE: Update Firebase
             await setDoc(doc(db, 'system_data', 'daily_pulse'), {
-                [selectedStaff]: { energy: parseInt(newEnergy), lastUpdate: timeString, status: 'online' }
+                [selectedStaff]: updatePayload
             }, { merge: true });
         }
         
         setSelectedStaff(null); // Close modal
     };
 
+    // --- AURA INTELLIGENCE LOGIC ---
+    const getStatusRecommendation = (energy, focus) => {
+        if (energy <= 3) return "Rest and recovery highly recommended";
+        if (energy <= 5 || focus <= 4) return "Light tasks recommended";
+        if (focus <= 3) return "Switch to low-cognitive tasks";
+        if (energy >= 8 && focus >= 8) return "Prime for deep work or complex cases";
+        return "Stable operating capacity";
+    };
+
+    // --- VISUAL HELPERS ---
     const getBatteryIcon = (level) => {
         if (level > 75) return <BatteryFull className="text-emerald-500" size={24} />;
         if (level > 40) return <BatteryCharging className="text-yellow-500" size={24} />;
@@ -106,7 +123,6 @@ const WellbeingView = () => {
                 <div className="absolute -top-40 -left-20 w-[600px] h-[600px] bg-indigo-600/20 rounded-full blur-[120px] pointer-events-none"></div>
                 <div className="absolute -bottom-40 -right-20 w-[500px] h-[500px] bg-emerald-600/10 rounded-full blur-[100px] pointer-events-none"></div>
 
-                {/* LEFT: Capacity Stats */}
                 <div className="relative z-10 flex flex-col sm:flex-row items-center sm:items-start gap-6 text-center sm:text-left min-w-fit">
                     <div className="p-4 bg-slate-800/80 rounded-2xl border border-slate-700 backdrop-blur-sm shadow-inner">
                         <Activity size={36} className="text-indigo-400" />
@@ -134,7 +150,6 @@ const WellbeingView = () => {
                     </div>
                 </div>
 
-                {/* MIDDLE: Wide Progress Bar */}
                 <div className="w-full flex-1 max-w-4xl flex flex-col justify-center space-y-4 px-2 lg:px-8">
                     <div className="flex justify-between text-[10px] font-bold text-slate-500 uppercase tracking-widest px-1">
                         <span>Critical</span>
@@ -178,11 +193,12 @@ const WellbeingView = () => {
                         const dataKey = Object.keys(pulseData).find(k => k.toLowerCase().includes(name.toLowerCase()));
                         const staffData = pulseData[name] || pulseData[dataKey];
                         const currentEnergy = staffData ? staffData.energy : 0;
+                        const currentFocus = staffData ? staffData.focus : 0;
                         
                         return (
                             <div 
                                 key={name} 
-                                onClick={() => handleCardClick(name, currentEnergy)}
+                                onClick={() => handleCardClick(name, currentEnergy, currentFocus)}
                                 className="group cursor-pointer bg-white dark:bg-slate-800 p-6 rounded-3xl border border-slate-100 dark:border-slate-700 shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all duration-300 flex flex-col justify-between h-[200px]"
                             >
                                 <div className="flex justify-between items-start">
@@ -222,10 +238,10 @@ const WellbeingView = () => {
                 </div>
             </div>
 
-            {/* 3. INTERACTIVE UPDATE MODAL */}
+            {/* 3. AURA SOCIAL BATTERY MODAL (NEXUS UI + Claude Sliders) */}
             {selectedStaff && (
                 <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center z-[100] p-4">
-                    <div className="bg-white dark:bg-slate-800 w-full max-w-sm rounded-3xl shadow-2xl p-6 border border-slate-200 dark:border-slate-700 animate-in zoom-in-95 duration-300">
+                    <div className="bg-white dark:bg-slate-800 w-full max-w-md rounded-3xl shadow-2xl p-6 border border-slate-200 dark:border-slate-700 animate-in zoom-in-95 duration-300">
                         <div className="flex justify-between items-center mb-6">
                             <h3 className="text-lg font-black text-slate-800 dark:text-white uppercase tracking-tight">Update Pulse</h3>
                             <button onClick={() => setSelectedStaff(null)} className="text-slate-400 hover:text-slate-600 dark:hover:text-white transition-colors">
@@ -238,19 +254,52 @@ const WellbeingView = () => {
                             <div className="text-3xl font-black text-indigo-600 dark:text-indigo-400">{selectedStaff}</div>
                         </div>
 
-                        <div className="mb-8">
-                            <div className="flex justify-between text-xs font-bold text-slate-400 uppercase mb-4">
-                                <span>Depleted</span>
-                                <span className="text-slate-800 dark:text-white text-2xl">{newEnergy}%</span>
-                                <span>Optimal</span>
+                        <div className="space-y-5 mb-8">
+                            {/* Energy Slider */}
+                            <div className="bg-slate-50 dark:bg-slate-900/50 p-5 rounded-2xl border border-slate-100 dark:border-slate-700">
+                                <div className="flex justify-between items-center mb-4">
+                                    <h4 className="font-bold text-slate-800 dark:text-slate-200">Energy Level</h4>
+                                    <span className="text-2xl font-black text-indigo-600 dark:text-indigo-400">{newEnergy}/10</span>
+                                </div>
+                                <input 
+                                    type="range" 
+                                    min="0" max="10" 
+                                    value={newEnergy} 
+                                    onChange={(e) => setNewEnergy(e.target.value)}
+                                    className="w-full h-2 bg-slate-200 dark:bg-slate-700 rounded-lg appearance-none cursor-pointer accent-indigo-600 mb-3"
+                                />
+                                <div className="flex justify-between text-xs font-medium text-slate-500">
+                                    <span className="flex items-center gap-1">😴 Exhausted</span>
+                                    <span className="flex items-center gap-1">⚡ Energized</span>
+                                </div>
                             </div>
-                            <input 
-                                type="range" 
-                                min="0" max="100" 
-                                value={newEnergy} 
-                                onChange={(e) => setNewEnergy(e.target.value)}
-                                className="w-full h-3 bg-slate-200 dark:bg-slate-700 rounded-lg appearance-none cursor-pointer accent-indigo-600"
-                            />
+
+                            {/* Focus Slider */}
+                            <div className="bg-slate-50 dark:bg-slate-900/50 p-5 rounded-2xl border border-slate-100 dark:border-slate-700">
+                                <div className="flex justify-between items-center mb-4">
+                                    <h4 className="font-bold text-slate-800 dark:text-slate-200">Focus Level</h4>
+                                    <span className="text-2xl font-black text-purple-600 dark:text-purple-400">{newFocus}/10</span>
+                                </div>
+                                <input 
+                                    type="range" 
+                                    min="0" max="10" 
+                                    value={newFocus} 
+                                    onChange={(e) => setNewFocus(e.target.value)}
+                                    className="w-full h-2 bg-slate-200 dark:bg-slate-700 rounded-lg appearance-none cursor-pointer accent-purple-600 mb-3"
+                                />
+                                <div className="flex justify-between text-xs font-medium text-slate-500">
+                                    <span className="flex items-center gap-1">🌫️ Distracted</span>
+                                    <span className="flex items-center gap-1">🎯 Sharp Focus</span>
+                                </div>
+                            </div>
+
+                            {/* Current Status Recommendation */}
+                            <div className="bg-amber-50 dark:bg-amber-900/20 p-5 rounded-2xl border border-amber-100 dark:border-amber-900/30">
+                                <h4 className="font-bold text-slate-800 dark:text-slate-200 mb-2">Current Status</h4>
+                                <p className="text-amber-600 dark:text-amber-500 font-medium">
+                                    {getStatusRecommendation(newEnergy, newFocus)}
+                                </p>
+                            </div>
                         </div>
 
                         <button 
