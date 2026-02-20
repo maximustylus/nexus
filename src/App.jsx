@@ -1,3 +1,4 @@
+import FeedbackWidget from './components/FeedbackWidget';
 import React, { useState, useEffect } from 'react';
 import { db, auth } from './firebase';
 import { collection, onSnapshot, doc } from 'firebase/firestore';
@@ -132,7 +133,7 @@ function NexusApp() {
     return () => unsubscribe();
   }, []);
   
-  // --- EFFECT: DATA FETCHING (v1.5 STABILIZED) ---
+// --- EFFECT: DATA FETCHING (v1.5 STABILIZED) ---
   useEffect(() => {
     let unsubStaff, unsubAttendance;
     const unsubLoads = [];
@@ -140,11 +141,13 @@ function NexusApp() {
     // Safety: If these aren't defined yet, don't try to fetch
     if (!currentView || !archiveYear) return;
 
+    // 🛡️ THE AUTH GATE: Do not fetch if they aren't logged in and aren't in Demo mode!
+    if (!isDemo && !user) return;
+
     if (isDemo) {
       console.log("🧪 [NEXUS] Loading Marvel Universe...");
       // No firebase fetching occurs here.
     } else {
-      console.log("🔌 [NEXUS] Connecting to Live Firestore...");
       
       // 1. Determine Target Collection
       const isArchived2025 = currentView === 'archive' && archiveYear === '2025';
@@ -190,7 +193,7 @@ function NexusApp() {
       unsubLoads.forEach(u => u());
     };
     // CRITICAL: Ensure all these are in the array!
-  }, [isDemo, currentView, archiveYear, activeStaffList, activeStaffIds]);
+  }, [isDemo, currentView, archiveYear, activeStaffList, activeStaffIds, user]);
   
   // --- HELPERS & TRANSFORMERS ---
 
