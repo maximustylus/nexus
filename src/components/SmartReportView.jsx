@@ -56,18 +56,61 @@ const isActuallyAdmin = forceAdminView === true;
       setLoading(true);
       try {
         if (isDemo) {
-          setReports({
-            private: {
-              summary: "Private: Junior staff (JG11) showing scope creep in Admin tasks. Evaluate JG14 clinical ratio.",
-              highlights: ["Clinical targets met by JG13."],
-              risks: ["Monitor workload balance for JG11."]
-            },
-            public: {
-              summary: "Public: The team is making great progress on Q3 deliverables. Keep up the momentum!",
-              highlights: ["Education modules updated."],
-              risks: ["Finalize EPIC integration."]
-            }
-          });
+          let mockReport = {};
+          if (String(year) === '2026') {
+            mockReport = {
+              private: { 
+                summary: "Private: Peter (JG11) is experiencing severe scope creep and burnout risk. Reallocate his Inpatient Ward duties to Steve.", 
+                highlights: ["Steve maintaining 100% on Shield Integration.", "Charles securing Mutant Genome grant."], 
+                risks: ["Peter's On-Call frequency.", "Tony's WFH isolation."] 
+              },
+              public: { 
+                summary: "Public: The Marvel CEP Team is crushing Q1! Shield Integration is complete, and clinical targets are being met across the board.", 
+                highlights: ["Shield Integration Completed.", "New Web Shooter protocols active."], 
+                risks: ["Maintain communication during remote work.", "Monitor ward volumes."] 
+              }
+            };
+          } else if (String(year) === '2025') {
+            mockReport = {
+              private: { 
+                summary: "Private (2025 Archive): Tony (JG15) delayed Nano-Tech upgrades due to excessive management overhead. Streamline approvals for JG15 staff.", 
+                highlights: ["Operation: Rebirth succeeded.", "Young Avengers Mentorship launched."], 
+                risks: ["Management bottlenecking tech upgrades.", "Budget constraints on Cerebro."] 
+              },
+              public: { 
+                summary: "Public (2025 Archive): A historic year for the Marvel CEP Team! Operation Rebirth set new clinical standards for the hospital.", 
+                highlights: ["Historic clinical outcomes.", "Mentorship program launched."], 
+                risks: ["Equipment maintenance schedules.", "Documentation backlogs."] 
+              }
+            };
+          } else if (String(year) === '2024') {
+            mockReport = {
+              private: { 
+                summary: "Private (2024 Archive): Jean's research load compromised her clinical availability in Q3. Ensure strict 60/40 splits for JG13.", 
+                highlights: ["Sentinels Defense Pact secured.", "Daily Bugle PR handled perfectly."], 
+                risks: ["Research bleeding into clinical hours.", "Vibranium supply shortages."] 
+              },
+              public: { 
+                summary: "Public (2024 Archive): The team flawlessly handled the Phoenix Force crisis while maintaining excellent patient care metrics.", 
+                highlights: ["Crisis management excellence.", "Public relations win."], 
+                risks: ["Supply chain stability.", "Staff fatigue post-crisis."] 
+              }
+            };
+          } else {
+            mockReport = {
+              private: { 
+                summary: "Private (2023 Archive): Foundational year. Steve established baseline protocols. Need to hire more junior staff to support him.", 
+                highlights: ["Hydra Base cleared.", "Web Fluid V3 finalized."], 
+                risks: ["Single-point-of-failure with Steve.", "Ethics board delays."] 
+              },
+              public: { 
+                summary: "Public (2023 Archive): The team established our core clinic protocols and hosted a highly successful Stark Expo!", 
+                highlights: ["Stark Expo 2023.", "New clinical baselines set."], 
+                risks: ["Growing patient waitlists.", "Facility expansions needed."] 
+              }
+            };
+          }
+          setReports(mockReport);
         } else {
           const reportRef = doc(db, 'system_data', `reports_${year}`);
           const reportSnap = await getDoc(reportRef);
