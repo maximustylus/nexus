@@ -1,17 +1,18 @@
+import { LayoutDashboard, Archive, Calendar, Activity, BookOpen } from 'lucide-react';
 import React from 'react';
 import useWindowSize from '../hooks/useWindowSize';
-import { LayoutDashboard, Archive, Calendar, Activity } from 'lucide-react';
 
 const ResponsiveLayout = ({ children, activeTab, onNavigate }) => {
   const { width } = useWindowSize();
   const isMobile = width < 1024;
 
   // Navigation Items Config
-  const navItems = [
-    { id: 'dashboard', label: 'Home', icon: LayoutDashboard },
-    { id: 'archive', label: 'Archive', icon: Archive },
-    { id: 'roster', label: 'Roster', icon: Calendar },
-    { id: 'pulse', label: 'Pulse', icon: Activity },
+const navItems = [
+    { id: 'dashboard', icon: LayoutDashboard, label: 'Dashboard' },
+    { id: 'archive', icon: Archive, label: 'Archive' },
+    { id: 'roster', icon: Calendar, label: 'Roster' },
+    { id: 'pulse', icon: Activity, label: 'Pulse' },
+    { id: 'guide', icon: BookOpen, label: 'Guide' }
   ];
 
   return (
