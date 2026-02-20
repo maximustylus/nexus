@@ -77,8 +77,9 @@ const fetchData = async () => {
             setLoadLoading(true);
             try {
                 const is2025 = loadYear === '2025';
-                const collectionName = is2025 ? 'archive_2025' : 'staff_loads';
                 
+                // 🎯 FIX: Look in 'cep_team' for 2025 data, 'staff_loads' for 2026
+                const collectionName = is2025 ? 'cep_team' : 'staff_loads';
                 const loadSnap = await getDocs(collection(db, collectionName));
                 const newLoads = {};
                 
@@ -87,25 +88,26 @@ const fetchData = async () => {
                 loadSnap.forEach(doc => {
                     const data = doc.data();
                     
-                    // 🛡️ BULLETPROOF TRANSLATOR: Checks doc.id AND data.staff_name AND data.id
                     const matchingStaffName = CEP_STAFF.find(name => 
                         normalize(name) === normalize(doc.id) || 
                         normalize(name) === normalize(data.staff_name) ||
                         normalize(name) === normalize(data.id)
                     );
-
-                    // If it finds a match, use the clean name (e.g. "Ying Xian")
                     const finalName = matchingStaffName || doc.id;
 
                     if (is2025) {
-                        const clinicalProject = (data.projects || []).find(p => 
+                        // 🎯 FIX: Dig into the projects array to find the 2025 hours
+                        const projects = data.projects || [];
+                        const clinicalProject = projects.find(p => 
                             p.title?.toLowerCase().includes("clinical load")
                         );
+                        
                         if (clinicalProject && Array.isArray(clinicalProject.monthly_hours)) {
                             newLoads[finalName] = clinicalProject.monthly_hours;
                         }
                     } else {
-                        newLoads[finalName] = data.data;
+                        // Live mode
+                        newLoads[finalName] = data.data || Array(12).fill(0);
                     }
                 });
                 
