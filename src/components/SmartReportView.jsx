@@ -10,7 +10,7 @@ const SmartReportView = ({ year, teamData, staffLoads, user, forceAdminView }) =
   const [loading, setLoading] = useState(true);
   
   // 🛡️ MASTER OVERRIDE: Check if user is admin OR if the parent component forces admin view
-  const isActuallyAdmin = forceAdminView || user?.role === 'admin' || user?.role === 'director' || isDemo;
+const isActuallyAdmin = forceAdminView || user?.role === 'admin' || user?.role === 'director';
 
   // HOLD BOTH REPORTS IN STATE
   const [reports, setReports] = useState({ private: null, public: null });
