@@ -4,12 +4,13 @@ import {
     signInWithEmailAndPassword, 
     createUserWithEmailAndPassword, 
     updateProfile, 
-    signOut 
+    signOut,
+    sendPasswordResetEmail // 👈 ADDED RESET IMPORT
 } from 'firebase/auth';
 import { 
     Sun, Moon, ArrowRight, Activity, ShieldCheck, 
     Building2, Globe, ChevronLeft, AlertCircle, ShieldAlert, 
-    BrainCircuit, Shield, User, Lock, Mail, Sparkles, Zap
+    BrainCircuit, Shield, User, Lock, Mail, Sparkles, Zap, KeyRound, CheckCircle2
 } from 'lucide-react';
 import { useNexus } from '../context/NexusContext';
 import { checkAccess } from '../utils'; 
@@ -21,7 +22,7 @@ const WelcomeScreen = (props) => {
     const { toggleDemo } = useNexus(); 
 
     // VIEW STATES
-    const [view, setView] = useState('SPLASH'); 
+    const [view, setView] = useState('SPLASH'); // 'SPLASH' | 'AUTH' | 'ORG_REGISTER' | 'RESET'
     const [isDark, setIsDark] = useState(false);
     const [animate, setAnimate] = useState(false);
 
@@ -31,6 +32,7 @@ const WelcomeScreen = (props) => {
     const [password, setPassword] = useState('');
     const [name, setName] = useState('');
     const [error, setError] = useState('');
+    const [message, setMessage] = useState(''); // 👈 ADDED MESSAGE STATE
     const [loading, setLoading] = useState(false);
 
     // --- 1. THEME & INITIALIZATION ---
@@ -70,6 +72,7 @@ const WelcomeScreen = (props) => {
     const handleAuth = async (e) => {
         e.preventDefault();
         setError('');
+        setMessage('');
         setLoading(true);
         
         try {
@@ -95,6 +98,28 @@ const WelcomeScreen = (props) => {
             if (auth.currentUser) await signOut(auth);
             const cleanError = err.message.replace('Firebase:', '').replace('Error (auth/', '').replace(').', '').trim();
             setError(cleanError.toUpperCase());
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    // 👈 ADDED RESET PASSWORD HANDLER
+    const handleResetPassword = async (e) => {
+        e.preventDefault();
+        if (!email) {
+            setError("PLEASE ENTER YOUR OFFICIAL EMAIL FIRST.");
+            return;
+        }
+        setLoading(true); setError(''); setMessage('');
+        try {
+            await sendPasswordResetEmail(auth, email);
+            setMessage("RESET LINK TRANSMITTED. CHECK YOUR INBOX.");
+            setTimeout(() => {
+                setView('AUTH');
+                setMessage('');
+            }, 3000);
+        } catch (err) {
+            setError("TRANSMISSION FAILED. ENSURE EMAIL IS REGISTERED.");
         } finally {
             setLoading(false);
         }
@@ -131,7 +156,8 @@ const WelcomeScreen = (props) => {
         }
     ];
 
-    const isSplitView = view === 'AUTH' || view === 'ORG_REGISTER';
+    // 👈 ADDED 'RESET' TO SPLIT VIEW TRIGGER
+    const isSplitView = view === 'AUTH' || view === 'ORG_REGISTER' || view === 'RESET';
 
     return (
         <div className="min-h-screen w-full bg-slate-100 dark:bg-slate-950 transition-colors duration-700 flex flex-col items-center justify-center relative overflow-hidden p-4 md:p-6 font-sans">
@@ -267,16 +293,24 @@ const WelcomeScreen = (props) => {
                                     <h2 className="text-3xl font-black text-slate-900 dark:text-white uppercase mb-2 tracking-tighter">
                                         {isLoginMode ? 'Verify Identity' : 'Initialise Profile'}
                                     </h2>
-                                    <p className="text-slate-500 dark:text-slate-400 text-[10px] font-bold uppercase tracking-[0.2em] flex items-center gap-2">
+                                    <div className="text-slate-500 dark:text-slate-400 text-[10px] font-bold uppercase tracking-[0.2em] flex items-center gap-2">
                                         <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></div>
                                         {isLoginMode ? 'Secure Gateway Active' : 'New User Registration Protocol'}
-                                    </p>
+                                    </div>
                                 </div>
 
                                 {error && (
                                     <div className="mb-6 p-3 bg-red-50 dark:bg-red-900/20 border border-red-100 dark:border-red-800/50 text-red-600 dark:text-red-400 text-[10px] font-bold rounded-xl flex gap-3 items-start animate-shake">
                                         <AlertCircle size={16} className="shrink-0 mt-0.5"/> 
                                         <span>{error}</span>
+                                    </div>
+                                )}
+
+                                {/* 👈 ADDED SUCCESS MESSAGE UI */}
+                                {message && (
+                                    <div className="mb-6 p-3 bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-100 dark:border-emerald-800/50 text-emerald-600 dark:text-emerald-400 text-[10px] font-bold rounded-xl flex gap-3 items-start">
+                                        <CheckCircle2 size={16} className="shrink-0 mt-0.5"/> 
+                                        <span>{message}</span>
                                     </div>
                                 )}
 
@@ -303,7 +337,20 @@ const WelcomeScreen = (props) => {
                                             onChange={e => setEmail(e.target.value)} 
                                         />
                                     </div>
+                                    
                                     <div className="relative group">
+                                        {/* 👈 ADDED FORGOT PASSWORD LINK */}
+                                        {isLoginMode && (
+                                            <div className="flex justify-end mb-1">
+                                                <button 
+                                                    type="button" 
+                                                    onClick={() => { setView('RESET'); setError(''); setMessage(''); }}
+                                                    className="text-[10px] font-bold text-indigo-500 hover:text-indigo-400 transition-colors uppercase tracking-widest"
+                                                >
+                                                    Forgot Password?
+                                                </button>
+                                            </div>
+                                        )}
                                         <div className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-indigo-500 transition-colors"><Lock size={18} /></div>
                                         <input 
                                             type="password" 
@@ -332,6 +379,54 @@ const WelcomeScreen = (props) => {
                                         {isLoginMode ? "New to NEXUS? Request Access" : "Have credentials? Sign in"}
                                     </button>
                                 </div>
+                            </div>
+                        )}
+
+                        {/* --- 👈 NEW VIEW: RESET PASSWORD --- */}
+                        {view === 'RESET' && (
+                            <div className="w-full max-w-sm mx-auto animate-in slide-in-from-right duration-500 fade-in text-center">
+                                <button onClick={() => setView('AUTH')} className="mb-8 text-slate-400 hover:text-indigo-500 flex items-center gap-2 text-[10px] font-black uppercase tracking-widest transition-colors group">
+                                    <ChevronLeft size={14} className="group-hover:-translate-x-1 transition-transform"/> Back to Sign In
+                                </button>
+                                
+                                <div className="relative w-16 h-16 bg-indigo-500/10 rounded-2xl flex items-center justify-center mx-auto mb-6 border border-indigo-500/20 ring-4 ring-indigo-500/5">
+                                    <KeyRound className="text-indigo-500" size={32}/>
+                                </div>
+
+                                <h2 className="text-2xl font-black text-slate-900 dark:text-white uppercase mb-3 tracking-tight">System Override</h2>
+                                <p className="text-slate-500 text-xs font-medium mb-8 leading-relaxed px-2">
+                                    Enter your official email to receive a secure password reset transmission.
+                                </p>
+
+                                {error && (
+                                    <div className="mb-6 p-3 bg-red-50 dark:bg-red-900/20 border border-red-100 dark:border-red-800/50 text-red-600 dark:text-red-400 text-[10px] font-bold rounded-xl flex gap-3 items-start animate-shake text-left">
+                                        <AlertCircle size={16} className="shrink-0 mt-0.5"/> 
+                                        <span>{error}</span>
+                                    </div>
+                                )}
+
+                                <form onSubmit={handleResetPassword} className="space-y-4">
+                                    <div className="relative group">
+                                        <div className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-indigo-500 transition-colors"><Mail size={18} /></div>
+                                        <input 
+                                            type="email" 
+                                            placeholder="Official Email" 
+                                            required
+                                            className="w-full bg-white dark:bg-slate-900/80 border border-slate-200 dark:border-slate-700 rounded-xl py-4 pl-12 pr-4 text-xs font-bold text-slate-900 dark:text-white outline-none focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500 transition-all placeholder:text-slate-400 dark:placeholder:text-slate-600" 
+                                            value={email} 
+                                            onChange={e => setEmail(e.target.value)} 
+                                        />
+                                    </div>
+
+                                    <button 
+                                        type="submit" 
+                                        disabled={loading} 
+                                        className="w-full py-4 bg-indigo-600 text-white font-black text-xs uppercase tracking-widest rounded-xl hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-600/20 flex justify-center items-center gap-2 active:scale-95 disabled:opacity-50 mt-4"
+                                    >
+                                        {loading ? <Zap size={16} className="animate-spin" /> : <ShieldCheck size={16} />}
+                                        {loading ? 'Transmitting...' : 'Send Reset Link'}
+                                    </button>
+                                </form>
                             </div>
                         )}
 
