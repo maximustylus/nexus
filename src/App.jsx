@@ -680,6 +680,9 @@ const CustomBarTooltip = ({ active, payload, label }) => {
 
       {/* Global Bot */}
       <AuraPulseBot user={user} />
+
+      {/* Global Feedback Reporter */}
+      <FeedbackWidget user={user} />
       
     </ResponsiveLayout>
   );
