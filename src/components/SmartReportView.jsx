@@ -99,9 +99,9 @@ const SmartReportView = ({ year, teamData, staffLoads, user }) => {
 
 return (
     <div className="flex flex-col gap-4">
-<div className="bg-gradient-to-br from-indigo-600 to-violet-700 rounded-3xl p-8 text-white shadow-xl relative overflow-hidden group">
+      <div className="bg-gradient-to-br from-indigo-600 to-violet-700 rounded-3xl p-8 text-white shadow-xl relative overflow-hidden group">
         
-        {/* ONE UNIFIED GRID NO MORE EMPTY TOP ROWS */}
+        {/* ONE UNIFIED GRID */}
         <div className="relative z-10 grid grid-cols-1 md:grid-cols-3 gap-8">
           
           {/* COLUMN 1: AURA HEADER, TOGGLES, SCORE, AND SUMMARY */}
@@ -152,34 +152,8 @@ return (
               <Maximize2 size={12} /> View Full Analysis
             </button>
           </div>
-          
-          {/* SCORE AND SUMMARY COLUMN */}
-              <div className="md:col-span-1 pr-6">            
-              <div className="flex items-center gap-2 mb-2 opacity-80">
-              <Sparkles size={16} className="text-yellow-300" />
-              <span className="text-[10px] font-black uppercase tracking-widest">
-                {isPrivateView ? 'AI Executive Analysis' : 'AI Team Pulse'}
-              </span>
-            </div>
-            <div className="text-6xl font-black mb-1 tracking-tighter">100%</div>
-            
-            <div className={`inline-flex items-center gap-1 px-3 py-1 rounded-full backdrop-blur-md text-[10px] font-black uppercase mb-4 ${isPrivateView ? 'bg-red-500/30 text-red-100' : 'bg-emerald-500/30 text-emerald-100'}`}>
-              {isPrivateView ? <Lock size={10} /> : <Users size={10} />}
-              {isPrivateView ? 'PRIVATE ARCHIVE' : 'PUBLIC ARCHIVE'}
-            </div>
-            
-            <p className="text-xs leading-relaxed font-bold opacity-80 line-clamp-3 italic">
-              "{activeReport?.summary}"
-            </p>
-            <button 
-              onClick={() => setIsFullReportOpen(true)}
-              className="mt-3 flex items-center gap-1 text-[10px] font-black uppercase text-indigo-200 hover:text-white transition-colors"
-            >
-              <Maximize2 size={12} /> View Full Analysis
-            </button>
-          </div>
 
-          {/* WINS AND RISKS COLUMNS */}
+          {/* COLUMNS 2 & 3: WINS AND RISKS COLUMNS */}
           <div className="md:col-span-2 flex flex-col justify-between">
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-8">
               <div>
@@ -187,7 +161,7 @@ return (
                   <TrendingUp size={14} /> {isPrivateView ? 'Executive Wins' : 'Team Wins'}
                 </h3>
                 <ul className="space-y-3">
-                  {activeReport?.highlights.map((h, i) => (
+                  {activeReport?.highlights?.map((h, i) => (
                     <li key={i} className="flex gap-2 text-[11px] font-black leading-tight">
                       <CheckCircle2 size={14} className="shrink-0 text-emerald-300" />
                       {h}
@@ -201,7 +175,7 @@ return (
                   <AlertTriangle size={14} /> {isPrivateView ? 'Risk Factors' : 'Strategic Focus'}
                 </h3>
                 <ul className="space-y-3">
-                  {activeReport?.risks.map((r, i) => (
+                  {activeReport?.risks?.map((r, i) => (
                     <li key={i} className="flex gap-2 text-[11px] font-black leading-tight">
                       <span className="shrink-0 w-2 h-2 rounded-full bg-orange-400 mt-1" />
                       {r}
@@ -234,6 +208,7 @@ return (
                 </div>
             </div>
           </div>
+
         </div>
       </div>
 
@@ -268,6 +243,5 @@ return (
       )}
     </div>
   );
-};
 
-export default SmartReportView;
+  export default SmartReportView;
