@@ -5,7 +5,7 @@ import { db } from '../firebase';
 import { doc, getDoc } from 'firebase/firestore';
 import SmartAnalysis from './SmartAnalysis';
 
-const SmartReportView = ({ year, teamData, staffLoads, user }) => {
+  const SmartReportView = ({ year, teamData, staffLoads, user, forceAdminView }) => {  
   const { isDemo } = useNexus();
   const [loading, setLoading] = useState(true);
   
@@ -108,16 +108,16 @@ return (
           <div className="md:col-span-1 pr-6 flex flex-col">
             
             {/* 1. The Unified AURA Header */}
-            <div className="flex items-center gap-2 mb-4 opacity-80">
-              <Sparkles size={16} className="text-yellow-300" />
+                  <div className="flex items-center gap-2 mb-4 opacity-80">
+                    <Sparkles size={16} className="text-yellow-300" />
               <span className="text-[10px] font-black uppercase tracking-widest">
                 {isPrivateView ? 'AURA EXECUTIVE ANALYSIS' : 'AURA TEAM PULSE'}
               </span>
             </div>
 
             {/* 2. The Admin Toggles */}
-            {isAdmin && (
-                <div className="flex bg-black/30 w-fit rounded-lg p-1 border border-white/20 backdrop-blur-md mb-6">
+                    {(isAdmin || forceAdminView) && (
+                    <div className="flex bg-black/30 w-fit rounded-lg p-1 border border-white/20 backdrop-blur-md mb-6">
                     <button 
                         onClick={() => setViewMode('private')}
                         className={`flex items-center gap-2 px-3 py-1.5 rounded-md text-[10px] font-black uppercase transition-all ${isPrivateView ? 'bg-red-500 text-white shadow-lg' : 'text-white/50 hover:text-white'}`}
