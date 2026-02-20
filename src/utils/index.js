@@ -75,7 +75,7 @@ export const TEAM_DIRECTORY = [
     title: 'CEP (JG11)'
   },
   { 
-    id: 'ying_xian', // Matches Firestore ID 'ying_xian'
+    id: 'ying xian', // Matches Firestore ID 'ying_xian'
     name: 'Ying Xian', 
     email: 'lim.ying.xian@kkh.com.sg', 
     role: 'staff',
