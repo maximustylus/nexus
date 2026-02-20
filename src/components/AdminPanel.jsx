@@ -73,45 +73,45 @@ const AdminPanel = ({ teamData, staffLoads, user }) => {
             return;
         }
 
-        const fetchData = async () => {
+const fetchData = async () => {
             setLoadLoading(true);
             try {
-                // 1. Determine Collection
                 const is2025 = loadYear === '2025';
                 const collectionName = is2025 ? 'archive_2025' : 'staff_loads';
                 
                 const loadSnap = await getDocs(collection(db, collectionName));
                 const newLoads = {};
                 
-                // 🧹 NORMALIZER: Strips spaces and underscores
                 const normalize = (str) => String(str || "").toLowerCase().replace(/[\s_]/g, '');
 
                 loadSnap.forEach(doc => {
                     const data = doc.data();
                     
-                    // 🔀 TRANSLATOR: Match database ID (ying_xian) to UI Name (Ying Xian)
+                    // 🛡️ BULLETPROOF TRANSLATOR: Checks doc.id AND data.staff_name AND data.id
                     const matchingStaffName = CEP_STAFF.find(name => 
-                        normalize(name) === normalize(doc.id)
-                    ) || doc.id; // Fallback to doc.id if not found
+                        normalize(name) === normalize(doc.id) || 
+                        normalize(name) === normalize(data.staff_name) ||
+                        normalize(name) === normalize(data.id)
+                    );
 
-                    // 3. Extract the Data
+                    // If it finds a match, use the clean name (e.g. "Ying Xian")
+                    const finalName = matchingStaffName || doc.id;
+
                     if (is2025) {
                         const clinicalProject = (data.projects || []).find(p => 
                             p.title?.toLowerCase().includes("clinical load")
                         );
                         if (clinicalProject && Array.isArray(clinicalProject.monthly_hours)) {
-                            // Save under the translated name!
-                            newLoads[matchingStaffName] = clinicalProject.monthly_hours;
+                            newLoads[finalName] = clinicalProject.monthly_hours;
                         }
                     } else {
-                        // Live mode
-                        newLoads[matchingStaffName] = data.data;
+                        newLoads[finalName] = data.data;
                     }
                 });
                 
                 setLocalLoads(newLoads);
 
-                // 4. Fetch Attendance
+                // Fetch Attendance
                 const attRef = doc(db, 'system_data', 'monthly_attendance');
                 const attSnap = await getDoc(attRef);
                 if (attSnap.exists()) {
@@ -322,13 +322,15 @@ const AdminPanel = ({ teamData, staffLoads, user }) => {
                             </h3>
                             <div className="flex items-center gap-3">
                                 <select 
-                                    className="bg-slate-100 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded px-3 py-1 text-sm font-bold text-slate-700 dark:text-white"
-                                    value={loadYear}
-                                    onChange={(e) => setLoadYear(e.target.value)}
-                                >
-                                    <option value="2026">2026</option>
-                                    <option value="2025">2025</option>
-                                </select>
+                                      value={loadYear} 
+                                      onChange={(e) => setLoadYear(e.target.value)} // <-- THIS IS CRITICAL
+                                      className="bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-bold px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 outline-none"
+                                  >
+                                      <option value="2026">2026 (Live)</option>
+                                      <option value="2025">2025 (Archive)</option>
+                                      <option value="2024">2024 (Archive)</option>
+                                      <option value="2023">2023 (Archive)</option>
+                                  </select>
                                 <button 
                                     onClick={saveLoads}
                                     disabled={loadLoading}
@@ -383,14 +385,16 @@ const AdminPanel = ({ teamData, staffLoads, user }) => {
                                 UPDATE PATIENT ATTENDANCE
                             </h3>
                             <div className="flex items-center gap-3">
-                                <select 
-                                    className="bg-slate-100 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded px-3 py-1 text-sm font-bold text-slate-700 dark:text-white"
-                                    value={attYear}
-                                    onChange={(e) => setAttYear(e.target.value)}
-                                >
-                                    <option value="2026">2026</option>
-                                    <option value="2025">2025</option>
-                                </select>
+                                  <select 
+                                      value={attYear} 
+                                      onChange={(e) => setAttYear(e.target.value)} // <-- THIS IS CRITICAL
+                                      className="bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-bold px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 outline-none"
+                                  >
+                                      <option value="2026">2026 (Live)</option>
+                                      <option value="2025">2025 (Archive)</option>
+                                      <option value="2024">2024 (Archive)</option>
+                                      <option value="2023">2023 (Archive)</option>
+                                  </select>
                                 <button 
                                     onClick={handleSaveAttendance} 
                                     disabled={attLoading}
