@@ -308,7 +308,7 @@ const AdminPanel = ({ teamData, staffLoads, user }) => {
                     )}
 
                     {/* SECTION 1: AI REPORT VIEW (With Deep Audit built-in) */}
-                    <SmartReportView year={loadYear} teamData={teamData} staffLoads={localLoads} user={user} 
+                    <SmartReportView isAdmin={true} year={loadYear} teamData={teamData} staffLoads={localLoads} user={user} 
                       />
 
                     {/* ================================================= */}
