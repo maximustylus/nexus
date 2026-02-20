@@ -5,24 +5,26 @@ import { db } from '../firebase';
 import { doc, getDoc } from 'firebase/firestore';
 import SmartAnalysis from './SmartAnalysis';
 
-  const SmartReportView = ({ year, teamData, staffLoads, user, forceAdminView }) => {  
+const SmartReportView = ({ year, teamData, staffLoads, user, forceAdminView }) => {  
   const { isDemo } = useNexus();
   const [loading, setLoading] = useState(true);
   
+  // 🛡️ MASTER OVERRIDE: Check if user is admin OR if the parent component forces admin view
+  const isActuallyAdmin = forceAdminView || user?.role === 'admin' || user?.role === 'director' || isDemo;
+
   // HOLD BOTH REPORTS IN STATE
   const [reports, setReports] = useState({ private: null, public: null });
+  
   // ADMIN TOGGLE STATE (Defaults to private for admins, public for staff)
-  const [viewMode, setViewMode] = useState('private'); 
+  const [viewMode, setViewMode] = useState(isActuallyAdmin ? 'private' : 'public'); 
   
   const [isAnalysisOpen, setIsAnalysisOpen] = useState(false);
   const [isFullReportOpen, setIsFullReportOpen] = useState(false);
 
-  const isAdmin = user?.role === 'admin' || isDemo;
-
   // Force non-admins to strictly view the public pulse
   useEffect(() => {
-      if (!isAdmin) setViewMode('public');
-  }, [isAdmin]);
+      if (!isActuallyAdmin) setViewMode('public');
+  }, [isActuallyAdmin]);
 
   // BULLETPROOF PARSER HELPER
   const parseAI = (rawText) => {
@@ -72,7 +74,6 @@ import SmartAnalysis from './SmartAnalysis';
 
           if (reportSnap.exists()) {
             const data = reportSnap.data();
-            // PARSE BOTH JSON OBJECTS AT THE SAME TIME
             setReports({
                 private: parseAI(data.privateText),
                 public: parseAI(data.publicText)
@@ -97,7 +98,7 @@ import SmartAnalysis from './SmartAnalysis';
   const activeReport = reports[viewMode] || reports.public;
   const isPrivateView = viewMode === 'private';
 
-return (
+  return (
     <div className="flex flex-col gap-4">
       <div className="bg-gradient-to-br from-indigo-600 to-violet-700 rounded-3xl p-8 text-white shadow-xl relative overflow-hidden group">
         
@@ -108,16 +109,16 @@ return (
           <div className="md:col-span-1 pr-6 flex flex-col">
             
             {/* 1. The Unified AURA Header */}
-                  <div className="flex items-center gap-2 mb-4 opacity-80">
-                    <Sparkles size={16} className="text-yellow-300" />
+            <div className="flex items-center gap-2 mb-4 opacity-80">
+              <Sparkles size={16} className="text-yellow-300" />
               <span className="text-[10px] font-black uppercase tracking-widest">
                 {isPrivateView ? 'AURA EXECUTIVE ANALYSIS' : 'AURA TEAM PULSE'}
               </span>
             </div>
 
             {/* 2. The Admin Toggles */}
-                    {(isAdmin || forceAdminView) && (
-                    <div className="flex bg-black/30 w-fit rounded-lg p-1 border border-white/20 backdrop-blur-md mb-6">
+            {isActuallyAdmin && (
+                <div className="flex bg-black/30 w-fit rounded-lg p-1 border border-white/20 backdrop-blur-md mb-6">
                     <button 
                         onClick={() => setViewMode('private')}
                         className={`flex items-center gap-2 px-3 py-1.5 rounded-md text-[10px] font-black uppercase transition-all ${isPrivateView ? 'bg-red-500 text-white shadow-lg' : 'text-white/50 hover:text-white'}`}
@@ -187,7 +188,8 @@ return (
 
             {/* ACTION BAR */}
             <div className="mt-8 pt-6 border-t border-white/10 flex items-center justify-between gap-4">
-                {isAdmin ? (
+                {/* 🛡️ THE FIX: Dual-key lock. Must be admin AND looking at private view */}
+                {isActuallyAdmin && isPrivateView ? (
                     <button 
                         onClick={() => setIsAnalysisOpen(true)}
                         className="px-6 py-3 bg-white text-indigo-700 font-black rounded-xl uppercase text-[10px] shadow-xl hover:bg-indigo-50 transition-all flex items-center gap-2 shrink-0"
@@ -238,11 +240,11 @@ return (
       )}
 
       {/* ANALYSIS TOOL */}
-      {isAnalysisOpen && isAdmin && (
+      {isAnalysisOpen && isActuallyAdmin && (
         <SmartAnalysis teamData={teamData} staffLoads={staffLoads} onClose={() => setIsAnalysisOpen(false)} />
       )}
     </div>
   );
-  };
+};
 
-  export default SmartReportView;
+export default SmartReportView;
