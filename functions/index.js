@@ -1,30 +1,17 @@
 const { onCall, HttpsError } = require("firebase-functions/v2/https");
 const logger = require("firebase-functions/logger");
-
-// ─── CONFIG ───────────────────────────────────────────────────────────────────
 const API_KEY = process.env.GEMINI_API_KEY;
-
-// [FIX-02] Cache the model name at cold-start — not per request.
-// This is resolved once and reused for the lifetime of the function instance.
-// If discovery fails, we default to a known-good model (not the deprecated one).
 const MODEL_PRIORITY = [
     'gemini-2.0-flash',     // best if available
     'gemini-1.5-flash',     // reliable fallback
     'gemini-1.5-pro',       // larger context fallback
 ];
-const SAFE_FALLBACK_MODEL = 'models/gemini-1.5-flash'; // [FIX-01] NOT gemini-pro
+const SAFE_FALLBACK_MODEL = 'models/gemini-1.5-flash';
 
-let resolvedModelName = null; // module-level cache
+let resolvedModelName = null;
 
-/**
- * Discovers the best available Gemini model once per cold start.
- * Cached for the lifetime of the function instance.
- * [FIX-01] Fallback is gemini-1.5-flash, never the deprecated gemini-pro.
- * [FIX-03] Priority list uses exact prefix matches, not broad includes().
- * [FIX-07] API key is never interpolated into logged strings.
- */
 async function resolveModel() {
-    if (resolvedModelName) return resolvedModelName; // cache hit
+    if (resolvedModelName) return resolvedModelName;
 
     try {
         const response = await fetch(
@@ -38,9 +25,8 @@ async function resolveModel() {
         }
 
         const data = await response.json();
-        const available = (data.models || []).map(m => m.name); // e.g. ["models/gemini-1.5-flash", ...]
+        const available = (data.models || []).map(m => m.name);
 
-        // [FIX-03] Exact prefix match — won't accidentally pick deprecated gemini-pro
         for (const candidate of MODEL_PRIORITY) {
             const match = available.find(name => name === `models/${candidate}`);
             if (match) {
@@ -52,8 +38,6 @@ async function resolveModel() {
 
         logger.warn("[AURA] No priority model found in API response. Using safe fallback.");
     } catch (e) {
-        // [FIX-07] Log message only — never log the error object directly as it
-        // may contain the full URL with the API key embedded in it.
         logger.warn(`[AURA] Model discovery failed: ${e.message}. Using safe fallback.`);
     }
 
@@ -61,10 +45,10 @@ async function resolveModel() {
     return resolvedModelName;
 }
 
-// ─── SYSTEM PROMPT ───────────────────────────────────────────────────────────
+// SYSTEM PROMPT
 const SYSTEM_PROMPT = `
 ROLE:
-You are AURA (Adaptive Understanding & Real-time Analytics), the Emotional Intelligence pillar of the NEXUS Smart Dashboard. You serve as a Clinical Performance and Wellbeing Coach for healthcare professionals at KKH and SingHealth. Your mission is captured in your tagline: "Master the grind. Protect the pulse."
+You are AURA (Adaptive Understanding & Real-time Analytics), the Emotional Intelligence pillar of the NEXUS Smart Dashboard. You serve as a Clinical Performance and Wellbeing Coach for healthcare professionals at SingHealth. Your mission is captured in your tagline: "Master the grind. Protect the pulse."
 
 CORE PERSONALITY:
 - Tone: Natural, conversational, and grounding. You are a peer, not a clinical textbook.
@@ -82,7 +66,7 @@ Categorise every user input into exactly one of these four phases based on their
 RESPONSE REQUIREMENTS:
 For every staff check-in, your reply field must contain three components in this order:
 
-1. EMPATHY & VALIDATION (OARS technique): A short, warm response that validates their current state. Strict limit: under 50 words. Never be clinical or textbook. Sound like a trusted colleague.
+1. EMPATHY & VALIDATION (OARS technique): A short, warm response that validates their current state. Strict limit: under 100 words. Never be clinical or textbook. Sound like a trusted colleague.
 
 2. PULSE CHECK: State their Phase and a specific Energy % based on their sentiment. Example: "Your pulse reads: REACTING at 62%."
 
@@ -92,6 +76,8 @@ CRITICAL RULES:
 - If the user is in the ILL phase: be extremely gentle. Prioritise "Arrange" actions (professional referral). Do not minimise their state.
 - Prioritise Ghost Protocol tone (anonymity, no judgement) so staff feel completely safe sharing.
 - Never use em-dashes in your reply. Use commas, colons, or full stops instead.
+- No emoji and emoticons.
+- No bullet or point form.
 - UK English only.
 
 STRICT OUTPUT RULE:
@@ -105,14 +91,10 @@ JSON FORMAT:
 }
 `.trim();
 
-// ─── INPUT VALIDATION ─────────────────────────────────────────────────────────
+// INPUT VALIDATION
 const MAX_USER_TEXT   = 500;
-const MAX_HISTORY_LEN = 20;   // max turns passed in history array
+const MAX_HISTORY_LEN = 20; 
 
-/**
- * [FIX-05] Validates and sanitizes all incoming request fields.
- * Throws HttpsError for any invalid input.
- */
 function validateInput({ userText, history, role, prompt }) {
     if (!userText || typeof userText !== 'string') {
         throw new HttpsError('invalid-argument', 'userText is required.');
@@ -137,13 +119,7 @@ function validateInput({ userText, history, role, prompt }) {
     }
 }
 
-// ─── RESPONSE PARSER ─────────────────────────────────────────────────────────
-/**
- * [FIX-06] Safely extracts the reply text from the Gemini response.
- * Handles safety-filtered responses (empty candidates array) without crashing.
- * @param {object} data - Raw API response body
- * @returns {string}
- */
+// RESPONSE PARSER
 function extractText(data) {
     const candidate = data.candidates?.[0];
 
@@ -168,7 +144,7 @@ function extractText(data) {
     return text;
 }
 
-// ─── MAIN FUNCTION ────────────────────────────────────────────────────────────
+// MAIN FUNCTION
 exports.chatWithAura = onCall({
     cors: true,
     secrets: ["GEMINI_API_KEY"],
@@ -181,24 +157,18 @@ exports.chatWithAura = onCall({
         throw new HttpsError('unauthenticated', 'Access Denied.');
     }
 
-    // [FIX-05] Validate before doing anything expensive
     validateInput({ userText, history, role, prompt });
 
     try {
-        // [FIX-02] Model resolved once and cached — not on every request
         const modelName = await resolveModel();
-
-        // [FIX-04] system_instruction used correctly — not injected as a user turn
         const url = `https://generativelanguage.googleapis.com/v1beta/${modelName}:generateContent?key=${API_KEY}`;
-
         const requestBody = {
             system_instruction: {
                 parts: [{ text: SYSTEM_PROMPT }]
             },
             contents: [
-                // Sanitize history: only pass role + parts, strip any extra fields
                 ...history
-                    .slice(-MAX_HISTORY_LEN)  // cap length as a second safety net
+                    .slice(-MAX_HISTORY_LEN)
                     .map(({ role, parts }) => ({ role, parts })),
                 {
                     role: "user",
@@ -209,8 +179,8 @@ exports.chatWithAura = onCall({
             ],
             generationConfig: {
                 temperature:     0.7,
-                maxOutputTokens: 512,   // enough for a JSON reply, prevents runaway output
-                responseMimeType: "application/json", // tell Gemini to return JSON directly
+                maxOutputTokens: 512, 
+                responseMimeType: "application/json",
             }
         };
 
@@ -223,14 +193,11 @@ exports.chatWithAura = onCall({
         const data = await response.json();
 
         if (!response.ok) {
-            // [FIX-07] Log the error message only — not the full data object
-            // which could echo back the URL containing the API key
             logger.error("[AURA] API Failure", {
                 status:  response.status,
                 message: data.error?.message,
                 model:   modelName,
             });
-            // If the model was not found, reset the cache so next request re-discovers
             if (response.status === 404) {
                 resolvedModelName = null;
                 logger.warn("[AURA] Model cache cleared due to 404 — will re-discover on next request.");
@@ -238,13 +205,9 @@ exports.chatWithAura = onCall({
             throw new Error(data.error?.message ?? "API Handshake Failed");
         }
 
-        // [FIX-06] Safe extraction — handles empty/blocked candidates
         const rawText = extractText(data);
-
-        // Strip markdown fences if the model includes them despite responseMimeType
         const cleanText = rawText.replace(/```json/g, '').replace(/```/g, '').trim();
 
-        // Validate the response is parseable JSON before returning
         try {
             JSON.parse(cleanText);
         } catch (_) {
@@ -255,7 +218,6 @@ exports.chatWithAura = onCall({
         return { text: cleanText, success: true };
 
     } catch (error) {
-        // Re-throw HttpsErrors as-is (they already have correct codes)
         if (error instanceof HttpsError) throw error;
 
         logger.error("[AURA] Neural Failure", error.message);
@@ -263,9 +225,7 @@ exports.chatWithAura = onCall({
     }
 });
 
-// ============================================================================
-// 2. SMART ANALYSIS FUNCTION
-// ============================================================================
+// SMART ANALYSIS FUNCTION
 exports.generateSmartAnalysis = onCall({ 
     cors: true, 
     secrets: ["GEMINI_API_KEY"] 
@@ -278,11 +238,9 @@ exports.generateSmartAnalysis = onCall({
             throw new HttpsError("failed-precondition", "Server missing Gemini API Key.");
         }
 
-        // Use our bulletproof Auto-Discovery helper!
         const modelName = await resolveModel(API_KEY);
-
         const promptText = `
-            ACT AS: Senior Clinical Lead at a Healthcare institution.
+            ACT AS: Senior Clinical Lead at a Senior Management Level with Senior Supervisory Skills at a Healthcare institution.
             CONTEXT: Annual Performance Review for Year ${targetYear}.
             DATA: ${JSON.stringify(staffProfiles)}
             WORKLOAD: ${JSON.stringify(yearData)}
@@ -306,7 +264,7 @@ exports.generateSmartAnalysis = onCall({
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ 
                 contents: [{ parts: [{ text: promptText }] }],
-                generationConfig: { temperature: 0.2 } // Keep it highly analytical
+                generationConfig: { temperature: 0.2 }
             })
         });
 
