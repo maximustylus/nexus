@@ -1,4 +1,4 @@
-name: Deploy to Firebase Hosting on merge
+name: Deploy to Firebase Hosting and Functions on merge
 'on':
   push:
     branches:
@@ -10,13 +10,25 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       
-      - name: Install Dependencies
+      - name: Install Frontend Dependencies
         run: npm ci
 
-      - name: Build
+      - name: Build Frontend
         run: npm run build
 
-      - name: Deploy to Firebase
+      - name: Install Backend Dependencies
+        working-directory: ./functions
+        run: npm ci
+
+      - name: Deploy Backend (Functions)
+        uses: w9jds/firebase-action@master
+        with:
+          args: deploy --only functions
+        env:
+          GCP_SA_KEY: '${{ secrets.FIREBASE_SERVICE_ACCOUNT }}'
+          PROJECT_ID: idc-app-e0c59
+
+      - name: Deploy Frontend (Hosting)
         uses: FirebaseExtended/action-hosting-deploy@v0
         with:
           repoToken: '${{ secrets.GITHUB_TOKEN }}'
