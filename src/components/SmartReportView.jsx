@@ -51,7 +51,12 @@ const isActuallyAdmin = forceAdminView === true;
     };
   };
 
-  useEffect(() => {
+ useEffect(() => {
+    // 🛑 THE BOUNCER CHECK: 
+    if (!isDemo && !user) {
+        return; 
+    }
+
     const fetchReport = async () => {
       setLoading(true);
       try {
@@ -132,8 +137,11 @@ const isActuallyAdmin = forceAdminView === true;
         }
       } catch (e) { console.error(e); } finally { setLoading(false); }
     };
+    
     fetchReport();
-  }, [isDemo, year]);
+    
+  // ⏱️ THE DEPENDENCY FIX: 
+  }, [isDemo, year, user]);
 
   if (loading) return <div className="h-64 bg-slate-800 animate-pulse rounded-3xl" />;
 
