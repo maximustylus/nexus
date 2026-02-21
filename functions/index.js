@@ -1,6 +1,5 @@
 const { onCall, HttpsError } = require("firebase-functions/v2/https");
 const logger = require("firebase-functions/logger");
-const API_KEY = process.env.GEMINI_API_KEY;
 const MODEL_PRIORITY = [
     'gemini-2.0-flash',     // best if available
     'gemini-1.5-flash',     // reliable fallback
@@ -10,12 +9,12 @@ const SAFE_FALLBACK_MODEL = 'models/gemini-1.5-flash';
 
 let resolvedModelName = null;
 
-async function resolveModel() {
+async function resolveModel(apiKey) {
     if (resolvedModelName) return resolvedModelName;
 
     try {
         const response = await fetch(
-            `https://generativelanguage.googleapis.com/v1beta/models?key=${API_KEY}`
+            `https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey}`
         );
 
         if (!response.ok) {
@@ -34,6 +33,15 @@ async function resolveModel() {
                 resolvedModelName = match;
                 return resolvedModelName;
             }
+        }
+        logger.warn("[AURA] No priority model found. Using fallback.");
+    } catch (e) {
+        logger.warn(`[AURA] Model discovery failed: ${e.message}. Using safe fallback.`);
+    }
+
+    resolvedModelName = SAFE_FALLBACK_MODEL;
+    return resolvedModelName;
+}
         }
 
         logger.warn("[AURA] No priority model found in API response. Using safe fallback.");
@@ -146,6 +154,13 @@ exports.chatWithAura = onCall({
 }, async (request) => {
 
     const { userText, history = [], role = 'Staff', prompt = '', isDemo } = request.data;
+    
+    // 1. Grab the secret AT RUNTIME inside the function execution
+    const API_KEY = process.env.GEMINI_API_KEY;
+
+    if (!API_KEY) {
+        throw new HttpsError('failed-precondition', 'Server missing Gemini API Key.');
+    }
 
     // Auth gate
     if (!request.auth && !isDemo) {
@@ -155,10 +170,13 @@ exports.chatWithAura = onCall({
     validateInput({ userText, history, role, prompt });
 
     try {
-        const modelName = await resolveModel();
+        // 2. Pass the dynamically loaded key into the model resolver
+        const modelName = await resolveModel(API_KEY);
         const url = `https://generativelanguage.googleapis.com/v1beta/${modelName}:generateContent?key=${API_KEY}`;
+        
         const requestBody = {
-            system_instruction: {
+            // 3. Changed to camelCase to match Google's REST API schema
+            systemInstruction: {
                 parts: [{ text: SYSTEM_PROMPT }]
             },
             contents: [
@@ -184,7 +202,6 @@ exports.chatWithAura = onCall({
             headers: { 'Content-Type': 'application/json' },
             body:    JSON.stringify(requestBody),
         });
-
         const data = await response.json();
 
         if (!response.ok) {
