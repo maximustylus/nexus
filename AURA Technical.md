@@ -1,4 +1,4 @@
-# AURA Pulse — v2.0 → v2.1 Migration Guide
+# AURA — v2.0 → v2.1 Migration Guide
 
 ## File Structure
 
