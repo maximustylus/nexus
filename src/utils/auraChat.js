@@ -1,37 +1,57 @@
 import { getFunctions, httpsCallable } from 'firebase/functions';
-// 👇 Ensure this points to your actual firebase config file!
 import { app } from '../firebase'; 
 
 export const analyzeWellbeing = async (chatHistory, isDemo = false, personaName = 'User') => {
     try {
         const functions = getFunctions(app);
-        // Call the secure backend function
         const chatWithAura = httpsCallable(functions, 'chatWithAura');
 
-        // Extract the latest message and the history
+        // 1. Guard: Ensure we have history to send
+        if (!chatHistory || chatHistory.length === 0) {
+            throw new Error("No chat history provided.");
+        }
+
         const latestMsg = chatHistory[chatHistory.length - 1];
+        
+        // 2. Format history to match Gemini's { role, parts: [{ text }] } schema
         const previousHistory = chatHistory.slice(0, -1).map(msg => ({
             role: msg.role === 'bot' ? 'model' : 'user',
             parts: [{ text: msg.text }]
         }));
 
-        // Fire payload to the secure vault
+        // 3. Fire payload with explicit isDemo flag
         const response = await chatWithAura({
             userText: latestMsg.text,
             history: previousHistory,
             role: 'Staff',
             prompt: personaName,
-            isDemo: isDemo
+            isDemo: isDemo // Critical for bypassing auth checks in demo mode
         });
 
-        // Parse the secure AI response
-        return JSON.parse(response.data.text);
+        // 4. Robust Response Handling
+        // response.data is where Firebase puts the return value of your function
+        const result = response.data;
+
+        if (result.success && result.text) {
+            return JSON.parse(result.text);
+        } else {
+            throw new Error(result.error || "AURA returned an invalid response format.");
+        }
 
     } catch (e) {
-        console.error("[NEXUS] Secure Cloud Failure:", e);
+        // Detailed logging for your Mac console to see exactly what failed
+        console.error("[NEXUS] AURA Logic Failure:", {
+            code: e.code,
+            message: e.message,
+            details: e.details
+        });
+
         return { 
-            reply: `⚠️ Nexus Connection Error: ${e.message}. Please check your network.`, 
-            diagnosis_ready: false 
+            reply: `⚠️ Neural link unstable: ${e.message}. I am having trouble processing that right now.`, 
+            diagnosis_ready: false,
+            phase: null,
+            energy: null,
+            action: null
         };
     }
 };
