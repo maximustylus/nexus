@@ -247,19 +247,22 @@ export default function AuraPulseBot({ user }) {
                 throw new Error('AURA returned an unreadable format. Please try again.');
             }
 
-            if (!analysis.reply || !analysis.phase) {
+            if (!analysis || !analysis.reply) {
                 throw new Error('Incomplete response from AURA.');
             }
 
-            // Clamp energy to valid range for the given phase
-            const safeEnergy = clampEnergy(analysis.phase, analysis.energy ?? 50);
-
+            // Always show AURA's message
             setMessages(prev => [...prev, { role: 'bot', text: analysis.reply }]);
-            setPendingLog({
-                phase:  analysis.phase.toUpperCase(),
-                energy: safeEnergy,
-                action: analysis.action ?? '',
-            });
+
+            // FIX: Only trigger the Pulse Card if AURA is ready to diagnose
+            if (analysis.diagnosis_ready && analysis.phase && analysis.phase !== 'null' && analysis.phase !== 'NULL') {
+                const safeEnergy = clampEnergy(analysis.phase, analysis.energy ?? 50);
+                setPendingLog({
+                    phase:  analysis.phase.toUpperCase(),
+                    energy: safeEnergy,
+                    action: analysis.action ?? '',
+                });
+            }
 
         } catch (error) {
             console.error('[AURA] Link Error:', error.message);
