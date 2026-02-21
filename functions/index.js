@@ -40,10 +40,11 @@ const logger = require('firebase-functions/logger');
 // and reused across all warm invocations on the same instance.
 const API_KEY = process.env.GEMINI_API_KEY;
 
-// Fail loudly at cold-start if the secret is missing rather than failing
-// silently on every request.
+// Note: API_KEY will be undefined during local `firebase deploy` analysis
+// because secrets only exist inside Cloud Run at runtime. Use console.warn
+// (not logger.error) so the deploy output stays clean.
 if (!API_KEY) {
-    logger.error('[NEXUS] GEMINI_API_KEY secret is not set. All AI calls will fail.');
+    console.warn('[NEXUS] GEMINI_API_KEY not in environment. Normal during local deploy analysis.');
 }
 
 // ─── MODEL RESOLUTION ────────────────────────────────────────────────────────
