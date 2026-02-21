@@ -26,28 +26,29 @@ const isActuallyAdmin = forceAdminView === true;
       if (!isActuallyAdmin) setViewMode('public');
   }, [isActuallyAdmin]);
 
-  // BULLETPROOF PARSER HELPER
+ // 🛡️ BULLETPROOF PARSER HELPER
   const parseAI = (rawText) => {
-    let parsed = { summary: "", wins: [], risks: [] };
+    let parsed = { summary: "", wins: [], risks: [], highlights: [] }; 
     if (!rawText) return parsed;
-
-    try {
-        const cleanJsonString = rawText.replace(/```json/gi, '').replace(/```/g, '').trim();
-        parsed = JSON.parse(cleanJsonString);
-    } catch (e) {
-        console.error("AI JSON Parse Error. Falling back.", e);
-        const cleanRawText = rawText.replace(/[#*]/g, '');
-        parsed.summary = cleanRawText;
-        const sentences = cleanRawText.split(/(?<=[.!?])\s+/).filter(s => s.length > 20);
-        parsed.wins = sentences.length > 1 ? sentences.slice(0, 2) : ["Review full report for details."];
-        parsed.risks = sentences.length > 3 ? sentences.slice(2, 4) : ["Review full report for priorities."];
+    if (typeof rawText === 'object') return rawText;
+    if (String(rawText).trim().startsWith('{')) {
+      try {
+        const jsonResult = JSON.parse(rawText);
+        return {
+          summary: jsonResult.summary || "",
+          wins: jsonResult.wins || [],
+          highlights: jsonResult.highlights || jsonResult.wins || [],
+          risks: jsonResult.risks || []
+        };
+      } catch (e) {
+      }
     }
-    
-    const cleanUIString = (str) => (str || "").replace(/[#*]/g, '');
-    return {
-        summary: cleanUIString(parsed.summary) || "No summary available.",
-        highlights: parsed.wins?.length > 0 ? parsed.wins.map(cleanUIString) : ["Historical data retrieved."],
-        risks: parsed.risks?.length > 0 ? parsed.risks.map(cleanUIString) : ["Read-only record loaded."]
+
+    return { 
+      summary: rawText, 
+      wins: [], 
+      highlights: [],
+      risks: [] 
     };
   };
 
