@@ -8,7 +8,9 @@ import { getFunctions, httpsCallable } from 'firebase/functions';
 import { useNexus } from '../context/NexusContext';
 
 const functions = getFunctions(undefined, 'us-central1');
-const generateSmartAnalysis = httpsCallable(functions, 'generateSmartAnalysis', { timeout: 120000 });
+// 🛡️ CRITICAL FIX: 300,000ms (5 minutes) timeout to match the backend!
+const generateSmartAnalysis = httpsCallable(functions, 'generateSmartAnalysis', { timeout: 300000 });
+
 const STAFF_PROFILES = {
     "Alif":      { role: "Lead and Senior Clinical Exercise Physiologist", grade: "JG14", focus: "Leadership, Management, Clinical, Education, Research" },
     "Fadzlynn":  { role: "Clinical Exercise Physiologist, CEP I",      grade: "JG13", focus: "Clinical Lead, Co-Lead Management, Education" },
@@ -53,7 +55,7 @@ const SmartAnalysis = ({ teamData, staffLoads, onClose }) => {
         reader.readAsText(file);
     };
 
-const handleAnalyze = async () => {
+    const handleAnalyze = async () => {
         setLoading(true); setError('');
         console.log("Starting Analysis for:", targetYear);
         
@@ -67,7 +69,7 @@ const handleAnalyze = async () => {
             const currentProfiles = isDemo ? MARVEL_PROFILES : STAFF_PROFILES;
             const profileArray = Object.values(currentProfiles);
 
-            setStatus('Connecting to Neural Link (This may take 60+ seconds)...');
+            setStatus('Connecting to Neural Link (This may take up to 5 minutes)...');
 
             // 🛡️ CALLING THE AI (Now with Clinical Loads included!)
             const response = await generateSmartAnalysis({
