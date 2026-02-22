@@ -76,13 +76,14 @@ const AdminPanel = ({ teamData, staffLoads, user }) => {
 const fetchData = async () => {
         setLoadLoading(true);
         try {
-            const is2025 = loadYear === '2025';
+            // 🎯 DYNAMIC ROUTING: Anything that isn't 2026 is an Archive
+            const isArchive = loadYear !== '2026';
             const newLoads = {};
             const normalize = (str) => String(str || "").toLowerCase().replace(/[\s_]/g, '');
 
-            if (is2025) {
-                // 🎯 FIXED: Fetch directly from the archive_2025 vault!
-                const archiveSnap = await getDocs(collection(db, 'archive_2025'));
+            if (isArchive) {
+                // Fetches dynamically from archive_2025, archive_2024, etc.
+                const archiveSnap = await getDocs(collection(db, `archive_${loadYear}`));
                 
                 archiveSnap.forEach(docSnap => {
                     const data = docSnap.data();
@@ -92,7 +93,6 @@ const fetchData = async () => {
                     );
                     
                     if (matchingStaffName) {
-                        // Find their specific Clinical Load project for 2025
                         const clinicalProject = (data.projects || []).find(p => 
                             p.title?.toLowerCase().includes("clinical load")
                         );
@@ -100,7 +100,6 @@ const fetchData = async () => {
                     }
                 });
 
-                // Ensure everyone has at least an array of 0s if they weren't in the archive
                 CEP_STAFF.forEach(staff => {
                     if (!newLoads[staff]) newLoads[staff] = Array(12).fill(0);
                 });
@@ -136,25 +135,23 @@ const fetchData = async () => {
     };
       
     fetchData();
-}, [loadYear, attYear, isDemo]); // (Kept the fixed dependencies!)
+}, [loadYear, attYear, isDemo]); 
 
 // --- HANDLER: SAVE LOADS (Smart Routing) ---
 const saveLoads = async () => {
     if (isDemo) {
-        setMessage('(Sandbox) Loads simulated save.');
+        setMessage('✅ (Sandbox) Loads simulated save.');
         return;
     }
     setLoadLoading(true);
     try {
-        const is2025 = loadYear === '2025';
+        const isArchive = loadYear !== '2026';
 
-        if (is2025) {
-            // 🛡️ ARCHIVE ROUTE (2025): Update the 'archive_2025' collection directly
+        if (isArchive) {
+            // 🛡️ ARCHIVE ROUTE: Updates the correct archive vault dynamically
             const promises = Object.keys(localLoads).map(async (staffName) => {
-                const docId = staffName.toLowerCase().replace(/\s+/g, '_'); // Fixed regex spacing issue
-                
-                // 🎯 FIXED: Point to archive_2025 instead of cep_team
-                const staffRef = doc(db, 'archive_2025', docId); 
+                const docId = staffName.toLowerCase().replace(/\s+/g, '_'); 
+                const staffRef = doc(db, `archive_${loadYear}`, docId); 
                 
                 const snap = await getDoc(staffRef);
                 if (snap.exists()) {
@@ -169,22 +166,46 @@ const saveLoads = async () => {
                         return p;
                     });
 
-                    if (updated) {
-                        await updateDoc(staffRef, { projects });
+                    // If they don't have a clinical load entry for this year, create one safely
+                    if (!updated) {
+                        projects.push({
+                            title: "Clinical Load",
+                            item_type: "Task",
+                            domain_type: "CLINICAL",
+                            monthly_hours: localLoads[staffName],
+                            year: loadYear
+                        });
                     }
+                    
+                    // 🛡️ CRITICAL FIX: setDoc with merge prevents "No document to update" crashes
+                    await setDoc(staffRef, { projects }, { merge: true });
+                } else {
+                    // Create the archive document if it doesn't exist at all
+                    await setDoc(staffRef, {
+                        staff_name: staffName,
+                        year: loadYear,
+                        projects: [{
+                            title: "Clinical Load",
+                            item_type: "Task",
+                            domain_type: "CLINICAL",
+                            monthly_hours: localLoads[staffName],
+                            year: loadYear
+                        }]
+                    }, { merge: true });
                 }
             });
             await Promise.all(promises);
-            setMessage(`${loadYear} Archive Loads Updated!`);
+            setMessage(`✅ ${loadYear} Archive Loads Updated!`);
 
         } else {
             // 🟢 LIVE ROUTE (2026): Update the standard 'staff_loads' collection
             const promises = Object.keys(localLoads).map(staffName => {
                 const docId = staffName.toLowerCase().replace(/\s+/g, '_');
-                return updateDoc(doc(db, 'staff_loads', docId), { data: localLoads[staffName] });
+                // 🛡️ CRITICAL FIX: setDoc safely creates the document if it is missing
+                return setDoc(doc(db, 'staff_loads', docId), { data: localLoads[staffName] }, { merge: true });
             });
             await Promise.all(promises);
-            setMessage(`${loadYear} Live Loads Updated!`);
+            setMessage(`✅ ${loadYear} Live Loads Updated!`);
         }
     } catch (e) {
         console.error(e);
