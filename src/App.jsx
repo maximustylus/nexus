@@ -599,6 +599,7 @@ const CustomBarTooltip = ({ active, payload, label }) => {
 
 // --- MAIN RENDER RETURN ---
   return (
+    <>
     <ResponsiveLayout activeTab={currentView} onNavigate={setCurrentView}>
       
       {/* DEMO BANNER */}
@@ -720,6 +721,7 @@ const CustomBarTooltip = ({ active, payload, label }) => {
 
       {/* Global Feedback Reporter */}
       <FeedbackWidget user={user} />
+  </>
   );
 }
 
