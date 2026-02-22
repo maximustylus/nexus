@@ -1,14 +1,14 @@
 import React, { useEffect, useState } from 'react';
 import { db } from '../firebase';
 import { doc, onSnapshot, setDoc } from 'firebase/firestore';
-import { Battery, BatteryCharging, BatteryWarning, BatteryFull, Users, Activity, Zap, X, Save, Lock } from 'lucide-react';
+import { Battery, BatteryCharging, BatteryWarning, BatteryFull, Users, Activity, Zap, X, Save, Lock, Bell, BellRing } from 'lucide-react';
 import { STAFF_LIST } from '../utils';
 
-// --- CONTEXT & DATA ---
+// --- CONTEXT, DATA & FIREBASE MESSAGING ---
 import { useNexus } from '../context/NexusContext';
 import { MOCK_STAFF } from '../data/mockData';
+import { requestForToken } from '../firebase'; // 🛡️ IMPORTING THE HANDSHAKE
 
-// 🛡️ INJECTED THE 'user' PROP HERE
 const WellbeingView = ({ user }) => {
     const { isDemo } = useNexus(); 
     const [pulseData, setPulseData] = useState({});
@@ -16,8 +16,12 @@ const WellbeingView = ({ user }) => {
 
     // --- AURA MODAL STATE ---
     const [selectedStaff, setSelectedStaff] = useState(null);
-    const [newEnergy, setNewEnergy] = useState(5); // 0-10 scale
-    const [newFocus, setNewFocus] = useState(5);   // 0-10 scale
+    const [newEnergy, setNewEnergy] = useState(5); 
+    const [newFocus, setNewFocus] = useState(5);   
+
+    // --- NOTIFICATION STATE ---
+    const [isSubscribing, setIsSubscribing] = useState(false);
+    const [hasToken, setHasToken] = useState(false);
 
     const activeStaffList = isDemo ? MOCK_STAFF.map(s => s.name) : STAFF_LIST;
 
@@ -26,8 +30,8 @@ const WellbeingView = ({ user }) => {
             const mockPulse = {};
             MOCK_STAFF.forEach(char => {
                 mockPulse[char.name] = {
-                    energy: char.battery, // Stored as 0-100 for the main chart
-                    focus: 8,             // Default focus out of 10
+                    energy: char.battery, 
+                    focus: 8,             
                     lastUpdate: 'Just now',
                     status: 'online'
                 };
@@ -42,9 +46,19 @@ const WellbeingView = ({ user }) => {
                     calculateStats(data);
                 }
             });
+            
+            // 🛡️ Check if the user already has a token saved
+            if (user?.uid) {
+                const userUnsub = onSnapshot(doc(db, 'users', user.uid), (docSnap) => {
+                    if (docSnap.exists() && docSnap.data().fcmToken) {
+                        setHasToken(true);
+                    }
+                });
+                return () => { unsub(); userUnsub(); };
+            }
             return () => unsub();
         }
-    }, [isDemo]);
+    }, [isDemo, user]);
 
     const calculateStats = (data) => {
         const values = Object.values(data);
@@ -58,16 +72,53 @@ const WellbeingView = ({ user }) => {
         });
     };
 
+    // --- NOTIFICATION HANDLER ---
+    const handleEnableNotifications = async () => {
+        if (isDemo) {
+            alert("Sandbox Mode: Notification simulation successful.");
+            setHasToken(true);
+            return;
+        }
+
+        if (!user?.uid) {
+            alert("Error: You must be logged in to enable notifications.");
+            return;
+        }
+
+        setIsSubscribing(true);
+        try {
+            // Trigger the native popup and get the VAPID token
+            const token = await requestForToken();
+            
+            if (token) {
+                // Save it securely to their Firestore profile
+                await setDoc(doc(db, 'users', user.uid), {
+                    fcmToken: token,
+                    notificationsEnabled: true,
+                    lastUpdated: new Date()
+                }, { merge: true });
+                
+                setHasToken(true);
+                alert("SUCCESS: Daily Pulse reminders enabled for this device.");
+            } else {
+                alert("Permission denied or VAPID error. Check your browser settings.");
+            }
+        } catch (error) {
+            console.error("Subscription error:", error);
+            alert("Failed to enable notifications.");
+        } finally {
+            setIsSubscribing(false);
+        }
+    };
+
     // --- CLICK HANDLERS ---
     const handleCardClick = (name, currentEnergy, currentFocus, canEdit) => {
-        // 🛡️ THE PERMISSION FIREWALL
         if (!canEdit) {
             alert("🔒 Access Denied: You are only authorized to update your own Social Battery.");
             return;
         }
 
         setSelectedStaff(name);
-        // Translate 0-100 energy back to a 0-10 scale for the UI slider
         setNewEnergy(currentEnergy ? Math.round(currentEnergy / 10) : 5);
         setNewFocus(currentFocus || 5);
     };
@@ -92,10 +143,9 @@ const WellbeingView = ({ user }) => {
             }, { merge: true });
         }
         
-        setSelectedStaff(null); // Close modal
+        setSelectedStaff(null); 
     };
 
-    // --- AURA INTELLIGENCE LOGIC ---
     const getStatusRecommendation = (energy, focus) => {
         if (energy <= 3) return "Rest and recovery highly recommended";
         if (energy <= 5 || focus <= 4) return "Light tasks recommended";
@@ -104,7 +154,6 @@ const WellbeingView = ({ user }) => {
         return "Stable operating capacity";
     };
 
-    // --- VISUAL HELPERS ---
     const getBatteryIcon = (level) => {
         if (level > 75) return <BatteryFull className="text-emerald-500" size={24} />;
         if (level > 40) return <BatteryCharging className="text-yellow-500" size={24} />;
@@ -179,15 +228,36 @@ const WellbeingView = ({ user }) => {
                 </div>
             </div>
 
-            {/* 2. LIVE STATUS GRID */}
+            {/* 2. LIVE STATUS GRID & NOTIFICATION TOGGLE */}
             <div className="w-full">
-                <div className="flex items-center gap-3 mb-8 pl-2">
-                    <div className="p-2 bg-white dark:bg-slate-800 rounded-lg shadow-sm border border-slate-200 dark:border-slate-700">
-                        <Zap className="text-indigo-500" size={20} />
+                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-8 pl-2 gap-4">
+                    <div className="flex items-center gap-3">
+                        <div className="p-2 bg-white dark:bg-slate-800 rounded-lg shadow-sm border border-slate-200 dark:border-slate-700">
+                            <Zap className="text-indigo-500" size={20} />
+                        </div>
+                        <h3 className="text-xl font-bold text-slate-700 dark:text-slate-200 uppercase tracking-tight">
+                            {isDemo ? 'Live Team Status (Demo)' : 'Live Team Status'}
+                        </h3>
                     </div>
-                    <h3 className="text-xl font-bold text-slate-700 dark:text-slate-200 uppercase tracking-tight">
-                        {isDemo ? 'Live Team Status (Demo)' : 'Live Team Status'}
-                    </h3>
+
+                    {/* 🛡️ THE NOTIFICATION BUTTON */}
+                    <button 
+                        onClick={handleEnableNotifications}
+                        disabled={isSubscribing || hasToken}
+                        className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold uppercase transition-all border ${
+                            hasToken 
+                                ? 'bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600 dark:text-emerald-400 border-emerald-200 dark:border-emerald-800/50 cursor-default'
+                                : 'bg-white dark:bg-slate-800 text-indigo-600 dark:text-indigo-400 border-slate-200 dark:border-slate-700 hover:border-indigo-300 shadow-sm hover:shadow-md'
+                        }`}
+                    >
+                        {isSubscribing ? (
+                            <><Activity size={16} className="animate-pulse" /> Subscribing...</>
+                        ) : hasToken ? (
+                            <><BellRing size={16} /> Reminders Active</>
+                        ) : (
+                            <><Bell size={16} /> Enable Daily Reminders</>
+                        )}
+                    </button>
                 </div>
                 
                 <div className="w-full grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 lg:gap-8">
@@ -197,7 +267,6 @@ const WellbeingView = ({ user }) => {
                         const currentEnergy = staffData ? staffData.energy : 0;
                         const currentFocus = staffData ? staffData.focus : 0;
                         
-                        // 🛡️ PERMISSION CHECK: Demo Mode, Admins, or The Staff Member Themselves
                         const canEdit = isDemo || user?.role === 'admin' || user?.name === 'Nisa' || user?.name === name;
                         
                         return (
@@ -226,7 +295,6 @@ const WellbeingView = ({ user }) => {
                                         <div className="bg-slate-50 dark:bg-slate-700/50 p-3 rounded-xl">
                                             {staffData ? getBatteryIcon(staffData.energy) : <Battery className="text-slate-300" size={28} />}
                                         </div>
-                                        {/* Show lock icon if they can't edit it */}
                                         {!canEdit && <Lock size={12} className="text-slate-300" />}
                                     </div>
                                 </div>
@@ -268,7 +336,6 @@ const WellbeingView = ({ user }) => {
                         </div>
 
                         <div className="space-y-5 mb-8">
-                            {/* Energy Slider */}
                             <div className="bg-slate-50 dark:bg-slate-900/50 p-5 rounded-2xl border border-slate-100 dark:border-slate-700">
                                 <div className="flex justify-between items-center mb-4">
                                     <h4 className="font-bold text-slate-800 dark:text-slate-200">Energy Level</h4>
@@ -287,7 +354,6 @@ const WellbeingView = ({ user }) => {
                                 </div>
                             </div>
 
-                            {/* Focus Slider */}
                             <div className="bg-slate-50 dark:bg-slate-900/50 p-5 rounded-2xl border border-slate-100 dark:border-slate-700">
                                 <div className="flex justify-between items-center mb-4">
                                     <h4 className="font-bold text-slate-800 dark:text-slate-200">Focus Level</h4>
@@ -306,7 +372,6 @@ const WellbeingView = ({ user }) => {
                                 </div>
                             </div>
 
-                            {/* Current Status Recommendation */}
                             <div className="bg-amber-50 dark:bg-amber-900/20 p-5 rounded-2xl border border-amber-100 dark:border-amber-900/30">
                                 <h4 className="font-bold text-slate-800 dark:text-slate-200 mb-2">Current Status</h4>
                                 <p className="text-amber-600 dark:text-amber-500 font-medium">
