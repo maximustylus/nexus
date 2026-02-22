@@ -170,9 +170,8 @@ function NexusApp() {
       // No firebase fetching occurs here.
     } else {
       
-      // 1. Determine Target Collection
-      const isArchived2025 = currentView === 'archive' && archiveYear === '2025';
-      const targetCollection = isArchived2025 ? 'archive_2025' : 'cep_team';
+      // 1. Determine Target Collection dynamically for ANY archive year
+      const targetCollection = currentView === 'archive' ? `archive_${archiveYear}` : 'cep_team';
 
       console.log(`📡 [NEXUS] Fetching from: ${targetCollection}`);
 
@@ -222,13 +221,13 @@ function NexusApp() {
   const activeTeamData = isDemo ? MOCK_TEAM_DATA : teamData;
   const activeStaffLoads = isDemo ? MOCK_STAFF_LOADS : staffLoads;
 
-  // 1. FILTER DATA (Fixes the Empty Department Overview & Tasks)
+// 1. FILTER DATA (Strict Timeline Isolation)
   const getFilteredData = () => {
     const targetYear = currentView === 'archive' ? archiveYear : '2026';
     return activeTeamData.map(staff => ({
       ...staff,
-      // Force String comparison so JSON (2025) and Dropdown ("2025") match perfectly
-      projects: (staff.projects || []).filter(p => String(p.year || targetYear) === String(targetYear))
+      // Strict Filter: If a project has no year, it defaults to '2026', NOT the targetYear
+      projects: (staff.projects || []).filter(p => String(p.year || '2026') === String(targetYear))
     }));
   };
 
