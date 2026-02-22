@@ -23,13 +23,14 @@
         top: 0;
         left: 0;
         width: 100vw;
-        height: 100vh;
-        background-color: #5849df; /* Adjust to your exact brand blue */
+        height: 100vh; /* Keep as fallback for older devices */
+        height: 100dvh; /* The iOS fix */
+        background-color: #5849df; 
         display: flex;
         justify-content: center;
         align-items: center;
         z-index: 9999;
-        transition: transform 0.8s cubic-bezier(0.85, 0, 0.15, 1);
+        transition: all 0.8s cubic-bezier(0.85, 0, 0.15, 1); /* Changed transform to all */
       }
 
       /* 2. SVG Sizing */
@@ -57,7 +58,8 @@
 
       /* 4. The Move Up & Reveal */
       body.app-ready #nexus-splash {
-        transform: translateY(-100%); /* Slides the blue screen up */
+        transform: translateY(-120%); /* Over-slides to guarantee it clears the top */
+        opacity: 0; /* Forces it to visually vanish */
         pointer-events: none;
       }
       
