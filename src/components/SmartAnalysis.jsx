@@ -1,6 +1,6 @@
 import React, { useState, useRef } from 'react';
 import { db } from '../firebase'; 
-import { doc, setDoc } from 'firebase/firestore'; 
+import { doc, getDoc, getDocs, collection } from 'firebase/firestore';
 import { X, ShieldCheck, Sparkles, Upload, FileJson } from 'lucide-react';
 import { getFunctions, httpsCallable } from 'firebase/functions';
 
@@ -66,15 +66,15 @@ const SmartAnalysis = ({ teamData, staffLoads, onClose }) => {
 
             setStatus('Connecting to Secure Neural Link...');
 
-            // 🛡️ THE FIREWALL: Perfectly scoped inside the function
+            // THE FIREWALL
             const activeProfiles = isDemo ? MARVEL_PROFILES : STAFF_PROFILES;
 
-            // The upgraded, mathematically correct payload
+            // THE TEAM
             const response = await generateSmartAnalysis({
-              targetYear: Number(selectedYear),
+              targetYear: Number(targetYear),
               teamName: "SSMC@KKH CEP Team",
-              staffProfiles: profiles, 
-              yearData: data 
+              staffProfiles: activeProfiles, 
+              yearData: yearData 
             });
 
             setResult({ 
