@@ -11,6 +11,11 @@ const logger = require('firebase-functions/logger');
 const { onSchedule } = require("firebase-functions/v2/scheduler");
 const { getFirestore } = require("firebase-admin/firestore");
 const { getMessaging } = require("firebase-admin/messaging");
+
+// 🛡️ CRITICAL IGNITION SWITCH ADDED HERE:
+const admin = require('firebase-admin');
+admin.initializeApp();
+
 const API_KEY = process.env.GEMINI_API_KEY;
 
 if (!API_KEY) {
