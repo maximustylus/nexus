@@ -25,32 +25,73 @@ const SmartReportView = ({ year, teamData, staffLoads, user, forceAdminView }) =
       if (!isActuallyAdmin) setViewMode('public');
   }, [isActuallyAdmin]);
 
- // 🛡️ BULLETPROOF PARSER HELPER
+// 🛡️ BULLETPROOF PARSER HELPER v2 (Smart Markdown Extractor)
   const parseAI = (rawText) => {
-    let parsed = { summary: "", wins: [], risks: [], highlights: [] }; 
-    if (!rawText) return parsed;
+    if (!rawText) return { summary: "", highlights: [], risks: [] };
     if (typeof rawText === 'object') return rawText;
+
+    // Legacy JSON support (just in case)
     if (String(rawText).trim().startsWith('{')) {
       try {
         const jsonResult = JSON.parse(rawText);
         return {
           summary: jsonResult.summary || "",
-          wins: jsonResult.wins || [],
           highlights: jsonResult.highlights || jsonResult.wins || [],
           risks: jsonResult.risks || []
         };
-      } catch (e) {
-      }
+      } catch (e) {}
     }
 
-    return { 
-      summary: rawText, 
-      wins: [], 
-      highlights: [],
-      risks: [] 
+    // 🧠 THE MARKDOWN EXTRACTOR
+    const lines = String(rawText).split('\n');
+    let summaryLines = [];
+    let highlights = [];
+    let risks = [];
+    let currentSection = 'summary';
+
+    lines.forEach(line => {
+      const cleanLine = line.trim();
+      const lowerLine = cleanLine.toLowerCase();
+
+      // 1. Detect Headers to route the bullet points
+      if (lowerLine.includes('win') || lowerLine.includes('highlight') || lowerLine.includes('success')) {
+        currentSection = 'wins';
+        return; // Skip the header itself
+      } else if (lowerLine.includes('risk') || lowerLine.includes('focus') || lowerLine.includes('recommendation')) {
+        currentSection = 'risks';
+        return; // Skip the header itself
+      }
+
+      // 2. Extract Bullet Points
+      if (cleanLine.startsWith('*') || cleanLine.startsWith('-')) {
+        // Strip the asterisks and dashes for a clean UI look
+        const cleanBullet = cleanLine.replace(/^[\*\-]\s*/, '').replace(/\*\*/g, '').trim();
+        
+        if (currentSection === 'wins' && highlights.length < 4) highlights.push(cleanBullet);
+        else if (currentSection === 'risks' && risks.length < 4) risks.push(cleanBullet);
+        else summaryLines.push(cleanLine);
+      } else if (cleanLine) {
+        // Add normal text to the summary
+        if (currentSection === 'summary') summaryLines.push(cleanLine);
+      }
+    });
+
+    // Fallback: If the AI wrote no bullets at all, provide placeholders
+    if (highlights.length === 0 && risks.length === 0) {
+      return {
+        summary: rawText,
+        highlights: ["Full details available in Executive Brief."],
+        risks: ["Monitor standard operational metrics."]
+      };
+    }
+
+    return {
+      summary: summaryLines.join('\n').trim(),
+      highlights: highlights,
+      risks: risks
     };
   };
-
+  
  useEffect(() => {
     // 🛑 THE BOUNCER CHECK: 
     if (!isDemo && !user) {
