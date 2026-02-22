@@ -1,6 +1,6 @@
 import React, { useState, useRef } from 'react';
 import { db } from '../firebase'; 
-import * as f from 'firebase/firestore';
+import * as firestore from 'firebase/firestore';
 import { X, ShieldCheck, Sparkles, Upload, FileJson } from 'lucide-react';
 import { getFunctions, httpsCallable } from 'firebase/functions';
 
@@ -91,30 +91,38 @@ const handleAnalyze = async () => {
     };
 
     const handlePublish = async () => {
-        if (!result) return;
-        setLoading(true);
-        console.log("Attempting to Publish...");
+    if (!result) return;
+    setLoading(true);
+    try {
+        const reportRef = firestore.doc(db, 'system_data', `reports_${targetYear}`);
+        await firestore.setDoc(reportRef, {
+            privateText: result.private,
+            publicText: result.public,
+            timestamp: new Date()
+        });
 
-        try {
-            // 🛡️ USING THE 'f' PREFIX FOR ALL FIRESTORE TOOLS
-            const reportRef = f.doc(db, 'system_data', `reports_${targetYear}`);
-            await f.setDoc(reportRef, {
-                privateText: result.private,
-                publicText: result.public,
-                timestamp: new Date()
+        const dataToArchive = importedData || teamData || [];
+        
+        const batchPromises = dataToArchive.map(staff => {
+            const sName = staff.staff_name || staff.name || 'unknown';
+            const staffId = sName.toLowerCase().replace(/\s+/g, '_');
+            const staffRef = firestore.doc(db, `archive_${targetYear}`, staffId);
+            return firestore.setDoc(staffRef, {
+                staff_name: sName,
+                projects: staff.projects || [],
+                year: targetYear
             });
+        });
 
-            const dataToArchive = importedData || teamData || [];
-            
-            const batchPromises = dataToArchive.map(staff => {
-                const sName = staff.staff_name || staff.name || 'unknown';
-                const staffId = sName.toLowerCase().replace(/\s+/g, '_');
-                return f.setDoc(f.doc(db, `archive_${targetYear}`, staffId), {
-                    staff_name: sName,
-                    projects: staff.projects || [],
-                    year: targetYear
-                });
-            });
+        await Promise.all(batchPromises);
+        alert(`SUCCESS: Archived ${targetYear}!`);
+        onClose(); 
+    } catch (e) {
+        alert("Archive Error: " + e.message);
+    } finally {
+        setLoading(false);
+    }
+};
 
             await Promise.all(batchPromises);
             console.log("Archive Success!");
