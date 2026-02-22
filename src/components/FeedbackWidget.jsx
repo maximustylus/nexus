@@ -45,13 +45,11 @@ const FeedbackWidget = ({ user }) => {
 
     return (
         <>
-            {/* FLOATING BUTTON */}
-            <button 
-                onClick={() => setIsOpen(true)}
-                className="fixed bottom-[180px] right-4 lg:bottom-6 lg:right-28 w-16 h-16 bg-indigo-600 hover:bg-indigo-700 text-white rounded-full shadow-[0_0_20px_rgba(79,70,229,0.4)] transition-all hover:scale-110 z-[85] flex items-center justify-center p-0 m-0"
-            >
-                <MessageSquare size={26} />
-            </button>
+            {/* 🛡️ FIX: Stacks on mobile, sits beside AURA on iPad (above nav), sits beside AURA on Desktop (bottom) */}
+                <button 
+                    onClick={() => setIsOpen(true)}
+                    className="fixed bottom-[180px] md:bottom-24 xl:bottom-6 right-4 md:right-24 xl:right-28 w-16 h-16 bg-indigo-600 hover:bg-indigo-700 text-white rounded-full shadow-[0_0_20px_rgba(79,70,229,0.4)] transition-all hover:scale-110 z-[85] flex items-center justify-center p-0 m-0"
+                >
 
             {/* FEEDBACK MODAL */}
             {isOpen && (
