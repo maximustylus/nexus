@@ -631,7 +631,6 @@ const CustomBarTooltip = ({ active, payload, label }) => {
 
         {/* CENTER NAVIGATION */}
         <div className="hidden lg:flex bg-slate-100 dark:bg-slate-900/50 p-1 rounded-lg shrink-0">
-           {/* 👇 ADDED 'guide' TO THIS ARRAY */}
            {['dashboard', 'archive', 'roster', 'pulse', 'guide'].map(view => (
              <button 
                key={view} 
@@ -698,7 +697,7 @@ const CustomBarTooltip = ({ active, payload, label }) => {
          {currentView === 'dashboard' && <DashboardView />}
          {currentView === 'archive' && <DashboardView isArchive={true} />}
          {currentView === 'roster' && <RosterView />}
-         {currentView === 'pulse' && <WellbeingView />}
+         {currentView === 'pulse' && <WellbeingView user={user} />}
        </div>
      )}
 
