@@ -1,14 +1,6 @@
 import React, { useState, useRef } from 'react';
 import { db } from '../firebase'; 
-import { 
-  doc, 
-  getDoc, 
-  getDocs, 
-  setDoc, 
-  collection, 
-  query, 
-  where 
-} from 'firebase/firestore';
+import * as f from 'firebase/firestore';
 import { X, ShieldCheck, Sparkles, Upload, FileJson } from 'lucide-react';
 import { getFunctions, httpsCallable } from 'firebase/functions';
 
@@ -64,7 +56,7 @@ const SmartAnalysis = ({ teamData, staffLoads, onClose }) => {
 
 const handleAnalyze = async () => {
         setLoading(true); setError('');
-        console.log("📡 Starting Analysis for:", targetYear);
+        console.log("Starting Analysis for:", targetYear);
         
         try {
             const sourceData = importedData || teamData || [];
@@ -74,10 +66,9 @@ const handleAnalyze = async () => {
             }));
 
             const currentProfiles = isDemo ? MARVEL_PROFILES : STAFF_PROFILES;
-
-            // Ensure we are sending an ARRAY of profiles, not an object
             const profileArray = Object.values(currentProfiles);
 
+            // 🛡️ CALLING THE AI
             const response = await generateSmartAnalysis({
                 targetYear: Number(targetYear),
                 teamName: "SSMC@KKH CEP Team",
@@ -89,9 +80,9 @@ const handleAnalyze = async () => {
                 private: response.data.private, 
                 public: response.data.public 
             });
-            console.log("✅ AI Analysis Received");
+            console.log("AI Analysis Received");
         } catch (err) {
-            console.error("❌ Analysis Error:", err);
+            console.error("Analysis Error:", err);
             setError('Analysis Failed: ' + err.message);
         } finally {
             setLoading(false);
@@ -102,12 +93,12 @@ const handleAnalyze = async () => {
     const handlePublish = async () => {
         if (!result) return;
         setLoading(true);
-        console.log("💾 Attempting to Publish...");
+        console.log("Attempting to Publish...");
 
         try {
-            // Save Master Report
-            const reportRef = doc(db, 'system_data', `reports_${targetYear}`);
-            await setDoc(reportRef, {
+            // 🛡️ USING THE 'f' PREFIX FOR ALL FIRESTORE TOOLS
+            const reportRef = f.doc(db, 'system_data', `reports_${targetYear}`);
+            await f.setDoc(reportRef, {
                 privateText: result.private,
                 publicText: result.public,
                 timestamp: new Date()
@@ -115,11 +106,10 @@ const handleAnalyze = async () => {
 
             const dataToArchive = importedData || teamData || [];
             
-            // Save individual docs
             const batchPromises = dataToArchive.map(staff => {
                 const sName = staff.staff_name || staff.name || 'unknown';
                 const staffId = sName.toLowerCase().replace(/\s+/g, '_');
-                return setDoc(doc(db, `archive_${targetYear}`, staffId), {
+                return f.setDoc(f.doc(db, `archive_${targetYear}`, staffId), {
                     staff_name: sName,
                     projects: staff.projects || [],
                     year: targetYear
@@ -127,11 +117,11 @@ const handleAnalyze = async () => {
             });
 
             await Promise.all(batchPromises);
-            console.log("🎉 Archive Success!");
+            console.log("Archive Success!");
             alert(`SUCCESS: Archived ${targetYear}!`);
             onClose(); 
         } catch (e) {
-            console.error("❌ Publish Error:", e);
+            console.error("Publish Error:", e);
             alert("Archive Error: " + e.message);
         } finally {
             setLoading(false);
