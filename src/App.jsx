@@ -709,6 +709,8 @@ const CustomBarTooltip = ({ active, payload, label }) => {
          {currentView === 'pulse' && <WellbeingView user={user} />}
        </div>
      )}
+      
+    </ResponsiveLayout>
 
       {/* App Guide */}
       <AppGuide isOpen={isGuideOpen} onClose={() => setIsGuideOpen(false)} />
@@ -718,8 +720,6 @@ const CustomBarTooltip = ({ active, payload, label }) => {
 
       {/* Global Feedback Reporter */}
       <FeedbackWidget user={user} />
-      
-    </ResponsiveLayout>
   );
 }
 
