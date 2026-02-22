@@ -195,7 +195,17 @@ const SmartReportView = ({ year, teamData, staffLoads, user, forceAdminView }) =
 
       let isHeader = false;
       let headerClass = "";
-      if (trimmedLine.startsWith('### ')) {
+      
+      // 🛡️ THE FIX: Added deep header support (H4 and H5)
+      if (trimmedLine.startsWith('##### ')) {
+        trimmedLine = trimmedLine.replace(/^#####\s/, '');
+        isHeader = true;
+        headerClass = `text-sm mt-3 mb-1 font-bold ${boldColor}`;
+      } else if (trimmedLine.startsWith('#### ')) {
+        trimmedLine = trimmedLine.replace(/^####\s/, '');
+        isHeader = true;
+        headerClass = `text-base mt-4 mb-2 font-black tracking-wide ${boldColor}`;
+      } else if (trimmedLine.startsWith('### ')) {
         trimmedLine = trimmedLine.replace(/^###\s/, '');
         isHeader = true;
         headerClass = `text-md mt-4 mb-2 uppercase tracking-wide ${boldColor}`;
@@ -209,9 +219,11 @@ const SmartReportView = ({ year, teamData, staffLoads, user, forceAdminView }) =
         headerClass = `text-xl mt-5 mb-3 uppercase tracking-widest ${boldColor}`;
       }
 
+      // Clean dash bullets
       const isBullet = trimmedLine.startsWith('- ');
       if (isBullet) trimmedLine = trimmedLine.replace(/^\-\s/, '');
 
+      // Apply bolding to **text**
       const parts = trimmedLine.split(/(\*\*.*?\*\*)/g);
       const formattedLine = parts.map((part, i) => {
         if (part.startsWith('**') && part.endsWith('**')) {
@@ -220,8 +232,10 @@ const SmartReportView = ({ year, teamData, staffLoads, user, forceAdminView }) =
         return part.replace(/\*\*/g, ''); 
       });
 
+      // Render Headers
       if (isHeader) return <div key={index} className={headerClass}>{formattedLine}</div>;
 
+      // Render Bullets
       if (isBullet) {
         return (
           <div key={index} className="flex items-start mb-1 ml-2">
@@ -230,6 +244,8 @@ const SmartReportView = ({ year, teamData, staffLoads, user, forceAdminView }) =
           </div>
         );
       }
+      
+      // Render Standard Paragraphs
       return <p key={index} className={`mb-2 leading-relaxed ${textColor}`}>{formattedLine}</p>;
     });
   };
