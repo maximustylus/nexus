@@ -124,18 +124,6 @@ const handleAnalyze = async () => {
     }
 };
 
-            await Promise.all(batchPromises);
-            console.log("Archive Success!");
-            alert(`SUCCESS: Archived ${targetYear}!`);
-            onClose(); 
-        } catch (e) {
-            console.error("Publish Error:", e);
-            alert("Archive Error: " + e.message);
-        } finally {
-            setLoading(false);
-        }
-    };
-
     return (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-md flex items-center justify-center z-[100] p-4">
             <div className="bg-white dark:bg-slate-900 w-full max-w-4xl max-h-[90vh] rounded-3xl shadow-2xl overflow-hidden flex flex-col border border-slate-200 dark:border-slate-700">
