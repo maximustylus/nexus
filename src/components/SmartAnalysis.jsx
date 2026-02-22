@@ -1,6 +1,6 @@
 import React, { useState, useRef } from 'react';
 import { db } from '../firebase'; 
-import { doc, getDoc, getDocs, collection } from 'firebase/firestore';
+import { doc, getDoc, getDocs, setDoc, collection } from 'firebase/firestore';
 import { X, ShieldCheck, Sparkles, Upload, FileJson } from 'lucide-react';
 import { getFunctions, httpsCallable } from 'firebase/functions';
 
@@ -55,39 +55,47 @@ const SmartAnalysis = ({ teamData, staffLoads, onClose }) => {
     };
 
     const handleAnalyze = async () => {
-        setLoading(true); setError('');
-        try {
-            setStatus(`Filtering Data for ${targetYear}...`);
-            const sourceData = importedData || teamData || [];
-            const yearData = sourceData.map(staff => ({
-                name: staff.staff_name || staff.name,
-                projects: (staff.projects || []).filter(p => (p.year || '2026') === targetYear)
-            }));
+    setLoading(true); 
+    setError('');
+    
+    try {
+        setStatus(`Filtering Data for ${targetYear}...`);
+        
+        // Use the data currently loaded in the component
+        const sourceData = importedData || teamData || [];
+        
+        // Filter the data for the AI
+        const filteredYearData = sourceData.map(staff => ({
+            name: staff.staff_name || staff.name,
+            projects: (staff.projects || []).filter(p => (p.year || '2026') === targetYear)
+        }));
 
-            setStatus('Connecting to Secure Neural Link...');
+        setStatus('Connecting to Secure Neural Link...');
 
-            // THE FIREWALL
-            const activeProfiles = isDemo ? MARVEL_PROFILES : STAFF_PROFILES;
+        // Determine which profiles to use
+        const activeProfiles = isDemo ? MARVEL_PROFILES : STAFF_PROFILES;
 
-            // THE TEAM
-            const response = await generateSmartAnalysis({
-              targetYear: Number(targetYear),
-              teamName: "SSMC@KKH CEP Team",
-              staffProfiles: activeProfiles, 
-              yearData: yearData 
-            });
+        // 🛡️ CALL THE BACKEND
+        const resultPromise = await generateSmartAnalysis({
+            targetYear: Number(targetYear),
+            teamName: "SSMC@KKH CEP Team",
+            staffProfiles: activeProfiles, 
+            yearData: filteredYearData 
+        });
 
-            setResult({ 
-                private: response.data.private, 
-                public: response.data.public 
-            });
-        } catch (err) {
-            setError('Analysis Failed: ' + err.message);
-        } finally {
-            setLoading(false);
-            setStatus('GENERATE ANALYSIS');
-        }
-    };
+        setResult({ 
+            private: resultPromise.data.private, 
+            public: resultPromise.data.public 
+        });
+
+    } catch (err) {
+        console.error("Analysis Error:", err);
+        setError('Analysis Failed: ' + err.message);
+    } finally {
+        setLoading(false);
+        setStatus('GENERATE ANALYSIS');
+    }
+};
 
     const handlePublish = async () => {
         if (!result || !importedData) return;
