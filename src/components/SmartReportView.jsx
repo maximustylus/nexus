@@ -15,84 +15,96 @@ const SmartReportView = ({ year, teamData, staffLoads, user, forceAdminView }) =
   // HOLD BOTH REPORTS IN STATE
   const [reports, setReports] = useState({ private: null, public: null });
   
-  // ADMIN TOGGLE STATE (Defaults to private for admins, public for staff)
+  // ADMIN TOGGLE STATE
   const [viewMode, setViewMode] = useState(isActuallyAdmin ? 'private' : 'public'); 
   const [isAnalysisOpen, setIsAnalysisOpen] = useState(false);
   const [isFullReportOpen, setIsFullReportOpen] = useState(false);
 
-  // Force non-admins to strictly view the public pulse
   useEffect(() => {
       if (!isActuallyAdmin) setViewMode('public');
   }, [isActuallyAdmin]);
 
-  // 🛡️ BULLETPROOF PARSER HELPER v3 (Aggressive Markdown Cleaner)
+  // 🛡️ BULLETPROOF PARSER HELPER v4 (Decouples UI boxes from the Full Report)
   const parseAI = (rawText) => {
-    if (!rawText) return { summary: "", highlights: [], risks: [] };
-    if (typeof rawText === 'object') return rawText;
-
-    const lines = String(rawText).split('\n');
-    let summaryLines = [];
-    let highlights = [];
-    let risks = [];
-    let currentSection = 'summary';
-
-    lines.forEach(line => {
-      const cleanLine = line.trim();
-      const lowerLine = cleanLine.toLowerCase();
-
-      // 1. Detect Headers safely
-      if (lowerLine.includes('win') || lowerLine.includes('highlight') || lowerLine.includes('success')) {
-        currentSection = 'wins';
-        return; 
-      } else if (lowerLine.includes('risk') || lowerLine.includes('focus') || lowerLine.includes('recommendation')) {
-        currentSection = 'risks'; 
-        return; 
-      } else if (lowerLine.includes('summary') || lowerLine.includes('analysis') || lowerLine.includes('conclusion')) {
-        currentSection = 'summary';
-      }
-
-      // 2. Extract Bullet Points & Aggressively Strip Numbers
-      const isBullet = cleanLine.startsWith('*') || cleanLine.startsWith('-') || /^\d+\./.test(cleanLine);
-
-      if (isBullet) {
-        // 🛡️ AGGRESSIVE CLEANING: Strips dashes, asterisks, AND numbers (e.g., "* 1.", "1. ", "-")
-        const cleanBullet = cleanLine
-            .replace(/^[\*\-\s]+/, '')    // Strip leading * or -
-            .replace(/^\d+[\.\)]\s*/, '') // Strip numbers like "1." or "3)"
-            .replace(/^[\*\-\s]+/, '')    // Catch any leftover * after the number
-            .replace(/\*\*/g, '')         // Strip bolding
-            .trim();
-        
-        if (cleanBullet.length > 0) {
-            if (currentSection === 'wins' && highlights.length < 5) highlights.push(cleanBullet);
-            else if (currentSection === 'risks' && risks.length < 5) risks.push(cleanBullet);
-            else summaryLines.push(cleanLine);
-        }
-      } else if (cleanLine) {
-        if (currentSection === 'summary') summaryLines.push(cleanLine);
-      }
-    });
-
-    if (highlights.length === 0 && risks.length === 0) {
-      return {
-        summary: rawText,
-        highlights: ["Full details available in Executive Brief."],
-        risks: ["Monitor standard operational metrics."]
-      };
+    if (!rawText) return { preview: "", highlights: [], risks: [], fullText: "" };
+    
+    // Legacy JSON fallback
+    if (typeof rawText === 'object') {
+        return {
+            preview: rawText.summary || rawText.preview || "",
+            highlights: rawText.highlights || rawText.wins || [],
+            risks: rawText.risks || [],
+            fullText: JSON.stringify(rawText, null, 2)
+        };
     }
 
+    const lines = String(rawText).split('\n');
+    let highlights = [];
+    let risks = [];
+    let previewText = "";
+    let currentSection = 'none';
+
+    // 1. Clean the full text while extracting the dashboard bits
+    const cleanedLines = lines.map(line => {
+        const cleanLine = line.trim();
+        const lowerLine = cleanLine.toLowerCase();
+
+        // Detect Sections
+        if (lowerLine.includes('win') || lowerLine.includes('highlight') || lowerLine.includes('success')) {
+            currentSection = 'wins';
+        } else if (lowerLine.includes('risk') || lowerLine.includes('focus') || lowerLine.includes('recommendation')) {
+            currentSection = 'risks';
+        } else if (lowerLine.includes('analysis') || lowerLine.includes('summary') || lowerLine.includes('conclusion')) {
+            currentSection = 'summary';
+        }
+
+        // Clean Bullets (Strips numbers like "1.", "2)", asterisks, and dashes)
+        const isBullet = cleanLine.startsWith('*') || cleanLine.startsWith('-') || /^\d+[\.\)]/.test(cleanLine);
+        
+        if (isBullet) {
+            const pureText = cleanLine
+                .replace(/^[\*\-\s]+/, '')
+                .replace(/^\d+[\.\)]\s*/, '')
+                .replace(/^[\*\-\s]+/, '')
+                .trim();
+            
+            const unboldedText = pureText.replace(/\*\*/g, '');
+            
+            if (pureText) {
+                if (currentSection === 'wins' && highlights.length < 5) highlights.push(unboldedText);
+                if (currentSection === 'risks' && risks.length < 5) risks.push(unboldedText);
+            }
+
+            // Return a perfectly clean dash bullet for the full text view
+            return "- " + pureText;
+        } 
+        
+        // Extract Preview Text (First solid paragraph of the summary section)
+        if (!cleanLine.startsWith('#') && cleanLine.length > 30 && currentSection === 'summary' && !previewText) {
+            previewText = cleanLine.replace(/\*\*/g, '');
+        }
+
+        return line; // Return normal lines untouched for the full text
+    });
+
+    // 2. Fallbacks if the AI was completely uncooperative
+    if (!previewText) {
+         const fallbackLines = cleanedLines.filter(l => !l.startsWith('#') && !l.startsWith('-') && l.trim().length > 30);
+         previewText = fallbackLines.length > 0 ? fallbackLines[0].replace(/\*\*/g, '') : "Analysis completed. View full report for detailed breakdown.";
+    }
+    if (highlights.length === 0) highlights = ["See full report for detailed wins."];
+    if (risks.length === 0) risks = ["See full report for risk analysis."];
+
     return {
-      summary: summaryLines.join('\n').trim(),
-      highlights: highlights,
-      risks: risks // NOTE: The UI automatically maps this to "Strategic Focus" in Public view
+        preview: previewText,
+        highlights,
+        risks,
+        fullText: cleanedLines.join('\n') // The entire intact report for the Modal!
     };
   };
   
   useEffect(() => {
-    // 🛑 THE BOUNCER CHECK: 
-    if (!isDemo && !user) {
-        return; 
-    }
+    if (!isDemo && !user) return; 
 
     const fetchReport = async () => {
       setLoading(true);
@@ -102,53 +114,32 @@ const SmartReportView = ({ year, teamData, staffLoads, user, forceAdminView }) =
           if (String(year) === '2026') {
             mockReport = {
               private: { 
-                summary: "Private: Peter (JG11) is experiencing severe scope creep and burnout risk. Reallocate his Inpatient Ward duties to Steve.", 
+                preview: "Private: Peter (JG11) is experiencing severe scope creep and burnout risk. Reallocate his Inpatient Ward duties to Steve.", 
                 highlights: ["Steve maintaining 100% on Shield Integration.", "Charles securing Mutant Genome grant."], 
-                risks: ["Peter's On-Call frequency.", "Tony's WFH isolation."] 
+                risks: ["Peter's On-Call frequency.", "Tony's WFH isolation."],
+                fullText: "## Executive Wins\n- Steve maintaining 100% on Shield Integration.\n- Charles securing Mutant Genome grant.\n\n## Risk Factors\n- Peter's On-Call frequency.\n- Tony's WFH isolation.\n\n## Full Analysis\nPrivate: Peter (JG11) is experiencing severe scope creep and burnout risk. Reallocate his Inpatient Ward duties to Steve."
               },
               public: { 
-                summary: "Public: The Marvel CEP Team is crushing Q1! Shield Integration is complete, and clinical targets are being met across the board.", 
+                preview: "Public: The Marvel CEP Team is crushing Q1! Shield Integration is complete, and clinical targets are being met across the board.", 
                 highlights: ["Shield Integration Completed.", "New Web Shooter protocols active."], 
-                risks: ["Maintain communication during remote work.", "Monitor ward volumes."] 
-              }
-            };
-          } else if (String(year) === '2025') {
-            mockReport = {
-              private: { 
-                summary: "Private (2025 Archive): Tony (JG15) delayed Nano-Tech upgrades due to excessive management overhead. Streamline approvals for JG15 staff.", 
-                highlights: ["Operation: Rebirth succeeded.", "Young Avengers Mentorship launched."], 
-                risks: ["Management bottlenecking tech upgrades.", "Budget constraints on Cerebro."] 
-              },
-              public: { 
-                summary: "Public (2025 Archive): A historic year for the Marvel CEP Team! Operation Rebirth set new clinical standards for the hospital.", 
-                highlights: ["Historic clinical outcomes.", "Mentorship program launched."], 
-                risks: ["Equipment maintenance schedules.", "Documentation backlogs."] 
-              }
-            };
-          } else if (String(year) === '2024') {
-            mockReport = {
-              private: { 
-                summary: "Private (2024 Archive): Jean's research load compromised her clinical availability in Q3. Ensure strict 60/40 splits for JG13.", 
-                highlights: ["Sentinels Defense Pact secured.", "Daily Bugle PR handled perfectly."], 
-                risks: ["Research bleeding into clinical hours.", "Vibranium supply shortages."] 
-              },
-              public: { 
-                summary: "Public (2024 Archive): The team flawlessly handled the Phoenix Force crisis while maintaining excellent patient care metrics.", 
-                highlights: ["Crisis management excellence.", "Public relations win."], 
-                risks: ["Supply chain stability.", "Staff fatigue post-crisis."] 
+                risks: ["Maintain communication during remote work.", "Monitor ward volumes."],
+                fullText: "## Team Wins\n- Shield Integration Completed.\n- New Web Shooter protocols active.\n\n## Strategic Focus\n- Maintain communication during remote work.\n- Monitor ward volumes.\n\n## Summary\nPublic: The Marvel CEP Team is crushing Q1! Shield Integration is complete, and clinical targets are being met across the board."
               }
             };
           } else {
-            mockReport = {
+             // Generic mock for other years
+             mockReport = {
               private: { 
-                summary: "Private (2023 Archive): Foundational year. Steve established baseline protocols. Need to hire more junior staff to support him.", 
-                highlights: ["Hydra Base cleared.", "Web Fluid V3 finalized."], 
-                risks: ["Single-point-of-failure with Steve.", "Ethics board delays."] 
+                preview: "Archived Private Report. Standard operational parameters maintained.", 
+                highlights: ["Clinical targets met.", "Research grants approved."], 
+                risks: ["Standard operational friction.", "Budget constraints."],
+                fullText: "## Executive Wins\n- Clinical targets met.\n- Research grants approved.\n\n## Risk Factors\n- Standard operational friction.\n- Budget constraints.\n\n## Full Analysis\nArchived Private Report. Standard operational parameters maintained."
               },
               public: { 
-                summary: "Public (2023 Archive): The team established our core clinic protocols and hosted a highly successful Stark Expo!", 
-                highlights: ["Stark Expo 2023.", "New clinical baselines set."], 
-                risks: ["Growing patient waitlists.", "Facility expansions needed."] 
+                preview: "Archived Public Report. The team maintained excellent patient care metrics.", 
+                highlights: ["Clinical excellence.", "Public relations win."], 
+                risks: ["Supply chain stability.", "Equipment maintenance."],
+                fullText: "## Team Wins\n- Clinical excellence.\n- Public relations win.\n\n## Strategic Focus\n- Supply chain stability.\n- Equipment maintenance.\n\n## Summary\nArchived Public Report. The team maintained excellent patient care metrics."
               }
             };
           }
@@ -165,9 +156,10 @@ const SmartReportView = ({ year, teamData, staffLoads, user, forceAdminView }) =
             });
           } else {
             const emptyState = {
-              summary: "No published report found for this year.",
+              preview: "No published report found for this year.",
               highlights: ["Ready for analysis."],
-              risks: ["Awaiting data import."]
+              risks: ["Awaiting data import."],
+              fullText: "No report data has been generated or published for this year yet."
             };
             setReports({ private: emptyState, public: emptyState });
           }
@@ -176,38 +168,31 @@ const SmartReportView = ({ year, teamData, staffLoads, user, forceAdminView }) =
     };
     
     fetchReport();
-    
-  // ⏱️ THE DEPENDENCY FIX: 
   }, [isDemo, year, user]);
 
   if (loading) return <div className="h-64 bg-slate-800 animate-pulse rounded-3xl" />;
 
-  // DETERMINE WHICH REPORT TO SHOW BASED ON TOGGLE
   const activeReport = reports[viewMode] || reports.public;
   const isPrivateView = viewMode === 'private';
 
-// Context-Aware Colors & Advanced Markdown Stripping
-  const formatAIText = (text, isBanner = false) => {
+  // Modal Text Formatter (Applies Headers and Bullets cleanly)
+  const formatAIText = (text) => {
     if (!text) return null;
 
-    // Smart Colors:
-    const textColor = isBanner ? "text-white/90" : "text-slate-700 dark:text-gray-300";
-    const boldColor = isBanner ? "text-white font-black" : "text-indigo-700 dark:text-indigo-300 font-bold";
-    const bulletColor = isBanner ? "text-white/50" : "text-indigo-500 dark:text-blue-400";
-    const dividerColor = isBanner ? "border-white/20" : "border-slate-200 dark:border-slate-700";
+    const textColor = "text-slate-700 dark:text-gray-300";
+    const boldColor = "text-indigo-700 dark:text-indigo-300 font-bold";
+    const bulletColor = "text-indigo-500 dark:text-blue-400";
+    const dividerColor = "border-slate-200 dark:border-slate-700";
 
     return text.split('\n').map((line, index) => {
       let trimmedLine = line.trim();
 
-      // 1. Spacing
       if (!trimmedLine) return <div key={index} className="h-2" />; 
       
-      // 2. Horizontal Dividers (--- or ***)
       if (trimmedLine === '---' || trimmedLine === '***' || trimmedLine === '- - -') {
         return <hr key={index} className={`my-4 border-t-2 border-dashed ${dividerColor}`} />;
       }
 
-      // 3. Headers (Strip # but make them big and bold)
       let isHeader = false;
       let headerClass = "";
       if (trimmedLine.startsWith('### ')) {
@@ -224,26 +209,18 @@ const SmartReportView = ({ year, teamData, staffLoads, user, forceAdminView }) =
         headerClass = `text-xl mt-5 mb-3 uppercase tracking-widest ${boldColor}`;
       }
 
-      // 4. Bullets
-      const isBullet = trimmedLine.startsWith('* ') || trimmedLine.startsWith('- ');
-      if (isBullet) {
-        trimmedLine = trimmedLine.replace(/^[\*\-]\s/, '');
-      }
+      const isBullet = trimmedLine.startsWith('- ');
+      if (isBullet) trimmedLine = trimmedLine.replace(/^\-\s/, '');
 
-      // 5. Bold Text (Bulletproof replacement)
       const parts = trimmedLine.split(/(\*\*.*?\*\*)/g);
       const formattedLine = parts.map((part, i) => {
         if (part.startsWith('**') && part.endsWith('**')) {
-          // completely vaporize any remaining asterisks
           return <strong key={i} className={boldColor}>{part.replace(/\*/g, '')}</strong>;
         }
         return part.replace(/\*\*/g, ''); 
       });
 
-      // 6. Final Render
-      if (isHeader) {
-        return <div key={index} className={headerClass}>{formattedLine}</div>;
-      }
+      if (isHeader) return <div key={index} className={headerClass}>{formattedLine}</div>;
 
       if (isBullet) {
         return (
@@ -261,13 +238,11 @@ const SmartReportView = ({ year, teamData, staffLoads, user, forceAdminView }) =
     <div className="flex flex-col gap-4">
       <div className="bg-gradient-to-br from-indigo-600 to-violet-700 rounded-3xl p-8 text-white shadow-xl relative overflow-hidden group">
         
-        {/* ONE UNIFIED GRID */}
         <div className="relative z-10 grid grid-cols-1 md:grid-cols-3 gap-8">
           
           {/* COLUMN 1: AURA HEADER, TOGGLES, SCORE, AND SUMMARY */}
           <div className="md:col-span-1 pr-6 flex flex-col">
             
-            {/* 1. The Unified AURA Header */}
             <div className="flex items-center gap-2 mb-4 opacity-80">
               <Sparkles size={16} className="text-yellow-300" />
               <span className="text-[10px] font-black uppercase tracking-widest">
@@ -275,7 +250,6 @@ const SmartReportView = ({ year, teamData, staffLoads, user, forceAdminView }) =
               </span>
             </div>
 
-            {/* 2. The Admin Toggles */}
             {isActuallyAdmin && (
                 <div className="flex bg-black/30 w-fit rounded-lg p-1 border border-white/20 backdrop-blur-md mb-6">
                     <button 
@@ -293,15 +267,15 @@ const SmartReportView = ({ year, teamData, staffLoads, user, forceAdminView }) =
                 </div>
             )}
 
-            {/* 3. The 100% Score & Summary */}
             <div className="text-6xl font-black mb-1 tracking-tighter">100%</div>
             <div className={`inline-flex w-fit items-center gap-1 px-3 py-1 rounded-full backdrop-blur-md text-[10px] font-black uppercase mb-4 ${isPrivateView ? 'bg-red-500/30 text-red-100' : 'bg-emerald-500/30 text-emerald-100'}`}>
               {isPrivateView ? <Lock size={10} /> : <Users size={10} />}
               {isPrivateView ? 'PRIVATE ARCHIVE' : 'PUBLIC ARCHIVE'}
             </div>
             
+           {/* 🛡️ THE PREVIEW FIX: Displays the extracted summary blurb here */}
            <div className="text-xs leading-relaxed font-bold opacity-80 line-clamp-3 italic">
-              {formatAIText(activeReport?.summary, true)}
+              {activeReport?.preview}
             </div>
             
             <button 
@@ -345,7 +319,6 @@ const SmartReportView = ({ year, teamData, staffLoads, user, forceAdminView }) =
 
             {/* ACTION BAR */}
             <div className="mt-8 pt-6 border-t border-white/10 flex items-center justify-between gap-4">
-                {/* 🛡️ THE FIX: Dual-key lock. Must be admin AND looking at private view */}
                 {isActuallyAdmin && isPrivateView ? (
                     <button 
                         onClick={() => setIsAnalysisOpen(true)}
@@ -373,8 +346,8 @@ const SmartReportView = ({ year, teamData, staffLoads, user, forceAdminView }) =
       {/* FULL REPORT MODAL */}
       {isFullReportOpen && (
         <div className="fixed inset-0 bg-slate-900/90 backdrop-blur-sm z-[150] flex items-center justify-center p-4">
-          <div className="bg-white dark:bg-slate-900 w-full max-w-2xl rounded-3xl shadow-2xl overflow-hidden animate-in fade-in zoom-in duration-200 border border-slate-200 dark:border-slate-800">
-            <div className="p-6 border-b border-slate-100 dark:border-slate-800 flex justify-between items-center bg-slate-50 dark:bg-slate-800/50">
+          <div className="bg-white dark:bg-slate-900 w-full max-w-3xl rounded-3xl shadow-2xl overflow-hidden animate-in fade-in zoom-in duration-200 border border-slate-200 dark:border-slate-800 flex flex-col max-h-[90vh]">
+            <div className="p-6 border-b border-slate-100 dark:border-slate-800 flex justify-between items-center bg-slate-50 dark:bg-slate-800/50 shrink-0">
               <div className="flex items-center gap-2">
                 {isPrivateView ? <Lock className="text-red-500" size={18} /> : <Users className="text-emerald-500" size={18} />}
                 <h2 className="font-black uppercase text-sm tracking-tight text-slate-800 dark:text-white">
@@ -383,12 +356,15 @@ const SmartReportView = ({ year, teamData, staffLoads, user, forceAdminView }) =
               </div>
               <button className="text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-white" onClick={() => setIsFullReportOpen(false)}><X size={20} /></button>
             </div>
-            <div className="p-8 max-h-[60vh] overflow-y-auto">
+            
+            {/* 🛡️ THE MODAL FIX: Displays the 100% complete, unadulterated essay here */}
+            <div className="p-8 overflow-y-auto flex-1">
              <div className="text-slate-700 dark:text-slate-300 leading-relaxed font-medium">
-              {formatAIText(activeReport?.summary, false)}
+              {formatAIText(activeReport?.fullText)}
             </div>
             </div>
-            <div className="p-6 bg-slate-50 dark:bg-slate-800/50 text-center border-t border-slate-100 dark:border-slate-800">
+            
+            <div className="p-6 bg-slate-50 dark:bg-slate-800/50 text-center border-t border-slate-100 dark:border-slate-800 shrink-0">
               <button onClick={() => setIsFullReportOpen(false)} className="px-8 py-3 bg-slate-900 dark:bg-indigo-600 text-white font-black rounded-xl uppercase text-xs tracking-widest hover:bg-slate-800 dark:hover:bg-indigo-500 transition-colors">Close</button>
             </div>
           </div>
