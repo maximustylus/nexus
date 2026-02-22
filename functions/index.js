@@ -234,10 +234,15 @@ STRICT JSON OUTPUT (return ONLY this, no markdown, no preamble):
 `.trim();
 
 const SMART_ANALYSIS_SYSTEM_PROMPT = `
-You are a Senior Healthcare Analytics Advisor generating confidential staff wellbeing audit reports.
-Your analysis must be evidence-based, clinically appropriate, and written in professional UK English.
-Return ONLY a valid JSON object. No markdown. No preamble.
-Output schema: { "private": "<detailed clinical report for department heads>", "public": "<summary safe for broader staff>"}
+You are an Expert Organizational Analyst and Wellbeing Advisor for a major healthcare institution. Your role is to generate confidential, highly accurate performance and wellbeing audits for ANY department within the hospital network (e.g., Clinical, Administrative, Facilities Management, Allied Health, Corporate, or Operations).
+
+CRITICAL RULES:
+1. TARGET IDENTITY: You must identify the specific team or department from the provided data. You MUST use their exact, formal team name in your report. Do not invent names or default to clinical terminology if they are not a clinical team.
+2. DOMAIN ADAPTATION: Adapt your analysis to their specific function. If they are clinical, focus on patient care and clinical load. If they are non-clinical (e.g., facilities, marketing, admin), focus on operational efficiency, project delivery, and systemic workflows.
+3. Your tone must be evidence-based, highly professional, empathetic, and written in UK English.
+
+Return ONLY a valid JSON object. No markdown code blocks. No preamble.
+Output schema: { "private": "<detailed operational/clinical report for department heads>", "public": "<summary safe for broader staff>" }
 `.trim();
 
 // =============================================================================
@@ -353,31 +358,34 @@ exports.generateSmartAnalysis = onCall({
 
     if (!API_KEY) throw new HttpsError('failed-precondition', 'AI service is not configured.');
 
-    const { targetYear, staffProfiles, yearData, staffLoads } = request.data;
-
-    validateAnalysisInput({ targetYear, staffProfiles, yearData });
-
-    try {
-        const modelName = await resolveModel();
-        const url = `https://generativelanguage.googleapis.com/v1beta/${modelName}:generateContent?key=${API_KEY}`;
-
-        const promptText = `
-Generate a comprehensive staff wellbeing audit report for the year ${targetYear}.
-
-STAFF PROFILES (${staffProfiles.length} records):
-${JSON.stringify(staffProfiles, null, 2)}
-
-WORKLOAD DATA:
-${JSON.stringify(yearData, null, 2)}
-
-${staffLoads ? `STAFF LOAD INDICATORS:\n${JSON.stringify(staffLoads, null, 2)}` : ''}
-
-OUTPUT REQUIREMENTS:
-- "private": A detailed clinical report for department heads (300-500 words). Include trend analysis, risk flags, and specific recommendations.
-- "public": A positive, encouraging summary safe for all staff (100-150 words). Focus on collective strengths and general wellbeing initiatives.
-
-Return ONLY the JSON object. No markdown.
-        `.trim();
+        // TEAM NAME
+            const { targetYear, staffProfiles, yearData, staffLoads, teamName = "the department" } = request.data;
+        
+            validateAnalysisInput({ targetYear, staffProfiles, yearData });
+        
+            try {
+                const modelName = await resolveModel();
+                const url = `https://generativelanguage.googleapis.com/v1beta/${modelName}:generateContent?key=${API_KEY}`;
+        
+                // TEAM IDENTITY
+                const promptText = `
+        TEAM IDENTITY: ${teamName}
+        Generate a comprehensive staff wellbeing audit report for the year ${targetYear} for the team identified above.
+        
+        STAFF PROFILES (${staffProfiles.length} records):
+        ${JSON.stringify(staffProfiles, null, 2)}
+        
+        WORKLOAD DATA:
+        ${JSON.stringify(yearData, null, 2)}
+        
+        ${staffLoads ? `STAFF LOAD INDICATORS:\n${JSON.stringify(staffLoads, null, 2)}` : ''}
+        
+        OUTPUT REQUIREMENTS:
+        - "private": A detailed clinical report for department heads (300-500 words). Include trend analysis, risk flags, and specific recommendations.
+        - "public": A positive, encouraging summary safe for all staff (100-150 words). Focus on collective strengths and general wellbeing initiatives.
+        
+        Return ONLY the JSON object. No markdown.
+                `.trim();
 
         const response = await fetch(url, {
             method:  'POST',
