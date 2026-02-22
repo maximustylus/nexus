@@ -55,47 +55,47 @@ const SmartAnalysis = ({ teamData, staffLoads, onClose }) => {
     };
 
     const handleAnalyze = async () => {
-    setLoading(true); 
-    setError('');
-    
-    try {
-        setStatus(`Filtering Data for ${targetYear}...`);
+        setLoading(true); 
+        setError('');
         
-        // Use the data currently loaded in the component
-        const sourceData = importedData || teamData || [];
-        
-        // Filter the data for the AI
-        const filteredYearData = sourceData.map(staff => ({
-            name: staff.staff_name || staff.name,
-            projects: (staff.projects || []).filter(p => (p.year || '2026') === targetYear)
-        }));
+        try {
+            setStatus(`Filtering Data for ${targetYear}...`);
+            
+            // 1. Establish the source: imported JSON or the live teamData
+            const sourceData = importedData || teamData || [];
+            
+            // 2. Filter data for the specific year (The AI needs this vial)
+            const filteredYearData = sourceData.map(staff => ({
+                name: staff.staff_name || staff.name,
+                projects: (staff.projects || []).filter(p => (p.year || '2026') === String(targetYear))
+            }));
 
-        setStatus('Connecting to Secure Neural Link...');
+            setStatus('Connecting to Secure Neural Link...');
 
-        // Determine which profiles to use
-        const activeProfiles = isDemo ? MARVEL_PROFILES : STAFF_PROFILES;
+            // 3. Select the correct profiles (The AI needs this vial too)
+            const currentProfiles = isDemo ? MARVEL_PROFILES : STAFF_PROFILES;
 
-        // 🛡️ CALL THE BACKEND
-        const resultPromise = await generateSmartAnalysis({
-            targetYear: Number(targetYear),
-            teamName: "SSMC@KKH CEP Team",
-            staffProfiles: activeProfiles, 
-            yearData: filteredYearData 
-        });
+            // 🛡️ THE INJECTION: We use the exact names defined in this file
+            const response = await generateSmartAnalysis({
+                targetYear: Number(targetYear),      // Fixed: ensures it's a number
+                teamName: "SSMC@KKH CEP Team",      // Fixed: your new universal name tag
+                staffProfiles: Object.values(currentProfiles), // Fixed: ensures it is an ARRAY
+                yearData: filteredYearData          // Fixed: maps to our filtered variable
+            });
 
-        setResult({ 
-            private: resultPromise.data.private, 
-            public: resultPromise.data.public 
-        });
+            setResult({ 
+                private: response.data.private, 
+                public: response.data.public 
+            });
 
-    } catch (err) {
-        console.error("Analysis Error:", err);
-        setError('Analysis Failed: ' + err.message);
-    } finally {
-        setLoading(false);
-        setStatus('GENERATE ANALYSIS');
-    }
-};
+        } catch (err) {
+            console.error("Neural Link Error:", err);
+            setError('Analysis Failed: ' + err.message);
+        } finally {
+            setLoading(false);
+            setStatus('GENERATE ANALYSIS');
+        }
+    };
 
     const handlePublish = async () => {
         if (!result || !importedData) return;
