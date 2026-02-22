@@ -8,7 +8,9 @@
 
 const { onCall, HttpsError } = require('firebase-functions/v2/https');
 const logger = require('firebase-functions/logger');
-
+const { onSchedule } = require("firebase-functions/v2/scheduler");
+const { getFirestore } = require("firebase-admin/firestore");
+const { getMessaging } = require("firebase-admin/messaging");
 const API_KEY = process.env.GEMINI_API_KEY;
 
 if (!API_KEY) {
@@ -435,5 +437,61 @@ exports.generateSmartAnalysis = onCall({
         if (error instanceof HttpsError) throw error;
         logger.error('[SMART_ANALYSIS] Failure', error.message);
         throw new HttpsError('internal', error.message);
+    }
+});
+
+// =============================================================================
+// FUNCTION 3: scheduledPulseNudge (Runs 9:00 AM, Mon-Fri)
+// =============================================================================
+exports.scheduledPulseNudge = onSchedule({
+    schedule: "0 9 * * 1-5", // 9:00 AM, Monday through Friday
+    timeZone: "Asia/Singapore", 
+    timeoutSeconds: 60,
+    memory: "256MiB"
+}, async (event) => {
+    const db = getFirestore();
+    const messaging = getMessaging();
+
+    try {
+        console.log('[NEXUS] Waking up for daily Pulse Nudge...');
+
+        // 1. Find all users who have a registered device token
+        const usersSnap = await db.collection('users')
+            .where('fcmToken', '!=', null)
+            .get();
+
+        if (usersSnap.empty) {
+            console.log('[NEXUS] No users subscribed to notifications.');
+            return null;
+        }
+
+        // 2. Extract the tokens into an array
+        const tokens = [];
+        usersSnap.forEach(doc => {
+            const data = doc.data();
+            if (data.fcmToken && data.notificationsEnabled !== false) {
+                tokens.push(data.fcmToken);
+            }
+        });
+
+        if (tokens.length === 0) return null;
+
+        // 3. Construct the Push Notification
+        const message = {
+            notification: {
+                title: 'NEXUS | Pulse Check ⚡',
+                body: 'Good morning! Take 30 seconds to log your Social Battery and Energy levels.',
+            },
+            tokens: tokens, 
+        };
+
+        // 4. Fire the payload!
+        const response = await messaging.sendEachForMulticast(message);
+        console.log(`[NEXUS] Nudge Report: ${response.successCount} sent successfully.`);
+
+        return null;
+    } catch (error) {
+        console.error('[NEXUS] Critical error sending pulse nudge:', error);
+        return null;
     }
 });
