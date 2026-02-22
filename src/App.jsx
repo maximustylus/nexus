@@ -724,9 +724,8 @@ const CustomBarTooltip = ({ active, payload, label }) => {
      )}
       
     </ResponsiveLayout>
-
-    )}
   );
+}
 
 // --- APP WRAPPER ---
 export default function App() {
