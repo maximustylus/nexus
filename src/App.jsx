@@ -196,7 +196,7 @@ function NexusApp() {
         }, (err) => console.error("Snapshot Error:", err));
 
         // 3. Fetch Loads
-        if (!isArchived2025) {
+        if (currentView !== 'archive') {          
           activeStaffIds.forEach(staffId => {
             const u = onSnapshot(doc(db, 'staff_loads', staffId), (docSnap) => {
               if (docSnap.exists()) {
