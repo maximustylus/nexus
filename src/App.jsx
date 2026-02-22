@@ -615,11 +615,11 @@ const CustomBarTooltip = ({ active, payload, label }) => {
         </div>
       )}
 
-      {/* HEADER BAR (FIXED FOR LANDSCAPE) */}
-        <div className="md:col-span-2 flex items-center justify-between mb-6 bg-white dark:bg-slate-800 p-4 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 mx-2 md:mx-0">
+{/* HEADER BAR */}
+      <div className="md:col-span-2 flex items-center justify-between mb-6 bg-white dark:bg-slate-800 p-4 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 w-full overflow-hidden">
         
         {/* BRANDING */}
-        <div className="flex items-center gap-3 md:gap-4 shrink-0">           
+        <div className="flex items-center gap-3 md:gap-4 shrink-0">            
           <div className="relative">
             {isDemo ? (
               <img src="/nexus.png" alt="NEXUS Logo" className="h-8 md:h-12 w-auto object-contain animate-in zoom-in duration-500" />
@@ -638,8 +638,8 @@ const CustomBarTooltip = ({ active, payload, label }) => {
           </div>
         </div>
 
-        {/* CENTER NAVIGATION */}
-        <div className="hidden lg:flex bg-slate-100 dark:bg-slate-900/50 p-1 rounded-lg shrink-0">
+        {/* CENTER NAVIGATION (🛡️ FIXED: hidden xl:flex completely hides this on all iPads) */}
+        <div className="hidden xl:flex bg-slate-100 dark:bg-slate-900/50 p-1 rounded-lg shrink-0">
            {['dashboard', 'archive', 'roster', 'pulse', 'guide'].map(view => (
              <button 
                key={view} 
@@ -656,10 +656,10 @@ const CustomBarTooltip = ({ active, payload, label }) => {
            ))}
         </div>
           
-        {/* ACTION BUTTONS (Always Visible) */}
-        <div className="flex items-center gap-2 md:gap-3 shrink-0">
+        {/* ACTION BUTTONS */}
+        <div className="flex items-center justify-end gap-2 md:gap-3 shrink-0">
           
-          {/*  Toggle - FIXED STRUCTURE */}
+          {/* Toggle */}
           <div className="flex items-center gap-2 border-r border-slate-200 dark:border-slate-700 pr-2 mr-1">
             <span className={`text-[10px] font-bold uppercase ${isDemo ? 'text-emerald-600' : 'text-slate-400'}`}>
                {isDemo ? 'Demo' : 'Live'}
@@ -677,7 +677,7 @@ const CustomBarTooltip = ({ active, payload, label }) => {
             {isDark ? <Sun size={18} /> : <Moon size={18} />}
           </button>
           
-          {/* Admin Button - ONLY VISIBLE TO ADMINS OR DEMO MODE */}
+          {/* Admin Button */}
           {(user?.role === 'admin' || isDemo) && (
             <button 
               onClick={() => setIsAdminOpen(!isAdminOpen)} 
