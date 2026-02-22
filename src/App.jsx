@@ -66,41 +66,50 @@ function NexusApp() {
   const [archiveYear, setArchiveYear] = useState('2025');
   const [isAdminOpen, setIsAdminOpen] = useState(false);
 
-  // 1. Initialize based on System Preference
+  // 1. Initialize based on Saved Memory OR System Preference
   const [isDark, setIsDark] = useState(() => {
     if (typeof window !== 'undefined') {
+      const savedTheme = localStorage.getItem('nexus_theme');
+      if (savedTheme) {
+        return savedTheme === 'dark';
+      }
+      // If no saved preference, fall back to system preference
       return window.matchMedia('(prefers-color-scheme: dark)').matches;
     }
     return false;
   });
 
- // 2a. EFFECT: Update the DOM (CSS Class) whenever state changes
+  // 2. EFFECT: Sync the DOM and Local Memory whenever state changes
   useEffect(() => {
     if (isDark) {
       document.documentElement.classList.add('dark');
+      localStorage.setItem('nexus_theme', 'dark');
     } else {
       document.documentElement.classList.remove('dark');
+      localStorage.setItem('nexus_theme', 'light');
     }
   }, [isDark]);
 
-  // 2b. EFFECT: Listen for System Changes (Runs once on mount)
+  // 3. EFFECT: Listen for System OS changes (only if they haven't manually set a preference)
   useEffect(() => {
     const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
-    
-    const handleChange = (e) => setIsDark(e.matches);
+    const handleChange = (e) => {
+      // Don't auto-switch if the user has explicitly chosen a theme!
+      if (!localStorage.getItem('nexus_theme')) {
+        setIsDark(e.matches);
+      }
+    };
     mediaQuery.addEventListener('change', handleChange);
     
     return () => mediaQuery.removeEventListener('change', handleChange);
-  }, []); // Empty dependency array = persistent listener
+  }, []);
   
-  // 3. Manual Toggle (Optional Override)
+  // 4. Manual Toggle (Bulletproof Override using previous state)
   const toggleTheme = () => { 
-      setIsDark(!isDark);
-      // Logic inside useEffect will handle the class toggling
+      setIsDark(prevDark => !prevDark); 
   };
 
-  // 4. App Guide Pop-up
-  
+  // 5. App Guide Pop-up
   const [isGuideOpen, setIsGuideOpen] = useState(false);
   const previousView = useRef('dashboard');
 
