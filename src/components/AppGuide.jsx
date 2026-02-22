@@ -57,8 +57,8 @@ const AppGuide = ({ isOpen, onClose }) => {
     };
 
     return (
-        <div className="fixed top-[15%] lg:top-auto lg:bottom-6 left-4 lg:left-6 z-[90] w-[calc(100%-2rem)] md:w-80 bg-slate-900 border border-slate-700 rounded-2xl shadow-[0_0_40px_rgba(0,0,0,0.5)] overflow-hidden animate-in fade-in zoom-in-95 lg:slide-in-from-bottom-8 duration-500">            <div className="bg-gradient-to-r from-emerald-600 to-teal-600 p-4 flex justify-between items-center text-white">
-                <div className="flex items-center gap-2">
+                {/* 🛡️ FIX: Centers on mobile, bottom-left above nav on iPad, bottom-left on Desktop */}
+                <div className="fixed top-[15%] md:top-auto bottom-auto md:bottom-24 xl:bottom-6 left-4 md:left-6 z-[90] w-[calc(100%-2rem)] md:w-80 bg-slate-900 border border-slate-700 rounded-2xl shadow-[0_0_40px_rgba(0,0,0,0.5)] overflow-hidden animate-in fade-in zoom-in-95 md:slide-in-from-bottom-8 duration-500">                <div className="flex items-center gap-2">
                     <Sparkles size={18} />
                     <h3 className="text-sm font-black uppercase tracking-wider">{isDemo ? 'Demo Guide' : 'NEXUS Guide'}</h3>
                 </div>
