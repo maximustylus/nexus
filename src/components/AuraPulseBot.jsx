@@ -355,9 +355,10 @@ export default function AuraPulseBot({ user }) {
     // RENDER
     // ==========================================================================
     return (
-            <div className="fixed bottom-24 right-4 md:bottom-6 md:right-6 z-50 flex flex-col items-end drop-shadow-2xl">
-    
-            {/* ── CHAT PANEL ─────────────────────────────────────────────────── */}
+
+            <div className="fixed bottom-24 right-4 lg:bottom-6 lg:right-6 z-50 flex flex-col items-end drop-shadow-2xl">    
+            
+    {/* ── CHAT PANEL ─────────────────────────────────────────────────── */}
             {isOpen && (
                 <div
                     role="dialog"
