@@ -149,47 +149,74 @@ const SmartReportView = ({ year, teamData, staffLoads, user, forceAdminView }) =
   const activeReport = reports[viewMode] || reports.public;
   const isPrivateView = viewMode === 'private';
 
-// Parses Headers, Bold, Bullets, and supports Light/Dark mode
-  const formatAIText = (text) => {
+// Context-Aware Colors & Advanced Markdown Stripping
+  const formatAIText = (text, isBanner = false) => {
     if (!text) return null;
-    
+
+    // Smart Colors:
+    const textColor = isBanner ? "text-white/90" : "text-slate-700 dark:text-gray-300";
+    const boldColor = isBanner ? "text-white font-black" : "text-indigo-700 dark:text-indigo-300 font-bold";
+    const bulletColor = isBanner ? "text-white/50" : "text-indigo-500 dark:text-blue-400";
+    const dividerColor = isBanner ? "border-white/20" : "border-slate-200 dark:border-slate-700";
+
     return text.split('\n').map((line, index) => {
-      const trimmedLine = line.trim();
-      
-      // 1. Empty lines become spacing
+      let trimmedLine = line.trim();
+
+      // 1. Spacing
       if (!trimmedLine) return <div key={index} className="h-2" />; 
       
-      // 2. Detect Headers (## or ###)
+      // 2. Horizontal Dividers (--- or ***)
+      if (trimmedLine === '---' || trimmedLine === '***' || trimmedLine === '- - -') {
+        return <hr key={index} className={`my-4 border-t-2 border-dashed ${dividerColor}`} />;
+      }
+
+      // 3. Headers (Strip # but make them big and bold)
+      let isHeader = false;
+      let headerClass = "";
       if (trimmedLine.startsWith('### ')) {
-        return <h3 key={index} className="text-md font-black text-slate-800 dark:text-white mt-4 mb-2">{trimmedLine.replace('### ', '')}</h3>;
-      }
-      if (trimmedLine.startsWith('## ')) {
-        return <h2 key={index} className="text-lg font-black text-indigo-700 dark:text-indigo-300 mt-5 mb-3">{trimmedLine.replace('## ', '')}</h2>;
+        trimmedLine = trimmedLine.replace(/^###\s/, '');
+        isHeader = true;
+        headerClass = `text-md mt-4 mb-2 uppercase tracking-wide ${boldColor}`;
+      } else if (trimmedLine.startsWith('## ')) {
+        trimmedLine = trimmedLine.replace(/^##\s/, '');
+        isHeader = true;
+        headerClass = `text-lg mt-5 mb-3 uppercase tracking-wide ${boldColor}`;
+      } else if (trimmedLine.startsWith('# ')) {
+        trimmedLine = trimmedLine.replace(/^#\s/, '');
+        isHeader = true;
+        headerClass = `text-xl mt-5 mb-3 uppercase tracking-widest ${boldColor}`;
       }
 
-      // 3. Detect bullets
+      // 4. Bullets
       const isBullet = trimmedLine.startsWith('* ') || trimmedLine.startsWith('- ');
-      const cleanLine = isBullet ? trimmedLine.replace(/^[\*\-]\s/, '') : trimmedLine;
+      if (isBullet) {
+        trimmedLine = trimmedLine.replace(/^[\*\-]\s/, '');
+      }
 
-      // 4. Detect **bold** text
-      const parts = cleanLine.split(/(\*\*.*?\*\*)/g);
+      // 5. Bold Text (Bulletproof replacement)
+      const parts = trimmedLine.split(/(\*\*.*?\*\*)/g);
       const formattedLine = parts.map((part, i) => {
         if (part.startsWith('**') && part.endsWith('**')) {
-          return <strong key={i} className="text-indigo-700 dark:text-blue-300 font-bold">{part.slice(2, -2)}</strong>;
+          // completely vaporize any remaining asterisks
+          return <strong key={i} className={boldColor}>{part.replace(/\*/g, '')}</strong>;
         }
-        return part;
+        return part.replace(/\*\*/g, ''); 
       });
 
-      // 5. Render as bullet point or paragraph (with Light/Dark text colors!)
+      // 6. Final Render
+      if (isHeader) {
+        return <div key={index} className={headerClass}>{formattedLine}</div>;
+      }
+
       if (isBullet) {
         return (
           <div key={index} className="flex items-start mb-1 ml-2">
-            <span className="mr-2 text-indigo-500 dark:text-blue-400">•</span>
-            <span className="text-slate-700 dark:text-gray-300 leading-relaxed">{formattedLine}</span>
+            <span className={`mr-2 ${bulletColor}`}>•</span>
+            <span className={`leading-relaxed ${textColor}`}>{formattedLine}</span>
           </div>
         );
       }
-      return <p key={index} className="mb-2 text-slate-700 dark:text-gray-300 leading-relaxed">{formattedLine}</p>;
+      return <p key={index} className={`mb-2 leading-relaxed ${textColor}`}>{formattedLine}</p>;
     });
   };
 
@@ -237,7 +264,7 @@ const SmartReportView = ({ year, teamData, staffLoads, user, forceAdminView }) =
             </div>
             
            <div className="text-xs leading-relaxed font-bold opacity-80 line-clamp-3 italic">
-              {formatAIText(activeReport?.summary)}
+              {formatAIText(activeReport?.summary, true)}
             </div>
             
             <button 
@@ -321,7 +348,7 @@ const SmartReportView = ({ year, teamData, staffLoads, user, forceAdminView }) =
             </div>
             <div className="p-8 max-h-[60vh] overflow-y-auto">
              <div className="text-slate-700 dark:text-slate-300 leading-relaxed font-medium">
-              {formatAIText(activeReport?.summary)}
+              {formatAIText(activeReport?.summary, false)}
             </div>
             </div>
             <div className="p-6 bg-slate-50 dark:bg-slate-800/50 text-center border-t border-slate-100 dark:border-slate-800">
