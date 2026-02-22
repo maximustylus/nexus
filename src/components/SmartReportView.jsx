@@ -149,39 +149,49 @@ const SmartReportView = ({ year, teamData, staffLoads, user, forceAdminView }) =
   const activeReport = reports[viewMode] || reports.public;
   const isPrivateView = viewMode === 'private';
 
- // Converts raw Markdown into structured UI
+// Parses Headers, Bold, Bullets, and supports Light/Dark mode
   const formatAIText = (text) => {
     if (!text) return null;
     
     return text.split('\n').map((line, index) => {
-      // Empty lines become spacing
-      if (!line.trim()) return <div key={index} className="h-2" />; 
+      const trimmedLine = line.trim();
       
-      // Detect bullets
-      const isBullet = line.trim().startsWith('* ');
-      const cleanLine = isBullet ? line.replace('* ', '') : line;
+      // 1. Empty lines become spacing
+      if (!trimmedLine) return <div key={index} className="h-2" />; 
+      
+      // 2. Detect Headers (## or ###)
+      if (trimmedLine.startsWith('### ')) {
+        return <h3 key={index} className="text-md font-black text-slate-800 dark:text-white mt-4 mb-2">{trimmedLine.replace('### ', '')}</h3>;
+      }
+      if (trimmedLine.startsWith('## ')) {
+        return <h2 key={index} className="text-lg font-black text-indigo-700 dark:text-indigo-300 mt-5 mb-3">{trimmedLine.replace('## ', '')}</h2>;
+      }
 
-      // Detect **bold** text
+      // 3. Detect bullets
+      const isBullet = trimmedLine.startsWith('* ') || trimmedLine.startsWith('- ');
+      const cleanLine = isBullet ? trimmedLine.replace(/^[\*\-]\s/, '') : trimmedLine;
+
+      // 4. Detect **bold** text
       const parts = cleanLine.split(/(\*\*.*?\*\*)/g);
       const formattedLine = parts.map((part, i) => {
         if (part.startsWith('**') && part.endsWith('**')) {
-          return <strong key={i} className="text-blue-300 font-bold">{part.slice(2, -2)}</strong>;
+          return <strong key={i} className="text-indigo-700 dark:text-blue-300 font-bold">{part.slice(2, -2)}</strong>;
         }
         return part;
       });
 
-      // Render as bullet point or paragraph
+      // 5. Render as bullet point or paragraph (with Light/Dark text colors!)
       if (isBullet) {
         return (
           <div key={index} className="flex items-start mb-1 ml-2">
-            <span className="mr-2 text-blue-400">•</span>
-            <span className="text-gray-300 leading-relaxed">{formattedLine}</span>
+            <span className="mr-2 text-indigo-500 dark:text-blue-400">•</span>
+            <span className="text-slate-700 dark:text-gray-300 leading-relaxed">{formattedLine}</span>
           </div>
         );
       }
-      return <p key={index} className="mb-2 text-gray-300 leading-relaxed">{formattedLine}</p>;
+      return <p key={index} className="mb-2 text-slate-700 dark:text-gray-300 leading-relaxed">{formattedLine}</p>;
     });
-    };
+  };
 
   return (
     <div className="flex flex-col gap-4">
