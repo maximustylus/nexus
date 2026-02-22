@@ -354,12 +354,11 @@ export default function AuraPulseBot({ user }) {
     // ==========================================================================
     // RENDER
     // ==========================================================================
+    // 🛡️ FIX: Hovers at bottom-24 on iPads, drops to bottom-6 on Desktop
     return (
-
-            {/* 🛡️ FIX: Hovers at bottom-24 on iPads, drops to bottom-6 on Desktop */}
-            <div className="fixed bottom-24 xl:bottom-6 right-4 xl:right-6 z-50 flex flex-col items-end drop-shadow-2xl">
-        
-    {/* ── CHAT PANEL ─────────────────────────────────────────────────── */}
+        <div className="fixed bottom-24 xl:bottom-6 right-4 xl:right-6 z-50 flex flex-col items-end drop-shadow-2xl">
+            
+            {/* ── CHAT PANEL ─────────────────────────────────────────────────── */}
             {isOpen && (
                 <div
                     role="dialog"
