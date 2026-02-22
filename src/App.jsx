@@ -1,3 +1,4 @@
+import { createPortal } from 'react-dom';
 import React, { useState, useEffect, useRef } from 'react';
 import AppGuide from './components/AppGuide';
 import FeedbackWidget from './components/FeedbackWidget';
@@ -713,15 +714,16 @@ const CustomBarTooltip = ({ active, payload, label }) => {
       
     </ResponsiveLayout>
 
-      {/* App Guide */}
-      <AppGuide isOpen={isGuideOpen} onClose={() => setIsGuideOpen(false)} />
-      
-      {/* Global Bot */}
-      <AuraPulseBot user={user} />
+      {createPortal(
+        <>
+          <AppGuide isOpen={isGuideOpen} onClose={() => setIsGuideOpen(false)} />
+          <AuraPulseBot user={user} />
+          <FeedbackWidget user={user} />
+        </>,
+        document.body
+      )}
 
-      {/* Global Feedback Reporter */}
-      <FeedbackWidget user={user} />
-  </>
+    </>
   );
 }
 
