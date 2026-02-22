@@ -8,8 +8,7 @@ import { getFunctions, httpsCallable } from 'firebase/functions';
 import { useNexus } from '../context/NexusContext';
 
 const functions = getFunctions(undefined, 'us-central1');
-const generateSmartAnalysis = httpsCallable(functions, 'generateSmartAnalysis');
-
+const generateSmartAnalysis = httpsCallable(functions, 'generateSmartAnalysis', { timeout: 120000 });
 const STAFF_PROFILES = {
     "Alif":      { role: "Lead and Senior Clinical Exercise Physiologist", grade: "JG14", focus: "Leadership, Management, Clinical, Education, Research" },
     "Fadzlynn":  { role: "Clinical Exercise Physiologist, CEP I",      grade: "JG13", focus: "Clinical Lead, Co-Lead Management, Education" },
@@ -68,12 +67,15 @@ const handleAnalyze = async () => {
             const currentProfiles = isDemo ? MARVEL_PROFILES : STAFF_PROFILES;
             const profileArray = Object.values(currentProfiles);
 
-            // 🛡️ CALLING THE AI
+            setStatus('Connecting to Neural Link (This may take 60+ seconds)...');
+
+            // 🛡️ CALLING THE AI (Now with Clinical Loads included!)
             const response = await generateSmartAnalysis({
                 targetYear: Number(targetYear),
                 teamName: "SSMC@KKH CEP Team",
                 staffProfiles: profileArray,
-                yearData: filteredYearData
+                yearData: filteredYearData,
+                staffLoads: staffLoads // 🎯 THE MISSING LINK: The AI can finally see the clinical hours!
             });
 
             setResult({ 
@@ -91,43 +93,43 @@ const handleAnalyze = async () => {
     };
 
     const handlePublish = async () => {
-    if (!result) return;
-    setLoading(true);
-    try {
-        const reportRef = firestore.doc(db, 'system_data', `reports_${targetYear}`);
-        await firestore.setDoc(reportRef, {
-            privateText: result.private,
-            publicText: result.public,
-            timestamp: new Date()
-        });
-
-        const dataToArchive = importedData || teamData || [];
-        
-        const batchPromises = dataToArchive.map(staff => {
-            const sName = staff.staff_name || staff.name || 'unknown';
-            const staffId = sName.toLowerCase().replace(/\s+/g, '_');
-            const staffRef = firestore.doc(db, `archive_${targetYear}`, staffId);
-            return firestore.setDoc(staffRef, {
-                staff_name: sName,
-                projects: staff.projects || [],
-                year: targetYear
+        if (!result) return;
+        setLoading(true);
+        try {
+            const reportRef = firestore.doc(db, 'system_data', `reports_${targetYear}`);
+            await firestore.setDoc(reportRef, {
+                privateText: result.private,
+                publicText: result.public,
+                timestamp: new Date()
             });
-        });
 
-        await Promise.all(batchPromises);
-        alert(`SUCCESS: Archived ${targetYear}!`);
-        onClose(); 
-    } catch (e) {
-        alert("Archive Error: " + e.message);
-    } finally {
-        setLoading(false);
-    }
-};
+            const dataToArchive = importedData || teamData || [];
+            
+            const batchPromises = dataToArchive.map(staff => {
+                const sName = staff.staff_name || staff.name || 'unknown';
+                const staffId = sName.toLowerCase().replace(/\s+/g, '_');
+                const staffRef = firestore.doc(db, `archive_${targetYear}`, staffId);
+                return firestore.setDoc(staffRef, {
+                    staff_name: sName,
+                    projects: staff.projects || [],
+                    year: targetYear
+                });
+            });
+
+            await Promise.all(batchPromises);
+            alert(`SUCCESS: Archived ${targetYear}!`);
+            onClose(); 
+        } catch (e) {
+            alert("Archive Error: " + e.message);
+        } finally {
+            setLoading(false);
+        }
+    };
 
     return (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-md flex items-center justify-center z-[100] p-4">
-            <div className="bg-white dark:bg-slate-900 w-full max-w-4xl max-h-[90vh] rounded-3xl shadow-2xl overflow-hidden flex flex-col border border-slate-200 dark:border-slate-700">
-                <div className="bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-600 p-8 flex justify-between items-center text-white">
+            <div className="bg-white dark:bg-slate-900 w-full max-w-5xl max-h-[95vh] rounded-3xl shadow-2xl overflow-hidden flex flex-col border border-slate-200 dark:border-slate-700">
+                <div className="bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-600 p-8 flex justify-between items-center text-white shrink-0">
                     <div className="flex items-center gap-3">
                         <ShieldCheck size={28} />
                         <div>
@@ -140,7 +142,7 @@ const handleAnalyze = async () => {
 
                 <div className="p-8 overflow-y-auto flex-1 bg-slate-50/50 dark:bg-slate-900/50">
                     {!result ? (
-                        <div className="flex flex-col items-center justify-center py-6">
+                        <div className="flex flex-col items-center justify-center py-6 h-full">
                             <div className="bg-white dark:bg-slate-800 p-8 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 max-w-md w-full text-center">
                                 <div className="mb-6">
                                     <label className="block text-xs font-bold text-slate-400 uppercase mb-2">Select Analysis Year</label>
@@ -157,7 +159,8 @@ const handleAnalyze = async () => {
                                         {importedData ? 'DATA LOADED' : 'IMPORT BULK .JSON'}
                                     </button>
                                 </div>
-                                <button onClick={handleAnalyze} disabled={loading} className="w-full py-4 bg-slate-900 dark:bg-indigo-600 text-white font-black rounded-xl uppercase hover:bg-slate-800 transition-all">
+                                <button onClick={handleAnalyze} disabled={loading} className="w-full py-4 bg-slate-900 dark:bg-indigo-600 text-white font-black rounded-xl uppercase hover:bg-slate-800 transition-all flex items-center justify-center gap-2">
+                                    {loading ? <Sparkles className="animate-spin" size={18} /> : null}
                                     {loading ? <span>{status}</span> : `Generate ${targetYear} Report`}
                                 </button>
                                 {error && <div className="mt-4 p-3 bg-red-50 text-red-600 text-xs font-bold rounded">{error}</div>}
@@ -167,11 +170,13 @@ const handleAnalyze = async () => {
                         <div className="space-y-6">
                             <div className="bg-white dark:bg-slate-800 p-6 rounded-2xl border-2 border-indigo-500 shadow-sm">
                                 <h3 className="text-xs font-black text-indigo-500 mb-2 uppercase">Private Brief ({targetYear})</h3>
-                                <div className="whitespace-pre-wrap text-sm text-slate-700 dark:text-slate-300 h-32 overflow-y-auto border border-slate-100 dark:border-slate-700 p-3 rounded-lg bg-slate-50 dark:bg-slate-900">{result.private}</div>
+                                {/* 🛡️ TALLER BOX: Increased from h-32 to h-64 to fit the new massive text */}
+                                <div className="whitespace-pre-wrap text-sm text-slate-700 dark:text-slate-300 h-64 overflow-y-auto border border-slate-100 dark:border-slate-700 p-4 rounded-lg bg-slate-50 dark:bg-slate-900 shadow-inner">{result.private}</div>
                             </div>
                             <div className="bg-slate-50 dark:bg-slate-800/50 p-6 rounded-2xl border border-slate-200 dark:border-slate-700">
                                 <h3 className="text-xs font-black text-slate-500 mb-2 uppercase">Team Pulse ({targetYear})</h3>
-                                <div className="whitespace-pre-wrap text-sm text-slate-600 dark:text-slate-400 h-24 overflow-y-auto border border-slate-200 p-3 rounded-lg bg-white dark:bg-slate-900">{result.public}</div>
+                                {/* 🛡️ TALLER BOX: Increased from h-24 to h-48 */}
+                                <div className="whitespace-pre-wrap text-sm text-slate-600 dark:text-slate-400 h-48 overflow-y-auto border border-slate-200 dark:border-slate-700 p-4 rounded-lg bg-white dark:bg-slate-900 shadow-inner">{result.public}</div>
                             </div>
                             <button onClick={handlePublish} className="w-full py-4 bg-indigo-600 text-white font-black rounded-xl shadow-lg uppercase hover:bg-indigo-700 transition-all">
                                 PUBLISH TO {targetYear} ARCHIVE
