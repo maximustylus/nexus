@@ -74,116 +74,124 @@ const AdminPanel = ({ teamData, staffLoads, user }) => {
         }
 
 const fetchData = async () => {
-            setLoadLoading(true);
-            try {
-                const is2025 = loadYear === '2025';
-                const newLoads = {};
-                const normalize = (str) => String(str || "").toLowerCase().replace(/[\s_]/g, '');
-
-                if (is2025) {
-                    // 🎯 SILVER BULLET: Extract 2025 data directly from the existing teamData prop
-                    CEP_STAFF.forEach(staffName => {
-                        const cleanName = normalize(staffName);
-                        const staffDoc = teamData.find(s => 
-                            normalize(s.id) === cleanName || normalize(s.staff_name) === cleanName
-                        );
-
-                        if (staffDoc && staffDoc.projects) {
-                            const clinicalProject = staffDoc.projects.find(p => 
-                                p.title?.toLowerCase().includes("clinical load")
-                            );
-                            newLoads[staffName] = clinicalProject?.monthly_hours || Array(12).fill(0);
-                        } else {
-                            newLoads[staffName] = Array(12).fill(0);
-                        }
-                    });
-                    setLocalLoads(newLoads);
-                } else {
-                    // 🎯 LIVE MODE: Fetch 2026 from the staff_loads collection
-                    const loadSnap = await getDocs(collection(db, 'staff_loads'));
-                    loadSnap.forEach(doc => {
-                        const data = doc.data();
-                        const matchingStaffName = CEP_STAFF.find(name => 
-                            normalize(name) === normalize(doc.id) || 
-                            normalize(name) === normalize(data.staff_name) ||
-                            normalize(name) === normalize(data.id)
-                        );
-                        const finalName = matchingStaffName || doc.id;
-                        newLoads[finalName] = data.data || Array(12).fill(0);
-                    });
-                    setLocalLoads(newLoads);
-                }
-
-                // Fetch Attendance
-                const attRef = doc(db, 'system_data', 'monthly_attendance');
-                const attSnap = await getDoc(attRef);
-                if (attSnap.exists()) {
-                    setAttValues(attSnap.data()[attYear] || Array(12).fill(0));
-                }
-            } catch (error) {
-                console.error("Fetch Error:", error);
-            } finally {
-                setLoadLoading(false);
-            }
-        };
-      
-        fetchData();
-    }, [loadYear, attYear, isDemo]);
-  
-// --- HANDLER: SAVE LOADS (Smart Routing) ---
-    const saveLoads = async () => {
-        if (isDemo) {
-            setMessage('✅ (Sandbox) Loads simulated save.');
-            return;
-        }
         setLoadLoading(true);
         try {
             const is2025 = loadYear === '2025';
+            const newLoads = {};
+            const normalize = (str) => String(str || "").toLowerCase().replace(/[\s_]/g, '');
 
             if (is2025) {
-                // 🛡️ ARCHIVE ROUTE (2025): Safely update deep inside the 'cep_team' projects array
-                const promises = Object.keys(localLoads).map(async (staffName) => {
-                    // Convert "Ying Xian" to "ying_xian" for the database ID
-                    const docId = staffName.toLowerCase().replace(' ', '_');
-                    const staffRef = doc(db, 'cep_team', docId);
+                // 🎯 FIXED: Fetch directly from the archive_2025 vault!
+                const archiveSnap = await getDocs(collection(db, 'archive_2025'));
+                
+                archiveSnap.forEach(docSnap => {
+                    const data = docSnap.data();
+                    const matchingStaffName = CEP_STAFF.find(name => 
+                        normalize(name) === normalize(docSnap.id) || 
+                        normalize(name) === normalize(data.staff_name)
+                    );
                     
-                    const snap = await getDoc(staffRef);
-                    if (snap.exists()) {
-                        let projects = snap.data().projects || [];
-                        let updated = false;
-                        
-                        // Map through projects and ONLY update the clinical load item
-                        projects = projects.map(p => {
-                            if (p.title?.toLowerCase().includes("clinical load")) {
-                                updated = true;
-                                return { ...p, monthly_hours: localLoads[staffName] };
-                            }
-                            return p;
-                        });
-
-                        if (updated) {
-                            await updateDoc(staffRef, { projects });
-                        }
+                    if (matchingStaffName) {
+                        // Find their specific Clinical Load project for 2025
+                        const clinicalProject = (data.projects || []).find(p => 
+                            p.title?.toLowerCase().includes("clinical load")
+                        );
+                        newLoads[matchingStaffName] = clinicalProject?.monthly_hours || Array(12).fill(0);
                     }
                 });
-                await Promise.all(promises);
-                setMessage(`✅ ${loadYear} Archive Loads Updated!`);
 
-            } else {
-                // 🟢 LIVE ROUTE (2026): Update the standard 'staff_loads' collection
-                const promises = Object.keys(localLoads).map(staffName => {
-                    const docId = staffName.toLowerCase().replace(' ', '_');
-                    return updateDoc(doc(db, 'staff_loads', docId), { data: localLoads[staffName] });
+                // Ensure everyone has at least an array of 0s if they weren't in the archive
+                CEP_STAFF.forEach(staff => {
+                    if (!newLoads[staff]) newLoads[staff] = Array(12).fill(0);
                 });
-                await Promise.all(promises);
-                setMessage(`✅ ${loadYear} Live Loads Updated!`);
+                
+                setLocalLoads(newLoads);
+            } else {
+                // 🎯 LIVE MODE: Fetch 2026 from the staff_loads collection
+                const loadSnap = await getDocs(collection(db, 'staff_loads'));
+                loadSnap.forEach(doc => {
+                    const data = doc.data();
+                    const matchingStaffName = CEP_STAFF.find(name => 
+                        normalize(name) === normalize(doc.id) || 
+                        normalize(name) === normalize(data.staff_name) ||
+                        normalize(name) === normalize(data.id)
+                    );
+                    const finalName = matchingStaffName || doc.id;
+                    newLoads[finalName] = data.data || Array(12).fill(0);
+                });
+                setLocalLoads(newLoads);
             }
-        } catch (e) {
-            console.error(e);
-            setMessage('❌ Error saving loads');
+
+            // Fetch Attendance
+            const attRef = doc(db, 'system_data', 'monthly_attendance');
+            const attSnap = await getDoc(attRef);
+            if (attSnap.exists()) {
+                setAttValues(attSnap.data()[attYear] || Array(12).fill(0));
+            }
+        } catch (error) {
+            console.error("Fetch Error:", error);
+        } finally {
+            setLoadLoading(false);
         }
-        setLoadLoading(false);
     };
+      
+    fetchData();
+}, [loadYear, attYear, isDemo]); // (Kept the fixed dependencies!)
+
+// --- HANDLER: SAVE LOADS (Smart Routing) ---
+const saveLoads = async () => {
+    if (isDemo) {
+        setMessage('(Sandbox) Loads simulated save.');
+        return;
+    }
+    setLoadLoading(true);
+    try {
+        const is2025 = loadYear === '2025';
+
+        if (is2025) {
+            // 🛡️ ARCHIVE ROUTE (2025): Update the 'archive_2025' collection directly
+            const promises = Object.keys(localLoads).map(async (staffName) => {
+                const docId = staffName.toLowerCase().replace(/\s+/g, '_'); // Fixed regex spacing issue
+                
+                // 🎯 FIXED: Point to archive_2025 instead of cep_team
+                const staffRef = doc(db, 'archive_2025', docId); 
+                
+                const snap = await getDoc(staffRef);
+                if (snap.exists()) {
+                    let projects = snap.data().projects || [];
+                    let updated = false;
+                    
+                    projects = projects.map(p => {
+                        if (p.title?.toLowerCase().includes("clinical load")) {
+                            updated = true;
+                            return { ...p, monthly_hours: localLoads[staffName] };
+                        }
+                        return p;
+                    });
+
+                    if (updated) {
+                        await updateDoc(staffRef, { projects });
+                    }
+                }
+            });
+            await Promise.all(promises);
+            setMessage(`${loadYear} Archive Loads Updated!`);
+
+        } else {
+            // 🟢 LIVE ROUTE (2026): Update the standard 'staff_loads' collection
+            const promises = Object.keys(localLoads).map(staffName => {
+                const docId = staffName.toLowerCase().replace(/\s+/g, '_');
+                return updateDoc(doc(db, 'staff_loads', docId), { data: localLoads[staffName] });
+            });
+            await Promise.all(promises);
+            setMessage(`${loadYear} Live Loads Updated!`);
+        }
+    } catch (e) {
+        console.error(e);
+        setMessage('❌ Error saving loads');
+    }
+    setLoadLoading(false);
+};
 
     const handleLoadChange = (staff, index, value) => {
         const newVal = parseInt(value) || 0;
