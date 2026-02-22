@@ -600,8 +600,19 @@ const CustomBarTooltip = ({ active, payload, label }) => {
 
 // --- MAIN RENDER RETURN ---
   return (
-    <>
-    <ResponsiveLayout activeTab={currentView} onNavigate={setCurrentView}>
+    <ResponsiveLayout 
+      activeTab={currentView} 
+      onNavigate={setCurrentView}
+      
+      // 🛡️ PASSING THE WIDGETS INTO THE SAFE ZONE
+      floatingWidgets={
+        <>
+          <AppGuide isOpen={isGuideOpen} onClose={() => setIsGuideOpen(false)} />
+          <AuraPulseBot user={user} />
+          <FeedbackWidget user={user} />
+        </>
+      }
+    >
       
       {/* DEMO BANNER */}
       {isDemo && (
@@ -714,16 +725,7 @@ const CustomBarTooltip = ({ active, payload, label }) => {
       
     </ResponsiveLayout>
 
-      {createPortal(
-        <>
-          <AppGuide isOpen={isGuideOpen} onClose={() => setIsGuideOpen(false)} />
-          <AuraPulseBot user={user} />
-          <FeedbackWidget user={user} />
-        </>,
-        document.body
-      )}
-
-    </>
+    )}
   );
 }
 
