@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { db } from '../firebase';
 import { 
-  updateDoc, doc, arrayUnion, arrayRemove, getDoc, setDoc, writeBatch 
+  updateDoc, doc, arrayUnion, arrayRemove, getDoc, setDoc, writeBatch, getDocs, collection 
 } from 'firebase/firestore';
 import { 
   LayoutList, X, Save, Briefcase, Activity, Calendar 
