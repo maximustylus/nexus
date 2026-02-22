@@ -1,14 +1,15 @@
 import React, { useEffect, useState } from 'react';
 import { db } from '../firebase';
 import { doc, onSnapshot, setDoc } from 'firebase/firestore';
-import { Battery, BatteryCharging, BatteryWarning, BatteryFull, Users, Activity, Zap, X, Save } from 'lucide-react';
+import { Battery, BatteryCharging, BatteryWarning, BatteryFull, Users, Activity, Zap, X, Save, Lock } from 'lucide-react';
 import { STAFF_LIST } from '../utils';
 
 // --- CONTEXT & DATA ---
 import { useNexus } from '../context/NexusContext';
 import { MOCK_STAFF } from '../data/mockData';
 
-const WellbeingView = () => {
+// 🛡️ INJECTED THE 'user' PROP HERE
+const WellbeingView = ({ user }) => {
     const { isDemo } = useNexus(); 
     const [pulseData, setPulseData] = useState({});
     const [stats, setStats] = useState({ avg: 0, active: 0, zone: 'HEALTHY' });
@@ -58,7 +59,13 @@ const WellbeingView = () => {
     };
 
     // --- CLICK HANDLERS ---
-    const handleCardClick = (name, currentEnergy, currentFocus) => {
+    const handleCardClick = (name, currentEnergy, currentFocus, canEdit) => {
+        // 🛡️ THE PERMISSION FIREWALL
+        if (!canEdit) {
+            alert("🔒 Access Denied: You are only authorized to update your own Social Battery.");
+            return;
+        }
+
         setSelectedStaff(name);
         // Translate 0-100 energy back to a 0-10 scale for the UI slider
         setNewEnergy(currentEnergy ? Math.round(currentEnergy / 10) : 5);
@@ -76,12 +83,10 @@ const WellbeingView = () => {
         };
 
         if (isDemo) {
-            // 🛡️ FIREWALL: Update Demo State Only
             const updatedData = { ...pulseData, [selectedStaff]: updatePayload };
             setPulseData(updatedData);
             calculateStats(updatedData);
         } else {
-            // 📡 LIVE: Update Firebase
             await setDoc(doc(db, 'system_data', 'daily_pulse'), {
                 [selectedStaff]: updatePayload
             }, { merge: true });
@@ -192,15 +197,22 @@ const WellbeingView = () => {
                         const currentEnergy = staffData ? staffData.energy : 0;
                         const currentFocus = staffData ? staffData.focus : 0;
                         
+                        // 🛡️ PERMISSION CHECK: Demo Mode, Admins, or The Staff Member Themselves
+                        const canEdit = isDemo || user?.role === 'admin' || user?.name === 'Nisa' || user?.name === name;
+                        
                         return (
                             <div 
                                 key={name} 
-                                onClick={() => handleCardClick(name, currentEnergy, currentFocus)}
-                                className="group cursor-pointer bg-white dark:bg-slate-800 p-6 rounded-3xl border border-slate-100 dark:border-slate-700 shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all duration-300 flex flex-col justify-between h-[200px]"
+                                onClick={() => handleCardClick(name, currentEnergy, currentFocus, canEdit)}
+                                className={`group bg-white dark:bg-slate-800 p-6 rounded-3xl border shadow-sm flex flex-col justify-between h-[200px] transition-all duration-300
+                                    ${canEdit 
+                                        ? 'border-slate-100 dark:border-slate-700 hover:shadow-xl hover:-translate-y-1 cursor-pointer' 
+                                        : 'border-slate-100 dark:border-slate-800 opacity-80 cursor-not-allowed hover:bg-slate-50 dark:hover:bg-slate-800/80'}
+                                `}
                             >
                                 <div className="flex justify-between items-start">
                                     <div className="overflow-hidden">
-                                        <h3 className="text-xl font-bold text-slate-800 dark:text-slate-100 group-hover:text-indigo-600 transition-colors truncate pr-2">
+                                        <h3 className={`text-xl font-bold transition-colors truncate pr-2 ${canEdit ? 'text-slate-800 dark:text-slate-100 group-hover:text-indigo-600' : 'text-slate-500 dark:text-slate-400'}`}>
                                             {name}
                                         </h3>
                                         <div className="flex items-center gap-2 mt-2">
@@ -210,8 +222,12 @@ const WellbeingView = () => {
                                             </p>
                                         </div>
                                     </div>
-                                    <div className="bg-slate-50 dark:bg-slate-700/50 p-3 rounded-xl shrink-0">
-                                        {staffData ? getBatteryIcon(staffData.energy) : <Battery className="text-slate-300" size={28} />}
+                                    <div className="flex flex-col items-end gap-2 shrink-0">
+                                        <div className="bg-slate-50 dark:bg-slate-700/50 p-3 rounded-xl">
+                                            {staffData ? getBatteryIcon(staffData.energy) : <Battery className="text-slate-300" size={28} />}
+                                        </div>
+                                        {/* Show lock icon if they can't edit it */}
+                                        {!canEdit && <Lock size={12} className="text-slate-300" />}
                                     </div>
                                 </div>
 
@@ -235,7 +251,7 @@ const WellbeingView = () => {
                 </div>
             </div>
 
-            {/* 3. AURA SOCIAL BATTERY MODAL (NEXUS UI + Claude Sliders) */}
+            {/* 3. AURA SOCIAL BATTERY MODAL */}
             {selectedStaff && (
                 <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center z-[100] p-4">
                     <div className="bg-white dark:bg-slate-800 w-full max-w-md rounded-3xl shadow-2xl p-6 border border-slate-200 dark:border-slate-700 animate-in zoom-in-95 duration-300">
