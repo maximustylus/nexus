@@ -11,25 +11,25 @@ const functions = getFunctions(undefined, 'us-central1');
 const generateSmartAnalysis = httpsCallable(functions, 'generateSmartAnalysis');
 
 const STAFF_PROFILES = {
-    "Alif":      { role: "Senior CEP", grade: "JG14", focus: "Leadership, Management, Clinical, Education, Research" },
-    "Fadzlynn":  { role: "CEP I",      grade: "JG13", focus: "Clinical Lead, Co-Lead Management, Education" },
-    "Derlinder": { role: "CEP II",     grade: "JG12", focus: "Education Lead, Clinical" },
-    "Ying Xian": { role: "CEP II",     grade: "JG12", focus: "Research Co-Lead, Clinical" },
-    "Brandon":   { role: "CEP III",    grade: "JG11", focus: "Education Co-Lead, Clinical, Community" },
+    "Alif":      { role: "Lead and Senior Clinical Exercise Physiologist", grade: "JG14", focus: "Leadership, Management, Clinical, Education, Research" },
+    "Fadzlynn":  { role: "Clinical Exercise Physiologist, CEP I",      grade: "JG13", focus: "Clinical Lead, Co-Lead Management, Education" },
+    "Derlinder": { role: "Clinical Exercise Physiologist, CEP II",     grade: "JG12", focus: "Education Lead, Clinical" },
+    "Ying Xian": { role: "Clinical Exercise Physiologist, CEP II",     grade: "JG12", focus: "Research Co-Lead, Clinical" },
+    "Brandon":   { role: "Clinical Exercise Physiologist, CEP III",    grade: "JG11", focus: "Education Co-Lead, Clinical, Community" },
     "Nisa":      { role: "Administrator", grade: "Admin", focus: "Operations, Budget, Rostering" }
 };
 
 // 🦸‍♂️ MARVEL PROFILES
 const MARVEL_PROFILES = {
-    "Steve": { role: "Senior Principal", grade: "JG14", focus: "Leadership, Clinical" },
-    "Peter": { role: "Junior CEP", grade: "JG11", focus: "Inpatient, Clinical" },
-    "Charles": { role: "Master Expert", grade: "JG16", focus: "Research" },
-    "Jean": { role: "Principal", grade: "JG13", focus: "Education" },
-    "Tony": { role: "Tech Lead", grade: "JG15", focus: "Management" }
+    "Steve": { role: "Senior Staff and Clinical Lead", grade: "JG14", focus: "Leadership, Clinical" },
+    "Peter": { role: "Junior Staff", grade: "JG11", focus: "Inpatient, Clinical" },
+    "Charles": { role: "Head of Department", grade: "JG16", focus: "Research" },
+    "Jean": { role: "Education Lead", grade: "JG13", focus: "Education" },
+    "Tony": { role: "Senior Staff and Research Lead", grade: "JG15", focus: "Management" }
 };
 
 const SmartAnalysis = ({ teamData, staffLoads, onClose }) => {
-    const { isDemo } = useNexus(); // 👈 GRAB CONTEXT HERE
+    const { isDemo } = useNexus();
     const [targetYear, setTargetYear] = useState('2026'); 
     const [loading, setLoading] = useState(false);
     const [status, setStatus] = useState('GENERATE ANALYSIS');
