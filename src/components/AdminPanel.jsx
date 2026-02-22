@@ -128,7 +128,7 @@ const fetchData = async () => {
         };
       
         fetchData();
-    }, [loadYear, attYear, isDemo, CEP_STAFF]);
+    }, [loadYear, attYear, isDemo]);
   
 // --- HANDLER: SAVE LOADS (Smart Routing) ---
     const saveLoads = async () => {
