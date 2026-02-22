@@ -69,11 +69,12 @@ const SmartAnalysis = ({ teamData, staffLoads, onClose }) => {
             // 🛡️ THE FIREWALL: Perfectly scoped inside the function
             const activeProfiles = isDemo ? MARVEL_PROFILES : STAFF_PROFILES;
 
+            // The upgraded, mathematically correct payload
             const response = await generateSmartAnalysis({
-                targetYear,
-                staffProfiles: activeProfiles, // 👈 FEED THE CORRECT PROFILES TO AI
-                yearData,
-                staffLoads
+              targetYear: Number(selectedYear),
+              teamName: "SSMC@KKH CEP Team",
+              staffProfiles: profiles, 
+              yearData: data 
             });
 
             setResult({ 
