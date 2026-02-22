@@ -381,8 +381,8 @@ exports.generateSmartAnalysis = onCall({
         ${staffLoads ? `STAFF LOAD INDICATORS:\n${JSON.stringify(staffLoads, null, 2)}` : ''}
         
         OUTPUT REQUIREMENTS:
-        - "private": A detailed clinical report for department heads (300-500 words). Include trend analysis, risk flags, and specific recommendations.
-        - "public": A positive, encouraging summary safe for all staff (100-150 words). Focus on collective strengths and general wellbeing initiatives.
+        - "private": A detailed clinical report for department heads (1000-2000 words). Include trend analysis, risk flags, and specific recommendations.
+        - "public": A positive, encouraging summary safe for all staff (200-500 words). Focus on collective strengths and general wellbeing initiatives.
         
         Return ONLY the JSON object. No markdown.
                 `.trim();
