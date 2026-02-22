@@ -10,14 +10,13 @@ const SmartReportView = ({ year, teamData, staffLoads, user, forceAdminView }) =
   const [loading, setLoading] = useState(true);
   
   // 🛡️ MASTER OVERRIDE: Check if user is admin OR if the parent component forces admin view
-const isActuallyAdmin = forceAdminView === true;
+  const isActuallyAdmin = forceAdminView === true;
 
   // HOLD BOTH REPORTS IN STATE
   const [reports, setReports] = useState({ private: null, public: null });
   
   // ADMIN TOGGLE STATE (Defaults to private for admins, public for staff)
   const [viewMode, setViewMode] = useState(isActuallyAdmin ? 'private' : 'public'); 
-  
   const [isAnalysisOpen, setIsAnalysisOpen] = useState(false);
   const [isFullReportOpen, setIsFullReportOpen] = useState(false);
 
@@ -150,6 +149,40 @@ const isActuallyAdmin = forceAdminView === true;
   const activeReport = reports[viewMode] || reports.public;
   const isPrivateView = viewMode === 'private';
 
+ // Converts raw Markdown into structured UI
+  const formatAIText = (text) => {
+    if (!text) return null;
+    
+    return text.split('\n').map((line, index) => {
+      // Empty lines become spacing
+      if (!line.trim()) return <div key={index} className="h-2" />; 
+      
+      // Detect bullets
+      const isBullet = line.trim().startsWith('* ');
+      const cleanLine = isBullet ? line.replace('* ', '') : line;
+
+      // Detect **bold** text
+      const parts = cleanLine.split(/(\*\*.*?\*\*)/g);
+      const formattedLine = parts.map((part, i) => {
+        if (part.startsWith('**') && part.endsWith('**')) {
+          return <strong key={i} className="text-blue-300 font-bold">{part.slice(2, -2)}</strong>;
+        }
+        return part;
+      });
+
+      // Render as bullet point or paragraph
+      if (isBullet) {
+        return (
+          <div key={index} className="flex items-start mb-1 ml-2">
+            <span className="mr-2 text-blue-400">•</span>
+            <span className="text-gray-300 leading-relaxed">{formattedLine}</span>
+          </div>
+        );
+      }
+      return <p key={index} className="mb-2 text-gray-300 leading-relaxed">{formattedLine}</p>;
+    });
+    };
+
   return (
     <div className="flex flex-col gap-4">
       <div className="bg-gradient-to-br from-indigo-600 to-violet-700 rounded-3xl p-8 text-white shadow-xl relative overflow-hidden group">
@@ -188,15 +221,14 @@ const isActuallyAdmin = forceAdminView === true;
 
             {/* 3. The 100% Score & Summary */}
             <div className="text-6xl font-black mb-1 tracking-tighter">100%</div>
-            
             <div className={`inline-flex w-fit items-center gap-1 px-3 py-1 rounded-full backdrop-blur-md text-[10px] font-black uppercase mb-4 ${isPrivateView ? 'bg-red-500/30 text-red-100' : 'bg-emerald-500/30 text-emerald-100'}`}>
               {isPrivateView ? <Lock size={10} /> : <Users size={10} />}
               {isPrivateView ? 'PRIVATE ARCHIVE' : 'PUBLIC ARCHIVE'}
             </div>
             
-            <p className="text-xs leading-relaxed font-bold opacity-80 line-clamp-3 italic">
-              "{activeReport?.summary}"
-            </p>
+           <div className="text-xs leading-relaxed font-bold opacity-80 line-clamp-3 italic">
+              {formatAIText(activeReport?.summary)}
+            </div>
             
             <button 
               onClick={() => setIsFullReportOpen(true)}
@@ -222,7 +254,6 @@ const isActuallyAdmin = forceAdminView === true;
                   ))}
                 </ul>
               </div>
-
               <div>
                 <h3 className="text-[10px] font-black uppercase text-orange-300 mb-3 flex items-center gap-2 tracking-[0.2em]">
                   <AlertTriangle size={14} /> {isPrivateView ? 'Risk Factors' : 'Strategic Focus'}
@@ -262,7 +293,6 @@ const isActuallyAdmin = forceAdminView === true;
                 </div>
             </div>
           </div>
-
         </div>
       </div>
 
@@ -280,9 +310,9 @@ const isActuallyAdmin = forceAdminView === true;
               <button className="text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-white" onClick={() => setIsFullReportOpen(false)}><X size={20} /></button>
             </div>
             <div className="p-8 max-h-[60vh] overflow-y-auto">
-              <p className="text-slate-700 dark:text-slate-300 whitespace-pre-wrap leading-relaxed font-medium">
-                {activeReport?.summary}
-              </p>
+             <div className="text-slate-700 dark:text-slate-300 leading-relaxed font-medium">
+              {formatAIText(activeReport?.summary)}
+            </div>
             </div>
             <div className="p-6 bg-slate-50 dark:bg-slate-800/50 text-center border-t border-slate-100 dark:border-slate-800">
               <button onClick={() => setIsFullReportOpen(false)} className="px-8 py-3 bg-slate-900 dark:bg-indigo-600 text-white font-black rounded-xl uppercase text-xs tracking-widest hover:bg-slate-800 dark:hover:bg-indigo-500 transition-colors">Close</button>
