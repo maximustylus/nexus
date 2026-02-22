@@ -1,6 +1,14 @@
 import React, { useState, useRef } from 'react';
 import { db } from '../firebase'; 
-import { doc, getDoc, getDocs, setDoc, collection } from 'firebase/firestore';
+import { 
+  doc, 
+  getDoc, 
+  getDocs, 
+  setDoc, 
+  collection, 
+  query, 
+  where 
+} from 'firebase/firestore';
 import { X, ShieldCheck, Sparkles, Upload, FileJson } from 'lucide-react';
 import { getFunctions, httpsCallable } from 'firebase/functions';
 
@@ -54,42 +62,36 @@ const SmartAnalysis = ({ teamData, staffLoads, onClose }) => {
         reader.readAsText(file);
     };
 
-    const handleAnalyze = async () => {
-        setLoading(true); 
-        setError('');
+const handleAnalyze = async () => {
+        setLoading(true); setError('');
+        console.log("📡 Starting Analysis for:", targetYear);
         
         try {
-            setStatus(`Filtering Data for ${targetYear}...`);
-            
-            // 1. Establish the source: imported JSON or the live teamData
             const sourceData = importedData || teamData || [];
-            
-            // 2. Filter data for the specific year (The AI needs this vial)
             const filteredYearData = sourceData.map(staff => ({
                 name: staff.staff_name || staff.name,
-                projects: (staff.projects || []).filter(p => (p.year || '2026') === String(targetYear))
+                projects: (staff.projects || []).filter(p => String(p.year || '2026') === String(targetYear))
             }));
 
-            setStatus('Connecting to Secure Neural Link...');
-
-            // 3. Select the correct profiles (The AI needs this vial too)
             const currentProfiles = isDemo ? MARVEL_PROFILES : STAFF_PROFILES;
 
-            // 🛡️ THE INJECTION: We use the exact names defined in this file
+            // Ensure we are sending an ARRAY of profiles, not an object
+            const profileArray = Object.values(currentProfiles);
+
             const response = await generateSmartAnalysis({
-                targetYear: Number(targetYear),      // Fixed: ensures it's a number
-                teamName: "SSMC@KKH CEP Team",      // Fixed: your new universal name tag
-                staffProfiles: Object.values(currentProfiles), // Fixed: ensures it is an ARRAY
-                yearData: filteredYearData          // Fixed: maps to our filtered variable
+                targetYear: Number(targetYear),
+                teamName: "SSMC@KKH CEP Team",
+                staffProfiles: profileArray,
+                yearData: filteredYearData
             });
 
             setResult({ 
                 private: response.data.private, 
                 public: response.data.public 
             });
-
+            console.log("✅ AI Analysis Received");
         } catch (err) {
-            console.error("Neural Link Error:", err);
+            console.error("❌ Analysis Error:", err);
             setError('Analysis Failed: ' + err.message);
         } finally {
             setLoading(false);
@@ -98,30 +100,39 @@ const SmartAnalysis = ({ teamData, staffLoads, onClose }) => {
     };
 
     const handlePublish = async () => {
-        if (!result || !importedData) return;
+        if (!result) return;
         setLoading(true);
+        console.log("💾 Attempting to Publish...");
+
         try {
-            await setDoc(doc(db, 'system_data', `reports_${targetYear}`), {
+            // Save Master Report
+            const reportRef = doc(db, 'system_data', `reports_${targetYear}`);
+            await setDoc(reportRef, {
                 privateText: result.private,
                 publicText: result.public,
                 timestamp: new Date()
             });
 
-            const batchPromises = importedData.map(staff => {
-                const staffId = staff.staff_name.toLowerCase();
+            const dataToArchive = importedData || teamData || [];
+            
+            // Save individual docs
+            const batchPromises = dataToArchive.map(staff => {
+                const sName = staff.staff_name || staff.name || 'unknown';
+                const staffId = sName.toLowerCase().replace(/\s+/g, '_');
                 return setDoc(doc(db, `archive_${targetYear}`, staffId), {
-                    staff_name: staff.staff_name,
-                    projects: staff.projects,
+                    staff_name: sName,
+                    projects: staff.projects || [],
                     year: targetYear
                 });
             });
 
             await Promise.all(batchPromises);
-
-            alert(`SUCCESS: Fully archived ${targetYear} data and report!`);
+            console.log("🎉 Archive Success!");
+            alert(`SUCCESS: Archived ${targetYear}!`);
             onClose(); 
         } catch (e) {
-            alert("❌ Archive Error: " + e.message);
+            console.error("❌ Publish Error:", e);
+            alert("Archive Error: " + e.message);
         } finally {
             setLoading(false);
         }
