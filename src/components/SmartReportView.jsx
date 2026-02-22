@@ -25,24 +25,11 @@ const SmartReportView = ({ year, teamData, staffLoads, user, forceAdminView }) =
       if (!isActuallyAdmin) setViewMode('public');
   }, [isActuallyAdmin]);
 
-// 🛡️ BULLETPROOF PARSER HELPER v2 (Smart Markdown Extractor)
+  // 🛡️ BULLETPROOF PARSER HELPER v3 (Aggressive Markdown Cleaner)
   const parseAI = (rawText) => {
     if (!rawText) return { summary: "", highlights: [], risks: [] };
     if (typeof rawText === 'object') return rawText;
 
-    // Legacy JSON support (just in case)
-    if (String(rawText).trim().startsWith('{')) {
-      try {
-        const jsonResult = JSON.parse(rawText);
-        return {
-          summary: jsonResult.summary || "",
-          highlights: jsonResult.highlights || jsonResult.wins || [],
-          risks: jsonResult.risks || []
-        };
-      } catch (e) {}
-    }
-
-    // 🧠 THE MARKDOWN EXTRACTOR
     const lines = String(rawText).split('\n');
     let summaryLines = [];
     let highlights = [];
@@ -53,30 +40,39 @@ const SmartReportView = ({ year, teamData, staffLoads, user, forceAdminView }) =
       const cleanLine = line.trim();
       const lowerLine = cleanLine.toLowerCase();
 
-      // 1. Detect Headers to route the bullet points
+      // 1. Detect Headers safely
       if (lowerLine.includes('win') || lowerLine.includes('highlight') || lowerLine.includes('success')) {
         currentSection = 'wins';
-        return; // Skip the header itself
+        return; 
       } else if (lowerLine.includes('risk') || lowerLine.includes('focus') || lowerLine.includes('recommendation')) {
-        currentSection = 'risks';
-        return; // Skip the header itself
+        currentSection = 'risks'; 
+        return; 
+      } else if (lowerLine.includes('summary') || lowerLine.includes('analysis') || lowerLine.includes('conclusion')) {
+        currentSection = 'summary';
       }
 
-      // 2. Extract Bullet Points
-      if (cleanLine.startsWith('*') || cleanLine.startsWith('-')) {
-        // Strip the asterisks and dashes for a clean UI look
-        const cleanBullet = cleanLine.replace(/^[\*\-]\s*/, '').replace(/\*\*/g, '').trim();
+      // 2. Extract Bullet Points & Aggressively Strip Numbers
+      const isBullet = cleanLine.startsWith('*') || cleanLine.startsWith('-') || /^\d+\./.test(cleanLine);
+
+      if (isBullet) {
+        // 🛡️ AGGRESSIVE CLEANING: Strips dashes, asterisks, AND numbers (e.g., "* 1.", "1. ", "-")
+        const cleanBullet = cleanLine
+            .replace(/^[\*\-\s]+/, '')    // Strip leading * or -
+            .replace(/^\d+[\.\)]\s*/, '') // Strip numbers like "1." or "3)"
+            .replace(/^[\*\-\s]+/, '')    // Catch any leftover * after the number
+            .replace(/\*\*/g, '')         // Strip bolding
+            .trim();
         
-        if (currentSection === 'wins' && highlights.length < 4) highlights.push(cleanBullet);
-        else if (currentSection === 'risks' && risks.length < 4) risks.push(cleanBullet);
-        else summaryLines.push(cleanLine);
+        if (cleanBullet.length > 0) {
+            if (currentSection === 'wins' && highlights.length < 5) highlights.push(cleanBullet);
+            else if (currentSection === 'risks' && risks.length < 5) risks.push(cleanBullet);
+            else summaryLines.push(cleanLine);
+        }
       } else if (cleanLine) {
-        // Add normal text to the summary
         if (currentSection === 'summary') summaryLines.push(cleanLine);
       }
     });
 
-    // Fallback: If the AI wrote no bullets at all, provide placeholders
     if (highlights.length === 0 && risks.length === 0) {
       return {
         summary: rawText,
@@ -88,11 +84,11 @@ const SmartReportView = ({ year, teamData, staffLoads, user, forceAdminView }) =
     return {
       summary: summaryLines.join('\n').trim(),
       highlights: highlights,
-      risks: risks
+      risks: risks // NOTE: The UI automatically maps this to "Strategic Focus" in Public view
     };
   };
   
- useEffect(() => {
+  useEffect(() => {
     // 🛑 THE BOUNCER CHECK: 
     if (!isDemo && !user) {
         return; 
