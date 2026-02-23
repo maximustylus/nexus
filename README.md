@@ -31,7 +31,7 @@
 
 ## 🧪 Interactive Demo Mode
 To facilitate safe beta testing and stakeholder demonstrations without exposing sensitive hospital data, NEXUS features a fully functional **Demo Mode**. 
-* Populated by a simulated "Marvel Superhero" CEP Team.
+* Populated by a simulated "Marvel Superhero" Healthcare Professional Team.
 * Features an automated guided tour of the app's core mechanics.
 * Allows testers to interact with AURA, adjust sliders, and generate AI audits without writing to the live database.
 * Includes a native **In-App Feedback Widget** for instant bug and idea reporting.
