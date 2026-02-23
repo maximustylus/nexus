@@ -1,9 +1,9 @@
-import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { db } from '../firebase'; 
 import { getFunctions, httpsCallable } from 'firebase/functions';
 import { doc, setDoc, getDoc, updateDoc, arrayUnion } from 'firebase/firestore';
 import { 
-    X, Send, BrainCircuit, Shield, Ghost, Users, Zap, RefreshCw, AlertTriangle, WifiOff, FileText, CheckCircle
+    X, Send, BrainCircuit, Shield, Ghost, Users, Zap, RefreshCw, AlertTriangle, WifiOff, FileText, CheckCircle, Database
 } from 'lucide-react';
 import { useNexus } from '../context/NexusContext';
 
@@ -31,36 +31,12 @@ const clampEnergy = (phase, energy) => {
 
 // ─── PERSONAS ────────────────────────────────────────────────────────────────
 const PERSONAS = [
-    {
-        id: 'peter', name: 'Peter', title: 'Junior Staff',
-        color: 'bg-blue-500', baseEnergy: 65,
-        prompt: 'Peter is a junior staff member: eager but overwhelmed by his clinical rotation workload. Struggling with pacing and documentation speed.',
-    },
-    {
-        id: 'steve', name: 'Steve', title: 'Senior Clinician',
-        color: 'bg-indigo-500', baseEnergy: 55,
-        prompt: 'Steve is a veteran senior clinician facing compassion fatigue from sustained high patient volume. He needs peer-level validation, not top-down advice.',
-    },
-    {
-        id: 'tony', name: 'Tony', title: 'Team Lead',
-        color: 'bg-slate-700', baseEnergy: 42,
-        prompt: 'Tony is a team lead under heavy strategic planning pressure. He is experiencing decision fatigue and struggling to delegate effectively.',
-    },
-    {
-        id: 'charles', name: 'Charles', title: 'Deptartment Head',
-        color: 'bg-amber-600', baseEnergy: 38,
-        prompt: 'Charles is a department head balancing compliance demands with dropping staff morale. He feels isolated at the top of decision-making.',
-    },
-    {
-        id: 'jean', name: 'Jean', title: 'Research Lead',
-        color: 'bg-pink-600', baseEnergy: 48,
-        prompt: 'Jean is a research lead under intense grant deadline pressure. Cognitive fatigue is building and her sleep hygiene has been disrupted by late writing sessions.',
-    },
-    {
-        id: 'anon', name: 'Anonymous', title: 'Ghost Protocol',
-        color: 'bg-purple-600', baseEnergy: 50,
-        prompt: 'This is an anonymous Ghost Protocol session. The user has requested strict confidentiality. Do not ask for identifying details. Prioritise psychological safety above all else.',
-    },
+    { id: 'peter', name: 'Peter', title: 'Junior Staff', color: 'bg-blue-500', baseEnergy: 65, prompt: 'Peter is a junior staff member: eager but overwhelmed by his clinical rotation workload. Struggling with pacing and documentation speed.' },
+    { id: 'steve', name: 'Steve', title: 'Senior Clinician', color: 'bg-indigo-500', baseEnergy: 55, prompt: 'Steve is a veteran senior clinician facing compassion fatigue from sustained high patient volume. He needs peer-level validation, not top-down advice.' },
+    { id: 'tony', name: 'Tony', title: 'Team Lead', color: 'bg-slate-700', baseEnergy: 42, prompt: 'Tony is a team lead under heavy strategic planning pressure. He is experiencing decision fatigue and struggling to delegate effectively.' },
+    { id: 'charles', name: 'Charles', title: 'Deptartment Head', color: 'bg-amber-600', baseEnergy: 38, prompt: 'Charles is a department head balancing compliance demands with dropping staff morale. He feels isolated at the top of decision-making.' },
+    { id: 'jean', name: 'Jean', title: 'Research Lead', color: 'bg-pink-600', baseEnergy: 48, prompt: 'Jean is a research lead under intense grant deadline pressure. Cognitive fatigue is building and her sleep hygiene has been disrupted by late writing sessions.' },
+    { id: 'anon', name: 'Anonymous', title: 'Ghost Protocol', color: 'bg-purple-600', baseEnergy: 50, prompt: 'This is an anonymous Ghost Protocol session. The user has requested strict confidentiality. Do not ask for identifying details. Prioritise psychological safety above all else.' },
 ];
 
 const MAX_INPUT       = 500;
@@ -82,6 +58,7 @@ export default function AuraPulseBot({ user }) {
     const [isSending,       setIsSending]       = useState(false);
     const [pendingLog,      setPendingLog]      = useState(null);
     const [isOnline,        setIsOnline]        = useState(navigator.onLine);
+    const [liveMemory,      setLiveMemory]      = useState(null);
 
     // ── Refs ──────────────────────────────────────────────────────────────────
     const messagesEndRef = useRef(null);
@@ -112,25 +89,21 @@ export default function AuraPulseBot({ user }) {
         messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
     }, [messages, loading, pendingLog]);
 
-    const [liveMemory, setLiveMemory] = useState(null);
-
     // ── Session start ─────────────────────────────────────────────────────────
     const startSession = useCallback((persona) => {
         setSelectedPersona(persona);
         setPendingLog(null);
 
         const isAnon = persona.id === 'anon';
-
-        // 🛡️ DUAL-MODE GREETING UPDATE
         let greeting;
         if (isDemo) {
             greeting = isAnon
                 ? '🔒 Ghost Protocol engaged. Your identity is masked. How can I support you today?'
-                : `[SIMULATION] Hello ${persona.name}. I am ready to assist. Do you need a wellbeing check-in, or help with administrative tasks today?`;
+                : `[SIMULATION] Hello ${persona.name}. I am ready to assist. Do you need a wellbeing check-in, or help with operational data today?`;
         } else if (persona.memory) {
             greeting = `Welcome back, ${(user?.name ?? 'there').split(' ')[0]}. Last time we spoke, I noted: "${persona.memory}". How can I support your workflow or wellbeing today?`;
         } else {
-            greeting = `Hello ${(user?.name ?? 'there').split(' ')[0]}. AURA is active. What kind of support do you need today? We can do our usual wellbeing check-in, or I can help you draft ops memos and administrative data.`;
+            greeting = `Hello ${(user?.name ?? 'there').split(' ')[0]}. AURA is active. What kind of support do you need today? We can do our usual wellbeing check-in, or I can execute database workloads and draft ops memos.`;
         }
 
         setMessages([{ role: 'bot', text: greeting, isGreeting: true, mode: 'NEUTRAL' }]);
@@ -225,16 +198,17 @@ export default function AuraPulseBot({ user }) {
                 throw new Error('Incomplete response from AURA.');
             }
 
-            // 🛡️ DUAL-MODE INTEGRATION: Save mode and action to the chat history
+            // 🛡️ TRI-MODE INTEGRATION: Save mode, action, AND db_workload to chat history
             setMessages(prev => [...prev, { 
                 role: 'bot', 
                 text: analysis.reply,
-                mode: analysis.mode || 'COACH', // Default to coach if not provided
-                action: analysis.action 
+                mode: analysis.mode || 'COACH',
+                action: analysis.action,
+                db_workload: analysis.db_workload 
             }]);
 
             // Only trigger the Pulse Card if AURA is ready to diagnose in COACH mode
-            if (analysis.mode !== 'ASSISTANT' && analysis.diagnosis_ready && analysis.phase && analysis.phase !== 'null' && analysis.phase !== 'NULL') {
+            if (analysis.mode === 'COACH' && analysis.diagnosis_ready && analysis.phase && analysis.phase !== 'null' && analysis.phase !== 'NULL') {
                 const safeEnergy = clampEnergy(analysis.phase, analysis.energy ?? 50);
                 setPendingLog({
                     phase:  analysis.phase.toUpperCase(),
@@ -260,7 +234,7 @@ export default function AuraPulseBot({ user }) {
         if (e.key === 'Enter' && !e.repeat) handleSend();
     }, [handleSend]);
 
-    // ── Confirm and sync log ──────────────────────────────────────────────────
+    // ── Confirm & Sync Pulse Log (Mode 1) ────────────────────────────────────
     const confirmLog = useCallback(async () => {
         if (!pendingLog) return;
         setLoading(true);
@@ -286,9 +260,7 @@ export default function AuraPulseBot({ user }) {
             };
 
             if (isDemo || selectedPersona?.id === 'anon') {
-                const heatKey = isDemo
-                    ? (activeUser?.name ?? 'Demo')
-                    : `Anon_${Math.floor(Math.random() * 9999)}`;
+                const heatKey = isDemo ? (activeUser?.name ?? 'Demo') : `Anon_${Math.floor(Math.random() * 9999)}`;
                 const anonRef = doc(db, 'wellbeing_history', '_anonymous_logs');
                 await setDoc(anonRef, { last_updated: timestamp }, { merge: true });
                 await updateDoc(anonRef, { logs: arrayUnion(logData) });
@@ -305,8 +277,7 @@ export default function AuraPulseBot({ user }) {
             }
 
             setMessages(prev => [...prev, {
-                role: 'bot',
-                text: '✅ Insights synced to your dashboard. Take care of yourself today.',
+                role: 'bot', text: '✅ Insights synced to your dashboard. Take care of yourself today.', mode: 'COACH'
             }]);
             setPendingLog(null);
             safeTimeout(() => setIsOpen(false), 2500);
@@ -314,14 +285,80 @@ export default function AuraPulseBot({ user }) {
         } catch (err) {
             console.error('[AURA] Sync failed:', err);
             setMessages(prev => [...prev, {
-                role:    'bot',
-                text:    '⚠️ Could not sync your pulse log. Please check your connection and try again.',
-                isError: true,
+                role: 'bot', text: '⚠️ Could not sync your pulse log. Please check your connection and try again.', isError: true, mode: 'COACH'
             }]);
         } finally {
             setLoading(false);
         }
     }, [pendingLog, isDemo, selectedPersona, user, safeTimeout]);
+
+    // ── Confirm Admin Document (Mode 2) ──────────────────────────────────────
+    const confirmAdminAction = useCallback(async (actionText) => {
+        if (!actionText) return;
+        setLoading(true);
+
+        const timestamp   = new Date().toISOString();
+        const displayDate = new Date().toLocaleDateString();
+        const activeUser  = isDemo ? selectedPersona : user;
+        const docId       = `doc_${Date.now()}`; 
+
+        try {
+            await setDoc(doc(db, 'smart_database', docId), {
+                timestamp, displayDate,
+                author: activeUser?.name || 'Anonymous',
+                role: activeUser?.title || 'Staff',
+                content: actionText,
+                type: 'AURA_GENERATED_DOC',
+                isDemo
+            });
+
+            setMessages(prev => [...prev, {
+                role: 'bot', text: '✅ Document securely routed to the Smart Database. You can access it from the admin panel.', mode: 'ASSISTANT'
+            }]);
+        } catch (err) {
+            console.error('[AURA] DB Save failed:', err);
+            setMessages(prev => [...prev, {
+                role: 'bot', text: '⚠️ Could not save to the Smart Database. Please check your connection.', isError: true, mode: 'ASSISTANT'
+            }]);
+        } finally {
+            setLoading(false);
+        }
+    }, [isDemo, selectedPersona, user]);
+
+    // ── Execute Precise Data Entry (Mode 3) ──────────────────────────────────
+    const executeDataEntry = useCallback(async (workload) => {
+        if (!workload || !workload.target_collection) return;
+        setLoading(true);
+
+        try {
+            const collectionName = isDemo ? `demo_${workload.target_collection}` : workload.target_collection;
+            const docRef = doc(db, collectionName, workload.target_doc);
+            
+            await setDoc(docRef, { 
+                [workload.target_field]: workload.target_value,
+                last_updated_by: user?.name || 'AURA System',
+                last_updated_at: new Date().toISOString()
+            }, { merge: true });
+
+            setMessages(prev => [...prev, {
+                role: 'bot',
+                text: `✅ Database updated successfully. \n[${workload.target_collection} -> ${workload.target_field}: ${workload.target_value}]`,
+                mode: 'DATA_ENTRY'
+            }]);
+
+        } catch (err) {
+            console.error('[AURA] Data Entry failed:', err);
+            setMessages(prev => [...prev, {
+                role: 'bot',
+                text: '⚠️ Database write failed. Ensure you have the correct Firestore permissions.',
+                isError: true,
+                mode: 'DATA_ENTRY'
+            }]);
+        } finally {
+            setLoading(false);
+        }
+    }, [isDemo, user]);
+
 
     const isAnonymous = selectedPersona?.id === 'anon';
     const inputLength = input.length;
@@ -331,47 +368,40 @@ export default function AuraPulseBot({ user }) {
         <div className="fixed bottom-24 xl:bottom-6 right-4 xl:right-6 z-50 flex flex-col items-end drop-shadow-2xl">
             {isOpen && (
                 <div
-                    role="dialog"
-                    aria-modal="true"
-                    aria-label="AURA Pulse wellbeing assistant"
+                    role="dialog" aria-modal="true" aria-label="AURA Pulse wellbeing assistant"
                     className="mb-4 w-[380px] h-[660px] bg-white dark:bg-slate-900 rounded-[2rem] shadow-2xl border border-slate-200 dark:border-slate-800 flex flex-col overflow-hidden animate-in slide-in-from-bottom-4 zoom-in-95 duration-300"
                 >
+                    {/* Header */}
                     <div className={`p-5 text-white flex justify-between items-center bg-gradient-to-r ${isAnonymous ? 'from-purple-800 to-indigo-900' : 'from-slate-900 to-indigo-950'}`}>
                         <div className="flex items-center gap-3">
-                            {isAnonymous
-                                ? <Ghost size={20} className="text-purple-300 animate-pulse" aria-hidden />
-                                : <BrainCircuit size={20} className="text-indigo-400 animate-pulse" aria-hidden />
-                            }
+                            {isAnonymous ? <Ghost size={20} className="text-purple-300 animate-pulse" /> : <BrainCircuit size={20} className="text-indigo-400 animate-pulse" />}
                             <div>
-                                <h3 className="font-bold text-xs uppercase tracking-widest">
-                                    {isAnonymous ? 'Ghost Protocol' : 'AURA Pulse'}
-                                </h3>
-                                <p className="text-[9px] opacity-60 uppercase tracking-tight">
-                                    {isDemo ? 'Full AI Simulation' : (isOnline ? 'Secure Live Link' : 'Offline')}
-                                </p>
+                                <h3 className="font-bold text-xs uppercase tracking-widest">{isAnonymous ? 'Ghost Protocol' : 'AURA Intelligence'}</h3>
+                                <p className="text-[9px] opacity-60 uppercase tracking-tight">{isDemo ? 'Full AI Simulation' : (isOnline ? 'Secure Live Link' : 'Offline')}</p>
                             </div>
                         </div>
                         <div className="flex items-center gap-1.5">
-                            {!isOnline && <WifiOff size={13} className="text-yellow-300" aria-label="You are offline" />}
+                            {!isOnline && <WifiOff size={13} className="text-yellow-300" />}
                             <button onClick={() => setIsOpen(false)} aria-label="Close AURA" className="p-1.5 hover:bg-white/20 rounded-lg transition-all">
-                                <X size={18} aria-hidden />
+                                <X size={18} />
                             </button>
                         </div>
                     </div>
 
                     {!isOnline && (
                         <div className="flex items-center gap-2 px-4 py-2 bg-yellow-50 border-b border-yellow-200">
-                            <WifiOff size={12} className="text-yellow-600 flex-shrink-0" aria-hidden />
+                            <WifiOff size={12} className="text-yellow-600 flex-shrink-0" />
                             <p className="text-[10px] font-semibold text-yellow-700">You are offline. AURA cannot process new requests.</p>
                         </div>
                     )}
 
+                    {/* Scroll Area */}
                     <div className="flex-1 overflow-y-auto p-5 bg-slate-50 dark:bg-slate-950/50 scroll-smooth">
                         {view === 'SELECT' && isDemo ? (
                             <div className="space-y-5 animate-in fade-in duration-300">
                                 <div className="text-center">
                                     <div className="w-10 h-10 bg-indigo-500/10 rounded-2xl flex items-center justify-center mx-auto mb-2 border border-indigo-500/20">
-                                        <Users size={20} className="text-indigo-500" aria-hidden />
+                                        <Users size={20} className="text-indigo-500" />
                                     </div>
                                     <h2 className="text-xs font-black text-slate-800 dark:text-white uppercase tracking-tighter">Identity Matrix</h2>
                                     <p className="text-[10px] text-slate-400 font-semibold uppercase tracking-widest mt-0.5">Select a persona</p>
@@ -389,15 +419,19 @@ export default function AuraPulseBot({ user }) {
                         ) : (
                             <div className="space-y-4">
                                 {messages.map((m, i) => {
-                                    // 🛡️ DUAL-MODE UI STYLING
+                                    // 🛡️ TRI-MODE UI STYLING
                                     const isAssistant = m.mode === 'ASSISTANT';
+                                    const isDataEntry = m.mode === 'DATA_ENTRY';
+                                    
                                     const bubbleStyle = m.role === 'user' 
                                         ? (isAnonymous ? 'bg-purple-600 text-white rounded-tr-none' : 'bg-indigo-600 text-white rounded-tr-none')
                                         : m.isError 
                                             ? 'bg-red-50 text-red-600 rounded-tl-none border border-red-200'
-                                            : isAssistant 
-                                                ? 'bg-slate-800 text-blue-50 rounded-tl-none border border-slate-700 shadow-lg' // Admin Style
-                                                : 'bg-white text-slate-700 rounded-tl-none border border-slate-100 shadow-sm'; // Coach Style
+                                            : isDataEntry
+                                                ? 'bg-slate-900 text-emerald-50 rounded-tl-none border border-emerald-900 shadow-lg' // DB Style
+                                                : isAssistant 
+                                                    ? 'bg-slate-800 text-blue-50 rounded-tl-none border border-slate-700 shadow-lg' // Admin Style
+                                                    : 'bg-white text-slate-700 rounded-tl-none border border-slate-100 shadow-sm'; // Coach Style
 
                                     return (
                                         <div key={i} className={`flex ${m.role === 'bot' ? 'justify-start' : 'justify-end'} animate-in fade-in slide-in-from-bottom-1`}>
@@ -409,21 +443,50 @@ export default function AuraPulseBot({ user }) {
                                                         <FileText size={12} /> Operations Assist
                                                     </div>
                                                 )}
+                                                {/* Data Entry Badge */}
+                                                {isDataEntry && m.role === 'bot' && !m.isGreeting && (
+                                                    <div className="flex items-center gap-1.5 mb-2 text-[10px] font-black uppercase tracking-widest text-emerald-400">
+                                                        <Database size={12} /> Database Agent
+                                                    </div>
+                                                )}
 
                                                 {m.isError && <AlertTriangle size={13} className="inline mr-1.5 mb-0.5 text-red-500" />}
                                                 
                                                 <div className="whitespace-pre-wrap">{m.text}</div>
 
-                                                {/* Assistant Action Button */}
+                                                {/* 🛡️ ASSISTANT: Save Document Button */}
                                                 {isAssistant && m.action && (
                                                     <div className="mt-4 pt-3 border-t border-slate-600/50">
                                                         <p className="text-[10px] font-medium text-slate-400 mb-2 uppercase tracking-wide">Extracted Data/Action:</p>
                                                         <p className="text-xs text-blue-200 bg-slate-900/50 p-2 rounded-lg mb-3 border border-slate-700 font-mono">{m.action}</p>
                                                         <button 
-                                                            onClick={() => alert('Future Feature: Routing this payload to the Smart Database.')}
-                                                            className="w-full py-2 bg-blue-600 hover:bg-blue-500 text-white text-[11px] font-bold uppercase tracking-wider rounded-xl transition-colors flex items-center justify-center gap-2"
+                                                            onClick={() => confirmAdminAction(m.action)}
+                                                            disabled={loading}
+                                                            className="w-full py-2 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white text-[11px] font-bold uppercase tracking-wider rounded-xl transition-colors flex items-center justify-center gap-2"
                                                         >
-                                                            <CheckCircle size={14} /> Confirm & Save
+                                                            {loading ? <RefreshCw size={14} className="animate-spin" /> : <CheckCircle size={14} />} 
+                                                            Save Document
+                                                        </button>
+                                                    </div>
+                                                )}
+
+                                                {/* 🛡️ DATA ENTRY: Commit Workload Button */}
+                                                {isDataEntry && m.db_workload && m.role === 'bot' && (
+                                                    <div className="mt-4 pt-3 border-t border-emerald-900/50">
+                                                        <p className="text-[10px] font-bold text-emerald-400 mb-2 uppercase tracking-widest flex items-center gap-1">
+                                                            <Zap size={12} /> Pending Workload Transaction
+                                                        </p>
+                                                        <div className="bg-slate-950 p-3 rounded-lg border border-emerald-900/50 font-mono text-[10px] text-slate-300 mb-3 whitespace-pre">
+                                                            {`Collection: ${m.db_workload.target_collection}\nDocument:   ${m.db_workload.target_doc}\nField:      ${m.db_workload.target_field}\nValue:      `}
+                                                            <span className="text-emerald-400 font-bold">{m.db_workload.target_value}</span>
+                                                        </div>
+                                                        <button 
+                                                            onClick={() => executeDataEntry(m.db_workload)}
+                                                            disabled={loading}
+                                                            className="w-full py-2 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white text-[11px] font-bold uppercase tracking-wider rounded-xl transition-colors flex items-center justify-center gap-2"
+                                                        >
+                                                            {loading ? <RefreshCw size={14} className="animate-spin" /> : <Shield size={14} />} 
+                                                            Commit Workload to Database
                                                         </button>
                                                     </div>
                                                 )}
@@ -496,6 +559,7 @@ export default function AuraPulseBot({ user }) {
                         )}
                     </div>
 
+                    {/* Input Bar */}
                     {view === 'CHAT' && (
                         <div className="p-4 bg-white border-t border-slate-100 shrink-0">
                             {isNearLimit && <p className={`text-[9px] font-bold text-right mb-1 ${inputLength >= MAX_INPUT ? 'text-red-500' : 'text-amber-500'}`}>{inputLength} / {MAX_INPUT}</p>}
