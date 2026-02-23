@@ -1,6 +1,6 @@
 # NEXUS: Smart Operations Dashboard v1.4 [BETA]
 
-![Status](https://img.shields.io/badge/Status-Beta%20Phase-emerald) ![Org](https://img.shields.io/badge/Unit-Sport%20%26%20Exercise%20Medicine-indigo) ![Tech](https://img.shields.io/badge/AI-Gemini%20Powered-purple)
+![Status](https://img.shields.io/badge/Status-Beta%20Phase-emerald) ![Org](https://img.shields.io/badge/Unit-Sport%20%26%20Exercise%20Medicine-indigo) ![Tech](https://img.shields.io/badge/AI-Gemini%20Powered-purple) ![PWA](https://img.shields.io/badge/PWA-Native%20Push%20Enabled-blue) ![CI/CD](https://img.shields.io/badge/CI%2FCD-GitHub%20Actions-2ea44f)
 
 **NEXUS** (formerly IDC App) is an advanced, clinician-led innovation platform designed to revolutionize workload management, optimize skill-mix routing, and actively protect staff wellbeing at the Sport & Exercise Medicine Centre.
 
@@ -10,11 +10,13 @@
 
 ## 🚀 The Three Pillars of NEXUS
 
-### Pillar A: AURA Intelligence (The Emotional Layer)
-* **Objective:** Prevent burnout before it happens using real-time "Social Battery" indexing.
-* **Features:** * Interactive 0-10 **Energy & Focus** sliders for staff to report daily capacity.
-  * Real-time calculation of overall department operational health (Optimal vs. Critical load).
-  * Dynamic status recommendations based on Motivational Interviewing techniques.
+### Pillar A: AURA Intelligence (The Emotional & Operational Layer)
+* **Objective:** Prevent burnout before it happens and streamline daily administrative friction using an adaptive AI architecture.
+* **Features:** * **Interactive Wellbeing Indexing:** 0-10 **Energy & Focus** sliders for staff to report daily capacity, calculating overall department operational health (Optimal vs. Critical load).
+  * **Automated Pulse Nudges:** Firebase Cloud Messaging delivers targeted push notifications (with native iOS/macOS app badging) to staff devices every weekday at 09:00 AM to encourage proactive check-ins.
+  * **Dual-Mode AI Intent Router:** AURA dynamically detects user needs and shape-shifts its persona:
+    * *Wellbeing Coach:* Utilizes Motivational Interviewing (OARS) and the Mental Health Continuum to provide psychological first aid and workflow adjustments.
+    * *Clinical Assistant:* Instantly switches to a precise, analytical mode to handle administrative data entry and operational logging.
 
 ### Pillar B: Smart Workload & AI Audits (The Predictive Layer)
 * **Objective:** Move away from static spreadsheets to a dynamic, real-time view of *Clinical, Research, Education, and Management* domains.
