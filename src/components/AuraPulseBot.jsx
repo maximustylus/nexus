@@ -3,7 +3,7 @@ import { db } from '../firebase';
 import { getFunctions, httpsCallable } from 'firebase/functions';
 import { doc, setDoc, getDoc, updateDoc, arrayUnion } from 'firebase/firestore';
 import { 
-    X, Send, BrainCircuit, Shield, Ghost, Users, Zap, RefreshCw, AlertTriangle, WifiOff
+    X, Send, BrainCircuit, Shield, Ghost, Users, Zap, RefreshCw, AlertTriangle, WifiOff, FileText, CheckCircle
 } from 'lucide-react';
 import { useNexus } from '../context/NexusContext';
 
@@ -12,8 +12,6 @@ const functions = getFunctions(undefined, 'us-central1');
 const secureChatWithAura = httpsCallable(functions, 'chatWithAura');
 
 // ─── PHASE CONFIG ─────────────────────────────────────────────────────────────
-// Energy ranges mirror the backend system prompt exactly.
-// If the AI returns a value outside the range for its phase, we clamp it.
 const PHASE_CONFIG = {
     HEALTHY:  { min: 80, max: 100, badge: 'bg-emerald-50 text-emerald-700 border-emerald-200', icon: '💚', label: 'Healthy' },
     REACTING: { min: 50, max: 79,  badge: 'bg-yellow-50  text-yellow-700  border-yellow-200',  icon: '⚡', label: 'Reacting' },
@@ -25,10 +23,6 @@ const getPhaseConfig = (phase) => PHASE_CONFIG[phase?.toUpperCase()] ?? {
     badge: 'bg-slate-100 text-slate-600 border-slate-200', icon: '⬜', label: phase ?? 'Unknown',
 };
 
-/**
- * Clamps energy to the valid range for the given phase.
- * Guards against hallucinated values (e.g. phase=HEALTHY but energy=30).
- */
 const clampEnergy = (phase, energy) => {
     const cfg = PHASE_CONFIG[phase?.toUpperCase()];
     if (!cfg) return Math.max(0, Math.min(100, energy));
@@ -36,7 +30,6 @@ const clampEnergy = (phase, energy) => {
 };
 
 // ─── PERSONAS ────────────────────────────────────────────────────────────────
-// `prompt` is persona context only — the full AURA system prompt lives server-side.
 const PERSONAS = [
     {
         id: 'peter', name: 'Peter', title: 'Junior Staff',
@@ -102,10 +95,8 @@ export default function AuraPulseBot({ user }) {
         return id;
     }, []);
 
-    // ── Cleanup on unmount ────────────────────────────────────────────────────
     useEffect(() => () => timeoutsRef.current.forEach(clearTimeout), []);
 
-    // ── Online status ─────────────────────────────────────────────────────────
     useEffect(() => {
         const on  = () => setIsOnline(true);
         const off = () => setIsOnline(false);
@@ -117,14 +108,10 @@ export default function AuraPulseBot({ user }) {
         };
     }, []);
 
-    // ── Auto-scroll ───────────────────────────────────────────────────────────
     useEffect(() => {
         messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
     }, [messages, loading, pendingLog]);
 
-    // ── Live user memory ──────────────────────────────────────────────────────
-    // Loaded once on session start. Passed as context to the Cloud Function
-    // so AURA can reference prior sessions ("Last time you mentioned...").
     const [liveMemory, setLiveMemory] = useState(null);
 
     // ── Session start ─────────────────────────────────────────────────────────
@@ -134,28 +121,23 @@ export default function AuraPulseBot({ user }) {
 
         const isAnon = persona.id === 'anon';
 
-        // For live users, persona.memory is set by initLiveSession if it exists
+        // 🛡️ DUAL-MODE GREETING UPDATE
         let greeting;
         if (isDemo) {
             greeting = isAnon
-                ? '🔒 Ghost Protocol engaged. Your identity is masked. AURA is listening. How are you feeling right now?'
-                : `[SIMULATION] Hello ${persona.name}. AURA Pulse active. As a ${persona.title}, how is your wellbeing today?`;
+                ? '🔒 Ghost Protocol engaged. Your identity is masked. How can I support you today?'
+                : `[SIMULATION] Hello ${persona.name}. I am ready to assist. Do you need a wellbeing check-in, or help with administrative tasks today?`;
         } else if (persona.memory) {
-            // Returning user — acknowledge past session
-            greeting = `Welcome back, ${(user?.name ?? 'there').split(' ')[0]}. Last time we spoke, I noted: "${persona.memory}". How are you feeling today?`;
+            greeting = `Welcome back, ${(user?.name ?? 'there').split(' ')[0]}. Last time we spoke, I noted: "${persona.memory}". How can I support your workflow or wellbeing today?`;
         } else {
-            // First session
-            greeting = `Hello ${(user?.name ?? 'there').split(' ')[0]}. AURA Pulse is active. "Master the grind. Protect the pulse." How are you feeling right now?`;
+            greeting = `Hello ${(user?.name ?? 'there').split(' ')[0]}. AURA is active. What kind of support do you need today? We can do our usual wellbeing check-in, or I can help you draft ops memos and administrative data.`;
         }
 
-        setMessages([{ role: 'bot', text: greeting, isGreeting: true }]);
+        setMessages([{ role: 'bot', text: greeting, isGreeting: true, mode: 'NEUTRAL' }]);
         setView('CHAT');
         safeTimeout(() => inputRef.current?.focus(), 300);
     }, [isDemo, user, safeTimeout]);
 
-    // Auto-start live session on panel open for real (non-demo) users.
-    // [GAP-02 FIX] Loads aura_memory from Firestore before starting so AURA
-    // has prior session context to reference.
     useEffect(() => {
         if (isOpen && !isDemo && user && view === 'SELECT') {
             const initLiveSession = async () => {
@@ -168,7 +150,6 @@ export default function AuraPulseBot({ user }) {
                             if (memory) setLiveMemory(memory);
                         }
                     } catch (e) {
-                        // Non-fatal: proceed without memory rather than blocking the session
                         console.warn('[AURA] Memory fetch failed — starting stateless.', e);
                     }
                 }
@@ -191,7 +172,6 @@ export default function AuraPulseBot({ user }) {
         const text = input.trim().slice(0, MAX_INPUT);
         if (!text || loading || isSending || !isOnline) return;
 
-        // Rate limit: prevent spam
         const now = Date.now();
         if (now - lastSendRef.current < SEND_COOLDOWN_MS) return;
         lastSendRef.current = now;
@@ -203,8 +183,6 @@ export default function AuraPulseBot({ user }) {
         setPendingLog(null);
 
         try {
-            // Clean history: exclude greetings, errors, confirmation messages.
-            // Ensure history always starts with a user turn (Gemini API requirement).
             const rawHistory = messages.filter(
                 m => !m.isGreeting && !m.isError && !m.text.startsWith('✅')
             );
@@ -215,9 +193,6 @@ export default function AuraPulseBot({ user }) {
                     parts: [{ text: m.text }],
                 }));
 
-            // [GAP-03 FIX] Build context prompt for both modes:
-            // - Sandbox: use the persona's rich situational prompt
-            // - Live: build from the user's actual role + any past memory from Firestore
             const contextPrompt = isDemo
                 ? (selectedPersona?.prompt ?? '')
                 : [
@@ -234,7 +209,6 @@ export default function AuraPulseBot({ user }) {
                 isDemo,
             });
 
-            // ── Parse response ─────────────────────────────────────────────
             let analysis;
             try {
                 const raw      = result.data?.text ?? '';
@@ -251,11 +225,16 @@ export default function AuraPulseBot({ user }) {
                 throw new Error('Incomplete response from AURA.');
             }
 
-            // Always show AURA's message
-            setMessages(prev => [...prev, { role: 'bot', text: analysis.reply }]);
+            // 🛡️ DUAL-MODE INTEGRATION: Save mode and action to the chat history
+            setMessages(prev => [...prev, { 
+                role: 'bot', 
+                text: analysis.reply,
+                mode: analysis.mode || 'COACH', // Default to coach if not provided
+                action: analysis.action 
+            }]);
 
-            // FIX: Only trigger the Pulse Card if AURA is ready to diagnose
-            if (analysis.diagnosis_ready && analysis.phase && analysis.phase !== 'null' && analysis.phase !== 'NULL') {
+            // Only trigger the Pulse Card if AURA is ready to diagnose in COACH mode
+            if (analysis.mode !== 'ASSISTANT' && analysis.diagnosis_ready && analysis.phase && analysis.phase !== 'null' && analysis.phase !== 'NULL') {
                 const safeEnergy = clampEnergy(analysis.phase, analysis.energy ?? 50);
                 setPendingLog({
                     phase:  analysis.phase.toUpperCase(),
@@ -275,7 +254,7 @@ export default function AuraPulseBot({ user }) {
             setLoading(false);
             setIsSending(false);
         }
-    }, [input, loading, isSending, isOnline, messages, selectedPersona, isDemo]);
+    }, [input, loading, isSending, isOnline, messages, selectedPersona, isDemo, liveMemory, user]);
 
     const handleKeyDown = useCallback((e) => {
         if (e.key === 'Enter' && !e.repeat) handleSend();
@@ -319,11 +298,9 @@ export default function AuraPulseBot({ user }) {
                 await setDoc(doc(db, 'system_data', 'daily_pulse'), { [user.name]: heatmapPayload }, { merge: true });
                 await setDoc(doc(db, 'users', user.id), {
                     aura_last_phase:    pendingLog.phase,
-                    // [GAP-02 FIX] Save action as memory so next session has context
                     aura_memory:        pendingLog.action,
                     last_interaction:   new Date(),
                 }, { merge: true });
-                // Update local memory state so it's available if user sends more messages
                 setLiveMemory(pendingLog.action);
             }
 
@@ -346,19 +323,12 @@ export default function AuraPulseBot({ user }) {
         }
     }, [pendingLog, isDemo, selectedPersona, user, safeTimeout]);
 
-    // ── Derived values ────────────────────────────────────────────────────────
     const isAnonymous = selectedPersona?.id === 'anon';
     const inputLength = input.length;
     const isNearLimit = inputLength > MAX_INPUT * 0.8;
 
-    // ==========================================================================
-    // RENDER
-    // ==========================================================================
-    // 🛡️ FIX: Hovers at bottom-24 on iPads, drops to bottom-6 on Desktop
     return (
         <div className="fixed bottom-24 xl:bottom-6 right-4 xl:right-6 z-50 flex flex-col items-end drop-shadow-2xl">
-            
-            {/* ── CHAT PANEL ─────────────────────────────────────────────────── */}
             {isOpen && (
                 <div
                     role="dialog"
@@ -366,7 +336,6 @@ export default function AuraPulseBot({ user }) {
                     aria-label="AURA Pulse wellbeing assistant"
                     className="mb-4 w-[380px] h-[660px] bg-white dark:bg-slate-900 rounded-[2rem] shadow-2xl border border-slate-200 dark:border-slate-800 flex flex-col overflow-hidden animate-in slide-in-from-bottom-4 zoom-in-95 duration-300"
                 >
-                    {/* ── Header ─────────────────────────────────────────────── */}
                     <div className={`p-5 text-white flex justify-between items-center bg-gradient-to-r ${isAnonymous ? 'from-purple-800 to-indigo-900' : 'from-slate-900 to-indigo-950'}`}>
                         <div className="flex items-center gap-3">
                             {isAnonymous
@@ -384,169 +353,127 @@ export default function AuraPulseBot({ user }) {
                         </div>
                         <div className="flex items-center gap-1.5">
                             {!isOnline && <WifiOff size={13} className="text-yellow-300" aria-label="You are offline" />}
-                            <button
-                                onClick={() => setIsOpen(false)}
-                                aria-label="Close AURA"
-                                className="p-1.5 hover:bg-white/20 rounded-lg transition-all"
-                            >
+                            <button onClick={() => setIsOpen(false)} aria-label="Close AURA" className="p-1.5 hover:bg-white/20 rounded-lg transition-all">
                                 <X size={18} aria-hidden />
                             </button>
                         </div>
                     </div>
 
-                    {/* ── Offline banner ─────────────────────────────────────── */}
                     {!isOnline && (
-                        <div className="flex items-center gap-2 px-4 py-2 bg-yellow-50 dark:bg-yellow-900/20 border-b border-yellow-200 dark:border-yellow-700">
+                        <div className="flex items-center gap-2 px-4 py-2 bg-yellow-50 border-b border-yellow-200">
                             <WifiOff size={12} className="text-yellow-600 flex-shrink-0" aria-hidden />
-                            <p className="text-[10px] font-semibold text-yellow-700 dark:text-yellow-300">
-                                You are offline. AURA cannot process new requests until reconnected.
-                            </p>
+                            <p className="text-[10px] font-semibold text-yellow-700">You are offline. AURA cannot process new requests.</p>
                         </div>
                     )}
 
-                    {/* ── Scroll area ────────────────────────────────────────── */}
                     <div className="flex-1 overflow-y-auto p-5 bg-slate-50 dark:bg-slate-950/50 scroll-smooth">
-
-                        {/* PERSONA GRID (Demo only) */}
                         {view === 'SELECT' && isDemo ? (
                             <div className="space-y-5 animate-in fade-in duration-300">
                                 <div className="text-center">
                                     <div className="w-10 h-10 bg-indigo-500/10 rounded-2xl flex items-center justify-center mx-auto mb-2 border border-indigo-500/20">
                                         <Users size={20} className="text-indigo-500" aria-hidden />
                                     </div>
-                                    <h2 className="text-xs font-black text-slate-800 dark:text-white uppercase tracking-tighter">
-                                        Identity Matrix
-                                    </h2>
-                                    <p className="text-[10px] text-slate-400 font-semibold uppercase tracking-widest mt-0.5">
-                                        Select a persona
-                                    </p>
+                                    <h2 className="text-xs font-black text-slate-800 dark:text-white uppercase tracking-tighter">Identity Matrix</h2>
+                                    <p className="text-[10px] text-slate-400 font-semibold uppercase tracking-widest mt-0.5">Select a persona</p>
                                 </div>
-
-                                <div role="listbox" aria-label="Select persona" className="grid grid-cols-2 gap-3">
+                                <div role="listbox" className="grid grid-cols-2 gap-3">
                                     {PERSONAS.map(p => (
-                                        <button
-                                            key={p.id}
-                                            role="option"
-                                            onClick={() => startSession(p)}
-                                            className="p-4 rounded-2xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:border-indigo-500 hover:shadow-md hover:-translate-y-0.5 transition-all text-left focus-visible:outline-2 focus-visible:outline-indigo-500"
-                                        >
-                                            <div className={`w-7 h-7 ${p.color} rounded-full mb-2.5 ring-2 ring-white dark:ring-slate-700`} aria-hidden />
-                                            <h4 className="text-[11px] font-black text-slate-900 dark:text-white uppercase truncate">{p.name}</h4>
+                                        <button key={p.id} onClick={() => startSession(p)} className="p-4 rounded-2xl bg-white border border-slate-200 hover:border-indigo-500 hover:-translate-y-0.5 transition-all text-left">
+                                            <div className={`w-7 h-7 ${p.color} rounded-full mb-2.5 ring-2 ring-white`} />
+                                            <h4 className="text-[11px] font-black text-slate-900 uppercase truncate">{p.name}</h4>
                                             <p className="text-[9px] text-slate-400 font-semibold uppercase truncate mb-2">{p.title}</p>
-                                            <div className="w-full bg-slate-100 dark:bg-slate-700 rounded-full h-0.5" aria-hidden>
-                                                <div className={`${p.color} h-0.5 rounded-full`} style={{ width: `${p.baseEnergy}%` }} />
-                                            </div>
                                         </button>
                                     ))}
                                 </div>
-
-                                <p className="text-center text-[9px] text-indigo-500 font-semibold">
-                                    Simulation mode: actions generate live signals on the Admin Heatmap.
-                                </p>
                             </div>
-
                         ) : (
-                            /* CHAT VIEW */
                             <div className="space-y-4">
+                                {messages.map((m, i) => {
+                                    // 🛡️ DUAL-MODE UI STYLING
+                                    const isAssistant = m.mode === 'ASSISTANT';
+                                    const bubbleStyle = m.role === 'user' 
+                                        ? (isAnonymous ? 'bg-purple-600 text-white rounded-tr-none' : 'bg-indigo-600 text-white rounded-tr-none')
+                                        : m.isError 
+                                            ? 'bg-red-50 text-red-600 rounded-tl-none border border-red-200'
+                                            : isAssistant 
+                                                ? 'bg-slate-800 text-blue-50 rounded-tl-none border border-slate-700 shadow-lg' // Admin Style
+                                                : 'bg-white text-slate-700 rounded-tl-none border border-slate-100 shadow-sm'; // Coach Style
 
-                                {messages.map((m, i) => (
-                                    <div key={i} className={`flex ${m.role === 'bot' ? 'justify-start' : 'justify-end'} animate-in fade-in slide-in-from-bottom-1`}>
-                                        <div
-                                            aria-live={m.role === 'bot' ? 'polite' : undefined}
-                                            className={`max-w-[87%] px-4 py-3.5 rounded-[1.5rem] text-sm leading-relaxed shadow-sm ${
-                                                m.role === 'bot'
-                                                    ? m.isError
-                                                        ? 'bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-300 rounded-tl-none border border-red-200'
-                                                        : 'bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 rounded-tl-none border border-slate-100 dark:border-slate-700'
-                                                    : isAnonymous
-                                                        ? 'bg-purple-600 text-white rounded-tr-none'
-                                                        : 'bg-indigo-600 text-white rounded-tr-none'
-                                            }`}
-                                        >
-                                            {m.isError && <AlertTriangle size={13} className="inline mr-1.5 mb-0.5 text-red-500" aria-hidden />}
-                                            {m.text}
+                                    return (
+                                        <div key={i} className={`flex ${m.role === 'bot' ? 'justify-start' : 'justify-end'} animate-in fade-in slide-in-from-bottom-1`}>
+                                            <div className={`max-w-[87%] px-4 py-3.5 rounded-[1.5rem] text-sm leading-relaxed ${bubbleStyle}`}>
+                                                
+                                                {/* Assistant Badge */}
+                                                {isAssistant && m.role === 'bot' && !m.isGreeting && (
+                                                    <div className="flex items-center gap-1.5 mb-2 text-[10px] font-black uppercase tracking-widest text-blue-400">
+                                                        <FileText size={12} /> Operations Assist
+                                                    </div>
+                                                )}
+
+                                                {m.isError && <AlertTriangle size={13} className="inline mr-1.5 mb-0.5 text-red-500" />}
+                                                
+                                                <div className="whitespace-pre-wrap">{m.text}</div>
+
+                                                {/* Assistant Action Button */}
+                                                {isAssistant && m.action && (
+                                                    <div className="mt-4 pt-3 border-t border-slate-600/50">
+                                                        <p className="text-[10px] font-medium text-slate-400 mb-2 uppercase tracking-wide">Extracted Data/Action:</p>
+                                                        <p className="text-xs text-blue-200 bg-slate-900/50 p-2 rounded-lg mb-3 border border-slate-700 font-mono">{m.action}</p>
+                                                        <button 
+                                                            onClick={() => alert('Future Feature: Routing this payload to the Smart Database.')}
+                                                            className="w-full py-2 bg-blue-600 hover:bg-blue-500 text-white text-[11px] font-bold uppercase tracking-wider rounded-xl transition-colors flex items-center justify-center gap-2"
+                                                        >
+                                                            <CheckCircle size={14} /> Confirm & Save
+                                                        </button>
+                                                    </div>
+                                                )}
+
+                                            </div>
                                         </div>
-                                    </div>
-                                ))}
+                                    );
+                                })}
 
-                                {/* PULSE LOG CARD */}
+                                {/* PULSE LOG CARD (Coach Mode Only) */}
                                 {pendingLog && (() => {
                                     const cfg = getPhaseConfig(pendingLog.phase);
                                     return (
-                                        <div
-                                            role="dialog"
-                                            aria-label="Wellbeing analysis result"
-                                            className="mx-0.5 bg-white dark:bg-slate-800 rounded-2xl border-2 border-indigo-100 dark:border-slate-700 p-5 shadow-xl animate-in zoom-in-95"
-                                        >
+                                        <div className="mx-0.5 bg-white rounded-2xl border-2 border-indigo-100 p-5 shadow-xl animate-in zoom-in-95">
                                             <div className="flex justify-between items-center mb-4 text-[10px] font-black uppercase text-slate-400 tracking-widest">
-                                                <span className="flex items-center gap-1.5">
-                                                    <Zap size={12} className="text-amber-500 animate-bounce" aria-hidden />
-                                                    Pulse Reading
-                                                </span>
-                                                <span className="text-[9px] bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-300 px-2.5 py-1 rounded-full border border-indigo-100 dark:border-indigo-800 font-bold">
-                                                    5A Protocol
-                                                </span>
+                                                <span className="flex items-center gap-1.5"><Zap size={12} className="text-amber-500 animate-bounce" /> Pulse Reading</span>
+                                                <span className="text-[9px] bg-indigo-50 text-indigo-600 px-2.5 py-1 rounded-full border border-indigo-100 font-bold">5A Protocol</span>
                                             </div>
-
                                             <div className="grid grid-cols-2 gap-3 mb-4">
                                                 <div className={`p-3 rounded-xl border text-center ${cfg.badge}`}>
                                                     <div className="text-[8px] font-black uppercase opacity-60 mb-1">Zone</div>
                                                     <div className="text-xs font-black">{cfg.icon} {cfg.label}</div>
                                                 </div>
-                                                <div className="p-3 rounded-xl border bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300 border-blue-100 dark:border-blue-800 text-center">
+                                                <div className="p-3 rounded-xl border bg-blue-50 text-blue-700 border-blue-100 text-center">
                                                     <div className="text-[8px] font-black uppercase opacity-60 mb-1">Energy</div>
                                                     <div className="text-xs font-black mb-1.5">{pendingLog.energy}%</div>
-                                                    <div className="w-full bg-blue-100 dark:bg-blue-900 rounded-full h-1">
-                                                        <div
-                                                            className="bg-blue-500 h-1 rounded-full transition-all duration-700"
-                                                            style={{ width: `${pendingLog.energy}%` }}
-                                                            role="progressbar"
-                                                            aria-valuenow={pendingLog.energy}
-                                                            aria-valuemin={0}
-                                                            aria-valuemax={100}
-                                                        />
+                                                    <div className="w-full bg-blue-100 rounded-full h-1">
+                                                        <div className="bg-blue-500 h-1 rounded-full transition-all duration-700" style={{ width: `${pendingLog.energy}%` }} />
                                                     </div>
                                                 </div>
                                             </div>
-
                                             {pendingLog.action && (
-                                                <div className="bg-slate-50 dark:bg-slate-900/80 p-3.5 rounded-xl mb-4 border border-slate-100 dark:border-slate-800 text-center">
+                                                <div className="bg-slate-50 p-3.5 rounded-xl mb-4 border border-slate-100 text-center">
                                                     <p className="text-[9px] font-black text-slate-400 uppercase mb-1">Recommended Action</p>
-                                                    <p className="text-xs italic font-medium text-slate-600 dark:text-slate-300">"{pendingLog.action}"</p>
+                                                    <p className="text-xs italic font-medium text-slate-600">"{pendingLog.action}"</p>
                                                 </div>
                                             )}
-
-                                            {/* ILL phase: surface a gentle referral nudge */}
                                             {pendingLog.phase === 'ILL' && (
-                                                <div className="mb-4 px-3.5 py-3 rounded-xl bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800">
-                                                    <p className="text-[10px] text-red-600 dark:text-red-300 font-semibold text-center leading-relaxed">
+                                                <div className="mb-4 px-3.5 py-3 rounded-xl bg-red-50 border border-red-200">
+                                                    <p className="text-[10px] text-red-600 font-semibold text-center leading-relaxed">
                                                         You do not have to carry this alone. Please reach out to your Employee Assistance Programme or a trusted colleague today.
                                                     </p>
                                                 </div>
                                             )}
-
                                             <div className="flex gap-2">
-                                                <button
-                                                    onClick={() => setPendingLog(null)}
-                                                    aria-label="Dismiss pulse reading"
-                                                    className="flex-1 py-2.5 text-xs font-black text-slate-500 rounded-xl border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 transition-all flex items-center justify-center gap-1.5"
-                                                >
-                                                    <X size={12} aria-hidden /> Dismiss
+                                                <button onClick={() => setPendingLog(null)} className="flex-1 py-2.5 text-xs font-black text-slate-500 rounded-xl border border-slate-200 hover:bg-slate-50 transition-all flex items-center justify-center gap-1.5">
+                                                    <X size={12} /> Dismiss
                                                 </button>
-                                                <button
-                                                    onClick={confirmLog}
-                                                    disabled={loading}
-                                                    aria-label="Sync pulse to dashboard"
-                                                    className={`flex-[2] py-2.5 text-white text-xs font-black rounded-xl shadow-md transition-all active:scale-95 disabled:opacity-50 flex items-center justify-center gap-2 ${
-                                                        isAnonymous
-                                                            ? 'bg-purple-600 hover:bg-purple-700'
-                                                            : 'bg-indigo-600 hover:bg-indigo-700'
-                                                    }`}
-                                                >
-                                                    {loading
-                                                        ? <RefreshCw size={13} className="animate-spin" aria-hidden />
-                                                        : <Shield size={13} aria-hidden />
-                                                    }
+                                                <button onClick={confirmLog} disabled={loading} className={`flex-[2] py-2.5 text-white text-xs font-black rounded-xl shadow-md transition-all active:scale-95 disabled:opacity-50 flex items-center justify-center gap-2 ${isAnonymous ? 'bg-purple-600' : 'bg-indigo-600'}`}>
+                                                    {loading ? <RefreshCw size={13} className="animate-spin" /> : <Shield size={13} />}
                                                     {isAnonymous ? 'Confirm Ghost Log' : 'Sync to Dashboard'}
                                                 </button>
                                             </div>
@@ -554,95 +481,44 @@ export default function AuraPulseBot({ user }) {
                                     );
                                 })()}
 
-                                {/* Typing indicator */}
                                 {loading && (
-                                    <div
-                                        role="status"
-                                        aria-live="polite"
-                                        aria-label="AURA is thinking"
-                                        className="flex items-center gap-2 text-[10px] font-bold text-slate-400 animate-pulse pl-1"
-                                    >
-                                        <span className="flex gap-1" aria-hidden>
+                                    <div className="flex items-center gap-2 text-[10px] font-bold text-slate-400 animate-pulse pl-1">
+                                        <span className="flex gap-1">
                                             <span className="w-1.5 h-1.5 bg-indigo-400 rounded-full animate-bounce [animation-delay:0ms]" />
                                             <span className="w-1.5 h-1.5 bg-indigo-400 rounded-full animate-bounce [animation-delay:150ms]" />
                                             <span className="w-1.5 h-1.5 bg-indigo-400 rounded-full animate-bounce [animation-delay:300ms]" />
                                         </span>
-                                        AURA is thinking...
+                                        AURA is processing...
                                     </div>
                                 )}
-
-                                <div ref={messagesEndRef} className="h-1" aria-hidden />
+                                <div ref={messagesEndRef} className="h-1" />
                             </div>
                         )}
                     </div>
 
-                    {/* ── Input bar ──────────────────────────────────────────── */}
                     {view === 'CHAT' && (
-                        <div className="p-4 bg-white dark:bg-slate-900 border-t border-slate-100 dark:border-slate-800 shrink-0">
-                            {isNearLimit && (
-                                <p
-                                    className={`text-[9px] font-bold text-right mb-1 ${inputLength >= MAX_INPUT ? 'text-red-500' : 'text-amber-500'}`}
-                                    aria-live="polite"
-                                >
-                                    {inputLength} / {MAX_INPUT}
-                                </p>
-                            )}
-                            <div className={`flex items-center gap-2 bg-slate-50 dark:bg-slate-800 rounded-full pl-5 pr-3 py-3 border transition-all ${
-                                loading || isSending
-                                    ? 'opacity-60 border-slate-200 dark:border-slate-700'
-                                    : `border-slate-200 dark:border-slate-700 focus-within:border-${isAnonymous ? 'purple' : 'indigo'}-500`
-                            }`}>
+                        <div className="p-4 bg-white border-t border-slate-100 shrink-0">
+                            {isNearLimit && <p className={`text-[9px] font-bold text-right mb-1 ${inputLength >= MAX_INPUT ? 'text-red-500' : 'text-amber-500'}`}>{inputLength} / {MAX_INPUT}</p>}
+                            <div className={`flex items-center gap-2 bg-slate-50 rounded-full pl-5 pr-3 py-3 border transition-all ${loading || isSending ? 'opacity-60 border-slate-200' : `border-slate-200 focus-within:border-${isAnonymous ? 'purple' : 'indigo'}-500`}`}>
                                 <input
-                                    ref={inputRef}
-                                    type="text"
-                                    value={input}
+                                    ref={inputRef} type="text" value={input}
                                     onChange={e => setInput(e.target.value.slice(0, MAX_INPUT))}
                                     onKeyDown={handleKeyDown}
-                                    placeholder={
-                                        loading || isSending ? 'AURA is thinking...'
-                                        : isAnonymous        ? 'Ghost Mode active. Share how you feel...'
-                                        : 'Describe how you are feeling...'
-                                    }
-                                    className="flex-1 bg-transparent text-sm text-slate-700 dark:text-white outline-none placeholder:text-slate-400 disabled:cursor-not-allowed"
+                                    placeholder={loading || isSending ? 'AURA is processing...' : 'Type a message or request...'}
+                                    className="flex-1 bg-transparent text-sm text-slate-700 outline-none placeholder:text-slate-400 disabled:cursor-not-allowed"
                                     disabled={loading || isSending || !isOnline}
-                                    aria-label="Message input"
-                                    autoComplete="off"
-                                    spellCheck
-                                    maxLength={MAX_INPUT}
+                                    autoComplete="off" spellCheck maxLength={MAX_INPUT}
                                 />
-                                <button
-                                    onClick={handleSend}
-                                    disabled={!input.trim() || loading || isSending || !isOnline}
-                                    aria-label="Send message"
-                                    className={`p-2 rounded-full transition-all active:scale-90 disabled:opacity-30 ${
-                                        isAnonymous
-                                            ? 'text-purple-600 hover:bg-purple-50 dark:hover:bg-purple-900/20'
-                                            : 'text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-900/20'
-                                    }`}
-                                >
-                                    <Send size={17} aria-hidden />
+                                <button onClick={handleSend} disabled={!input.trim() || loading || isSending || !isOnline} className={`p-2 rounded-full transition-all active:scale-90 disabled:opacity-30 ${isAnonymous ? 'text-purple-600 hover:bg-purple-50' : 'text-indigo-600 hover:bg-indigo-50'}`}>
+                                    <Send size={17} />
                                 </button>
                             </div>
                         </div>
                     )}
                 </div>
             )}
-
-            {/* ── FAB ──────────────────────────────────────────────────────── */}
-            <button
-                onClick={() => setIsOpen(o => !o)}
-                aria-label={isOpen ? 'Close AURA Pulse' : 'Open AURA Pulse wellbeing assistant'}
-                aria-expanded={isOpen}
-                aria-haspopup="dialog"
-                className={`w-16 h-16 rounded-full shadow-2xl text-white flex items-center justify-center transition-all duration-300 hover:scale-110 active:scale-95 ${
-                    isOpen
-                        ? 'bg-slate-800 rotate-90'
-                        : isAnonymous
-                            ? 'bg-purple-700 shadow-purple-600/30'
-                            : 'bg-indigo-600 shadow-indigo-600/30'
-                }`}
-            >
-                {isOpen ? <X size={26} aria-hidden /> : <BrainCircuit size={28} aria-hidden />}
+            <button onClick={() => setIsOpen(o => !o)} className={`w-16 h-16 rounded-full shadow-2xl text-white flex items-center justify-center transition-all duration-300 hover:scale-110 active:scale-95 ${isOpen ? 'bg-slate-800 rotate-90' : isAnonymous ? 'bg-purple-700 shadow-purple-600/30' : 'bg-indigo-600 shadow-indigo-600/30'}`}>
+                {isOpen ? <X size={26} /> : <BrainCircuit size={28} />}
             </button>
         </div>
     );
