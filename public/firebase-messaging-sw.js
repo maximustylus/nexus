@@ -35,10 +35,10 @@ messaging.onBackgroundMessage((payload) => {
   const notificationTitle = payload.notification?.title || "NEXUS Pulse Reminder";
   const notificationOptions = {
     body: payload.notification?.body || "Time for your daily wellbeing check-in.",
-    icon: '/nexus.png', // Using the existing icon from your public folder
+    icon: '/nexus.png',
     badge: '/nexus.png',
-    tag: 'pulse-reminder', // Prevents multiple nudges from spamming the lock screen
-    data: { url: '/' } // Redirects to the dashboard when tapped
+    tag: 'pulse-reminder', 
+    data: { url: '/pulse' }
   };
 
   self.registration.showNotification(notificationTitle, notificationOptions);
