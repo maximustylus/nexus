@@ -17,17 +17,24 @@ firebase.initializeApp({
 
 const messaging = firebase.messaging();
 
-// 3. Handle incoming messages when the app is in the background or closed
+// 3. Handle incoming messages when the app is in the background
 messaging.onBackgroundMessage((payload) => {
   console.log('[NEXUS SW] Background Message received: ', payload);
+
+  // 🛡️ NEW: Set the App Badge (e.g., to 1 unread notification)
+  if ('setAppBadge' in navigator) {
+    navigator.setAppBadge(1).catch((error) => {
+      console.error('[NEXUS SW] Failed to set badge:', error);
+    });
+  }
 
   const notificationTitle = payload.notification?.title || "NEXUS Pulse Reminder";
   const notificationOptions = {
     body: payload.notification?.body || "Time for your daily wellbeing check-in.",
-    icon: '/nexus.png', // Using the existing icon from your public folder
-    badge: '/nexus.png',
-    tag: 'pulse-reminder', // Prevents multiple nudges from spamming the lock screen
-    data: { url: '/' } // Redirects to the dashboard when tapped
+    icon: '/nexus.png',
+    badge: '/nexus.png', // Note: This 'badge' is for Android status bar icons, not the red dot
+    tag: 'pulse-reminder', 
+    data: { url: '/' } 
   };
 
   self.registration.showNotification(notificationTitle, notificationOptions);
