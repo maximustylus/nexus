@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { db } from '../firebase';
+import { db, auth } from '../firebase';
 import { doc, onSnapshot, setDoc } from 'firebase/firestore';
 import { Battery, BatteryCharging, BatteryWarning, BatteryFull, Users, Activity, Zap, X, Save, Lock, Bell, BellRing } from 'lucide-react';
 import { STAFF_LIST } from '../utils';
@@ -80,19 +80,19 @@ const WellbeingView = ({ user }) => {
             return;
         }
 
-        if (!user?.uid) {
-            alert("Error: You must be logged in to enable notifications.");
+        const currentFirebaseUser = auth.currentUser;
+
+        if (!currentFirebaseUser?.uid) {
+            alert("Error: Firebase cannot verify your session. Try refreshing the page.");
             return;
         }
 
         setIsSubscribing(true);
         try {
-            // Trigger the native popup and get the VAPID token
             const token = await requestForToken();
             
             if (token) {
-                // Save it securely to their Firestore profile
-                await setDoc(doc(db, 'users', user.uid), {
+                await setDoc(doc(db, 'users', currentFirebaseUser.uid), {
                     fcmToken: token,
                     notificationsEnabled: true,
                     lastUpdated: new Date()
