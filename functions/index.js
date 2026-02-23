@@ -484,8 +484,8 @@ exports.scheduledPulseNudge = onSchedule({
         // 3. Construct the Push Notification
         const message = {
             notification: {
-                title: 'NEXUS | Pulse Check ⚡',
-                body: 'Good morning! Take 30 seconds to log your Social Battery and Energy levels.',
+                title: 'Social Battery ⚡ Check',
+                body: 'Take 30 seconds to log your Energy and Focus levels with AURA Pulse!',
             },
             tokens: tokens, 
         };
