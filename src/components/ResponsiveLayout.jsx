@@ -11,10 +11,10 @@ const ResponsiveLayout = ({ children, activeTab, onNavigate, floatingWidgets }) 
   ];
 
   return (
-    // 1. 🛡️ THE APP SHELL: Locked exactly to the mobile screen, preventing body scroll
+    // 1. 🛡️ THE APP SHELL: Locked exactly to the mobile screen
     <div className="h-[100dvh] w-full overflow-hidden flex flex-col bg-slate-50 dark:bg-slate-950 font-sans text-slate-900 dark:text-slate-100 transition-colors duration-500 relative">
       
-      {/* 2. 🛡️ THE SCROLLABLE CONTENT: Only the dashboard scrolls inside this invisible box */}
+      {/* 2. 🛡️ THE SCROLLABLE CONTENT: Only the dashboard scrolls inside this area */}
       <div className="flex-1 overflow-y-auto w-full relative">
         <div className="max-w-7xl mx-auto p-4 md:p-6 lg:p-8 
                         pl-[env(safe-area-inset-left)] pr-[env(safe-area-inset-right)] 
@@ -25,7 +25,7 @@ const ResponsiveLayout = ({ children, activeTab, onNavigate, floatingWidgets }) 
         </div>
       </div>
 
-      {/* 3. 🛡️ THE NAV BAR: Changed to 'absolute' to attach to the unmoving App Shell */}
+      {/* 3. 🛡️ THE NAV BAR: Positioned at the bottom */}
       <div className="xl:hidden absolute bottom-0 left-0 w-full bg-white/90 dark:bg-slate-900/90 backdrop-blur-lg border-t border-slate-200 dark:border-slate-800 z-[100] 
                       pb-[env(safe-area-inset-bottom)] pl-[env(safe-area-inset-left)] pr-[env(safe-area-inset-right)]">
         <div className="flex justify-around items-center h-16 px-2">
@@ -55,13 +55,10 @@ const ResponsiveLayout = ({ children, activeTab, onNavigate, floatingWidgets }) 
         </div>
       </div>
 
-      {/* 4. 🛡️ THE WIDGETS: Now securely contained in the non-scrolling shell */}
-      <div className="absolute inset-0 pointer-events-none z-[110]">
-          {/* pointer-events-none stops this invisible wrapper from blocking clicks, 
-              but we add auto back to the widgets so you can still click AURA! */}
-          <div className="pointer-events-auto h-full w-full relative">
-              {floatingWidgets}
-          </div>
+      {/* 4. 🛡️ THE WIDGETS (FIXED): The invisible shield is gone! */}
+      {/* [&>*]:pointer-events-auto targets ONLY the widgets, allowing clicks to pass through the empty space */}
+      <div className="absolute inset-0 pointer-events-none z-[110] [&>*]:pointer-events-auto">
+          {floatingWidgets}
       </div>
 
     </div>
