@@ -1,7 +1,6 @@
 import { LayoutDashboard, Archive, Calendar, Activity, BookOpen } from 'lucide-react';
 import React from 'react';
 
-// 🛡️ THE FIX: Added 'floatingWidgets' as a prop
 const ResponsiveLayout = ({ children, activeTab, onNavigate, floatingWidgets }) => {
   const navItems = [
     { id: 'dashboard', icon: LayoutDashboard, label: 'Dashboard' },
@@ -12,19 +11,22 @@ const ResponsiveLayout = ({ children, activeTab, onNavigate, floatingWidgets }) 
   ];
 
   return (
-    <div className="min-h-screen w-full bg-slate-50 dark:bg-slate-950 font-sans text-slate-900 dark:text-slate-100 transition-colors duration-500 relative">
+    // 1. 🛡️ THE APP SHELL: Locked exactly to the mobile screen, preventing body scroll
+    <div className="h-[100dvh] w-full overflow-hidden flex flex-col bg-slate-50 dark:bg-slate-950 font-sans text-slate-900 dark:text-slate-100 transition-colors duration-500 relative">
       
-      {/* THE MAIN CONTENT GRID (This has the CSS trap: animate-in slide-in) */}
-      <div className="max-w-7xl mx-auto p-4 md:p-6 lg:p-8 
-                      pl-[env(safe-area-inset-left)] pr-[env(safe-area-inset-right)] 
-                      pb-32 xl:pb-8">
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 animate-in fade-in slide-in-from-bottom-4 duration-700">
-          {children}
+      {/* 2. 🛡️ THE SCROLLABLE CONTENT: Only the dashboard scrolls inside this invisible box */}
+      <div className="flex-1 overflow-y-auto w-full relative">
+        <div className="max-w-7xl mx-auto p-4 md:p-6 lg:p-8 
+                        pl-[env(safe-area-inset-left)] pr-[env(safe-area-inset-right)] 
+                        pb-32 xl:pb-8">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 animate-in fade-in slide-in-from-bottom-4 duration-700">
+            {children}
+          </div>
         </div>
       </div>
 
-      {/* THE WORKING MOBILE NAV BAR */}
-      <div className="xl:hidden fixed bottom-0 left-0 w-full bg-white/90 dark:bg-slate-900/90 backdrop-blur-lg border-t border-slate-200 dark:border-slate-800 z-40 
+      {/* 3. 🛡️ THE NAV BAR: Changed to 'absolute' to attach to the unmoving App Shell */}
+      <div className="xl:hidden absolute bottom-0 left-0 w-full bg-white/90 dark:bg-slate-900/90 backdrop-blur-lg border-t border-slate-200 dark:border-slate-800 z-[100] 
                       pb-[env(safe-area-inset-bottom)] pl-[env(safe-area-inset-left)] pr-[env(safe-area-inset-right)]">
         <div className="flex justify-around items-center h-16 px-2">
           {navItems.map((item) => {
@@ -53,8 +55,14 @@ const ResponsiveLayout = ({ children, activeTab, onNavigate, floatingWidgets }) 
         </div>
       </div>
 
-      {/* 🛡️ THE SAFE ZONE: We inject the widgets here so they inherit the same perfect fixed positioning as the nav bar! */}
-      {floatingWidgets}
+      {/* 4. 🛡️ THE WIDGETS: Now securely contained in the non-scrolling shell */}
+      <div className="absolute inset-0 pointer-events-none z-[110]">
+          {/* pointer-events-none stops this invisible wrapper from blocking clicks, 
+              but we add auto back to the widgets so you can still click AURA! */}
+          <div className="pointer-events-auto h-full w-full relative">
+              {floatingWidgets}
+          </div>
+      </div>
 
     </div>
   );
