@@ -17,7 +17,7 @@ const genAI = new GoogleGenerativeAI(import.meta.env.VITE_GEMINI_API_KEY);
 const secureChatWithAura = httpsCallable(functions, 'chatWithAura');
 // ✅ SECURE: The React frontend no longer holds the API key. It sends a secure payload to Firebase, which handles the Gemini connection server-side.
 
-###2. Payload Schema Evolution (Dual-Mode)
+### 2. Payload Schema Evolution (Dual-Mode)
 AURA now returns a heavily structured JSON payload to dictate UI rendering.
 
 // v2.1 JSON Output:
