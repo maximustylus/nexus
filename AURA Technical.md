@@ -43,6 +43,7 @@ Resolution: The local simulation regex brain has been completely deprecated. All
 
 ### Updated Architecture Diagram
 
+Plaintext
 ┌─────────────────────────────────────────────────────┐
 │  AuraPulseBot.jsx (React Presentation & State)      │
 │                                                     │
