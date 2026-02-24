@@ -622,3 +622,4 @@ export default function AuraPulseBot({ user }) {
             </button>
         </div>
     );
+}
