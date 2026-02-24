@@ -7,6 +7,9 @@ export const NexusProvider = ({ children }) => {
   const [isDemo, setIsDemo] = useState(false);
   const [userRole, setUserRole] = useState('admin');
   
+  // 🛡️ NEW: Global Memory for AURA (Prevents chat wipes when the bot is minimized)
+  const [auraHistory, setAuraHistory] = useState([]);
+  
   const toggleDemo = () => {
     setIsDemo(prev => !prev);
     // When switching to Demo, force the user to be a 'Lead' to show off Admin features
@@ -14,7 +17,14 @@ export const NexusProvider = ({ children }) => {
   };
 
   return (
-    <NexusContext.Provider value={{ isDemo, toggleDemo, userRole, setUserRole }}>
+    <NexusContext.Provider value={{ 
+        isDemo, 
+        toggleDemo, 
+        userRole, 
+        setUserRole,
+        auraHistory,     
+        setAuraHistory   
+    }}>
       {children}
     </NexusContext.Provider>
   );
