@@ -38,16 +38,43 @@ messaging.onBackgroundMessage((payload) => {
     icon: '/nexus.png',
     badge: '/nexus.png',
     tag: 'pulse-reminder', 
-    data: { url: '/pulse' }
+    // 🛡️ NEW: Send a routing signal so React knows what to do
+    data: { 
+      url: '/', 
+      type: 'NAVIGATE_TO_PULSE' 
+    }
   };
 
   self.registration.showNotification(notificationTitle, notificationOptions);
 });
 
-// 4. Handle what happens when the user taps the notification
+// 4. Enhanced Routing: Focus existing app or open new, then trigger React navigation
 self.addEventListener('notificationclick', (event) => {
   event.notification.close();
+
+  const urlToOpen = new URL(self.location.origin).href;
+
   event.waitUntil(
-    clients.openWindow(event.notification.data.url)
+    clients.matchAll({ type: 'window', includeUncontrolled: true }).then((windowClients) => {
+      // 1. Check if NEXUS is already open in any tab
+      for (let i = 0; i < windowClients.length; i++) {
+        const client = windowClients[i];
+        if (client.url.includes(self.location.origin) && 'focus' in client) {
+          // Send signal to the existing React app
+          client.postMessage({ type: 'NAVIGATE_TO_PULSE' });
+          return client.focus();
+        }
+      }
+
+      // 2. If app is not open, open it and then send the signal
+      if (clients.openWindow) {
+        return clients.openWindow('/').then((windowClient) => {
+          // Delay briefly to allow React components to mount before shouting the route command
+          setTimeout(() => {
+            if (windowClient) windowClient.postMessage({ type: 'NAVIGATE_TO_PULSE' });
+          }, 2000);
+        });
+      }
+    })
   );
 });
