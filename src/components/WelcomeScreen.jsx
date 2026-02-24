@@ -94,8 +94,11 @@ const WelcomeScreen = (props) => {
                 
                 // 🛡️ SECURITY LAYER 3: EMAIL VERIFICATION GUARD
                 if (!userCredential.user.emailVerified) {
+                    // 🪄 THE FIX: Automatically resend the email to existing unverified users!
+                    await sendEmailVerification(userCredential.user);
+                    
                     await signOut(auth); // Boot them out immediately
-                    throw new Error("VERIFICATION REQUIRED: Please check your KKH inbox and click the verification link before logging in.");
+                    throw new Error("VERIFICATION REQUIRED: We just sent a fresh verification link to your email. Please click it before logging in.");
                 }
 
                 // If verified, let them in!
