@@ -233,8 +233,11 @@ export default function AuraPulseBot({ user }) {
     }, [input, loading, isSending, isOnline, messages, selectedPersona, isDemo, liveMemory, user]);
 
     const handleKeyDown = useCallback((e) => {
-        if (e.key === 'Enter' && !e.repeat) handleSend();
-    }, [handleSend]);
+            if (e.key === 'Enter' && !e.repeat) {
+                e.preventDefault();
+                handleSend();
+            }
+        }, [handleSend]);
 
     // ── Confirm & Sync Pulse Log (Mode 1) ────────────────────────────────────
     const confirmLog = useCallback(async () => {
@@ -599,13 +602,17 @@ export default function AuraPulseBot({ user }) {
                             {isNearLimit && <p className={`text-[9px] font-bold text-right mb-1 ${inputLength >= MAX_INPUT ? 'text-red-500' : 'text-amber-500'}`}>{inputLength} / {MAX_INPUT}</p>}
                             <div className={`flex items-center gap-2 bg-slate-50 rounded-full pl-5 pr-3 py-3 border transition-all ${loading || isSending ? 'opacity-60 border-slate-200' : `border-slate-200 focus-within:border-${isAnonymous ? 'purple' : 'indigo'}-500`}`}>
                                 <input
-                                    ref={inputRef} type="text" value={input}
+                                    ref={inputRef} 
+                                    type="text" 
+                                    value={input}
                                     onChange={e => setInput(e.target.value.slice(0, MAX_INPUT))}
                                     onKeyDown={handleKeyDown}
                                     placeholder={loading || isSending ? 'AURA is processing...' : 'Type a message or request...'}
                                     className="flex-1 bg-transparent text-sm text-slate-700 outline-none placeholder:text-slate-400 disabled:cursor-not-allowed"
                                     disabled={loading || isSending || !isOnline}
-                                    autoComplete="off" spellCheck maxLength={MAX_INPUT}
+                                    autoComplete="off" 
+                                    spellCheck 
+                                    maxLength={MAX_INPUT}
                                 />
                                 <button onClick={handleSend} disabled={!input.trim() || loading || isSending || !isOnline} className={`p-2 rounded-full transition-all active:scale-90 disabled:opacity-30 ${isAnonymous ? 'text-purple-600 hover:bg-purple-50' : 'text-indigo-600 hover:bg-indigo-50'}`}>
                                     <Send size={17} />
