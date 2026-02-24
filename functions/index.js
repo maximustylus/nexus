@@ -510,6 +510,10 @@ exports.scheduledPulseNudge = onSchedule({
                 title: 'Social Battery ⚡ Check',
                 body: 'Take 30 seconds to log your Energy and Focus levels with AURA Pulse!',
             },
+            data: {
+            click_action: 'FLUTTER_NOTIFICATION_CLICK', 
+            target_tab: 'pulse', 
+    },
             tokens: tokens, 
         };
 
