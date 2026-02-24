@@ -4,7 +4,6 @@ import { getFunctions, httpsCallable } from 'firebase/functions';
 import { doc, setDoc, getDoc, updateDoc, arrayUnion } from 'firebase/firestore';
 import { X, Send, BrainCircuit, Shield, Ghost, Users, Zap, RefreshCw, AlertTriangle, WifiOff, FileText, CheckCircle, Database } from 'lucide-react';
 import { useNexus } from '../context/NexusContext';
-const { isDemo, auraHistory, setAuraHistory } = useNexus();
 
 // ─── CLOUD FUNCTION LINK ──────────────────────────────────────────────────────
 const functions = getFunctions(undefined, 'us-central1');
@@ -45,7 +44,7 @@ const SEND_COOLDOWN_MS = 2000;
 // COMPONENT
 // =============================================================================
 export default function AuraPulseBot({ user }) {
-    const { isDemo } = useNexus();
+    const { isDemo, auraHistory, setAuraHistory } = useNexus();
 
     // ── State ─────────────────────────────────────────────────────────────────
     const [isOpen, setIsOpen] = useState(false);
@@ -65,7 +64,6 @@ export default function AuraPulseBot({ user }) {
     const inputRef       = useRef(null);
     const lastSendRef    = useRef(0);
     const timeoutsRef    = useRef([]);
-
     const safeTimeout = useCallback((fn, ms) => {
         const id = setTimeout(fn, ms);
         timeoutsRef.current.push(id);
