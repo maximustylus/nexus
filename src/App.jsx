@@ -58,6 +58,7 @@ const CUSTOM_DOMAIN_ORDER = ['MANAGEMENT', 'CLINICAL', 'RESEARCH', 'EDUCATION'];
 function NexusApp() {
   // --- HOOKS ---
   const { isDemo, toggleDemo } = useNexus(); 
+  const { setActiveTab } = useNexus();
 
 // --- UI STATE (SMART THEME) ---
   const [currentView, setCurrentView] = useState('dashboard');
