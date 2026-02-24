@@ -58,7 +58,6 @@ const CUSTOM_DOMAIN_ORDER = ['MANAGEMENT', 'CLINICAL', 'RESEARCH', 'EDUCATION'];
 function NexusApp() {
   // --- HOOKS ---
   const { isDemo, toggleDemo } = useNexus(); 
-  const [activeTab, setActiveTab] = useState('pulse');
   
 // --- UI STATE (SMART THEME) ---
   const [currentView, setCurrentView] = useState('dashboard');
@@ -239,8 +238,9 @@ function NexusApp() {
         if (event.data?.type === 'NAVIGATE_TO_PULSE') {
           console.log('[NEXUS] Deep Link Triggered: Routing to Pulse');
           
-          if (typeof setActiveTab === 'function') {
-            setActiveTab('pulse'); 
+          // 🛡️ THE FIX: Use setCurrentView instead of setActiveTab
+          if (typeof setCurrentView === 'function') {
+            setCurrentView('pulse'); 
           }
         }
       };
@@ -254,7 +254,7 @@ function NexusApp() {
     }
 
     return () => unsubscribe();
-  }, [setActiveTab]);
+  }, [setCurrentView]);
   
   // --- HELPERS & TRANSFORMERS ---
 
