@@ -2,7 +2,6 @@ import React, { useState, useEffect, useRef } from 'react';
 import AppGuide from './components/AppGuide';
 import FeedbackWidget from './components/FeedbackWidget';
 import { getMessaging, onMessage } from "firebase/messaging";
-import { useNexus } from './context/NexusContext';
 import { createPortal } from 'react-dom';
 import { db, auth } from './firebase';
 import { collection, onSnapshot, doc } from 'firebase/firestore';
