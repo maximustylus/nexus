@@ -92,19 +92,17 @@ function NexusApp() {
   useEffect(() => {
     const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
     const handleChange = (e) => {
-      // Don't auto-switch if the user has explicitly chosen a theme!
       if (!localStorage.getItem('nexus_theme')) {
         setIsDark(e.matches);
       }
     };
     mediaQuery.addEventListener('change', handleChange);
-    
     return () => mediaQuery.removeEventListener('change', handleChange);
   }, []);
   
   // 4. Manual Toggle (Bulletproof Override using previous state)
   const toggleTheme = () => { 
-      setIsDark(prevDark => !prevDark); 
+        setIsDark(!isDark); 
   };
 
   // 5. App Guide Pop-up
@@ -717,7 +715,7 @@ const CustomBarTooltip = ({ active, payload, label }) => {
           </div>
 
           {/* Theme Toggle */}
-          <button onClick={toggleTheme} className="p-2 rounded-full hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors text-slate-600 dark:text-slate-300 border border-transparent hover:border-slate-200">
+          <button onClick={toggleTheme} className="p-2 rounded-full transition-all text-slate-600 dark:text-slate-300 active:scale-95 active:bg-slate-200 dark:active:bg-slate-700 sm:hover:bg-slate-100 dark:sm:hover:bg-slate-700 border border-transparent sm:hover:border-slate-200">
             {isDark ? <Sun size={18} /> : <Moon size={18} />}
           </button>
           
