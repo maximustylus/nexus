@@ -421,46 +421,77 @@ export default function AuraPulseBot({ user }) {
                                 </div>
                             </div>
                         ) : (
-            <div className="whitespace-pre-wrap">{m.text}</div>
+                            <div className="space-y-4">
+                                {messages.map((m, i) => {
+                                    // 🛡️ TRI-MODE UI STYLING
+                                    const isAssistant = m.mode === 'ASSISTANT';
+                                    const isDataEntry = m.mode === 'DATA_ENTRY';
+                                    const bubbleStyle = m.role === 'user' 
+                                        ? (isAnonymous ? 'bg-purple-600 text-white rounded-tr-none' : 'bg-indigo-600 text-white rounded-tr-none')
+                                        : m.isError 
+                                            ? 'bg-red-50 text-red-600 rounded-tl-none border border-red-200'
+                                            : isDataEntry
+                                                ? 'bg-slate-900 text-emerald-50 rounded-tl-none border border-emerald-900 shadow-lg'
+                                                : isAssistant 
+                                                    ? 'bg-slate-800 text-blue-50 rounded-tl-none border border-slate-700 shadow-lg'
+                                                    : 'bg-white text-slate-700 rounded-tl-none border border-slate-100 shadow-sm';
 
-                        {/* 🛡️ NEW: QUICK REPLY BUTTONS FOR GREETING */}
-                        {m.isGreeting && m.role === 'bot' && (
-                            <div className="mt-4 flex flex-col gap-2">
-                                <div className="grid grid-cols-2 gap-2">
-                                    <button 
-                                        onClick={() => handleSend('I need a wellbeing check-in.')}
-                                        disabled={loading}
-                                        className="py-2 px-3 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 text-[11px] font-bold rounded-xl transition-colors flex flex-col items-center justify-center gap-1 border border-indigo-200"
-                                    >
-                                        <span className="text-sm"> </span> Wellbeing
-                                    </button>
-                                    <button 
-                                        onClick={() => handleSend('I need help with administrative tasks.')}
-                                        disabled={loading}
-                                        className="py-2 px-3 bg-blue-50 hover:bg-blue-100 text-blue-700 text-[11px] font-bold rounded-xl transition-colors flex flex-col items-center justify-center gap-1 border border-blue-200"
-                                    >
-                                        <span className="text-sm"> </span> Administrative
-                                    </button>
-                                </div>
-                                
-                                {/* Only show the Anonymous button if they aren't already Anonymous */}
-                                {!isAnonymous && (
-                                    <button 
-                                        onClick={() => startSession(PERSONAS.find(p => p.id === 'anon'))}
-                                        disabled={loading}
-                                        className="w-full mt-1 py-2 bg-slate-100 hover:bg-slate-200 text-slate-600 text-[10px] font-bold uppercase tracking-widest rounded-xl transition-colors flex items-center justify-center gap-2 border border-slate-200"
-                                    >
-                                        <Ghost size={12} /> Go Anonymous
-                                    </button>
-                                )}
-                            </div>
-                        )}
-                        
-                        {/* 🛡️ ASSISTANT: Save Document Button */}
-                        {isAssistant && m.action && !m.isGreeting && (
+                                    return (
+                                        <div key={i} className={`flex ${m.role === 'bot' ? 'justify-start' : 'justify-end'} animate-in fade-in slide-in-from-bottom-1`}>
+                                            <div className={`max-w-[87%] px-4 py-3.5 rounded-[1.5rem] text-sm leading-relaxed ${bubbleStyle}`}>
+                                                
+                                                {/* Assistant Badge */}
+                                                {isAssistant && m.role === 'bot' && !m.isGreeting && (
+                                                    <div className="flex items-center gap-1.5 mb-2 text-[10px] font-black uppercase tracking-widest text-blue-400">
+                                                        <FileText size={12} /> Operations Assist
+                                                    </div>
+                                                )}
+                                                {/* Data Entry Badge */}
+                                                {isDataEntry && m.role === 'bot' && !m.isGreeting && (
+                                                    <div className="flex items-center gap-1.5 mb-2 text-[10px] font-black uppercase tracking-widest text-emerald-400">
+                                                        <Database size={12} /> Database Agent
+                                                    </div>
+                                                )}
+
+                                                {m.isError && <AlertTriangle size={13} className="inline mr-1.5 mb-0.5 text-red-500" />}
+                                                
+                                                <div className="whitespace-pre-wrap">{m.text}</div>
+
+                                                {/* 🛡️ NEW: QUICK REPLY BUTTONS FOR GREETING */}
+                                                {m.isGreeting && m.role === 'bot' && (
+                                                    <div className="mt-4 flex flex-col gap-2">
+                                                        <div className="grid grid-cols-2 gap-2">
+                                                            <button 
+                                                                onClick={() => handleSend('I need a wellbeing check-in.')}
+                                                                disabled={loading}
+                                                                className="py-2 px-3 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 text-[11px] font-bold rounded-xl transition-colors flex flex-col items-center justify-center gap-1 border border-indigo-200"
+                                                            >
+                                                                <span className="text-sm">💚</span> Wellbeing
+                                                            </button>
+                                                            <button 
+                                                                onClick={() => handleSend('I need help with administrative tasks.')}
+                                                                disabled={loading}
+                                                                className="py-2 px-3 bg-blue-50 hover:bg-blue-100 text-blue-700 text-[11px] font-bold rounded-xl transition-colors flex flex-col items-center justify-center gap-1 border border-blue-200"
+                                                            >
+                                                                <span className="text-sm">📁</span> Administrative
+                                                            </button>
+                                                        </div>
+                                                        
+                                                        {/* Only show the Anonymous button if they aren't already Anonymous */}
+                                                        {!isAnonymous && (
+                                                            <button 
+                                                                onClick={() => startSession(PERSONAS.find(p => p.id === 'anon'))}
+                                                                disabled={loading}
+                                                                className="w-full mt-1 py-2 bg-slate-100 hover:bg-slate-200 text-slate-600 text-[10px] font-bold uppercase tracking-widest rounded-xl transition-colors flex items-center justify-center gap-2 border border-slate-200"
+                                                            >
+                                                                <Ghost size={12} /> Go Anonymous
+                                                            </button>
+                                                        )}
+                                                    </div>
+                                                )}
 
                                                 {/* 🛡️ ASSISTANT: Save Document Button */}
-                                                {isAssistant && m.action && (
+                                                {isAssistant && m.action && !m.isGreeting && (
                                                     <div className="mt-4 pt-3 border-t border-slate-600/50">
                                                         <p className="text-[10px] font-medium text-slate-400 mb-2 uppercase tracking-wide">Extracted Data/Action:</p>
                                                         <p className="text-xs text-blue-200 bg-slate-900/50 p-2 rounded-lg mb-3 border border-slate-700 font-mono">{m.action}</p>
@@ -476,7 +507,7 @@ export default function AuraPulseBot({ user }) {
                                                 )}
 
                                                 {/* 🛡️ DATA ENTRY: Commit Workload Button */}
-                                                {isDataEntry && m.db_workload && m.role === 'bot' && (
+                                                {isDataEntry && m.db_workload && m.role === 'bot' && !m.isGreeting && (
                                                     <div className="mt-4 pt-3 border-t border-emerald-900/50">
                                                         <p className="text-[10px] font-bold text-emerald-400 mb-2 uppercase tracking-widest flex items-center gap-1">
                                                             <Zap size={12} /> Pending Workload Transaction
@@ -591,4 +622,3 @@ export default function AuraPulseBot({ user }) {
             </button>
         </div>
     );
-}
