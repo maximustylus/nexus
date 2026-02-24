@@ -2,10 +2,9 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { db } from '../firebase'; 
 import { getFunctions, httpsCallable } from 'firebase/functions';
 import { doc, setDoc, getDoc, updateDoc, arrayUnion } from 'firebase/firestore';
-import { 
-    X, Send, BrainCircuit, Shield, Ghost, Users, Zap, RefreshCw, AlertTriangle, WifiOff, FileText, CheckCircle, Database
-} from 'lucide-react';
+import { X, Send, BrainCircuit, Shield, Ghost, Users, Zap, RefreshCw, AlertTriangle, WifiOff, FileText, CheckCircle, Database } from 'lucide-react';
 import { useNexus } from '../context/NexusContext';
+const { isDemo, auraHistory, setAuraHistory } = useNexus();
 
 // ─── CLOUD FUNCTION LINK ──────────────────────────────────────────────────────
 const functions = getFunctions(undefined, 'us-central1');
@@ -51,14 +50,15 @@ export default function AuraPulseBot({ user }) {
     // ── State ─────────────────────────────────────────────────────────────────
     const [isOpen, setIsOpen] = useState(false);
     const [view,            setView]            = useState('SELECT');
-    const [selectedPersona, setSelectedPersona] = useState(null);
-    const [messages,        setMessages]        = useState([]);
+    const [selectedPersona, setSelectedPersona] = useState(null); 
     const [input,           setInput]           = useState('');
     const [loading,         setLoading]         = useState(false);
     const [isSending,       setIsSending]       = useState(false);
     const [pendingLog,      setPendingLog]      = useState(null);
     const [isOnline,        setIsOnline]        = useState(navigator.onLine);
     const [liveMemory,      setLiveMemory]      = useState(null);
+    const messages = auraHistory;
+    const setMessages = setAuraHistory;   
 
     // ── Refs ──────────────────────────────────────────────────────────────────
     const messagesEndRef = useRef(null);
@@ -99,11 +99,12 @@ export default function AuraPulseBot({ user }) {
         if (isDemo) {
             greeting = isAnon
                 ? '🔒 Ghost Protocol engaged. Your identity is masked. How can I support you today?'
-                : `[SIMULATION] Hello ${persona.name}. I am ready to assist. Do you need a wellbeing check-in, or help with operational data today?`;
+                : `[SIMULATION] Hi ${persona.name}. AURA here. What kind of support do you need today?`;
         } else if (persona.memory) {
             greeting = `Welcome back, ${(user?.name ?? 'there').split(' ')[0]}. Last time we spoke, I noted: "${persona.memory}". How can I support your workflow or wellbeing today?`;
         } else {
-            greeting = `Hello ${(user?.name ?? 'there').split(' ')[0]}. AURA is active. What kind of support do you need today? We can do our usual wellbeing check-in, or I can execute database workloads and draft ops memos.`;
+            // 🛡️ THE NEW PUNCHY GREETING
+            greeting = `Hi ${(user?.name ?? 'there').split(' ')[0]}. AURA here. What kind of support do you need today?`;
         }
 
         setMessages([{ role: 'bot', text: greeting, isGreeting: true, mode: 'NEUTRAL' }]);
@@ -141,8 +142,11 @@ export default function AuraPulseBot({ user }) {
     }, [isOpen, isDemo, user, view, startSession]);
 
     // ── Send handler ──────────────────────────────────────────────────────────
-    const handleSend = useCallback(async () => {
-        const text = input.trim().slice(0, MAX_INPUT);
+    const handleSend = useCallback(async (overrideText = null) => {
+        // Read from the button click OR the typing input
+        const rawText = typeof overrideText === 'string' ? overrideText : input;
+        const text = rawText.trim().slice(0, MAX_INPUT);
+        
         if (!text || loading || isSending || !isOnline) return;
 
         const now = Date.now();
@@ -151,7 +155,7 @@ export default function AuraPulseBot({ user }) {
 
         setIsSending(true);
         setMessages(prev => [...prev, { role: 'user', text }]);
-        setInput('');
+        if (typeof overrideText !== 'string') setInput('');
         setLoading(true);
         setPendingLog(null);
 
@@ -417,42 +421,43 @@ export default function AuraPulseBot({ user }) {
                                 </div>
                             </div>
                         ) : (
-                            <div className="space-y-4">
-                                {messages.map((m, i) => {
-                                    // 🛡️ TRI-MODE UI STYLING
-                                    const isAssistant = m.mode === 'ASSISTANT';
-                                    const isDataEntry = m.mode === 'DATA_ENTRY';
-                                    
-                                    const bubbleStyle = m.role === 'user' 
-                                        ? (isAnonymous ? 'bg-purple-600 text-white rounded-tr-none' : 'bg-indigo-600 text-white rounded-tr-none')
-                                        : m.isError 
-                                            ? 'bg-red-50 text-red-600 rounded-tl-none border border-red-200'
-                                            : isDataEntry
-                                                ? 'bg-slate-900 text-emerald-50 rounded-tl-none border border-emerald-900 shadow-lg' // DB Style
-                                                : isAssistant 
-                                                    ? 'bg-slate-800 text-blue-50 rounded-tl-none border border-slate-700 shadow-lg' // Admin Style
-                                                    : 'bg-white text-slate-700 rounded-tl-none border border-slate-100 shadow-sm'; // Coach Style
+            <div className="whitespace-pre-wrap">{m.text}</div>
 
-                                    return (
-                                        <div key={i} className={`flex ${m.role === 'bot' ? 'justify-start' : 'justify-end'} animate-in fade-in slide-in-from-bottom-1`}>
-                                            <div className={`max-w-[87%] px-4 py-3.5 rounded-[1.5rem] text-sm leading-relaxed ${bubbleStyle}`}>
-                                                
-                                                {/* Assistant Badge */}
-                                                {isAssistant && m.role === 'bot' && !m.isGreeting && (
-                                                    <div className="flex items-center gap-1.5 mb-2 text-[10px] font-black uppercase tracking-widest text-blue-400">
-                                                        <FileText size={12} /> Operations Assist
-                                                    </div>
-                                                )}
-                                                {/* Data Entry Badge */}
-                                                {isDataEntry && m.role === 'bot' && !m.isGreeting && (
-                                                    <div className="flex items-center gap-1.5 mb-2 text-[10px] font-black uppercase tracking-widest text-emerald-400">
-                                                        <Database size={12} /> Database Agent
-                                                    </div>
-                                                )}
-
-                                                {m.isError && <AlertTriangle size={13} className="inline mr-1.5 mb-0.5 text-red-500" />}
-                                                
-                                                <div className="whitespace-pre-wrap">{m.text}</div>
+                        {/* 🛡️ NEW: QUICK REPLY BUTTONS FOR GREETING */}
+                        {m.isGreeting && m.role === 'bot' && (
+                            <div className="mt-4 flex flex-col gap-2">
+                                <div className="grid grid-cols-2 gap-2">
+                                    <button 
+                                        onClick={() => handleSend('I need a wellbeing check-in.')}
+                                        disabled={loading}
+                                        className="py-2 px-3 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 text-[11px] font-bold rounded-xl transition-colors flex flex-col items-center justify-center gap-1 border border-indigo-200"
+                                    >
+                                        <span className="text-sm"> </span> Wellbeing
+                                    </button>
+                                    <button 
+                                        onClick={() => handleSend('I need help with administrative tasks.')}
+                                        disabled={loading}
+                                        className="py-2 px-3 bg-blue-50 hover:bg-blue-100 text-blue-700 text-[11px] font-bold rounded-xl transition-colors flex flex-col items-center justify-center gap-1 border border-blue-200"
+                                    >
+                                        <span className="text-sm"> </span> Administrative
+                                    </button>
+                                </div>
+                                
+                                {/* Only show the Anonymous button if they aren't already Anonymous */}
+                                {!isAnonymous && (
+                                    <button 
+                                        onClick={() => startSession(PERSONAS.find(p => p.id === 'anon'))}
+                                        disabled={loading}
+                                        className="w-full mt-1 py-2 bg-slate-100 hover:bg-slate-200 text-slate-600 text-[10px] font-bold uppercase tracking-widest rounded-xl transition-colors flex items-center justify-center gap-2 border border-slate-200"
+                                    >
+                                        <Ghost size={12} /> Go Anonymous
+                                    </button>
+                                )}
+                            </div>
+                        )}
+                        
+                        {/* 🛡️ ASSISTANT: Save Document Button */}
+                        {isAssistant && m.action && !m.isGreeting && (
 
                                                 {/* 🛡️ ASSISTANT: Save Document Button */}
                                                 {isAssistant && m.action && (
