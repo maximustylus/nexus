@@ -5,7 +5,8 @@ import {
     createUserWithEmailAndPassword, 
     updateProfile, 
     signOut,
-    sendPasswordResetEmail // 👈 ADDED RESET IMPORT
+    sendPasswordResetEmail,
+    sendEmailVerification // 🛡️ ADDED: Secure Email Verification
 } from 'firebase/auth';
 import { 
     Sun, Moon, ArrowRight, Activity, ShieldCheck, 
@@ -32,7 +33,7 @@ const WelcomeScreen = (props) => {
     const [password, setPassword] = useState('');
     const [name, setName] = useState('');
     const [error, setError] = useState('');
-    const [message, setMessage] = useState(''); // 👈 ADDED MESSAGE STATE
+    const [message, setMessage] = useState(''); 
     const [loading, setLoading] = useState(false);
 
     // --- 1. THEME & INITIALIZATION ---
@@ -76,34 +77,69 @@ const WelcomeScreen = (props) => {
         setLoading(true);
         
         try {
+            // 🛡️ SECURITY LAYER 1: STRICT DOMAIN CHECK
+            if (!email.toLowerCase().endsWith('@kkh.com.sg')) {
+                throw new Error("ACCESS DENIED: Only @kkh.com.sg emails are authorized for NEXUS.");
+            }
+
+            // 🛡️ SECURITY LAYER 2: WHITELIST CHECK
             const authorizedUser = checkAccess(email);
             if (!authorizedUser) {
-                throw new Error("ACCESS DENIED: Your email is not on the authorized team list.");
+                throw new Error("ACCESS DENIED: Email is not registered on the official team roster.");
             }
 
             if (isLoginMode) {
-                await signInWithEmailAndPassword(auth, email, password);
+                // --- SIGN IN FLOW ---
+                const userCredential = await signInWithEmailAndPassword(auth, email, password);
+                
+                // 🛡️ SECURITY LAYER 3: EMAIL VERIFICATION GUARD
+                if (!userCredential.user.emailVerified) {
+                    await signOut(auth); // Boot them out immediately
+                    throw new Error("VERIFICATION REQUIRED: Please check your KKH inbox and click the verification link before logging in.");
+                }
+
+                // If verified, let them in!
                 if (onAuthSuccess) onAuthSuccess(authorizedUser);
+
             } else {
+                // --- SIGN UP FLOW ---
                 if (!name) throw new Error("Please enter your full name.");
                 if (password.length < 6) throw new Error("Password must be 6+ characters.");
                 
+                // 1. Create the account in Firebase
                 const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+                
+                // 2. Add their Display Name
                 await updateProfile(userCredential.user, { displayName: name });
                 
-                if (onAuthSuccess) onAuthSuccess(authorizedUser);
+                // 3. 🛡️ TRANSMIT THE VERIFICATION LINK
+                await sendEmailVerification(userCredential.user);
+                
+                // 4. Kick them out so they MUST verify
+                await signOut(auth);
+                
+                // 5. Update UI
+                setMessage("PROFILE CREATED. PLEASE CHECK YOUR KKH INBOX TO VERIFY YOUR EMAIL.");
+                setIsLoginMode(true); // Switch back to login view
+                setPassword(''); // Clear password field for safety
             }
         } catch (err) {
             console.error("Auth Exception:", err);
-            if (auth.currentUser) await signOut(auth);
-            const cleanError = err.message.replace('Firebase:', '').replace('Error (auth/', '').replace(').', '').trim();
+            // Ensure we boot them if something went wrong mid-process
+            if (auth.currentUser) await signOut(auth); 
+            
+            // Clean up the error message for the UI
+            let cleanError = err.message;
+            if (err.code === 'auth/email-already-in-use') cleanError = "ACCOUNT ALREADY EXISTS. PLEASE SIGN IN.";
+            else if (err.code === 'auth/wrong-password' || err.code === 'auth/user-not-found' || err.code === 'auth/invalid-credential') cleanError = "INVALID CREDENTIALS PROVIDED.";
+            else cleanError = cleanError.replace('Firebase:', '').replace('Error (auth/', '').replace(').', '').trim();
+            
             setError(cleanError.toUpperCase());
         } finally {
             setLoading(false);
         }
     };
 
-    // 👈 ADDED RESET PASSWORD HANDLER
     const handleResetPassword = async (e) => {
         e.preventDefault();
         if (!email) {
@@ -156,7 +192,6 @@ const WelcomeScreen = (props) => {
         }
     ];
 
-    // 👈 ADDED 'RESET' TO SPLIT VIEW TRIGGER
     const isSplitView = view === 'AUTH' || view === 'ORG_REGISTER' || view === 'RESET';
 
     return (
@@ -306,7 +341,6 @@ const WelcomeScreen = (props) => {
                                     </div>
                                 )}
 
-                                {/* 👈 ADDED SUCCESS MESSAGE UI */}
                                 {message && (
                                     <div className="mb-6 p-3 bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-100 dark:border-emerald-800/50 text-emerald-600 dark:text-emerald-400 text-[10px] font-bold rounded-xl flex gap-3 items-start">
                                         <CheckCircle2 size={16} className="shrink-0 mt-0.5"/> 
@@ -339,7 +373,6 @@ const WelcomeScreen = (props) => {
                                     </div>
                                     
                                     <div className="relative group">
-                                        {/* 👈 ADDED FORGOT PASSWORD LINK */}
                                         {isLoginMode && (
                                             <div className="flex justify-end mb-1">
                                                 <button 
@@ -373,7 +406,7 @@ const WelcomeScreen = (props) => {
 
                                 <div className="mt-8 text-center pt-6 border-t border-slate-200 dark:border-slate-800">
                                     <button 
-                                        onClick={() => { setIsLoginMode(!isLoginMode); setError(''); }} 
+                                        onClick={() => { setIsLoginMode(!isLoginMode); setError(''); setMessage(''); }} 
                                         className="text-[10px] font-black text-slate-500 hover:text-indigo-600 dark:hover:text-indigo-400 uppercase tracking-widest transition-colors"
                                     >
                                         {isLoginMode ? "New to NEXUS? Request Access" : "Have credentials? Sign in"}
@@ -382,7 +415,7 @@ const WelcomeScreen = (props) => {
                             </div>
                         )}
 
-                        {/* --- 👈 NEW VIEW: RESET PASSWORD --- */}
+                        {/* --- VIEW: RESET PASSWORD --- */}
                         {view === 'RESET' && (
                             <div className="w-full max-w-sm mx-auto animate-in slide-in-from-right duration-500 fade-in text-center">
                                 <button onClick={() => setView('AUTH')} className="mb-8 text-slate-400 hover:text-indigo-500 flex items-center gap-2 text-[10px] font-black uppercase tracking-widest transition-colors group">
@@ -402,6 +435,13 @@ const WelcomeScreen = (props) => {
                                     <div className="mb-6 p-3 bg-red-50 dark:bg-red-900/20 border border-red-100 dark:border-red-800/50 text-red-600 dark:text-red-400 text-[10px] font-bold rounded-xl flex gap-3 items-start animate-shake text-left">
                                         <AlertCircle size={16} className="shrink-0 mt-0.5"/> 
                                         <span>{error}</span>
+                                    </div>
+                                )}
+
+                                {message && (
+                                    <div className="mb-6 p-3 bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-100 dark:border-emerald-800/50 text-emerald-600 dark:text-emerald-400 text-[10px] font-bold rounded-xl flex gap-3 items-start text-left">
+                                        <CheckCircle2 size={16} className="shrink-0 mt-0.5"/> 
+                                        <span>{message}</span>
                                     </div>
                                 )}
 
