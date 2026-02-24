@@ -1,18 +1,16 @@
-import { createPortal } from 'react-dom';
 import React, { useState, useEffect, useRef } from 'react';
 import AppGuide from './components/AppGuide';
 import FeedbackWidget from './components/FeedbackWidget';
+import { getMessaging, onMessage } from "firebase/messaging";
+import { useNexus } from './context/NexusContext';
+import { createPortal } from 'react-dom';
 import { db, auth } from './firebase';
 import { collection, onSnapshot, doc } from 'firebase/firestore';
 import { signOut } from 'firebase/auth';
-import { 
-  BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, 
-  Tooltip, ResponsiveContainer, Cell, PieChart, Pie, Legend, ReferenceLine 
-} from 'recharts';
-import { 
-  Sun, Moon, LogOut, LayoutDashboard, Archive, 
-  Calendar, Activity, Filter, ShieldAlert, BookOpen 
-} from 'lucide-react';
+import { BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, 
+  Tooltip, ResponsiveContainer, Cell, PieChart, Pie, Legend, ReferenceLine } from 'recharts';
+import { Sun, Moon, LogOut, LayoutDashboard, Archive, 
+  Calendar, Activity, Filter, ShieldAlert, BookOpen } from 'lucide-react';
 
 // --- CONTEXT & DATA STRATEGY ---
 import { NexusProvider, useNexus } from './context/NexusContext';
@@ -224,6 +222,39 @@ function NexusApp() {
     };
     // CRITICAL: Ensure all these are in the array!
   }, [isDemo, currentView, archiveYear, activeStaffList, activeStaffIds, user]);
+
+// --- NEXUS NOTIFICATION & DEEP LINK HANDLER ---
+  useEffect(() => {
+    // 1. Initialize Messaging
+    const messaging = getMessaging();
+
+    // 2. Handle Foreground Notifications (App is active)
+    const unsubscribe = onMessage(messaging, (payload) => {
+      console.log('[NEXUS] Foreground Nudge Received:', payload);
+    });
+
+    // 3. Handle Notification Clicks (App opened from tray)
+    if ('serviceWorker' in navigator) {
+      const handleServiceWorkerMessage = (event) => {
+        if (event.data?.type === 'NAVIGATE_TO_PULSE') {
+          console.log('[NEXUS] Deep Link Triggered: Routing to Pulse');
+          
+          if (typeof setActiveTab === 'function') {
+            setActiveTab('pulse'); 
+          }
+        }
+      };
+
+      navigator.serviceWorker.addEventListener('message', handleServiceWorkerMessage);
+      
+      return () => {
+        unsubscribe();
+        navigator.serviceWorker.removeEventListener('message', handleServiceWorkerMessage);
+      };
+    }
+
+    return () => unsubscribe();
+  }, [setActiveTab]);
   
   // --- HELPERS & TRANSFORMERS ---
 
