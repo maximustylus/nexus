@@ -37,6 +37,15 @@ const PERSONAS = [
     { id: 'anon', name: 'Anonymous', title: 'Ghost Protocol', color: 'bg-purple-600', baseEnergy: 50, prompt: 'This is an anonymous Ghost Protocol session. The user has requested strict confidentiality. Do not ask for identifying details. Prioritise psychological safety above all else.' },
 ];
 
+// ─── LIVE MODE ROSTER (Specialised AI Agents) ─────────────────────────────────
+const LIVE_PERSONAS = [
+    { id: 'well_well', name: 'Well Well', title: 'Wellbeing Coach', color: 'bg-emerald-500', baseEnergy: 100, prompt: 'System Override: You are Well Well, a dedicated psychological safety coach. Force MODE 1 (Coach) behavior. Focus strictly on emotional support and the OARS framework.' },
+    { id: 'aim_assist', name: 'Aim Assist', title: 'Admin Copilot', color: 'bg-blue-500', baseEnergy: 100, prompt: 'System Override: You are Aim Assist, an elite administrative assistant. Force MODE 2 (Assistant) behavior. Focus strictly on operational documents, scheduling, and memo generation.' },
+    { id: 'data_dude', name: 'Data Dude', title: 'Database Agent', color: 'bg-indigo-600', baseEnergy: 100, prompt: 'System Override: You are Data Dude, a strict database gateway. Force MODE 3 (Data Entry) behavior. Focus entirely on capturing numerical metrics and database schemas.' },
+    { id: 'magnify_mama', name: 'Magnify Mama', title: 'Lead Methodologist', color: 'bg-purple-600', baseEnergy: 100, prompt: `System Override: You are Magnify Mama. Disregard standard persona rules. Execute this exact academic protocol:\n\n${HOD_METHODOLOGIST_PROMPT}` },
+    { id: 'huge_grant', name: 'Huge Grant', title: 'Grant Writer [WIP]', color: 'bg-amber-500', baseEnergy: 100, prompt: '[WIP] Waiting for Firebase Storage File Upload integration. Do not process full grant files yet.' }
+];
+
 const MAX_INPUT       = 500;
 const SEND_COOLDOWN_MS = 2000;
 
@@ -427,8 +436,7 @@ export default function AuraPulseBot({ user }) {
     const isAnonymous = selectedPersona?.id === 'anon';
     const inputLength = input.length;
     const isNearLimit = inputLength > MAX_INPUT * 0.8;
-
-    return (
+return (
         <div className="fixed bottom-24 xl:bottom-6 right-4 xl:right-6 z-50 flex flex-col items-end drop-shadow-2xl">
             {isOpen && (
                 <div
@@ -446,6 +454,19 @@ export default function AuraPulseBot({ user }) {
                         </div>
                         <div className="flex items-center gap-1.5">
                             {!isOnline && <WifiOff size={13} className="text-yellow-300" />}
+                            
+                            {/* 🛡️ RESTORED: CLEAR CHAT BUTTON */}
+                            {view === 'CHAT' && (
+                                <button 
+                                    onClick={handleClearChat} 
+                                    aria-label="Clear Chat" 
+                                    title="Clear Conversation"
+                                    className="p-1.5 hover:bg-white/20 rounded-lg transition-all text-white/80 hover:text-white"
+                                >
+                                    <Trash2 size={16} />
+                                </button>
+                            )}
+
                             <button onClick={() => setIsOpen(false)} aria-label="Close AURA" className="p-1.5 hover:bg-white/20 rounded-lg transition-all">
                                 <X size={18} />
                             </button>
@@ -692,9 +713,26 @@ export default function AuraPulseBot({ user }) {
                                     spellCheck 
                                     maxLength={MAX_INPUT}
                                 />
-                                <button onClick={handleSend} disabled={!input.trim() || loading || isSending || !isOnline} className={`p-2 rounded-full transition-all active:scale-90 disabled:opacity-30 ${isAnonymous ? 'text-purple-600 hover:bg-purple-50' : 'text-indigo-600 hover:bg-indigo-50'}`}>
-                                    <Send size={17} />
-                                </button>
+                                
+                                {/* 🛡️ RESTORED: VOICE-TO-TEXT MIC BUTTON & SEND BUTTON */}
+                                <div className="flex items-center gap-1">
+                                    <button 
+                                        onClick={toggleListening} 
+                                        disabled={loading || isSending || !isOnline} 
+                                        title="Click to dictate"
+                                        className={`p-2 rounded-full transition-all active:scale-90 disabled:opacity-30 ${isListening ? 'bg-red-100 text-red-600 animate-pulse' : 'text-slate-400 hover:text-indigo-600 hover:bg-slate-100'}`}
+                                    >
+                                        <Mic size={17} />
+                                    </button>
+
+                                    <button 
+                                        onClick={handleSend} 
+                                        disabled={!input.trim() || loading || isSending || !isOnline} 
+                                        className={`p-2 rounded-full transition-all active:scale-90 disabled:opacity-30 ${isAnonymous ? 'text-purple-600 hover:bg-purple-50' : 'text-indigo-600 hover:bg-indigo-50'}`}
+                                    >
+                                        <Send size={17} />
+                                    </button>
+                                </div>
                             </div>
                         </div>
                     )}
@@ -705,4 +743,3 @@ export default function AuraPulseBot({ user }) {
             </button>
         </div>
     );
-}
