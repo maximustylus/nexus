@@ -1,3 +1,4 @@
+import { DEMO_PERSONAS, LIVE_PERSONAS } from '../config/personas';
 import { X, Send, BrainCircuit, Shield, Ghost, Users, Zap, RefreshCw, AlertTriangle, WifiOff, FileText, CheckCircle, Database, Trash2, Download } from 'lucide-react';
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { db } from '../firebase'; 
@@ -26,25 +27,6 @@ const clampEnergy = (phase, energy) => {
     if (!cfg) return Math.max(0, Math.min(100, energy));
     return Math.max(cfg.min, Math.min(cfg.max, energy));
 };
-
-// ─── PERSONAS ────────────────────────────────────────────────────────────────
-const PERSONAS = [
-    { id: 'peter', name: 'Peter', title: 'Junior Staff', color: 'bg-blue-500', baseEnergy: 65, prompt: 'Peter is a junior staff member: eager but overwhelmed by his clinical rotation workload. Struggling with pacing and documentation speed.' },
-    { id: 'steve', name: 'Steve', title: 'Senior Clinician', color: 'bg-indigo-500', baseEnergy: 55, prompt: 'Steve is a veteran senior clinician facing compassion fatigue from sustained high patient volume. He needs peer-level validation, not top-down advice.' },
-    { id: 'tony', name: 'Tony', title: 'Team Lead', color: 'bg-slate-700', baseEnergy: 42, prompt: 'Tony is a team lead under heavy strategic planning pressure. He is experiencing decision fatigue and struggling to delegate effectively.' },
-    { id: 'charles', name: 'Charles', title: 'Deptartment Head', color: 'bg-amber-600', baseEnergy: 38, prompt: 'Charles is a department head balancing compliance demands with dropping staff morale. He feels isolated at the top of decision-making.' },
-    { id: 'jean', name: 'Jean', title: 'Research Lead', color: 'bg-pink-600', baseEnergy: 48, prompt: 'Jean is a research lead under intense grant deadline pressure. Cognitive fatigue is building and her sleep hygiene has been disrupted by late writing sessions.' },
-    { id: 'anon', name: 'Anonymous', title: 'Ghost Protocol', color: 'bg-purple-600', baseEnergy: 50, prompt: 'This is an anonymous Ghost Protocol session. The user has requested strict confidentiality. Do not ask for identifying details. Prioritise psychological safety above all else.' },
-];
-
-// ─── LIVE MODE ROSTER (Specialised AI Agents) ─────────────────────────────────
-const LIVE_PERSONAS = [
-    { id: 'well_well', name: 'Well Well', title: 'Wellbeing Coach', color: 'bg-emerald-500', baseEnergy: 100, prompt: 'System Override: You are Well Well, a dedicated psychological safety coach. Force MODE 1 (Coach) behavior. Focus strictly on emotional support and the OARS framework.' },
-    { id: 'aim_assist', name: 'Aim Assist', title: 'Admin Copilot', color: 'bg-blue-500', baseEnergy: 100, prompt: 'System Override: You are Aim Assist, an elite administrative assistant. Force MODE 2 (Assistant) behavior. Focus strictly on operational documents, scheduling, and memo generation.' },
-    { id: 'data_dude', name: 'Data Dude', title: 'Database Agent', color: 'bg-indigo-600', baseEnergy: 100, prompt: 'System Override: You are Data Dude, a strict database gateway. Force MODE 3 (Data Entry) behavior. Focus entirely on capturing numerical metrics and database schemas.' },
-    { id: 'magnify_mama', name: 'Magnify Mama', title: 'Lead Methodologist', color: 'bg-purple-600', baseEnergy: 100, prompt: `System Override: You are Magnify Mama. Disregard standard persona rules. Execute this exact academic protocol:\n\n${HOD_METHODOLOGIST_PROMPT}` },
-    { id: 'huge_grant', name: 'Huge Grant', title: 'Grant Writer [WIP]', color: 'bg-amber-500', baseEnergy: 100, prompt: '[WIP] Waiting for Firebase Storage File Upload integration. Do not process full grant files yet.' }
-];
 
 const MAX_INPUT       = 500;
 const SEND_COOLDOWN_MS = 2000;
@@ -187,19 +169,19 @@ export default function AuraPulseBot({ user }) {
 
         if (isListening) {
             setIsListening(false);
-            return; // The API will automatically stop when we don't restart it
+            return;
         }
 
         const recognition = new SpeechRecognition();
-        recognition.continuous = false; // Stop listening after one sentence/pause
+        recognition.continuous = false;
         recognition.interimResults = false;
-        recognition.lang = 'en-SG'; // Tuned for Singapore/British English nuances
+        recognition.lang = 'en-SG';
 
         recognition.onstart = () => setIsListening(true);
         
         recognition.onresult = (event) => {
             const transcript = event.results[0][0].transcript;
-            // Append the spoken words to whatever is already in the text box
+
             setInput(prev => (prev + ' ' + transcript).trim().slice(0, MAX_INPUT));
         };
 
