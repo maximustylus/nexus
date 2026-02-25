@@ -337,17 +337,59 @@ export default function AuraPulseBot({ user }) {
 
         try {
             const collectionName = isDemo ? `demo_${workload.target_collection}` : workload.target_collection;
-            const docRef = doc(db, collectionName, workload.target_doc);
             
-            await setDoc(docRef, { 
-                [workload.target_field]: workload.target_value,
-                last_updated_by: user?.name || 'AURA System',
-                last_updated_at: new Date().toISOString()
-            }, { merge: true });
+            // 🛡️ SAFETY CHECK 1: Prevent null documents
+            if (!workload.target_doc || workload.target_doc === 'null') {
+                 throw new Error("Missing target document. Please ask AURA to clarify who this is for.");
+            }
+            const docRef = doc(db, collectionName, workload.target_doc);
+
+            let updatedMessage = '';
+
+            // 🛡️ SMART ARRAY HANDLING FOR STAFF LOADS
+            if (workload.target_collection === 'staff_loads') {
+                
+                // 🛡️ SAFETY CHECK 2: Force a valid month index
+                const monthIndex = parseInt(workload.target_month);
+                if (isNaN(monthIndex) || monthIndex < 0 || monthIndex > 11) {
+                    throw new Error("A valid month (e.g., January) is required to update personal workload.");
+                }
+
+                // 1. Fetch the existing 12-month array
+                const docSnap = await getDoc(docRef);
+                let currentData = Array(12).fill(0);
+                
+                if (docSnap.exists() && Array.isArray(docSnap.data().data)) {
+                    currentData = [...docSnap.data().data];
+                }
+
+                // 2. Update ONLY the targeted month (safely cast to a Number)
+                currentData[monthIndex] = Number(workload.target_value);
+
+                // 3. Save the array back to the database safely
+                await setDoc(docRef, {
+                    data: currentData,
+                    last_updated_by: user?.name || 'AURA System',
+                    last_updated_at: new Date().toISOString()
+                }, { merge: true });
+                
+                const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+                updatedMessage = `[staff_loads -> ${monthNames[monthIndex]}: ${workload.target_value}]`;
+
+            } else {
+                // STANDARD LOGIC: Flat field update (for monthly_workload)
+                await setDoc(docRef, {
+                    [workload.target_field]: Number(workload.target_value),
+                    last_updated_by: user?.name || 'AURA System',
+                    last_updated_at: new Date().toISOString()
+                }, { merge: true });
+                
+                updatedMessage = `[${workload.target_collection} -> ${workload.target_field}: ${workload.target_value}]`;
+            }
 
             setMessages(prev => [...prev, {
                 role: 'bot',
-                text: `✅ Database updated successfully. \n[${workload.target_collection} -> ${workload.target_field}: ${workload.target_value}]`,
+                text: `✅ Database updated successfully. \n${updatedMessage}`,
                 mode: 'DATA_ENTRY'
             }]);
 
@@ -355,7 +397,7 @@ export default function AuraPulseBot({ user }) {
             console.error('[AURA] Data Entry failed:', err);
             setMessages(prev => [...prev, {
                 role: 'bot',
-                text: '⚠️ Database write failed. Ensure you have the correct Firestore permissions.',
+                text: `⚠️ Write failed: ${err.message}`,
                 isError: true,
                 mode: 'DATA_ENTRY'
             }]);
@@ -363,7 +405,6 @@ export default function AuraPulseBot({ user }) {
             setLoading(false);
         }
     }, [isDemo, user]);
-
 
     const isAnonymous = selectedPersona?.id === 'anon';
     const inputLength = input.length;
