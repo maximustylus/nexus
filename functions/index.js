@@ -312,19 +312,17 @@ exports.chatWithAura = onCall({
     try {
         const modelName = await resolveModel();
         const url = `https://generativelanguage.googleapis.com/v1beta/${modelName}:generateContent?key=${API_KEY}`;
-
-        // 🛡️ THE PACING FIX: Changed from >= 2 to >= 4
-        // history length 0 = Turn 1. Length 2 = Turn 2. Length 4 = Turn 3.
         const turnIndex      = history.length;
         const diagnosisReady = turnIndex >= 4;
 
+        // 🛡️ THE FIX: Smart Pacing that respects the Active Mode
         const contextualMessage = [
             `USER ROLE: ${role}`,
             prompt ? `CONTEXT: ${prompt}` : '',
             `CONVERSATION TURN: ${Math.floor(turnIndex/2) + 1}`,
             diagnosisReady
-                ? 'INSTRUCTION: Sufficient context gathered. If the user has provided their fatigue score, provide full Phase/Energy/Action assessment now.'
-                : 'INSTRUCTION: Phase 1 active. Listen, validate, and use reflections. Ask one open question to gauge their RPE (0-10). Do not diagnose yet.',
+                ? 'INSTRUCTION: If in COACH mode, and sufficient context is gathered, provide full Phase/Energy/Action assessment now.'
+                : 'INSTRUCTION: If this is a Wellbeing check-in (COACH mode), Phase 1 is active: Listen, validate, and ask one open question to gauge their RPE (0-10). If this is an Admin (ASSISTANT) or Database (DATA_ENTRY) request, IGNORE the RPE rule and execute the task immediately.',
             `USER SAYS: "${userText.trim()}"`,
         ].filter(Boolean).join('\n');
 
