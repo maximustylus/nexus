@@ -75,21 +75,21 @@ export const TEAM_DIRECTORY = [
     title: 'CEP (JG11)'
   },
   { 
-    id: 'ying xian', // Matches Firestore ID 'ying_xian'
+    id: 'ying_xian', // 🛡️ FIXED: Replaced space with underscore to perfectly match Firestore
     name: 'Ying Xian', 
     email: 'lim.ying.xian@kkh.com.sg', 
     role: 'staff',
     title: 'CEP (JG12)'
   },
   { 
-    id: 'derlinder', // ✅ CHANGED: Matches Firestore ID 'derlinder' (instead of 'linder')
+    id: 'derlinder', // Matches Firestore ID 'derlinder'
     name: 'Derlinder', 
     email: 'derlinder.kaur@kkh.com.sg', 
     role: 'staff',
     title: 'CEP (JG12)'
   },
   { 
-    id: 'fadzlynn', // ✅ CHANGED: Matches Firestore ID 'fadzlynn' (instead of 'lynn')
+    id: 'fadzlynn', // Matches Firestore ID 'fadzlynn'
     name: 'Fadzlynn', 
     email: 'fadzlynn.mohamad.fadzully@kkh.com.sg', 
     role: 'staff',
