@@ -3,7 +3,6 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { db } from '../firebase'; 
 import { getFunctions, httpsCallable } from 'firebase/functions';
 import { doc, setDoc, getDoc, updateDoc, arrayUnion } from 'firebase/firestore';
-import { X, Send, BrainCircuit, Shield, Ghost, Users, Zap, RefreshCw, AlertTriangle, WifiOff, FileText, CheckCircle, Database } from 'lucide-react';
 import { useNexus } from '../context/NexusContext';
 
 // ─── CLOUD FUNCTION LINK ──────────────────────────────────────────────────────
