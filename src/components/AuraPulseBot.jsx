@@ -1,3 +1,4 @@
+import { X, Send, BrainCircuit, Shield, Ghost, Users, Zap, RefreshCw, AlertTriangle, WifiOff, FileText, CheckCircle, Database, Trash2, Download } from 'lucide-react';
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { db } from '../firebase'; 
 import { getFunctions, httpsCallable } from 'firebase/functions';
@@ -294,6 +295,26 @@ export default function AuraPulseBot({ user }) {
         }
     }, [pendingLog, isDemo, selectedPersona, user, safeTimeout]);
 
+    // ── Export Document to Word (.doc) ───────────────────────────────────────
+    const exportToDoc = useCallback((text) => {
+        if (!text) return;
+        
+        // Add a BOM (Byte Order Mark) to ensure proper UTF-8 character rendering in MS Word
+        const blob = new Blob(['\ufeff', text], { type: 'application/msword' });
+        const url = URL.createObjectURL(blob);
+        
+        // Create a temporary hidden link, click it, and destroy it
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = `AURA_Document_${new Date().toISOString().split('T')[0]}.doc`;
+        document.body.appendChild(link);
+        link.click();
+        
+        // Clean up
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+    }, []);
+    
     // ── Confirm Admin Document (Mode 2) ──────────────────────────────────────
     const confirmAdminAction = useCallback(async (actionText) => {
         if (!actionText) return;
@@ -529,25 +550,38 @@ export default function AuraPulseBot({ user }) {
                                                         )}
                                                     </div>
                                                 )}
-
-                                                {/* 🛡️ ASSISTANT: Save Document Button */}
+                                                
+                                                {/* 🛡️ ASSISTANT: Document Action Buttons */}
                                                 {isAssistant && m.action && !m.isGreeting && (
                                                     <div className="mt-4 pt-3 border-t border-slate-600/50">
                                                         <p className="text-[10px] font-medium text-slate-400 mb-2 uppercase tracking-wide">Extracted Data/Action:</p>
-                                                        <p className="text-xs text-blue-200 bg-slate-900/50 p-2 rounded-lg mb-3 border border-slate-700 font-mono">{m.action}</p>
-                                                        <button 
-                                                            onClick={() => confirmAdminAction(m.action)}
-                                                            disabled={loading}
-                                                            className="w-full py-2 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white text-[11px] font-bold uppercase tracking-wider rounded-xl transition-colors flex items-center justify-center gap-2"
-                                                        >
-                                                            {loading ? <RefreshCw size={14} className="animate-spin" /> : <CheckCircle size={14} />} 
-                                                            Save Document
-                                                        </button>
+                                                        <p className="text-xs text-blue-200 bg-slate-900/50 p-2 rounded-lg mb-3 border border-slate-700 font-mono line-clamp-3 overflow-hidden">
+                                                            {m.action}
+                                                        </p>
+                                                        
+                                                        <div className="grid grid-cols-2 gap-2">
+                                                            <button 
+                                                                onClick={() => confirmAdminAction(m.action, i)}
+                                                                disabled={loading}
+                                                                className="py-2 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white text-[10px] font-bold uppercase tracking-wider rounded-xl transition-colors flex items-center justify-center gap-1.5"
+                                                            >
+                                                                {loading ? <RefreshCw size={13} className="animate-spin" /> : <CheckCircle size={13} />} 
+                                                                Save to DB
+                                                            </button>
+
+                                                            <button 
+                                                                onClick={() => exportToDoc(m.action)}
+                                                                disabled={loading}
+                                                                className="py-2 bg-slate-700 hover:bg-slate-600 disabled:opacity-50 text-white text-[10px] font-bold uppercase tracking-wider rounded-xl transition-colors flex items-center justify-center gap-1.5 border border-slate-600"
+                                                            >
+                                                                <Download size={13} /> 
+                                                                Export .DOC
+                                                            </button>
+                                                        </div>
                                                     </div>
                                                 )}
 
                                                 {/* 🛡️ DATA ENTRY: Commit Workload Button */}
-                                                {/* THE FIX: We added strict checks here so it hides if AURA outputs null collections! */}
                                                 {isDataEntry && m.db_workload && m.db_workload.target_collection && m.db_workload.target_collection !== 'null' && m.role === 'bot' && !m.isGreeting && (
                                                     <div className="mt-4 pt-3 border-t border-emerald-900/50">
                                                         <p className="text-[10px] font-bold text-emerald-400 mb-2 uppercase tracking-widest flex items-center gap-1">
