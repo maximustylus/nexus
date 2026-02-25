@@ -167,8 +167,9 @@ export default function AuraPulseBot({ user }) {
                 }));
 
             const contextPrompt = isDemo
-                ? (selectedPersona?.prompt ?? '')
+                ? `System Note: The user's exact database ID is '${selectedPersona?.id}'.\n${selectedPersona?.prompt ?? ''}`
                 : [
+                    `System Note: The user's exact database ID is '${user?.id}'.`,
                     user?.title ? `This staff member is a ${user.title} at KKH/SingHealth.` : '',
                     user?.department ? `Department: ${user.department}.` : '',
                     liveMemory ? `Prior session note: "${liveMemory}".` : 'This is their first session with AURA.',
