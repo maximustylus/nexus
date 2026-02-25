@@ -649,7 +649,7 @@ return (
                                                         {/* Only show the Anonymous button if they aren't already Anonymous */}
                                                         {!isAnonymous && (
                                                             <button 
-                                                                onClick={() => startSession(PERSONAS.find(p => p.id === 'anon'))}
+                                                                onClick={() => startSession((isDemo ? DEMO_PERSONAS : LIVE_PERSONAS).find(p => p.id === 'anon'))}
                                                                 disabled={loading}
                                                                 className="w-full mt-1 py-2 bg-slate-100 hover:bg-slate-200 text-slate-600 text-[10px] font-bold uppercase tracking-widest rounded-xl transition-colors flex items-center justify-center gap-2 border border-slate-200"
                                                             >
