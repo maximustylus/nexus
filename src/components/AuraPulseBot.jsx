@@ -48,14 +48,14 @@ export default function AuraPulseBot({ user }) {
 
     // ── State ─────────────────────────────────────────────────────────────────
     const [isOpen, setIsOpen] = useState(false);
-    const [view,            setView]            = useState('SELECT');
+    const [view,             setView]             = useState('SELECT');
     const [selectedPersona, setSelectedPersona] = useState(null); 
-    const [input,           setInput]           = useState('');
-    const [loading,         setLoading]         = useState(false);
-    const [isSending,       setIsSending]       = useState(false);
-    const [pendingLog,      setPendingLog]      = useState(null);
-    const [isOnline,        setIsOnline]        = useState(navigator.onLine);
-    const [liveMemory,      setLiveMemory]      = useState(null);
+    const [input,            setInput]            = useState('');
+    const [loading,          setLoading]          = useState(false);
+    const [isSending,        setIsSending]        = useState(false);
+    const [pendingLog,       setPendingLog]       = useState(null);
+    const [isOnline,         setIsOnline]         = useState(navigator.onLine);
+    const [liveMemory,       setLiveMemory]       = useState(null);
     const messages = auraHistory;
     const setMessages = setAuraHistory;   
 
@@ -101,7 +101,6 @@ export default function AuraPulseBot({ user }) {
         } else if (persona.memory) {
             greeting = `Welcome back, ${(user?.name ?? 'there').split(' ')[0]}. Last time we spoke, I noted: "${persona.memory}". How can I support your workflow or wellbeing today?`;
         } else {
-            // 🛡️ THE NEW PUNCHY GREETING
             greeting = `Hi ${(user?.name ?? 'there').split(' ')[0]}. AURA here. What kind of support do you need today?`;
         }
 
@@ -141,7 +140,6 @@ export default function AuraPulseBot({ user }) {
 
     // ── Send handler ──────────────────────────────────────────────────────────
     const handleSend = useCallback(async (overrideText = null) => {
-        // Read from the button click OR the typing input
         const rawText = typeof overrideText === 'string' ? overrideText : input;
         const text = rawText.trim().slice(0, MAX_INPUT);
         
@@ -200,7 +198,6 @@ export default function AuraPulseBot({ user }) {
                 throw new Error('Incomplete response from AURA.');
             }
 
-            // 🛡️ TRI-MODE INTEGRATION: Save mode, action, AND db_workload to chat history
             setMessages(prev => [...prev, { 
                 role: 'bot', 
                 text: analysis.reply,
@@ -209,7 +206,6 @@ export default function AuraPulseBot({ user }) {
                 db_workload: analysis.db_workload 
             }]);
 
-            // Only trigger the Pulse Card if AURA is ready to diagnose in COACH mode
             if (analysis.mode === 'COACH' && analysis.diagnosis_ready && analysis.phase && analysis.phase !== 'null' && analysis.phase !== 'NULL') {
                 const safeEnergy = clampEnergy(analysis.phase, analysis.energy ?? 50);
                 setPendingLog({
@@ -499,7 +495,7 @@ export default function AuraPulseBot({ user }) {
                                                 
                                                 <div className="whitespace-pre-wrap">{m.text}</div>
 
-                                                {/* 🛡️ NEW: QUICK REPLY BUTTONS FOR GREETING */}
+                                                {/* 🛡️ QUICK REPLY BUTTONS FOR GREETING */}
                                                 {m.isGreeting && m.role === 'bot' && (
                                                     <div className="mt-4 flex flex-col gap-2">
                                                         <div className="grid grid-cols-2 gap-2">
@@ -549,20 +545,21 @@ export default function AuraPulseBot({ user }) {
                                                 )}
 
                                                 {/* 🛡️ DATA ENTRY: Commit Workload Button */}
-                                                {isDataEntry && m.db_workload && m.role === 'bot' && !m.isGreeting && (
-                                                                    <div className="mt-4 pt-3 border-t border-emerald-900/50">
-                                                                        <p className="text-[10px] font-bold text-emerald-400 mb-2 uppercase tracking-widest flex items-center gap-1">
-                                                                            <Zap size={12} /> Pending Workload Transaction
-                                                                        </p>
-                                                                        <div className="bg-slate-950 p-3 rounded-lg border border-emerald-900/50 font-mono text-[10px] text-slate-300 mb-3 whitespace-pre">
-                                                                            {`Collection: ${m.db_workload.target_collection}\nDocument:   ${m.db_workload.target_doc}\nField:      ${m.db_workload.target_field}\nValue:      `}
-                                                                            <span className="text-emerald-400 font-bold">{m.db_workload.target_value}</span>
-                                                                            
-                                                                            {/* 🛡️ NEW: SHOW THE TARGET MONTH */}
-                                                                            {m.db_workload.target_month !== undefined && m.db_workload.target_month !== null && (
-                                                                                <>\nMonth Idx:  <span className="text-amber-400 font-bold">{m.db_workload.target_month}</span></>
-                                                                            )}
-                                                                        </div>
+                                                {/* THE FIX: We added strict checks here so it hides if AURA outputs null collections! */}
+                                                {isDataEntry && m.db_workload && m.db_workload.target_collection && m.db_workload.target_collection !== 'null' && m.role === 'bot' && !m.isGreeting && (
+                                                    <div className="mt-4 pt-3 border-t border-emerald-900/50">
+                                                        <p className="text-[10px] font-bold text-emerald-400 mb-2 uppercase tracking-widest flex items-center gap-1">
+                                                            <Zap size={12} /> Pending Workload Transaction
+                                                        </p>
+                                                        <div className="bg-slate-950 p-3 rounded-lg border border-emerald-900/50 font-mono text-[10px] text-slate-300 mb-3 whitespace-pre">
+                                                            {`Collection: ${m.db_workload.target_collection}\nDocument:   ${m.db_workload.target_doc}\nField:      ${m.db_workload.target_field}\nValue:      `}
+                                                            <span className="text-emerald-400 font-bold">{m.db_workload.target_value}</span>
+                                                            
+                                                            {/* 🛡️ SHOW THE TARGET MONTH IF IT EXISTS */}
+                                                            {m.db_workload.target_month !== undefined && m.db_workload.target_month !== null && (
+                                                                <>{`\nMonth Idx:  `}<span className="text-amber-400 font-bold">{m.db_workload.target_month}</span></>
+                                                            )}
+                                                        </div>
                                                         <button 
                                                             onClick={() => executeDataEntry(m.db_workload)}
                                                             disabled={loading}
