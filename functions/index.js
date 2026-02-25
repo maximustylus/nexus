@@ -23,9 +23,10 @@ if (!API_KEY) {
 }
 
 const MODEL_PRIORITY = [
+    'gemini-2.5-pro', // 🛡️ NEW: Future-proofing for multimodal heavy lifting
     'gemini-2.0-flash',
-    'gemini-1.5-flash',
     'gemini-1.5-pro',
+    'gemini-1.5-flash',
 ];
 const SAFE_FALLBACK_MODEL = 'models/gemini-1.5-flash';
 
@@ -73,7 +74,8 @@ const MAX_HISTORY_LEN  = 20;
 const MAX_PROMPT_LEN   = 8000;  
 const MAX_ROLE_LEN     = 100;
 
-function validateChatInput({ userText, history, role, prompt }) {
+// 🛡️ NEW: Validate incoming attachments (PDFs, Docs, Images)
+function validateChatInput({ userText, history, role, prompt, attachments }) {
     if (!userText || typeof userText !== 'string') {
         throw new HttpsError('invalid-argument', 'userText is required and must be a string.');
     }
@@ -112,30 +114,33 @@ function validateChatInput({ userText, history, role, prompt }) {
             throw new HttpsError('invalid-argument', `prompt exceeds ${MAX_PROMPT_LEN} character limit.`);
         }
     }
+    if (attachments !== undefined) {
+        if (!Array.isArray(attachments)) {
+            throw new HttpsError('invalid-argument', 'attachments must be an array.');
+        }
+        if (attachments.length > 5) {
+            throw new HttpsError('invalid-argument', 'Maximum 5 attachments allowed per request.');
+        }
+        for (const att of attachments) {
+            if (!att.mimeType || !att.data) {
+                throw new HttpsError('invalid-argument', 'Attachments must include mimeType and base64 data.');
+            }
+        }
+    }
 }
 
 const MAX_STAFF_PROFILES = 100;  
 const MAX_JSON_CHARS     = 8000; 
 
 function validateAnalysisInput({ targetYear, staffProfiles, yearData }) {
-    if (!targetYear || typeof targetYear !== 'number') {
-        throw new HttpsError('invalid-argument', 'targetYear must be a number.');
-    }
-    if (!staffProfiles || !Array.isArray(staffProfiles)) {
-        throw new HttpsError('invalid-argument', 'staffProfiles must be an array.');
-    }
-    if (staffProfiles.length > MAX_STAFF_PROFILES) {
-        throw new HttpsError('invalid-argument', `staffProfiles exceeds ${MAX_STAFF_PROFILES} record limit.`);
-    }
-    if (!yearData) {
-        throw new HttpsError('invalid-argument', 'yearData is required.');
-    }
+    if (!targetYear || typeof targetYear !== 'number') throw new HttpsError('invalid-argument', 'targetYear must be a number.');
+    if (!staffProfiles || !Array.isArray(staffProfiles)) throw new HttpsError('invalid-argument', 'staffProfiles must be an array.');
+    if (staffProfiles.length > MAX_STAFF_PROFILES) throw new HttpsError('invalid-argument', `staffProfiles exceeds limit.`);
+    if (!yearData) throw new HttpsError('invalid-argument', 'yearData is required.');
+    
     const serialised = JSON.stringify({ staffProfiles, yearData });
     if (serialised.length > MAX_JSON_CHARS) {
-        throw new HttpsError(
-            'invalid-argument',
-            `Payload too large (${serialised.length} chars). Maximum is ${MAX_JSON_CHARS}.`
-        );
+        throw new HttpsError('invalid-argument', `Payload too large. Maximum is ${MAX_JSON_CHARS}.`);
     }
 }
 
@@ -192,10 +197,10 @@ function parseJsonResponse(rawText, requiredFields = []) {
     return { text: jsonStr, parsed };
 }
 
-// 🛡️ UPGRADED TRI-MODE AI PROMPT (v2.3 - The Secretary Override)
+// 🛡️ UPGRADED TRI-MODE AI PROMPT (v3.0 - Multimodal Edition)
 const AURA_SYSTEM_PROMPT = `
 ROLE:
-You are AURA (Adaptive Understanding and Real-time Analytics). You are a Tri-Mode AI deployed at KKH/SingHealth. You must dynamically analyze the user's conversational intent and instantly switch your active persona to MODE 1 (Coach), MODE 2 (Assistant), or MODE 3 (Data Entry).
+You are AURA (Adaptive Understanding and Real-time Analytics). You are a Quad-Mode AI deployed at KKH/SingHealth. You must dynamically analyze the user's conversational intent and instantly switch your active persona to MODE 1 (Coach), MODE 2 (Assistant), MODE 3 (Data Entry), or MODE 4 (Research).
 
 CRITICAL OVERRIDE: 
 If the user's prompt contains a request to update, log, or change a numerical metric (e.g., "Log 35 patients for January"), you MUST INSTANTLY switch to MODE 3 (DATA_ENTRY). Do NOT use Motivational Interviewing. Do NOT ask about their feelings. Execute the database transaction immediately.
@@ -204,69 +209,56 @@ If the user's prompt contains a request to update, log, or change a numerical me
 MODE 1: WELLBEING COACH (Intent: Emotions, stress, psychological check-ins)
 =========================================
 CORE: You are a natural, grounding peer. Use British English spelling. Never use em dashes.
-FRAMEWORKS: You strictly utilize Motivational Interviewing via OARS (Open-ended questions, Affirmations, Reflections, Summaries).
-CLINICAL PACING (CRITICAL):
-1. NEVER jump to solutions or advice in the first turn.
-2. ALWAYS validate the user's emotion first ("That sounds incredibly draining...").
-3. ASSESS, DON'T GUESS: If they express fatigue, you must ask them to rate it before diagnosing: "On a scale of 0 to 10, how heavy does this workload feel right now?"
+FRAMEWORKS: You strictly utilize Motivational Interviewing via Open ended questions, Affirmations, Reflection and Summarising.
 SCORING LOGIC (0-100% Social Battery):
-When instructed to provide an assessment, calculate their 'energy' based on an inverted Clinical RPE (0-10) scale:
 - RPE 0-2 (Easy): Energy = 80-100 (HEALTHY)
 - RPE 3-5 (Moderate): Energy = 50-79 (REACTING)
 - RPE 6-8 (Heavy): Energy = 20-49 (INJURED)
 - RPE 9-10 (Exhaustion): Energy = 0-19 (ILL)
-*CRITICAL: Energy must NEVER be negative. Minimum 0, Maximum 100.*
 
 =========================================
 MODE 2: ADMINISTRATOR'S ASSISTANT (Intent: Operational documents, Scheduling, Memos)
 =========================================
 CORE: Administrative and operational support only. No HR/finance advice.
-COMPLIANCE: Strict PDPA adherence. De-identify PHI using placeholders like [Patient Name].
 CRITICAL GENERATION RULES:
-1. INSTANT GENERATION: DO NOT say "Give me a moment to draft this." Generate the requested document IMMEDIATELY in the same turn once you have the details.
+1. INSTANT GENERATION: Generate the requested document IMMEDIATELY in the same turn.
 2. THE ACTION FIELD: The "action" JSON field MUST strictly contain ONLY the final, complete document text.
-3. THE NULL RULE: If you do not have enough information to write the FULL document yet and must ask a clarifying question, you MUST set "action": null. Do NOT put "Drafting..." or "Awaiting details..." in the action field.
+3. THE NULL RULE: If you do not have enough information, you MUST set "action": null.
 
 =========================================
 MODE 3: DATA ENTRY AGENT (Intent: Updating metrics, logging workload)
 =========================================
-CORE: You act as a safe database gateway. You MUST map requests EXACTLY to the known Firestore schema below. Do not invent field names.
-
-THE SLOT-FILLING RULE (CRITICAL): 
-1. Determine if the user is talking about PERSONAL or INDIVIDUAL data ("my workload") or TEAM data ("department/team workload").
-2. If you are missing the metric name, value, OR timeframe/month, you MUST set "db_workload" to null and ask them to clarify.
+CORE: You act as a safe database gateway. You MUST map requests EXACTLY to the known Firestore schema below.
 
 KNOWN FIRESTORE SCHEMA:
-
 Option A: TEAM / DEPARTMENT DATA
 Trigger: User says "team", "department", or "attendance".
 - target_collection: "monthly_workload"
 - target_doc: The timeframe formatted as "mmm_yyyy" (e.g., "jan_2026")
 - target_field: "patient_attendance" OR "patient_load"
-- target_value: <integer>
-- target_month: null
 
 Option B: PERSONAL STAFF DATA
-Trigger: User says "my workload", "my cases", "my patients" or "my clinical load".
+Trigger: User says "my workload", "my cases", "my patients".
 - target_collection: "staff_loads"
 - target_doc: The exact database ID provided in the System Note (e.g., "alif").
 - target_field: "data"
-- target_value: <integer>
 - target_month: <integer 0-11> (0=Jan, 1=Feb, 2=Mar, etc.)
 
-EXAMPLE PERFECT PERSONAL TRANSACTION:
-User: "Update my patient load to 35 for January."
-Output db_workload: { "target_collection": "staff_loads", "target_doc": "alif", "target_field": "data", "target_value": 35, "target_month": 0 }
+=========================================
+MODE 4: RESEARCH / GRANT WRITER (Intent: Academic review, Methodology, File Parsing)
+=========================================
+CORE: If the user provides an academic system override OR attaches files for analysis, you are in MODE 4.
+OUTPUT: Place your highly academic, rigorous literature review, DAGs, or grant proposals inside the "action" field so the user can easily export it to Word.
 
 =========================================
 STRICT JSON OUTPUT FORMAT (Return ONLY this exact structure, no markdown code blocks, no preamble):
 {
-  "reply": "<If COACH: Empathetic response. If ASSISTANT: Conversational confirmation AND the beautifully formatted document text. If DATA_ENTRY: Crisp confirmation.>",
-  "mode": "<COACH | ASSISTANT | DATA_ENTRY>",
+  "reply": "<Conversational response.>",
+  "mode": "<COACH | ASSISTANT | DATA_ENTRY | RESEARCH>",
   "diagnosis_ready": <true | false>,
   "phase": "<HEALTHY | REACTING | INJURED | ILL | null>",
   "energy": <integer 0-100 | null>,
-  "action": "<If COACH: Assessment summary. If ASSISTANT: The final document text. MUST BE null IF STILL GATHERING DETAILS.>",
+  "action": "<If COACH: Assessment summary. If ASSISTANT/RESEARCH: The final document text. MUST BE null IF STILL GATHERING DETAILS.>",
   "db_workload": {
      "target_collection": "<string | null>",
      "target_doc": "<string | null>",
@@ -280,17 +272,16 @@ STRICT JSON OUTPUT FORMAT (Return ONLY this exact structure, no markdown code bl
 // 🛡️ SMART ANALYSIS PROMPT: Automated Deep Audits
 const SMART_ANALYSIS_SYSTEM_PROMPT = `
 ROLE:
-You are an Expert Organizational Analyst and Wellbeing Advisor for KKH/SingHealth. Your role is to generate confidential, highly accurate performance and wellbeing audits for ANY department within the hospital network (e.g., Clinical, Administrative, Allied Health, Corporate, or Operations).
-
+You are an Expert Organizational Analyst and Wellbeing Advisor for KKH/SingHealth.
 CRITICAL RULES:
-1. TARGET IDENTITY: You must identify the specific team or department from the provided data. You MUST use their exact, formal team name in your report. Do not invent names or default to clinical terminology if they are not a clinical team.
-2. DOMAIN ADAPTATION: Adapt your analysis to their specific function. If they are clinical, focus on patient care volumes and clinical load. If they are non-clinical, focus on operational efficiency, project delivery, and systemic workflows.
-3. TONE & FORMATTING: Your tone must be evidence-based, highly professional, empathetic, and written in British English. Do not use em dashes.
+1. TARGET IDENTITY: You must identify the specific team or department.
+2. DOMAIN ADAPTATION: Adapt your analysis to their specific function.
+3. TONE & FORMATTING: Evidence-based, highly professional, empathetic, British English. No em dashes.
 
-STRICT JSON OUTPUT FORMAT (Return ONLY this exact structure, no markdown code blocks, no preamble):
+STRICT JSON OUTPUT FORMAT:
 { 
-  "private": "<Detailed operational/clinical report for department heads. Include trend analysis, Key Performance Indicators (KPIs), risk flags, and specific recommendations.>", 
-  "public": "<Summary safe for broader staff distribution. Focus on collective strengths, wins, and general wellbeing initiatives.>" 
+  "private": "<Detailed operational/clinical report for department heads.>", 
+  "public": "<Summary safe for broader staff distribution.>" 
 }
 `.trim();
 
@@ -302,14 +293,12 @@ exports.chatWithAura = onCall({
     secrets: ['GEMINI_API_KEY'],
 }, async (request) => {
 
-    const { userText, history = [], role = 'Staff', prompt = '', isDemo } = request.data;
+    // 🛡️ NEW: Extract attachments from the incoming request
+    const { userText, history = [], role = 'Staff', prompt = '', isDemo, attachments = [] } = request.data;
 
     if (!API_KEY) throw new HttpsError('failed-precondition', 'AI service is not configured.');
-    
-    // TEMPORARY BYPASS: Auth check disabled for testing
-    // if (!request.auth && !isDemo) throw new HttpsError('unauthenticated', 'Access Denied.');
 
-    validateChatInput({ userText, history, role, prompt });
+    validateChatInput({ userText, history, role, prompt, attachments });
 
     try {
         const modelName = await resolveModel();
@@ -317,21 +306,36 @@ exports.chatWithAura = onCall({
         const turnIndex      = history.length;
         const diagnosisReady = turnIndex >= 4;
 
-        // 🛡️ THE FIX: Smart Pacing that respects the Active Mode
         const contextualMessage = [
             `USER ROLE: ${role}`,
-            prompt ? `CONTEXT: ${prompt}` : '',
+            prompt ? `CONTEXT/OVERRIDE: ${prompt}` : '',
             `CONVERSATION TURN: ${Math.floor(turnIndex/2) + 1}`,
             diagnosisReady
                 ? 'INSTRUCTION: If in COACH mode, and sufficient context is gathered, provide full Phase/Energy/Action assessment now.'
-                : 'INSTRUCTION: If this is a Wellbeing check-in (COACH mode), Phase 1 is active: Listen, validate, and ask one open question to gauge their RPE (0-10). If this is an Admin (ASSISTANT) or Database (DATA_ENTRY) request, IGNORE the RPE rule and execute the task immediately.',
+                : 'INSTRUCTION: If this is a Wellbeing check-in (COACH mode), Phase 1 is active: Listen, validate, and ask one open question to gauge their RPE (0-10). If this is an Admin (ASSISTANT), Database (DATA_ENTRY), or Academic (RESEARCH) request, IGNORE the RPE rule and execute the task immediately.',
             `USER SAYS: "${userText.trim()}"`,
         ].filter(Boolean).join('\n');
+
+        // 🛡️ NEW: Build the multimodal parts array
+        const userParts = [{ text: contextualMessage }];
+        
+        // If the user attached files (PDFs, Images), append them to the current turn!
+        if (attachments.length > 0) {
+            for (const att of attachments) {
+                userParts.push({
+                    inlineData: {
+                        mimeType: att.mimeType,
+                        data: att.data
+                    }
+                });
+            }
+            logger.info(`[AURA] Processing ${attachments.length} multimodal attachments.`);
+        }
 
         const response = await fetch(url, {
             method:  'POST',
             headers: { 'Content-Type': 'application/json' },
-            signal:  AbortSignal.timeout(15000), 
+            signal:  AbortSignal.timeout(30000), // Extended timeout for large files
             body: JSON.stringify({
                 systemInstruction: {                
                     parts: [{ text: AURA_SYSTEM_PROMPT }],
@@ -342,13 +346,12 @@ exports.chatWithAura = onCall({
                         .map(({ role, parts }) => ({ role, parts })),
                     {
                         role:  'user',
-                        parts: [{ text: contextualMessage }],
+                        parts: userParts, // 👈 Multimodal injection happens here!
                     },
                 ],
                 generationConfig: {
                     temperature:      0.7,
-                    // 🛡️ INCREASED LIMIT: Allowed up to 2048 tokens to accommodate Mode 2 SOPs and Memos
-                    maxOutputTokens:  2048,   
+                    maxOutputTokens:  8192, // 🛡️ MASSIVE INCREASE: 8k tokens for giant research reviews 
                     responseMimeType: 'application/json',
                 },
             }),
@@ -372,18 +375,9 @@ exports.chatWithAura = onCall({
 
         const rawText = extractText(data); 
 
-        // 🛡️ ADDED 'mode' to the required JSON fields to validate Intent Routing
         const { text: cleanText, parsed } = parseJsonResponse(rawText, [
             'reply', 'mode', 'diagnosis_ready', 'phase', 'energy', 'action',
         ]);
-
-        if (parsed.diagnosis_ready) {
-            logger.info('[AURA] Assessment complete', {
-                phase:  parsed.phase,
-                energy: parsed.energy,
-                isDemo,
-            });
-        }
 
         return { text: cleanText, success: true };
 
@@ -401,15 +395,8 @@ exports.generateSmartAnalysis = onCall({
     cors: true,
     secrets: ['GEMINI_API_KEY'],
 }, async (request) => {
-
-    // TEMPORARY BYPASS: Auth check disabled for testing
-    // if (!request.auth) {
-    //     throw new HttpsError('unauthenticated', 'Access Denied. Authentication required.');
-    // }
-
     if (!API_KEY) throw new HttpsError('failed-precondition', 'AI service is not configured.');
 
-    // TEAM NAME
     const { targetYear, staffProfiles, yearData, staffLoads, teamName = "the department" } = request.data;
         
     validateAnalysisInput({ targetYear, staffProfiles, yearData });
@@ -418,7 +405,6 @@ exports.generateSmartAnalysis = onCall({
         const modelName = await resolveModel();
         const url = `https://generativelanguage.googleapis.com/v1beta/${modelName}:generateContent?key=${API_KEY}`;
         
-        // TEAM IDENTITY
         const promptText = `
         TEAM IDENTITY: ${teamName}
         Generate a comprehensive staff wellbeing audit report for the year ${targetYear} for the team identified above.
@@ -460,21 +446,9 @@ exports.generateSmartAnalysis = onCall({
 
         const genData = await response.json();
 
-        if (response.status === 404) {
-            logger.warn('[NEXUS] Model 404 on analysis — clearing cache.');
-            modelResolutionPromise = null;
-        }
-
-        if (!response.ok) {
-            logger.error('[SMART_ANALYSIS] API Failure', {
-                status:  response.status,
-                message: genData.error?.message,
-            });
-            throw new Error(genData.error?.message ?? 'Audit API Error');
-        }
+        if (!response.ok) throw new Error(genData.error?.message ?? 'Audit API Error');
 
         const rawText = extractText(genData);
-
         const { parsed } = parseJsonResponse(rawText, ['private', 'public']);
 
         return {
@@ -493,7 +467,7 @@ exports.generateSmartAnalysis = onCall({
 // FUNCTION 3: scheduledPulseNudge (Runs 9:00 AM, Mon-Fri)
 // =============================================================================
 exports.scheduledPulseNudge = onSchedule({
-    schedule: "0 9 * * 1-5", // 9:00 AM, Monday through Friday
+    schedule: "0 9 * * 1-5", 
     timeZone: "Asia/Singapore", 
     timeoutSeconds: 60,
     memory: "256MiB"
@@ -502,46 +476,27 @@ exports.scheduledPulseNudge = onSchedule({
     const messaging = getMessaging();
 
     try {
-        console.log('[NEXUS] Waking up for daily Pulse Nudge...');
+        const usersSnap = await db.collection('users').where('fcmToken', '!=', null).get();
+        if (usersSnap.empty) return null;
 
-        // 1. Find all users who have a registered device token
-        const usersSnap = await db.collection('users')
-            .where('fcmToken', '!=', null)
-            .get();
-
-        if (usersSnap.empty) {
-            console.log('[NEXUS] No users subscribed to notifications.');
-            return null;
-        }
-
-        // 2. Extract the tokens into an array
         const tokens = [];
         usersSnap.forEach(doc => {
             const data = doc.data();
-            if (data.fcmToken && data.notificationsEnabled !== false) {
-                tokens.push(data.fcmToken);
-            }
+            if (data.fcmToken && data.notificationsEnabled !== false) tokens.push(data.fcmToken);
         });
 
         if (tokens.length === 0) return null;
 
-        // 3. Construct the Push Notification
         const message = {
             notification: {
                 title: 'Social Battery ⚡ Check',
                 body: 'Take 30 seconds to log your Energy and Focus levels with AURA Pulse!',
             },
-            data: {
-            click_action: 'FLUTTER_NOTIFICATION_CLICK', 
-            target_tab: 'pulse', 
-    },
+            data: { click_action: 'FLUTTER_NOTIFICATION_CLICK', target_tab: 'pulse' },
             tokens: tokens, 
         };
 
-        // 4. Fire the payload!
-        const response = await messaging.sendEachForMulticast(message);
-        console.log(`[NEXUS] Nudge Report: ${response.successCount} sent successfully.`);
-
+        await messaging.sendEachForMulticast(message);
         return null;
     } catch (error) {
         console.error('[NEXUS] Critical error sending pulse nudge:', error);
