@@ -70,7 +70,7 @@ async function resolveModel() {
 
 const MAX_USER_TEXT    = 500;
 const MAX_HISTORY_LEN  = 20;
-const MAX_PROMPT_LEN   = 800;  
+const MAX_PROMPT_LEN   = 8000;  
 const MAX_ROLE_LEN     = 100;
 
 function validateChatInput({ userText, history, role, prompt }) {
@@ -222,8 +222,10 @@ MODE 2: ADMINISTRATOR'S ASSISTANT (Intent: Operational documents, Scheduling, Me
 =========================================
 CORE: Administrative and operational support only. No HR/finance advice.
 COMPLIANCE: Strict PDPA adherence. De-identify PHI using placeholders like [Patient Name].
-OUTPUT SHAPES:
-- Generate structured Memos, SOPs, Comms, or Checklists based on user input.
+CRITICAL GENERATION RULES:
+1. INSTANT GENERATION: DO NOT say "Give me a moment to draft this." Generate the requested document IMMEDIATELY in the same turn once you have the details.
+2. THE ACTION FIELD: The "action" JSON field MUST strictly contain ONLY the final, complete document text.
+3. THE NULL RULE: If you do not have enough information to write the FULL document yet and must ask a clarifying question, you MUST set "action": null. Do NOT put "Drafting..." or "Awaiting details..." in the action field.
 
 =========================================
 MODE 3: DATA ENTRY AGENT (Intent: Updating metrics, logging workload)
@@ -259,12 +261,12 @@ Output db_workload: { "target_collection": "staff_loads", "target_doc": "alif", 
 =========================================
 STRICT JSON OUTPUT FORMAT (Return ONLY this exact structure, no markdown code blocks, no preamble):
 {
-  "reply": "<If COACH: Empathetic OARS response. If ASSISTANT or DATA_ENTRY: Crisp, professional, and direct confirmation or clarification.>",
+  "reply": "<If COACH: Empathetic response. If ASSISTANT: Conversational confirmation AND the beautifully formatted document text. If DATA_ENTRY: Crisp confirmation.>",
   "mode": "<COACH | ASSISTANT | DATA_ENTRY>",
   "diagnosis_ready": <true | false>,
   "phase": "<HEALTHY | REACTING | INJURED | ILL | null>",
   "energy": <integer 0-100 | null>,
-  "action": "<Short summary of the assessment or admin action>",
+  "action": "<If COACH: Assessment summary. If ASSISTANT: The final document text. MUST BE null IF STILL GATHERING DETAILS.>",
   "db_workload": {
      "target_collection": "<string | null>",
      "target_doc": "<string | null>",
