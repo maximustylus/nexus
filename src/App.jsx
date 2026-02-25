@@ -55,6 +55,24 @@ const STATUS_COLORS = {
 // 4. Domain Swimlane Order
 const CUSTOM_DOMAIN_ORDER = ['MANAGEMENT', 'CLINICAL', 'RESEARCH', 'EDUCATION'];
 
+// 5. CUSTOM BAR TOOLTIP
+const CustomBarTooltip = ({ active, payload, label }) => {
+    if (active && payload && payload.length) {
+      const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+      const monthLabel = monthNames[label] || label; 
+
+      return (
+        <div className="bg-slate-800 text-white p-3 rounded-xl shadow-2xl border border-slate-700">
+          <p className="text-xs font-bold uppercase text-slate-400 mb-1">{monthLabel}</p>
+          <p className="text-lg font-black text-emerald-400">
+            {payload[0].value}<span className="text-xs font-normal text-white ml-1">% Load</span>
+          </p>
+        </div>
+      );
+    }
+    return null;
+};
+
 function NexusApp() {
   // --- HOOKS ---
   const { isDemo, toggleDemo } = useNexus(); 
@@ -377,24 +395,6 @@ const getClinicalData = (staffId) => {
     );
   };
 
-  // --- NEW: CUSTOM BAR TOOLTIP (Solves the "0-11" issue) ---
-const CustomBarTooltip = ({ active, payload, label }) => {
-    if (active && payload && payload.length) {
-      const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-      const monthLabel = monthNames[label] || label; 
-
-      return (
-        <div className="bg-slate-800 text-white p-3 rounded-xl shadow-2xl border border-slate-700">
-          <p className="text-xs font-bold uppercase text-slate-400 mb-1">{monthLabel}</p>
-          <p className="text-lg font-black text-emerald-400">
-            {payload[0].value}<span className="text-xs font-normal text-white ml-1">% Load</span>
-          </p>
-        </div>
-      );
-    }
-    return null;
-  };
-
   // --- RENDER GUARDS ---
   
   if (authLoading) return (
@@ -408,7 +408,7 @@ const CustomBarTooltip = ({ active, payload, label }) => {
   }
 
   // --- SUB-COMPONENT: DASHBOARD VIEW ---
-  const DashboardView = ({ isArchive = false }) => (
+  const renderDashboardView = (isArchive = false) => (
     <>
       {/* Archive Header Banner */}
       {isArchive && (
@@ -745,8 +745,8 @@ const CustomBarTooltip = ({ active, payload, label }) => {
      ) : (
        <div className="md:col-span-2 w-full animate-in fade-in duration-500">
          {/* 🛡️ FIREWALL APPLIED TO DASHBOARDS (DashboardView now directly uses activeTeamData internally!) */}
-         {currentView === 'dashboard' && <DashboardView />}
-         {currentView === 'archive' && <DashboardView isArchive={true} />}
+         {currentView === 'dashboard' && renderDashboardView(false)}
+         {currentView === 'archive' && renderDashboardView(true)}
          {currentView === 'roster' && <RosterView />}
          {currentView === 'pulse' && <WellbeingView user={user} />}
        </div>
