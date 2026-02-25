@@ -247,7 +247,7 @@ Trigger: User says "team", "department", or "attendance".
 Option B: PERSONAL STAFF DATA
 Trigger: User says "my workload", "my cases", "my patients" or "my clinical load".
 - target_collection: "staff_loads"
-- target_doc: The user's first name in lowercase (e.g., "alif", "peter")
+- target_doc: The exact database ID provided in the System Note (e.g., "alif").
 - target_field: "data"
 - target_value: <integer>
 - target_month: <integer 0-11> (0=Jan, 1=Feb, 2=Mar, etc.)
