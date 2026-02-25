@@ -147,6 +147,72 @@ export default function AuraPulseBot({ user }) {
         }
     }, [isOpen, isDemo, user, view, startSession]);
 
+    // ── State for the Mic ─────────────────────────────────────────────────────
+    const [isListening, setIsListening] = useState(false);
+
+    // ── Clear Chat History (Trash Icon) ───────────────────────────────────────
+    const handleClearChat = useCallback(() => {
+        if (!window.confirm("Clear this conversation and start fresh?")) return;
+        
+        setPendingLog(null);
+        
+        // Regenerate the greeting
+        const isAnon = selectedPersona?.id === 'anon';
+        let greeting;
+        if (isDemo) {
+            greeting = isAnon
+                ? '🔒 Ghost Protocol engaged. Your identity is masked. How can I support you today?'
+                : `[SIMULATION] Hi ${selectedPersona?.name}. AURA here. What kind of support do you need today?`;
+        } else if (liveMemory) {
+            greeting = `Welcome back, ${(user?.name ?? 'there').split(' ')[0]}. Last time we spoke, I noted: "${liveMemory}". How can I support your workflow or wellbeing today?`;
+        } else {
+            greeting = `Hi ${(user?.name ?? 'there').split(' ')[0]}. AURA here. What kind of support do you need today?`;
+        }
+
+        // Wipe history and set only the greeting
+        setMessages([{ role: 'bot', text: greeting, isGreeting: true, mode: 'NEUTRAL' }]);
+        
+        // Refocus the input box
+        setTimeout(() => inputRef.current?.focus(), 300);
+    }, [isDemo, user, selectedPersona, liveMemory]);
+
+    // ── Voice-to-Text Engine (Mic Icon) ───────────────────────────────────────
+    const toggleListening = useCallback(() => {
+        // Check if the browser supports Speech Recognition
+        const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+        if (!SpeechRecognition) {
+            alert("Voice input is not supported in this browser. Please use Chrome, Edge, or Safari.");
+            return;
+        }
+
+        if (isListening) {
+            setIsListening(false);
+            return; // The API will automatically stop when we don't restart it
+        }
+
+        const recognition = new SpeechRecognition();
+        recognition.continuous = false; // Stop listening after one sentence/pause
+        recognition.interimResults = false;
+        recognition.lang = 'en-SG'; // Tuned for Singapore/British English nuances
+
+        recognition.onstart = () => setIsListening(true);
+        
+        recognition.onresult = (event) => {
+            const transcript = event.results[0][0].transcript;
+            // Append the spoken words to whatever is already in the text box
+            setInput(prev => (prev + ' ' + transcript).trim().slice(0, MAX_INPUT));
+        };
+
+        recognition.onerror = (event) => {
+            console.error('[AURA] Voice error:', event.error);
+            setIsListening(false);
+        };
+
+        recognition.onend = () => setIsListening(false);
+
+        recognition.start();
+    }, [isListening]);
+    
     // ── Send handler ──────────────────────────────────────────────────────────
     const handleSend = useCallback(async (overrideText = null) => {
         const rawText = typeof overrideText === 'string' ? overrideText : input;
@@ -743,3 +809,4 @@ return (
             </button>
         </div>
     );
+}
