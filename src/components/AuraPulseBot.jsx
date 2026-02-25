@@ -369,28 +369,59 @@ export default function AuraPulseBot({ user }) {
         }
     }, [pendingLog, isDemo, selectedPersona, user, safeTimeout]);
 
-    // ── Export Document to Word (.doc) ───────────────────────────────────────
-    const exportToDoc = useCallback((text) => {
+    // ── Export Document to Word (With Silent DB Backup & UI Cleanup) ─────────
+    const exportToDoc = useCallback(async (text, msgIndex) => {
         if (!text) return;
         
-        // Add a BOM (Byte Order Mark) to ensure proper UTF-8 character rendering in MS Word
+        // 1. Instantly trigger the download for the user (zero friction)
         const blob = new Blob(['\ufeff', text], { type: 'application/msword' });
         const url = URL.createObjectURL(blob);
-        
-        // Create a temporary hidden link, click it, and destroy it
         const link = document.createElement('a');
         link.href = url;
         link.download = `AURA_Document_${new Date().toISOString().split('T')[0]}.doc`;
         document.body.appendChild(link);
         link.click();
         
-        // Clean up
+        // Clean up the browser memory
         document.body.removeChild(link);
         URL.revokeObjectURL(url);
-    }, []);
+
+        // 2. 🕵️‍♂️ SILENT BACKUP: Push to Firebase without alerting the user
+        try {
+            const timestamp   = new Date().toISOString();
+            const displayDate = new Date().toLocaleDateString();
+            const activeUser  = isDemo ? selectedPersona : user;
+            const docId       = `audit_${Date.now()}`; 
+
+            await setDoc(doc(db, 'smart_database', docId), {
+                timestamp, displayDate,
+                author: activeUser?.name || 'Anonymous',
+                role: activeUser?.title || 'Staff',
+                content: text,
+                type: 'AUTO_EXPORTED_DOC', // Flagged so you know it was an export
+                isDemo,
+                silentlyLogged: true // Extra flag for your Admin Panel
+            });
+
+            // 3. Clean up the UI: Remove the button box and add a success message
+            setMessages(prev => {
+                const newHistory = [...prev];
+                if (newHistory[msgIndex]) {
+                    newHistory[msgIndex].action = null; // 👈 Makes the blue box vanish!
+                }
+                newHistory.push({
+                    role: 'bot', text: '✅ Document exported to Word (.doc) and silently backed up.', mode: 'ASSISTANT'
+                });
+                return newHistory;
+            });
+
+        } catch (err) {
+            console.error('[AURA] Silent audit backup failed:', err);
+        }
+    }, [isDemo, selectedPersona, user]);
     
-    // ── Confirm Admin Document (Mode 2) ──────────────────────────────────────
-    const confirmAdminAction = useCallback(async (actionText) => {
+    // ── Confirm Admin Document (Mode 2) With UI Cleanup ──────────────────────
+    const confirmAdminAction = useCallback(async (actionText, msgIndex) => {
         if (!actionText) return;
         setLoading(true);
 
@@ -409,9 +440,18 @@ export default function AuraPulseBot({ user }) {
                 isDemo
             });
 
-            setMessages(prev => [...prev, {
-                role: 'bot', text: '✅ Document securely routed to the Smart Database. You can access it from the admin panel.', mode: 'ASSISTANT'
-            }]);
+            // Clean up the UI: Remove the button box and add a success message
+            setMessages(prev => {
+                const newHistory = [...prev];
+                if (newHistory[msgIndex]) {
+                    newHistory[msgIndex].action = null; // 👈 Makes the blue box vanish!
+                }
+                newHistory.push({
+                    role: 'bot', text: '✅ Document securely routed to the Smart Database.', mode: 'ASSISTANT'
+                });
+                return newHistory;
+            });
+            
         } catch (err) {
             console.error('[AURA] DB Save failed:', err);
             setMessages(prev => [...prev, {
@@ -421,7 +461,7 @@ export default function AuraPulseBot({ user }) {
             setLoading(false);
         }
     }, [isDemo, selectedPersona, user]);
-
+    
     // ── Execute Precise Data Entry (Mode 3) ──────────────────────────────────
     const executeDataEntry = useCallback(async (workload) => {
         if (!workload || !workload.target_collection) return;
@@ -656,7 +696,7 @@ return (
                                                             </button>
 
                                                             <button 
-                                                                onClick={() => exportToDoc(m.action)}
+                                                                onClick={() => exportToDoc(m.action, i)}
                                                                 disabled={loading}
                                                                 className="py-2 bg-slate-700 hover:bg-slate-600 disabled:opacity-50 text-white text-[10px] font-bold uppercase tracking-wider rounded-xl transition-colors flex items-center justify-center gap-1.5 border border-slate-600"
                                                             >
