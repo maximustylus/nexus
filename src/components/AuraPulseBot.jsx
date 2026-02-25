@@ -550,14 +550,19 @@ export default function AuraPulseBot({ user }) {
 
                                                 {/* 🛡️ DATA ENTRY: Commit Workload Button */}
                                                 {isDataEntry && m.db_workload && m.role === 'bot' && !m.isGreeting && (
-                                                    <div className="mt-4 pt-3 border-t border-emerald-900/50">
-                                                        <p className="text-[10px] font-bold text-emerald-400 mb-2 uppercase tracking-widest flex items-center gap-1">
-                                                            <Zap size={12} /> Pending Workload Transaction
-                                                        </p>
-                                                        <div className="bg-slate-950 p-3 rounded-lg border border-emerald-900/50 font-mono text-[10px] text-slate-300 mb-3 whitespace-pre">
-                                                            {`Collection: ${m.db_workload.target_collection}\nDocument:   ${m.db_workload.target_doc}\nField:      ${m.db_workload.target_field}\nValue:      `}
-                                                            <span className="text-emerald-400 font-bold">{m.db_workload.target_value}</span>
-                                                        </div>
+                                                                    <div className="mt-4 pt-3 border-t border-emerald-900/50">
+                                                                        <p className="text-[10px] font-bold text-emerald-400 mb-2 uppercase tracking-widest flex items-center gap-1">
+                                                                            <Zap size={12} /> Pending Workload Transaction
+                                                                        </p>
+                                                                        <div className="bg-slate-950 p-3 rounded-lg border border-emerald-900/50 font-mono text-[10px] text-slate-300 mb-3 whitespace-pre">
+                                                                            {`Collection: ${m.db_workload.target_collection}\nDocument:   ${m.db_workload.target_doc}\nField:      ${m.db_workload.target_field}\nValue:      `}
+                                                                            <span className="text-emerald-400 font-bold">{m.db_workload.target_value}</span>
+                                                                            
+                                                                            {/* 🛡️ NEW: SHOW THE TARGET MONTH */}
+                                                                            {m.db_workload.target_month !== undefined && m.db_workload.target_month !== null && (
+                                                                                <>\nMonth Idx:  <span className="text-amber-400 font-bold">{m.db_workload.target_month}</span></>
+                                                                            )}
+                                                                        </div>
                                                         <button 
                                                             onClick={() => executeDataEntry(m.db_workload)}
                                                             disabled={loading}
