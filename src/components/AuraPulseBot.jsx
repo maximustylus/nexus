@@ -327,11 +327,38 @@ export default function AuraPulseBot({ user }) {
         }
     }, [pendingLog, isDemo, selectedPersona, user, safeTimeout, setMessages]);
 
-    // ── Export Document to Word (With Silent DB Backup & UI Cleanup) ─────────
+    // ─── Export Document to Word (With Silent DB Backup & UI Cleanup) ─────────
     const exportToDoc = useCallback(async (text, msgIndex) => {
         if (!text) return;
         
-        const blob = new Blob(['\ufeff', text], { type: 'application/msword' });
+        // 1. 🛡️ NEW: Convert AURA's Markdown to HTML so Word can style it perfectly
+        const htmlText = text
+            .replace(/^### (.*$)/gim, '<h3>$1</h3>')
+            .replace(/^## (.*$)/gim, '<h2>$1</h2>')
+            .replace(/^# (.*$)/gim, '<h1>$1</h1>')
+            .replace(/\*\*(.*?)\*\*/gim, '<strong>$1</strong>')
+            .replace(/\*(.*?)\*/gim, '<em>$1</em>')
+            .replace(/\n/gim, '<br>');
+
+        // 2. 🛡️ NEW: Wrap in Microsoft Word's official HTML boilerplate with UTF-8 enforced
+        const wordDocumentHTML = `
+            <html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word' xmlns='http://www.w3.org/TR/REC-html40'>
+            <head>
+                <meta charset='utf-8'>
+                <title>AURA Document</title>
+                <style>
+                    body { font-family: 'Calibri', sans-serif; font-size: 11pt; line-height: 1.5; }
+                    h1, h2, h3 { color: #2C3E50; }
+                </style>
+            </head>
+            <body>
+                ${htmlText}
+            </body>
+            </html>
+        `;
+
+        // 3. Create the Blob using our new perfectly formatted HTML string
+        const blob = new Blob([wordDocumentHTML], { type: 'application/msword' });
         const url = URL.createObjectURL(blob);
         const link = document.createElement('a');
         link.href = url;
@@ -342,6 +369,7 @@ export default function AuraPulseBot({ user }) {
         document.body.removeChild(link);
         URL.revokeObjectURL(url);
 
+        // 4. Silent Audit Backup (We still save the raw text to Firebase)
         try {
             const timestamp   = new Date().toISOString();
             const displayDate = new Date().toLocaleDateString();
@@ -364,7 +392,7 @@ export default function AuraPulseBot({ user }) {
                     newHistory[msgIndex].action = null; 
                 }
                 newHistory.push({
-                    role: 'bot', text: '✅ Document exported to Word (.doc) and silently backed up.', mode: 'ASSISTANT'
+                    role: 'bot', text: '✅ Document exported and cleanly formatted for Microsoft Word.', mode: 'ASSISTANT'
                 });
                 return newHistory;
             });
