@@ -1,6 +1,6 @@
 import { DEMO_PERSONAS, LIVE_PERSONAS } from '../config/personas';
 import { X, Send, BrainCircuit, Shield, Ghost, Users, Zap, RefreshCw, AlertTriangle, WifiOff, 
-         FileText, CheckCircle, Database, Trash2, Download, Mic } from 'lucide-react';
+         FileText, CheckCircle, Database, Trash2, Download, Mic, ChevronLeft } from 'lucide-react';
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { db } from '../firebase'; 
 import { getFunctions, httpsCallable } from 'firebase/functions';
@@ -101,17 +101,13 @@ export default function AuraPulseBot({ user }) {
         safeTimeout(() => inputRef.current?.focus(), 300);
     }, [isDemo, user, safeTimeout]);
 
-    // 🛡️ THE FIX: Restored missing useEffect hook to correctly reset the UI when closed
-    useEffect(() => {
-        if (!isOpen) {
-            setView('SELECT');
-            setSelectedPersona(null);
-            setMessages([]);
-            setPendingLog(null);
-            setLiveMemory(null);
-            setIsSending(false);
-        }
-    }, [isOpen]);
+    // 🛡️ UX FIX: Go Back to Grid function
+    const handleBackToGrid = useCallback(() => {
+        setView('SELECT');
+        setSelectedPersona(null);
+        setMessages([]);
+        setPendingLog(null);
+    }, []);
 
     // ── State for the Mic ─────────────────────────────────────────────────────
     const [isListening, setIsListening] = useState(false);
@@ -144,7 +140,6 @@ export default function AuraPulseBot({ user }) {
 
     // ── Voice-to-Text Engine (Mic Icon) ───────────────────────────────────────
     const toggleListening = useCallback(() => {
-        // Check if the browser supports Speech Recognition
         const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
         if (!SpeechRecognition) {
             alert("Voice input is not supported in this browser. Please use Chrome, Edge, or Safari.");
@@ -508,9 +503,25 @@ export default function AuraPulseBot({ user }) {
                     {/* Header */}
                     <div className={`p-5 text-white flex justify-between items-center bg-gradient-to-r ${isAnonymous ? 'from-purple-800 to-indigo-900' : 'from-slate-900 to-indigo-950'}`}>
                         <div className="flex items-center gap-3">
-                            {isAnonymous ? <Ghost size={20} className="text-purple-300 animate-pulse" /> : <BrainCircuit size={20} className="text-indigo-400 animate-pulse" />}
+                            
+                            {/* 🛡️ UX FIX: Back Button replaces the icon when in Chat view */}
+                            {view === 'CHAT' ? (
+                                <button 
+                                    onClick={handleBackToGrid} 
+                                    aria-label="Back to Identity Matrix"
+                                    className="p-1 hover:bg-white/20 rounded-lg transition-all active:scale-90"
+                                >
+                                    <ChevronLeft size={20} className="text-white" />
+                                </button>
+                            ) : (
+                                isAnonymous ? <Ghost size={20} className="text-purple-300 animate-pulse" /> : <BrainCircuit size={20} className="text-indigo-400 animate-pulse" />
+                            )}
+                            
                             <div>
-                                <h3 className="font-bold text-xs uppercase tracking-widest">{isAnonymous ? 'Ghost Protocol' : 'AURA Intelligence'}</h3>
+                                <h3 className="font-bold text-xs uppercase tracking-widest">
+                                    {/* 🛡️ UX FIX: Dynamically update title based on selected persona */}
+                                    {selectedPersona ? selectedPersona.name : (isAnonymous ? 'Ghost Protocol' : 'AURA Intelligence')}
+                                </h3>
                                 <p className="text-[9px] opacity-60 uppercase tracking-tight">{isDemo ? 'Full AI Simulation' : (isOnline ? 'Secure Live Link' : 'Offline')}</p>
                             </div>
                         </div>
@@ -543,7 +554,6 @@ export default function AuraPulseBot({ user }) {
 
                     {/* Scroll Area */}
                     <div className="flex-1 overflow-y-auto p-5 bg-slate-50 dark:bg-slate-950/50 scroll-smooth">
-                        {/* 🛡️ THE FIX: Removed && isDemo to allow live users to see the grid */}
                         {view === 'SELECT' ? (
                             <div className="space-y-5 animate-in fade-in duration-300">
                                 <div className="text-center">
@@ -554,7 +564,6 @@ export default function AuraPulseBot({ user }) {
                                     <p className="text-[10px] text-slate-400 font-semibold uppercase tracking-widest mt-0.5">Select a persona</p>
                                 </div>
                                 <div role="listbox" className="grid grid-cols-2 gap-3">
-                                    {/* 🛡️ THE FIX: Switch arrays dynamically based on Demo mode */}
                                     {(isDemo ? DEMO_PERSONAS : LIVE_PERSONAS).map(p => (
                                         <button key={p.id} onClick={() => startSession(p)} className="p-4 rounded-2xl bg-white border border-slate-200 hover:border-indigo-500 hover:-translate-y-0.5 transition-all text-left">
                                             <div className={`w-7 h-7 ${p.color} rounded-full mb-2.5 ring-2 ring-white`} />
@@ -598,36 +607,7 @@ export default function AuraPulseBot({ user }) {
                                                 
                                                 <div className="whitespace-pre-wrap">{m.text}</div>
 
-                                                {m.isGreeting && m.role === 'bot' && (
-                                                    <div className="mt-4 flex flex-col gap-2">
-                                                        <div className="grid grid-cols-2 gap-2">
-                                                            <button 
-                                                                onClick={() => handleSend('I need a wellbeing check-in.')}
-                                                                disabled={loading}
-                                                                className="py-2 px-3 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 text-[11px] font-bold rounded-xl transition-colors flex flex-col items-center justify-center gap-1 border border-indigo-200"
-                                                            >
-                                                                <span className="text-sm">💚</span> Wellbeing
-                                                            </button>
-                                                            <button 
-                                                                onClick={() => handleSend('I need help with administrative tasks.')}
-                                                                disabled={loading}
-                                                                className="py-2 px-3 bg-blue-50 hover:bg-blue-100 text-blue-700 text-[11px] font-bold rounded-xl transition-colors flex flex-col items-center justify-center gap-1 border border-blue-200"
-                                                            >
-                                                                <span className="text-sm">📁</span> Administrative
-                                                            </button>
-                                                        </div>
-                                                        
-                                                        {!isAnonymous && (
-                                                            <button 
-                                                                onClick={() => startSession((isDemo ? DEMO_PERSONAS : LIVE_PERSONAS).find(p => p.id === 'anon'))}
-                                                                disabled={loading}
-                                                                className="w-full mt-1 py-2 bg-slate-100 hover:bg-slate-200 text-slate-600 text-[10px] font-bold uppercase tracking-widest rounded-xl transition-colors flex items-center justify-center gap-2 border border-slate-200"
-                                                            >
-                                                                <Ghost size={12} /> Go Anonymous
-                                                            </button>
-                                                        )}
-                                                    </div>
-                                                )}
+                                                {/* 🛡️ UX FIX: Redundant Quick Reply buttons have been entirely deleted from here */}
                                                 
                                                 {isAssistant && m.action && !m.isGreeting && (
                                                     <div className="mt-4 pt-3 border-t border-slate-600/50">
