@@ -1,5 +1,6 @@
 import { DEMO_PERSONAS, LIVE_PERSONAS } from '../config/personas';
-import { X, Send, BrainCircuit, Shield, Ghost, Users, Zap, RefreshCw, AlertTriangle, WifiOff, FileText, CheckCircle, Database, Trash2, Download } from 'lucide-react';
+import { X, Send, BrainCircuit, Shield, Ghost, Users, Zap, RefreshCw, AlertTriangle, WifiOff, 
+        FileText, CheckCircle, Database, Trash2, Download, Mic } from 'lucide-react';
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { db } from '../firebase'; 
 import { getFunctions, httpsCallable } from 'firebase/functions';
