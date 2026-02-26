@@ -1,3 +1,4 @@
+import { Document, Packer, Paragraph, TextRun, HeadingLevel } from 'docx';
 import { DEMO_PERSONAS, LIVE_PERSONAS } from '../config/personas';
 import { X, Send, BrainCircuit, Shield, Ghost, Users, Zap, RefreshCw, AlertTriangle, WifiOff, 
          FileText, CheckCircle, Database, Trash2, Download, Mic, ChevronLeft } from 'lucide-react';
@@ -327,50 +328,61 @@ export default function AuraPulseBot({ user }) {
         }
     }, [pendingLog, isDemo, selectedPersona, user, safeTimeout, setMessages]);
 
-    // ─── Export Document to Word (With Silent DB Backup & UI Cleanup) ─────────
+    // ─── Export Document to TRUE .docx (Bulletproof for iOS/Mobile) ──────────
     const exportToDoc = useCallback(async (text, msgIndex) => {
         if (!text) return;
-        
-        // 1. 🛡️ NEW: Convert AURA's Markdown to HTML so Word can style it perfectly
-        const htmlText = text
-            .replace(/^### (.*$)/gim, '<h3>$1</h3>')
-            .replace(/^## (.*$)/gim, '<h2>$1</h2>')
-            .replace(/^# (.*$)/gim, '<h1>$1</h1>')
-            .replace(/\*\*(.*?)\*\*/gim, '<strong>$1</strong>')
-            .replace(/\*(.*?)\*/gim, '<em>$1</em>')
-            .replace(/\n/gim, '<br>');
 
-        // 2. 🛡️ NEW: Wrap in Microsoft Word's official HTML boilerplate with UTF-8 enforced
-        const wordDocumentHTML = `
-            <html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word' xmlns='http://www.w3.org/TR/REC-html40'>
-            <head>
-                <meta charset='utf-8'>
-                <title>AURA Document</title>
-                <style>
-                    body { font-family: 'Calibri', sans-serif; font-size: 11pt; line-height: 1.5; }
-                    h1, h2, h3 { color: #2C3E50; }
-                </style>
-            </head>
-            <body>
-                ${htmlText}
-            </body>
-            </html>
-        `;
-
-        // 3. Create the Blob using our new perfectly formatted HTML string
-        const blob = new Blob([wordDocumentHTML], { type: 'application/msword' });
-        const url = URL.createObjectURL(blob);
-        const link = document.createElement('a');
-        link.href = url;
-        link.download = `AURA_Document_${new Date().toISOString().split('T')[0]}.doc`;
-        document.body.appendChild(link);
-        link.click();
-        
-        document.body.removeChild(link);
-        URL.revokeObjectURL(url);
-
-        // 4. Silent Audit Backup (We still save the raw text to Firebase)
         try {
+            // 1. Parse AURA's Markdown into native Word Paragraphs
+            const lines = text.split('\n');
+            const docChildren = [];
+
+            for (const line of lines) {
+                const trimmed = line.trim();
+                
+                // Add empty space for line breaks
+                if (!trimmed) {
+                    docChildren.push(new Paragraph({ text: "" }));
+                    continue;
+                }
+
+                // Map markdown headers to Word Headers
+                if (trimmed.startsWith('### ')) {
+                    docChildren.push(new Paragraph({ text: trimmed.replace('### ', ''), heading: HeadingLevel.HEADING_3 }));
+                } else if (trimmed.startsWith('## ')) {
+                    docChildren.push(new Paragraph({ text: trimmed.replace('## ', ''), heading: HeadingLevel.HEADING_2 }));
+                } else if (trimmed.startsWith('# ')) {
+                    docChildren.push(new Paragraph({ text: trimmed.replace('# ', ''), heading: HeadingLevel.HEADING_1 }));
+                } else {
+                    // Handle **bold** text within normal paragraphs
+                    const parts = trimmed.split('**');
+                    const textRuns = parts.map((part, index) => {
+                        return new TextRun({ text: part, bold: index % 2 === 1 }); // Every odd index was inside **bold** markers
+                    });
+                    docChildren.push(new Paragraph({ children: textRuns }));
+                }
+            }
+
+            // 2. Build the official DOCX file
+            const wordDoc = new Document({
+                sections: [{
+                    properties: {},
+                    children: docChildren,
+                }]
+            });
+
+            // 3. Pack it into a true ZIP/Blob and trigger the native download
+            const blob = await Packer.toBlob(wordDoc);
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = `AURA_Document_${new Date().toISOString().split('T')[0]}.docx`;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            URL.revokeObjectURL(url);
+
+            // 4. Silent Audit Backup (Leaves a trace in Firebase)
             const timestamp   = new Date().toISOString();
             const displayDate = new Date().toLocaleDateString();
             const activeUser  = isDemo ? selectedPersona : user;
@@ -381,7 +393,7 @@ export default function AuraPulseBot({ user }) {
                 author: activeUser?.name || 'Anonymous',
                 role: activeUser?.title || 'Staff',
                 content: text,
-                type: 'AUTO_EXPORTED_DOC', 
+                type: 'AUTO_EXPORTED_DOCX', 
                 isDemo,
                 silentlyLogged: true 
             });
@@ -392,16 +404,19 @@ export default function AuraPulseBot({ user }) {
                     newHistory[msgIndex].action = null; 
                 }
                 newHistory.push({
-                    role: 'bot', text: '✅ Document exported and cleanly formatted for Microsoft Word.', mode: 'ASSISTANT'
+                    role: 'bot', text: '✅ Document exported as a true .docx file (iOS compatible).', mode: 'ASSISTANT'
                 });
                 return newHistory;
             });
 
         } catch (err) {
-            console.error('[AURA] Silent audit backup failed:', err);
+            console.error('[AURA] DOCX Export failed:', err);
+            setMessages(prev => [...prev, {
+                role: 'bot', text: '⚠️ Document export failed. Please check your connection.', isError: true, mode: 'ASSISTANT'
+            }]);
         }
     }, [isDemo, selectedPersona, user, setMessages]);
-    
+         
     // ── Confirm Admin Document (Mode 2) With UI Cleanup ──────────────────────
     const confirmAdminAction = useCallback(async (actionText, msgIndex) => {
         if (!actionText) return;
