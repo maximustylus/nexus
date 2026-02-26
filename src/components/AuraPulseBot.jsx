@@ -1,6 +1,6 @@
 import { DEMO_PERSONAS, LIVE_PERSONAS } from '../config/personas';
 import { X, Send, BrainCircuit, Shield, Ghost, Users, Zap, RefreshCw, AlertTriangle, WifiOff, 
-        FileText, CheckCircle, Database, Trash2, Download, Mic } from 'lucide-react';
+         FileText, CheckCircle, Database, Trash2, Download, Mic } from 'lucide-react';
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { db } from '../firebase'; 
 import { getFunctions, httpsCallable } from 'firebase/functions';
@@ -101,26 +101,9 @@ export default function AuraPulseBot({ user }) {
         safeTimeout(() => inputRef.current?.focus(), 300);
     }, [isDemo, user, safeTimeout]);
 
+    // 🛡️ THE FIX: Restored missing useEffect hook to correctly reset the UI when closed
     useEffect(() => {
-        if (isOpen && !isDemo && user && view === 'SELECT') {
-            const initLiveSession = async () => {
-                let memory = null;
-                if (user?.id) {
-                    try {
-                        const snap = await getDoc(doc(db, 'users', user.id));
-                        if (snap.exists()) {
-                            memory = snap.data()?.aura_memory ?? null;
-                            if (memory) setLiveMemory(memory);
-                        }
-                    } catch (e) {
-                        console.warn('[AURA] Memory fetch failed — starting stateless.', e);
-                    }
-                }
-                startSession({ name: user.name, title: user.title ?? 'Staff', id: user.id, prompt: '', memory });
-            };
-            initLiveSession();
-        }
-        if (!isOpen && isDemo) {
+        if (!isOpen) {
             setView('SELECT');
             setSelectedPersona(null);
             setMessages([]);
@@ -128,7 +111,7 @@ export default function AuraPulseBot({ user }) {
             setLiveMemory(null);
             setIsSending(false);
         }
-    }, [isOpen, isDemo, user, view, startSession]);
+    }, [isOpen]);
 
     // ── State for the Mic ─────────────────────────────────────────────────────
     const [isListening, setIsListening] = useState(false);
@@ -182,7 +165,6 @@ export default function AuraPulseBot({ user }) {
         
         recognition.onresult = (event) => {
             const transcript = event.results[0][0].transcript;
-
             setInput(prev => (prev + ' ' + transcript).trim().slice(0, MAX_INPUT));
         };
 
@@ -356,7 +338,6 @@ export default function AuraPulseBot({ user }) {
     const exportToDoc = useCallback(async (text, msgIndex) => {
         if (!text) return;
         
-        // 1. Instantly trigger the download for the user (zero friction)
         const blob = new Blob(['\ufeff', text], { type: 'application/msword' });
         const url = URL.createObjectURL(blob);
         const link = document.createElement('a');
@@ -365,11 +346,9 @@ export default function AuraPulseBot({ user }) {
         document.body.appendChild(link);
         link.click();
         
-        // Clean up the browser memory
         document.body.removeChild(link);
         URL.revokeObjectURL(url);
 
-        // 2. 🕵️‍♂️ SILENT BACKUP: Push to Firebase without alerting the user
         try {
             const timestamp   = new Date().toISOString();
             const displayDate = new Date().toLocaleDateString();
@@ -381,16 +360,15 @@ export default function AuraPulseBot({ user }) {
                 author: activeUser?.name || 'Anonymous',
                 role: activeUser?.title || 'Staff',
                 content: text,
-                type: 'AUTO_EXPORTED_DOC', // Flagged so you know it was an export
+                type: 'AUTO_EXPORTED_DOC', 
                 isDemo,
-                silentlyLogged: true // Extra flag for your Admin Panel
+                silentlyLogged: true 
             });
 
-            // 3. Clean up the UI: Remove the button box and add a success message
             setMessages(prev => {
                 const newHistory = [...prev];
                 if (newHistory[msgIndex]) {
-                    newHistory[msgIndex].action = null; // 👈 Makes the blue box vanish!
+                    newHistory[msgIndex].action = null; 
                 }
                 newHistory.push({
                     role: 'bot', text: '✅ Document exported to Word (.doc) and silently backed up.', mode: 'ASSISTANT'
@@ -423,11 +401,10 @@ export default function AuraPulseBot({ user }) {
                 isDemo
             });
 
-            // Clean up the UI: Remove the button box and add a success message
             setMessages(prev => {
                 const newHistory = [...prev];
                 if (newHistory[msgIndex]) {
-                    newHistory[msgIndex].action = null; // 👈 Makes the blue box vanish!
+                    newHistory[msgIndex].action = null; 
                 }
                 newHistory.push({
                     role: 'bot', text: '✅ Document securely routed to the Smart Database.', mode: 'ASSISTANT'
@@ -451,14 +428,11 @@ export default function AuraPulseBot({ user }) {
         setLoading(true);
 
         try {
-            // 🛡️ THE BULLETPROOF SANITIZER
-            // Forces "aLiF", "ying Xian", or "Jan 2026" strictly into "alif", "ying_xian", and "jan_2026"
             const rawDocId = workload.target_doc || 'null';
             const safeDocId = rawDocId.toLowerCase().trim().replace(/[\s-]+/g, '_');
 
             const collectionName = isDemo ? `demo_${workload.target_collection}` : workload.target_collection;
             
-            // 🛡️ Use safeDocId for safety check
             if (safeDocId === 'null' || safeDocId === '') {
                  throw new Error("Missing target document. Please ask AURA to clarify who this is for.");
             }
@@ -466,7 +440,6 @@ export default function AuraPulseBot({ user }) {
             const docRef = doc(db, collectionName, safeDocId);
             let updatedMessage = '';
 
-            // 🛡️ SMART ARRAY HANDLING FOR STAFF LOADS
             if (workload.target_collection === 'staff_loads') {
                 
                 const monthIndex = parseInt(workload.target_month);
@@ -493,7 +466,6 @@ export default function AuraPulseBot({ user }) {
                 updatedMessage = `[staff_loads -> ${safeDocId} -> ${monthNames[monthIndex]}: ${workload.target_value}]`;
 
             } else {
-                // STANDARD LOGIC: Flat field update (for monthly_workload)
                 await setDoc(docRef, {
                     [workload.target_field]: Number(workload.target_value),
                     last_updated_by: user?.name || 'AURA System',
@@ -525,7 +497,8 @@ export default function AuraPulseBot({ user }) {
     const isAnonymous = selectedPersona?.id === 'anon';
     const inputLength = input.length;
     const isNearLimit = inputLength > MAX_INPUT * 0.8;
-return (
+
+    return (
         <div className="fixed bottom-24 xl:bottom-6 right-4 xl:right-6 z-50 flex flex-col items-end drop-shadow-2xl">
             {isOpen && (
                 <div
@@ -544,7 +517,6 @@ return (
                         <div className="flex items-center gap-1.5">
                             {!isOnline && <WifiOff size={13} className="text-yellow-300" />}
                             
-                            {/* 🛡️ RESTORED: CLEAR CHAT BUTTON */}
                             {view === 'CHAT' && (
                                 <button 
                                     onClick={handleClearChat} 
@@ -571,7 +543,8 @@ return (
 
                     {/* Scroll Area */}
                     <div className="flex-1 overflow-y-auto p-5 bg-slate-50 dark:bg-slate-950/50 scroll-smooth">
-                        {view === 'SELECT' && isDemo ? (
+                        {/* 🛡️ THE FIX: Removed && isDemo to allow live users to see the grid */}
+                        {view === 'SELECT' ? (
                             <div className="space-y-5 animate-in fade-in duration-300">
                                 <div className="text-center">
                                     <div className="w-10 h-10 bg-indigo-500/10 rounded-2xl flex items-center justify-center mx-auto mb-2 border border-indigo-500/20">
@@ -581,7 +554,8 @@ return (
                                     <p className="text-[10px] text-slate-400 font-semibold uppercase tracking-widest mt-0.5">Select a persona</p>
                                 </div>
                                 <div role="listbox" className="grid grid-cols-2 gap-3">
-                                    {PERSONAS.map(p => (
+                                    {/* 🛡️ THE FIX: Switch arrays dynamically based on Demo mode */}
+                                    {(isDemo ? DEMO_PERSONAS : LIVE_PERSONAS).map(p => (
                                         <button key={p.id} onClick={() => startSession(p)} className="p-4 rounded-2xl bg-white border border-slate-200 hover:border-indigo-500 hover:-translate-y-0.5 transition-all text-left">
                                             <div className={`w-7 h-7 ${p.color} rounded-full mb-2.5 ring-2 ring-white`} />
                                             <h4 className="text-[11px] font-black text-slate-900 uppercase truncate">{p.name}</h4>
@@ -593,7 +567,6 @@ return (
                         ) : (
                             <div className="space-y-4">
                                 {messages.map((m, i) => {
-                                    // 🛡️ TRI-MODE UI STYLING
                                     const isAssistant = m.mode === 'ASSISTANT';
                                     const isDataEntry = m.mode === 'DATA_ENTRY';
                                     const bubbleStyle = m.role === 'user' 
@@ -610,13 +583,11 @@ return (
                                         <div key={i} className={`flex ${m.role === 'bot' ? 'justify-start' : 'justify-end'} animate-in fade-in slide-in-from-bottom-1`}>
                                             <div className={`max-w-[87%] px-4 py-3.5 rounded-[1.5rem] text-sm leading-relaxed ${bubbleStyle}`}>
                                                 
-                                                {/* Assistant Badge */}
                                                 {isAssistant && m.role === 'bot' && !m.isGreeting && (
                                                     <div className="flex items-center gap-1.5 mb-2 text-[10px] font-black uppercase tracking-widest text-blue-400">
                                                         <FileText size={12} /> Operations Assist
                                                     </div>
                                                 )}
-                                                {/* Data Entry Badge */}
                                                 {isDataEntry && m.role === 'bot' && !m.isGreeting && (
                                                     <div className="flex items-center gap-1.5 mb-2 text-[10px] font-black uppercase tracking-widest text-emerald-400">
                                                         <Database size={12} /> Database Agent
@@ -627,7 +598,6 @@ return (
                                                 
                                                 <div className="whitespace-pre-wrap">{m.text}</div>
 
-                                                {/* 🛡️ QUICK REPLY BUTTONS FOR GREETING */}
                                                 {m.isGreeting && m.role === 'bot' && (
                                                     <div className="mt-4 flex flex-col gap-2">
                                                         <div className="grid grid-cols-2 gap-2">
@@ -647,7 +617,6 @@ return (
                                                             </button>
                                                         </div>
                                                         
-                                                        {/* Only show the Anonymous button if they aren't already Anonymous */}
                                                         {!isAnonymous && (
                                                             <button 
                                                                 onClick={() => startSession((isDemo ? DEMO_PERSONAS : LIVE_PERSONAS).find(p => p.id === 'anon'))}
@@ -660,7 +629,6 @@ return (
                                                     </div>
                                                 )}
                                                 
-                                                {/* 🛡️ ASSISTANT: Document Action Buttons */}
                                                 {isAssistant && m.action && !m.isGreeting && (
                                                     <div className="mt-4 pt-3 border-t border-slate-600/50">
                                                         <p className="text-[10px] font-medium text-slate-400 mb-2 uppercase tracking-wide">Extracted Data/Action:</p>
@@ -690,7 +658,6 @@ return (
                                                     </div>
                                                 )}
 
-                                                {/* 🛡️ DATA ENTRY: Commit Workload Button */}
                                                 {isDataEntry && m.db_workload && m.db_workload.target_collection && m.db_workload.target_collection !== 'null' && m.role === 'bot' && !m.isGreeting && (
                                                     <div className="mt-4 pt-3 border-t border-emerald-900/50">
                                                         <p className="text-[10px] font-bold text-emerald-400 mb-2 uppercase tracking-widest flex items-center gap-1">
@@ -700,7 +667,6 @@ return (
                                                             {`Collection: ${m.db_workload.target_collection}\nDocument:   ${m.db_workload.target_doc}\nField:      ${m.db_workload.target_field}\nValue:      `}
                                                             <span className="text-emerald-400 font-bold">{m.db_workload.target_value}</span>
                                                             
-                                                            {/* 🛡️ SHOW THE TARGET MONTH IF IT EXISTS */}
                                                             {m.db_workload.target_month !== undefined && m.db_workload.target_month !== null && (
                                                                 <>{`\nMonth Idx:  `}<span className="text-amber-400 font-bold">{m.db_workload.target_month}</span></>
                                                             )}
@@ -721,7 +687,6 @@ return (
                                     );
                                 })}
 
-                                {/* PULSE LOG CARD (Coach Mode Only) */}
                                 {pendingLog && (() => {
                                     const cfg = getPhaseConfig(pendingLog.phase);
                                     return (
@@ -803,7 +768,6 @@ return (
                                     maxLength={MAX_INPUT}
                                 />
                                 
-                                {/* 🛡️ RESTORED: VOICE-TO-TEXT MIC BUTTON & SEND BUTTON */}
                                 <div className="flex items-center gap-1">
                                     <button 
                                         onClick={toggleListening} 
