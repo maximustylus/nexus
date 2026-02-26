@@ -48,6 +48,8 @@ export default function AuraPulseBot({ user }) {
     const [pendingLog,       setPendingLog]       = useState(null);
     const [isOnline,         setIsOnline]         = useState(navigator.onLine);
     const [liveMemory,       setLiveMemory]       = useState(null);
+    
+    // History tied strictly to context to prevent amnesia
     const messages = auraHistory;
     const setMessages = setAuraHistory;   
 
@@ -99,15 +101,15 @@ export default function AuraPulseBot({ user }) {
         setMessages([{ role: 'bot', text: greeting, isGreeting: true, mode: 'NEUTRAL' }]);
         setView('CHAT');
         safeTimeout(() => inputRef.current?.focus(), 300);
-    }, [isDemo, user, safeTimeout]);
+    }, [isDemo, user, safeTimeout, setMessages]);
 
-    // 🛡️ UX FIX: Go Back to Grid function
+    // 🛡️ UX FIX: Go Back to Grid function (Wipes chat, returns to selection)
     const handleBackToGrid = useCallback(() => {
         setView('SELECT');
         setSelectedPersona(null);
-        setMessages([]);
+        setMessages([]); 
         setPendingLog(null);
-    }, []);
+    }, [setMessages]);
 
     // ── State for the Mic ─────────────────────────────────────────────────────
     const [isListening, setIsListening] = useState(false);
@@ -118,7 +120,6 @@ export default function AuraPulseBot({ user }) {
         
         setPendingLog(null);
         
-        // Regenerate the greeting
         const isAnon = selectedPersona?.id === 'anon';
         let greeting;
         if (isDemo) {
@@ -131,12 +132,9 @@ export default function AuraPulseBot({ user }) {
             greeting = `Hi ${(user?.name ?? 'there').split(' ')[0]}. AURA here. What kind of support do you need today?`;
         }
 
-        // Wipe history and set only the greeting
         setMessages([{ role: 'bot', text: greeting, isGreeting: true, mode: 'NEUTRAL' }]);
-        
-        // Refocus the input box
         setTimeout(() => inputRef.current?.focus(), 300);
-    }, [isDemo, user, selectedPersona, liveMemory]);
+    }, [isDemo, user, selectedPersona, liveMemory, setMessages]);
 
     // ── Voice-to-Text Engine (Mic Icon) ───────────────────────────────────────
     const toggleListening = useCallback(() => {
@@ -262,7 +260,7 @@ export default function AuraPulseBot({ user }) {
             setLoading(false);
             setIsSending(false);
         }
-    }, [input, loading, isSending, isOnline, messages, selectedPersona, isDemo, liveMemory, user]);
+    }, [input, loading, isSending, isOnline, messages, selectedPersona, isDemo, liveMemory, user, setMessages]);
 
     const handleKeyDown = useCallback((e) => {
             if (e.key === 'Enter' && !e.repeat) {
@@ -327,7 +325,7 @@ export default function AuraPulseBot({ user }) {
         } finally {
             setLoading(false);
         }
-    }, [pendingLog, isDemo, selectedPersona, user, safeTimeout]);
+    }, [pendingLog, isDemo, selectedPersona, user, safeTimeout, setMessages]);
 
     // ── Export Document to Word (With Silent DB Backup & UI Cleanup) ─────────
     const exportToDoc = useCallback(async (text, msgIndex) => {
@@ -374,7 +372,7 @@ export default function AuraPulseBot({ user }) {
         } catch (err) {
             console.error('[AURA] Silent audit backup failed:', err);
         }
-    }, [isDemo, selectedPersona, user]);
+    }, [isDemo, selectedPersona, user, setMessages]);
     
     // ── Confirm Admin Document (Mode 2) With UI Cleanup ──────────────────────
     const confirmAdminAction = useCallback(async (actionText, msgIndex) => {
@@ -415,7 +413,7 @@ export default function AuraPulseBot({ user }) {
         } finally {
             setLoading(false);
         }
-    }, [isDemo, selectedPersona, user]);
+    }, [isDemo, selectedPersona, user, setMessages]);
     
     // ── Execute Precise Data Entry (Mode 3) ──────────────────────────────────
     const executeDataEntry = useCallback(async (workload) => {
@@ -425,7 +423,6 @@ export default function AuraPulseBot({ user }) {
         try {
             const rawDocId = workload.target_doc || 'null';
             const safeDocId = rawDocId.toLowerCase().trim().replace(/[\s-]+/g, '_');
-
             const collectionName = isDemo ? `demo_${workload.target_collection}` : workload.target_collection;
             
             if (safeDocId === 'null' || safeDocId === '') {
@@ -435,8 +432,8 @@ export default function AuraPulseBot({ user }) {
             const docRef = doc(db, collectionName, safeDocId);
             let updatedMessage = '';
 
+            // 🛡️ UX FIX: Translating backend schema into human-readable success text
             if (workload.target_collection === 'staff_loads') {
-                
                 const monthIndex = parseInt(workload.target_month);
                 if (isNaN(monthIndex) || monthIndex < 0 || monthIndex > 11) {
                     throw new Error("A valid month (e.g., January) is required to update personal workload.");
@@ -444,7 +441,6 @@ export default function AuraPulseBot({ user }) {
 
                 const docSnap = await getDoc(docRef);
                 let currentData = Array(12).fill(0);
-                
                 if (docSnap.exists() && Array.isArray(docSnap.data().data)) {
                     currentData = [...docSnap.data().data];
                 }
@@ -457,9 +453,8 @@ export default function AuraPulseBot({ user }) {
                     last_updated_at: new Date().toISOString()
                 }, { merge: true });
                 
-                const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-                updatedMessage = `[staff_loads -> ${safeDocId} -> ${monthNames[monthIndex]}: ${workload.target_value}]`;
-
+                const monthNames = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+                updatedMessage = `Logged ${workload.target_value} patients for ${monthNames[monthIndex]}.`;
             } else {
                 await setDoc(docRef, {
                     [workload.target_field]: Number(workload.target_value),
@@ -467,7 +462,8 @@ export default function AuraPulseBot({ user }) {
                     last_updated_at: new Date().toISOString()
                 }, { merge: true });
                 
-                updatedMessage = `[${workload.target_collection} -> ${safeDocId} -> ${workload.target_field}: ${workload.target_value}]`;
+                const cleanField = workload.target_field.replace(/_/g, ' ');
+                updatedMessage = `Updated team ${cleanField} to ${workload.target_value}.`;
             }
 
             setMessages(prev => [...prev, {
@@ -487,7 +483,7 @@ export default function AuraPulseBot({ user }) {
         } finally {
             setLoading(false);
         }
-    }, [isDemo, user]);
+    }, [isDemo, user, setMessages]);
 
     const isAnonymous = selectedPersona?.id === 'anon';
     const inputLength = input.length;
@@ -503,8 +499,6 @@ export default function AuraPulseBot({ user }) {
                     {/* Header */}
                     <div className={`p-5 text-white flex justify-between items-center bg-gradient-to-r ${isAnonymous ? 'from-purple-800 to-indigo-900' : 'from-slate-900 to-indigo-950'}`}>
                         <div className="flex items-center gap-3">
-                            
-                            {/* 🛡️ UX FIX: Back Button replaces the icon when in Chat view */}
                             {view === 'CHAT' ? (
                                 <button 
                                     onClick={handleBackToGrid} 
@@ -519,7 +513,6 @@ export default function AuraPulseBot({ user }) {
                             
                             <div>
                                 <h3 className="font-bold text-xs uppercase tracking-widest">
-                                    {/* 🛡️ UX FIX: Dynamically update title based on selected persona */}
                                     {selectedPersona ? selectedPersona.name : (isAnonymous ? 'Ghost Protocol' : 'AURA Intelligence')}
                                 </h3>
                                 <p className="text-[9px] opacity-60 uppercase tracking-tight">{isDemo ? 'Full AI Simulation' : (isOnline ? 'Secure Live Link' : 'Offline')}</p>
@@ -576,7 +569,8 @@ export default function AuraPulseBot({ user }) {
                         ) : (
                             <div className="space-y-4">
                                 {messages.map((m, i) => {
-                                    const isAssistant = m.mode === 'ASSISTANT';
+                                    // 🛡️ UX FIX: Show document export box for Research too
+                                    const isAssistant = m.mode === 'ASSISTANT' || m.mode === 'RESEARCH';
                                     const isDataEntry = m.mode === 'DATA_ENTRY';
                                     const bubbleStyle = m.role === 'user' 
                                         ? (isAnonymous ? 'bg-purple-600 text-white rounded-tr-none' : 'bg-indigo-600 text-white rounded-tr-none')
@@ -594,7 +588,7 @@ export default function AuraPulseBot({ user }) {
                                                 
                                                 {isAssistant && m.role === 'bot' && !m.isGreeting && (
                                                     <div className="flex items-center gap-1.5 mb-2 text-[10px] font-black uppercase tracking-widest text-blue-400">
-                                                        <FileText size={12} /> Operations Assist
+                                                        <FileText size={12} /> {m.mode === 'RESEARCH' ? 'Academic Review' : 'Operations Assist'}
                                                     </div>
                                                 )}
                                                 {isDataEntry && m.role === 'bot' && !m.isGreeting && (
@@ -606,8 +600,6 @@ export default function AuraPulseBot({ user }) {
                                                 {m.isError && <AlertTriangle size={13} className="inline mr-1.5 mb-0.5 text-red-500" />}
                                                 
                                                 <div className="whitespace-pre-wrap">{m.text}</div>
-
-                                                {/* 🛡️ UX FIX: Redundant Quick Reply buttons have been entirely deleted from here */}
                                                 
                                                 {isAssistant && m.action && !m.isGreeting && (
                                                     <div className="mt-4 pt-3 border-t border-slate-600/50">
@@ -643,21 +635,27 @@ export default function AuraPulseBot({ user }) {
                                                         <p className="text-[10px] font-bold text-emerald-400 mb-2 uppercase tracking-widest flex items-center gap-1">
                                                             <Zap size={12} /> Pending Workload Transaction
                                                         </p>
-                                                        <div className="bg-slate-950 p-3 rounded-lg border border-emerald-900/50 font-mono text-[10px] text-slate-300 mb-3 whitespace-pre">
-                                                            {`Collection: ${m.db_workload.target_collection}\nDocument:   ${m.db_workload.target_doc}\nField:      ${m.db_workload.target_field}\nValue:      `}
-                                                            <span className="text-emerald-400 font-bold">{m.db_workload.target_value}</span>
-                                                            
-                                                            {m.db_workload.target_month !== undefined && m.db_workload.target_month !== null && (
-                                                                <>{`\nMonth Idx:  `}<span className="text-amber-400 font-bold">{m.db_workload.target_month}</span></>
+                                                        
+                                                        {/* 🛡️ UX FIX: Secure, Human-readable translation of the backend schema */}
+                                                        <div className="bg-slate-950 p-3 rounded-lg border border-emerald-900/50 text-xs text-slate-300 mb-3 leading-relaxed">
+                                                            {m.db_workload.target_collection === 'staff_loads' ? (
+                                                                <div>
+                                                                    Preparing to log <span className="text-emerald-400 font-bold text-sm">{m.db_workload.target_value}</span> patients for <span className="text-amber-400 font-bold">{m.db_workload.target_month !== null && m.db_workload.target_month !== undefined ? ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"][m.db_workload.target_month] : 'Unknown Month'}</span>.
+                                                                </div>
+                                                            ) : (
+                                                                <div>
+                                                                    Preparing to update team <span className="text-amber-400 font-bold">{m.db_workload.target_field?.replace(/_/g, ' ')}</span> to <span className="text-emerald-400 font-bold text-sm">{m.db_workload.target_value}</span>.
+                                                                </div>
                                                             )}
                                                         </div>
+
                                                         <button 
                                                             onClick={() => executeDataEntry(m.db_workload)}
                                                             disabled={loading}
                                                             className="w-full py-2 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white text-[11px] font-bold uppercase tracking-wider rounded-xl transition-colors flex items-center justify-center gap-2"
                                                         >
                                                             {loading ? <RefreshCw size={14} className="animate-spin" /> : <Shield size={14} />} 
-                                                            Commit Workload to Database
+                                                            Commit Workload
                                                         </button>
                                                     </div>
                                                 )}
