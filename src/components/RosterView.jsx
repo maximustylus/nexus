@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { db } from '../firebase';
-import { doc, onSnapshot, setDoc } from 'firebase/firestore';
+// 🛡️ NEW: Imported collection, addDoc, and serverTimestamp for the Swap Engine
+import { doc, onSnapshot, setDoc, collection, addDoc, serverTimestamp } from 'firebase/firestore';
 import { Calendar, Download, Settings, ChevronLeft, ChevronRight, Play, FileSpreadsheet, ShieldAlert, ArrowRightLeft, X } from 'lucide-react';
 import { generateRoster, downloadICS, downloadCSV } from '../utils/auraEngine';
 
@@ -8,13 +9,12 @@ import { generateRoster, downloadICS, downloadCSV } from '../utils/auraEngine';
 import { useNexus } from '../context/NexusContext';
 import { MOCK_ROSTER, MOCK_STAFF_NAMES } from '../data/mockData';
 
-// 🛡️ FIX: Accept 'user' prop so we know who is logged in
 const RosterView = ({ user }) => {
     // --- CONTEXT ---
     const { isDemo } = useNexus();
 
     // --- STATE ---
-    const [currentDate, setCurrentDate] = useState(new Date(2026, 1, 1)); // Default to Feb 2026
+    const [currentDate, setCurrentDate] = useState(new Date(2026, 1, 1)); 
     const [rosterData, setRosterData] = useState({});
     const [isConfigOpen, setIsConfigOpen] = useState(false);
     
@@ -23,10 +23,11 @@ const RosterView = ({ user }) => {
     const [selectedShift, setSelectedShift] = useState(null);
     const [swapTargetStaff, setSwapTargetStaff] = useState('');
     const [swapReason, setSwapReason] = useState('');
+    const [isSubmitting, setIsSubmitting] = useState(false);
     
-    // Default Config (Editable via Wizard)
+    // Default Config 
     const [config, setConfig] = useState({
-        staff: ["Brandon", "Ying Xian", "Derlinder", "Fadzlynn"], // Default Live Staff
+        staff: ["Brandon", "Ying Xian", "Derlinder", "Fadzlynn"], 
         tasks: ["EFT", "IPT+SKG", "NC", "FSG+WI"],
         startDate: "2026-02-01",
         weeks: 4
@@ -88,7 +89,6 @@ const RosterView = ({ user }) => {
 
     // --- SWAP LOGIC ---
     const handleShiftClick = (shift, dateKey) => {
-        // Only allow clicking if they are an admin OR if it is their own shift
         const isMyShift = isDemo ? true : shift.staff === user?.name;
         
         if (isMyShift || user?.role === 'admin') {
@@ -97,23 +97,42 @@ const RosterView = ({ user }) => {
         }
     };
 
-    const submitSwapRequest = (e) => {
+    // 🛡️ NEW: The Firebase Database Engine
+    const submitSwapRequest = async (e) => {
         e.preventDefault();
         if (!swapTargetStaff) return;
         
-        // Phase 3 Preview: This is where we will push to Firebase
-        console.log("SWAP REQUESTED:", {
-            fromUser: isDemo ? 'Tony Stark' : user?.name,
-            originalShift: selectedShift,
-            targetColleague: swapTargetStaff,
-            reason: swapReason,
-            status: 'PENDING'
-        });
+        setIsSubmitting(true);
 
-        alert(`Swap request sent to ${swapTargetStaff}! They will be notified by AURA.`);
-        setIsSwapModalOpen(false);
-        setSwapTargetStaff('');
-        setSwapReason('');
+        try {
+            if (isDemo) {
+                // Fake delay for demo mode
+                await new Promise(resolve => setTimeout(resolve, 800));
+                alert(`🧪 [SANDBOX] Swap request intercepted! AURA notified ${swapTargetStaff}.`);
+            } else {
+                // 📡 LIVE MODE: Pushing the request to Firebase Firestore
+                await addDoc(collection(db, 'shift_swaps'), {
+                    requestedBy: user?.name || user?.email || 'Unknown User',
+                    targetStaff: swapTargetStaff,
+                    originalShiftDate: selectedShift.date,
+                    originalTask: selectedShift.task,
+                    reason: swapReason,
+                    status: 'PENDING',
+                    timestamp: serverTimestamp()
+                });
+                alert(`✅ Swap request securely transmitted to ${swapTargetStaff}!`);
+            }
+            
+            // Clean up and close modal
+            setIsSwapModalOpen(false);
+            setSwapTargetStaff('');
+            setSwapReason('');
+        } catch (error) {
+            console.error("🔥 Swap Request Failed:", error);
+            alert("Could not send request. Please check your connection.");
+        } finally {
+            setIsSubmitting(false);
+        }
     };
 
     // --- RENDER HELPERS ---
@@ -141,7 +160,6 @@ const RosterView = ({ user }) => {
                             {isDemo ? 'Simulation Roster' : 'AURA Roster'}
                         </h2>
                         
-                        {/* DATE NAVIGATOR */}
                         <div className="flex items-center gap-3 mt-1">
                             <button onClick={() => handleMonthChange(-1)} className="p-1 hover:bg-slate-100 dark:hover:bg-slate-700 rounded transition-colors text-slate-500">
                                 <ChevronLeft size={18} />
@@ -179,12 +197,10 @@ const RosterView = ({ user }) => {
                     </div>
                 ))}
                 
-                {/* Empty Cells */}
                 {Array.from({ length: firstDayIndex }).map((_, i) => (
                     <div key={`empty-${i}`} className="bg-white dark:bg-slate-900 h-32" />
                 ))}
 
-                {/* Days */}
                 {Array.from({ length: daysInMonth }).map((_, i) => {
                     const day = i + 1;
                     const { shifts, dateKey } = getShifts(day);
@@ -195,7 +211,6 @@ const RosterView = ({ user }) => {
                             
                             <div className="mt-5 flex flex-col gap-1 overflow-y-auto max-h-[90px] custom-scrollbar">
                                 {shifts.map((s, idx) => {
-                                    // Identify if the logged-in user owns this shift
                                     const isMyShift = isDemo ? true : s.staff === user?.name;
 
                                     return (
@@ -240,7 +255,6 @@ const RosterView = ({ user }) => {
                         </div>
 
                         <form onSubmit={submitSwapRequest} className="p-6">
-                            {/* Shift Details */}
                             <div className="bg-slate-50 dark:bg-slate-800/50 p-4 rounded-xl border border-slate-200 dark:border-slate-700 mb-6">
                                 <p className="text-[10px] text-slate-500 dark:text-slate-400 font-bold uppercase tracking-widest mb-1">Your Shift to Swap</p>
                                 <p className="text-sm font-black text-slate-800 dark:text-white mb-1">{selectedShift.date}</p>
@@ -250,7 +264,6 @@ const RosterView = ({ user }) => {
                                 </div>
                             </div>
 
-                            {/* Target Selection */}
                             <div className="space-y-4 mb-6">
                                 <div>
                                     <label className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1 block">Request Coverage From:</label>
@@ -280,16 +293,16 @@ const RosterView = ({ user }) => {
 
                             <button 
                                 type="submit"
-                                className="w-full py-4 bg-indigo-600 hover:bg-indigo-700 text-white font-black text-xs uppercase tracking-widest rounded-xl transition-colors shadow-lg shadow-indigo-500/30 flex items-center justify-center gap-2"
+                                disabled={isSubmitting}
+                                className="w-full py-4 bg-indigo-600 hover:bg-indigo-700 disabled:bg-indigo-400 text-white font-black text-xs uppercase tracking-widest rounded-xl transition-colors shadow-lg shadow-indigo-500/30 flex items-center justify-center gap-2"
                             >
-                                <ArrowRightLeft size={16} /> Submit Request
+                                <ArrowRightLeft size={16} /> {isSubmitting ? 'Transmitting...' : 'Submit Request'}
                             </button>
                         </form>
                     </div>
                 </div>
             )}
 
-            {/* OLD CONFIGURATION WIZARD MODAL CODE STAYS HERE EXACTLY AS IT WAS... */}
             {isConfigOpen && (
                 <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-md flex items-center justify-center z-[100] p-4">
                     <div className="bg-white dark:bg-slate-800 w-full max-w-lg rounded-2xl shadow-2xl p-6 border border-slate-200 dark:border-slate-700 animate-in zoom-in-95">
