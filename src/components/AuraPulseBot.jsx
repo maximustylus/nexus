@@ -81,6 +81,10 @@ export default function AuraPulseBot({ user }) {
     useEffect(() => {
         messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
     }, [messages, loading, pendingLog]);
+    
+    useEffect(() => {
+        window.dispatchEvent(new CustomEvent('aura-toggled', { detail: isOpen }));
+    }, [isOpen]);
 
     // ── Session start ─────────────────────────────────────────────────────────
     const startSession = useCallback((persona) => {
