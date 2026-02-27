@@ -42,8 +42,8 @@ const ScrollToTop = () => {
     return (
         <button
             onClick={scrollToTop}
-            // 🛡️ FIX: Elevated to bottom-28 and z-[100] to ensure it clears mobile browser bars and other widgets
-            className={`fixed bottom-28 left-1/2 -translate-x-1/2 z-[100] flex items-center gap-2 px-4 py-2.5 bg-slate-900/90 hover:bg-slate-800 backdrop-blur-md border border-slate-700 text-white text-[10px] font-black uppercase tracking-widest rounded-full shadow-[0_10px_30px_rgba(0,0,0,0.5)] transition-all duration-300 ease-in-out md:hidden ${
+            // Change the className inside your <button> to this:
+            className={`fixed bottom-24 xl:bottom-6 left-1/2 -translate-x-1/2 z-[100] flex items-center gap-2 px-4 py-2.5 bg-slate-900/90 hover:bg-slate-800 backdrop-blur-md border border-slate-700 text-white text-[10px] font-black uppercase tracking-widest rounded-full shadow-[0_10px_30px_rgba(0,0,0,0.5)] transition-all duration-300 ease-in-out md:hidden ${
                 isVisible ? 'opacity-100 translate-y-0 scale-100' : 'opacity-0 translate-y-10 scale-90 pointer-events-none'
             }`}
         >
