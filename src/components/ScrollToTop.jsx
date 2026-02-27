@@ -3,43 +3,51 @@ import { ArrowUp } from 'lucide-react';
 
 const ScrollToTop = () => {
     const [isVisible, setIsVisible] = useState(false);
+    const [scrollContainer, setScrollContainer] = useState(null);
 
     useEffect(() => {
-        // This function checks how far the user has scrolled
-        const toggleVisibility = () => {
-            // We check both the window and common scrollable containers
-            const scrolled = document.documentElement.scrollTop || document.body.scrollTop || window.scrollY;
-            if (scrolled > 300) {
+        const handleScroll = (e) => {
+            // 1. Identify EXACTLY what is scrolling (window or a specific div)
+            const target = e.target;
+            const scrollTop = target.scrollTop || window.scrollY || document.documentElement.scrollTop;
+            
+            // 2. If it scrolls past 300px, show the button
+            if (scrollTop > 300) {
                 setIsVisible(true);
+                // 3. Save that exact container so we know what to scroll back up!
+                if (target.scrollTop) {
+                    setScrollContainer(target);
+                }
             } else {
                 setIsVisible(false);
             }
         };
 
-        // Listen for scrolling
-        window.addEventListener('scroll', toggleVisibility, true);
-        return () => window.removeEventListener('scroll', toggleVisibility, true);
+        // Use capture phase (true) to catch scroll events from ANY scrolling div inside your app layout
+        window.addEventListener('scroll', handleScroll, true);
+        return () => window.removeEventListener('scroll', handleScroll, true);
     }, []);
 
     const scrollToTop = () => {
-        // Scroll the window
-        window.scrollTo({ top: 0, behavior: 'smooth' });
-        
-        // Also scroll the main app container just in case it's handling the overflow
-        const appContainer = document.getElementById('main-scroll-container');
-        if (appContainer) {
-            appContainer.scrollTo({ top: 0, behavior: 'smooth' });
+        // Scroll the specific container back to the top smoothly
+        if (scrollContainer && typeof scrollContainer.scrollTo === 'function') {
+            scrollContainer.scrollTo({ top: 0, behavior: 'smooth' });
+        } else {
+            window.scrollTo({ top: 0, behavior: 'smooth' });
         }
+        // Instantly hide the button as soon as they click it for a snappy feel
+        setIsVisible(false);
     };
 
     return (
         <button
             onClick={scrollToTop}
-            className={`fixed bottom-8 left-1/2 -translate-x-1/2 z-40 flex items-center gap-2 px-4 py-2 bg-slate-800/90 hover:bg-slate-700 backdrop-blur text-white text-[10px] font-black uppercase tracking-widest rounded-full shadow-2xl transition-all duration-300 ease-in-out md:hidden ${
-                isVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-10 pointer-events-none'
+            // 🛡️ FIX: Elevated to bottom-28 and z-[100] to ensure it clears mobile browser bars and other widgets
+            className={`fixed bottom-28 left-1/2 -translate-x-1/2 z-[100] flex items-center gap-2 px-4 py-2.5 bg-slate-900/90 hover:bg-slate-800 backdrop-blur-md border border-slate-700 text-white text-[10px] font-black uppercase tracking-widest rounded-full shadow-[0_10px_30px_rgba(0,0,0,0.5)] transition-all duration-300 ease-in-out md:hidden ${
+                isVisible ? 'opacity-100 translate-y-0 scale-100' : 'opacity-0 translate-y-10 scale-90 pointer-events-none'
             }`}
         >
-            <ArrowUp size={14} className="text-emerald-400" />
+            <ArrowUp size={16} className="text-emerald-400" />
             Top
         </button>
     );
