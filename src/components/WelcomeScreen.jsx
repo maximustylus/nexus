@@ -6,7 +6,7 @@ import {
     updateProfile, 
     signOut,
     sendPasswordResetEmail,
-    sendEmailVerification // 🛡️ ADDED: Secure Email Verification
+    sendEmailVerification
 } from 'firebase/auth';
 import { 
     Sun, Moon, ArrowRight, Activity, ShieldCheck, 
@@ -94,10 +94,8 @@ const WelcomeScreen = (props) => {
                 
                 // 🛡️ SECURITY LAYER 3: EMAIL VERIFICATION GUARD
                 if (!userCredential.user.emailVerified) {
-                    // 🪄 THE FIX: Automatically resend the email to existing unverified users!
                     await sendEmailVerification(userCredential.user);
-                    
-                    await signOut(auth); // Boot them out immediately
+                    await signOut(auth);
                     throw new Error("VERIFICATION REQUIRED: We just sent a fresh verification link to your email. Please click it before logging in.");
                 }
 
@@ -123,15 +121,13 @@ const WelcomeScreen = (props) => {
                 
                 // 5. Update UI
                 setMessage("PROFILE CREATED. PLEASE CHECK YOUR KKH INBOX TO VERIFY YOUR EMAIL.");
-                setIsLoginMode(true); // Switch back to login view
-                setPassword(''); // Clear password field for safety
+                setIsLoginMode(true); 
+                setPassword(''); 
             }
         } catch (err) {
             console.error("Auth Exception:", err);
-            // Ensure we boot them if something went wrong mid-process
             if (auth.currentUser) await signOut(auth); 
             
-            // Clean up the error message for the UI
             let cleanError = err.message;
             if (err.code === 'auth/email-already-in-use') cleanError = "ACCOUNT ALREADY EXISTS. PLEASE SIGN IN.";
             else if (err.code === 'auth/wrong-password' || err.code === 'auth/user-not-found' || err.code === 'auth/invalid-credential') cleanError = "INVALID CREDENTIALS PROVIDED.";
@@ -209,14 +205,14 @@ const WelcomeScreen = (props) => {
             <div className={`fixed top-0 left-0 w-[800px] h-[800px] bg-indigo-500/20 rounded-full blur-[120px] pointer-events-none animate-float-slow ${animate ? 'opacity-100' : 'opacity-0'}`}></div>
             <div className={`fixed bottom-0 right-0 w-[600px] h-[600px] bg-emerald-500/15 rounded-full blur-[100px] pointer-events-none animate-float-delayed ${animate ? 'opacity-100' : 'opacity-0'}`}></div>
 
-            {/* MAIN CARD CONTAINER */}
-            <div className={`relative z-10 w-full max-w-7xl mx-auto bg-white/80 dark:bg-slate-900/80 backdrop-blur-3xl border border-white/50 dark:border-slate-700/50 rounded-[3rem] shadow-2xl transition-all duration-1000 transform overflow-hidden ${animate ? 'translate-y-0 opacity-100 scale-100' : 'translate-y-20 opacity-0 scale-95'}`}>
+            {/* 🛡️ FIX: Strengthened Base Shadows on Main Container */}
+            <div className={`relative z-10 w-full max-w-7xl mx-auto bg-white/95 dark:bg-slate-900/95 backdrop-blur-3xl border border-white/80 dark:border-slate-700/80 rounded-[3rem] shadow-[0_20px_60px_rgba(0,0,0,0.1)] dark:shadow-[0_20px_60px_rgba(0,0,0,0.6)] transition-all duration-1000 transform overflow-hidden ${animate ? 'translate-y-0 opacity-100 scale-100' : 'translate-y-20 opacity-0 scale-95'}`}>
                 
                 {/* --- TOGGLE SWITCH (DOCKED INSIDE) --- */}
                 <div className="absolute top-6 right-6 md:top-8 md:right-8 z-50">
                     <button 
                         onClick={toggleTheme} 
-                        className="p-3 rounded-full bg-slate-100 dark:bg-slate-800/50 hover:bg-white dark:hover:bg-slate-700 shadow-sm border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:scale-110 active:scale-95 transition-all"
+                        className="p-3 rounded-full bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700 shadow-md border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:scale-110 active:scale-95 transition-all"
                     >
                         {isDark ? <Sun size={18} className="text-amber-400" /> : <Moon size={18} className="text-indigo-600" />}
                     </button>
@@ -262,11 +258,12 @@ const WelcomeScreen = (props) => {
 
                             <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-12 text-left w-full">
                                 {pillars.map((p, i) => (
-                                    <div key={i} className={`group p-5 rounded-3xl bg-slate-50/50 dark:bg-slate-800/40 border border-slate-200/60 dark:border-slate-700/60 hover:bg-white dark:hover:bg-slate-800 transition-all duration-300 hover:shadow-xl hover:-translate-y-1 ${p.color}`}>
+                                    /* 🛡️ FIX: Solid Backgrounds and Stronger Shadows on Cards */
+                                    <div key={i} className={`group p-5 rounded-3xl bg-white dark:bg-slate-800 shadow-md dark:shadow-lg border border-slate-200 dark:border-slate-700 hover:shadow-xl dark:hover:shadow-[0_10px_30px_rgba(0,0,0,0.5)] transition-all duration-300 hover:-translate-y-1 ${p.color}`}>
                                         <div className={`${p.bg} p-2 rounded-lg w-fit mb-3 transition-transform group-hover:scale-110`}>{p.icon}</div>
                                         <h3 className="font-bold text-[10px] text-slate-900 dark:text-white mb-1 uppercase tracking-wider">{p.title}</h3>
                                         <p className="text-[9px] text-slate-500 dark:text-slate-400 leading-relaxed mb-3">{p.desc}</p>
-                                        <span className="text-[7px] font-black text-indigo-500 dark:text-indigo-400 uppercase tracking-widest px-2 py-1 bg-slate-100 dark:bg-slate-900 rounded-md">{p.layer}</span>
+                                        <span className="text-[7px] font-black text-indigo-500 dark:text-indigo-400 uppercase tracking-widest px-2 py-1 bg-slate-100 dark:bg-slate-900 rounded-md border border-slate-200 dark:border-slate-700">{p.layer}</span>
                                     </div>
                                 ))}
                             </div>
@@ -274,7 +271,7 @@ const WelcomeScreen = (props) => {
                             <div className="flex flex-col items-center gap-4 w-full max-w-sm">
                                 <button 
                                     onClick={() => setView('AUTH')}
-                                    className="group relative px-12 py-4 bg-slate-900 dark:bg-white text-white dark:text-slate-900 font-black text-xs rounded-xl shadow-xl shadow-slate-900/10 hover:shadow-2xl hover:scale-[1.02] transition-all duration-300 w-full overflow-hidden"
+                                    className="group relative px-12 py-4 bg-slate-900 dark:bg-white text-white dark:text-slate-900 font-black text-xs rounded-xl shadow-[0_10px_20px_rgba(0,0,0,0.2)] dark:shadow-[0_10px_20px_rgba(255,255,255,0.1)] hover:shadow-2xl hover:scale-[1.02] transition-all duration-300 w-full overflow-hidden"
                                 >
                                     <span className="relative z-10 flex items-center justify-center gap-3 tracking-[0.2em]">
                                         INITIALISE SYSTEM <ArrowRight size={16} className="group-hover:translate-x-1 transition-transform" />
@@ -283,16 +280,17 @@ const WelcomeScreen = (props) => {
                                 </button>
                                 
                                 <div className="flex gap-3 w-full">
+                                    {/* 🛡️ FIX: Drop shadows and solid backgrounds for bottom buttons */}
                                     <button 
                                         onClick={handleDemoEnter} 
-                                        className="flex-1 flex items-center justify-center gap-2 px-4 py-3 bg-emerald-50/50 dark:bg-emerald-900/10 text-emerald-700 dark:text-emerald-400 font-bold text-[9px] rounded-lg border border-emerald-200/60 dark:border-emerald-800/30 hover:bg-emerald-100 dark:hover:bg-emerald-900/30 transition-all uppercase tracking-widest backdrop-blur-sm"
+                                        className="flex-1 flex items-center justify-center gap-2 px-4 py-3 bg-white dark:bg-slate-800 text-emerald-600 dark:text-emerald-400 font-bold text-[9px] rounded-lg border border-slate-200 dark:border-slate-700 shadow-md hover:shadow-lg dark:hover:shadow-[0_5px_20px_rgba(16,185,129,0.15)] hover:-translate-y-0.5 transition-all uppercase tracking-widest"
                                     >
                                         {loading ? <ShieldAlert size={12} className="animate-spin" /> : <ShieldAlert size={12} />} 
                                         {loading ? 'Decrypting...' : 'Demo Mode'}
                                     </button>
                                     <button 
                                         onClick={() => setView('ORG_REGISTER')} 
-                                        className="flex-1 flex items-center justify-center gap-2 px-4 py-3 bg-indigo-50/50 dark:bg-indigo-900/10 text-indigo-700 dark:text-indigo-400 font-bold text-[9px] rounded-lg border border-indigo-200/60 dark:border-indigo-800/30 hover:bg-indigo-100 dark:hover:bg-indigo-900/30 transition-all uppercase tracking-widest backdrop-blur-sm"
+                                        className="flex-1 flex items-center justify-center gap-2 px-4 py-3 bg-white dark:bg-slate-800 text-indigo-600 dark:text-indigo-400 font-bold text-[9px] rounded-lg border border-slate-200 dark:border-slate-700 shadow-md hover:shadow-lg dark:hover:shadow-[0_5px_20px_rgba(99,102,241,0.15)] hover:-translate-y-0.5 transition-all uppercase tracking-widest"
                                     >
                                         <Globe size={12} />
                                         Scale Unit
@@ -303,7 +301,7 @@ const WelcomeScreen = (props) => {
 
                         {/* 3. Footer (DOCKED INSIDE) */}
                         <div className={`pt-10 opacity-50 transition-all duration-500 ${isSplitView ? 'text-left' : 'text-center'}`}>
-                            <p className="text-[9px] font-black text-slate-400 dark:text-slate-600 tracking-[0.5em] uppercase pointer-events-none">
+                            <p className="text-[9px] font-black text-slate-400 dark:text-slate-500 tracking-[0.5em] uppercase pointer-events-none">
                                 © 2026 Muhammad Alif
                             </p>
                         </div>
@@ -312,7 +310,7 @@ const WelcomeScreen = (props) => {
                     {/* RIGHT SECTION: DYNAMIC CONTENT AREA */}
                     <div className={`
                         relative z-10 flex flex-col justify-center
-                        bg-slate-50/50 dark:bg-black/20 border-l border-slate-200/50 dark:border-slate-700/50
+                        bg-slate-50 dark:bg-slate-900 border-l border-slate-200 dark:border-slate-800 shadow-inner
                         transition-all duration-700 ease-[cubic-bezier(0.23,1,0.32,1)] overflow-hidden
                         ${isSplitView 
                             ? 'w-full md:w-7/12 opacity-100 p-8 md:p-16' 
@@ -355,10 +353,11 @@ const WelcomeScreen = (props) => {
                                     {!isLoginMode && (
                                         <div className="relative group">
                                             <div className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-indigo-500 transition-colors"><User size={18} /></div>
+                                            {/* 🛡️ FIX: Input shadows */}
                                             <input 
                                                 type="text" 
                                                 placeholder="Full Display Name" 
-                                                className="w-full bg-white dark:bg-slate-900/80 border border-slate-200 dark:border-slate-700 rounded-xl py-4 pl-12 pr-4 text-xs font-bold text-slate-900 dark:text-white outline-none focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500 transition-all placeholder:text-slate-400 dark:placeholder:text-slate-600" 
+                                                className="w-full bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-700 shadow-sm rounded-xl py-4 pl-12 pr-4 text-xs font-bold text-slate-900 dark:text-white outline-none focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500 transition-all placeholder:text-slate-400 dark:placeholder:text-slate-600" 
                                                 value={name} 
                                                 onChange={e => setName(e.target.value)} 
                                             />
@@ -369,7 +368,7 @@ const WelcomeScreen = (props) => {
                                         <input 
                                             type="email" 
                                             placeholder="Official Email" 
-                                            className="w-full bg-white dark:bg-slate-900/80 border border-slate-200 dark:border-slate-700 rounded-xl py-4 pl-12 pr-4 text-xs font-bold text-slate-900 dark:text-white outline-none focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500 transition-all placeholder:text-slate-400 dark:placeholder:text-slate-600" 
+                                            className="w-full bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-700 shadow-sm rounded-xl py-4 pl-12 pr-4 text-xs font-bold text-slate-900 dark:text-white outline-none focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500 transition-all placeholder:text-slate-400 dark:placeholder:text-slate-600" 
                                             value={email} 
                                             onChange={e => setEmail(e.target.value)} 
                                         />
@@ -391,7 +390,7 @@ const WelcomeScreen = (props) => {
                                         <input 
                                             type="password" 
                                             placeholder="Secure Key" 
-                                            className="w-full bg-white dark:bg-slate-900/80 border border-slate-200 dark:border-slate-700 rounded-xl py-4 pl-12 pr-4 text-xs font-bold text-slate-900 dark:text-white outline-none focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500 transition-all placeholder:text-slate-400 dark:placeholder:text-slate-600" 
+                                            className="w-full bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-700 shadow-sm rounded-xl py-4 pl-12 pr-4 text-xs font-bold text-slate-900 dark:text-white outline-none focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500 transition-all placeholder:text-slate-400 dark:placeholder:text-slate-600" 
                                             value={password} 
                                             onChange={e => setPassword(e.target.value)} 
                                         />
@@ -400,7 +399,7 @@ const WelcomeScreen = (props) => {
                                     <button 
                                         type="submit" 
                                         disabled={loading} 
-                                        className="w-full py-4 bg-indigo-600 text-white font-black text-xs uppercase tracking-widest rounded-xl hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-600/20 flex justify-center items-center gap-2 active:scale-95 disabled:opacity-50 mt-4"
+                                        className="w-full py-4 bg-indigo-600 text-white font-black text-xs uppercase tracking-widest rounded-xl hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-600/30 flex justify-center items-center gap-2 active:scale-95 disabled:opacity-50 mt-4"
                                     >
                                         {loading ? <Zap size={16} className="animate-spin" /> : <ShieldCheck size={16} />}
                                         {loading ? 'Authenticating...' : (isLoginMode ? 'Access Workspace' : 'Create Account')}
@@ -425,7 +424,7 @@ const WelcomeScreen = (props) => {
                                     <ChevronLeft size={14} className="group-hover:-translate-x-1 transition-transform"/> Back to Sign In
                                 </button>
                                 
-                                <div className="relative w-16 h-16 bg-indigo-500/10 rounded-2xl flex items-center justify-center mx-auto mb-6 border border-indigo-500/20 ring-4 ring-indigo-500/5">
+                                <div className="relative w-16 h-16 bg-white dark:bg-slate-800 shadow-lg rounded-2xl flex items-center justify-center mx-auto mb-6 border border-indigo-500/20 ring-4 ring-indigo-500/5">
                                     <KeyRound className="text-indigo-500" size={32}/>
                                 </div>
 
@@ -455,7 +454,7 @@ const WelcomeScreen = (props) => {
                                             type="email" 
                                             placeholder="Official Email" 
                                             required
-                                            className="w-full bg-white dark:bg-slate-900/80 border border-slate-200 dark:border-slate-700 rounded-xl py-4 pl-12 pr-4 text-xs font-bold text-slate-900 dark:text-white outline-none focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500 transition-all placeholder:text-slate-400 dark:placeholder:text-slate-600" 
+                                            className="w-full bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-700 shadow-sm rounded-xl py-4 pl-12 pr-4 text-xs font-bold text-slate-900 dark:text-white outline-none focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500 transition-all placeholder:text-slate-400 dark:placeholder:text-slate-600" 
                                             value={email} 
                                             onChange={e => setEmail(e.target.value)} 
                                         />
@@ -464,7 +463,7 @@ const WelcomeScreen = (props) => {
                                     <button 
                                         type="submit" 
                                         disabled={loading} 
-                                        className="w-full py-4 bg-indigo-600 text-white font-black text-xs uppercase tracking-widest rounded-xl hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-600/20 flex justify-center items-center gap-2 active:scale-95 disabled:opacity-50 mt-4"
+                                        className="w-full py-4 bg-indigo-600 text-white font-black text-xs uppercase tracking-widest rounded-xl hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-600/30 flex justify-center items-center gap-2 active:scale-95 disabled:opacity-50 mt-4"
                                     >
                                         {loading ? <Zap size={16} className="animate-spin" /> : <ShieldCheck size={16} />}
                                         {loading ? 'Transmitting...' : 'Send Reset Link'}
@@ -480,7 +479,7 @@ const WelcomeScreen = (props) => {
                                     <ChevronLeft size={14} className="group-hover:-translate-x-1 transition-transform"/> Back
                                 </button>
                                 
-                                <div className="relative w-16 h-16 bg-emerald-500/10 rounded-2xl flex items-center justify-center mx-auto mb-6 border border-emerald-500/20 ring-4 ring-emerald-500/5">
+                                <div className="relative w-16 h-16 bg-white dark:bg-slate-800 shadow-lg rounded-2xl flex items-center justify-center mx-auto mb-6 border border-emerald-500/20 ring-4 ring-emerald-500/5">
                                     <Globe className="text-emerald-500 animate-spin-slow" size={32}/>
                                     <Sparkles className="absolute -top-2 -right-2 text-amber-400 fill-amber-400" size={16} />
                                 </div>
@@ -491,14 +490,14 @@ const WelcomeScreen = (props) => {
                                 </p>
 
                                 <div className="grid grid-cols-1 gap-3 mb-8 text-left">
-                                    <div className="p-4 bg-white/50 dark:bg-slate-900/50 rounded-xl border border-slate-200 dark:border-slate-800 flex gap-4 group hover:border-indigo-500/30 transition-colors">
+                                    <div className="p-4 bg-white dark:bg-slate-800 shadow-md rounded-xl border border-slate-200 dark:border-slate-700 flex gap-4 group hover:border-indigo-500/50 hover:shadow-lg transition-all">
                                         <div className="bg-indigo-500/10 p-2 rounded-lg h-fit"><Building2 className="text-indigo-500" size={18} /></div>
                                         <div>
                                             <h4 className="text-[10px] font-black text-slate-900 dark:text-white uppercase mb-1">Unit Branding</h4>
                                             <p className="text-[9px] text-slate-500">Service-specific AURA logic & logos.</p>
                                         </div>
                                     </div>
-                                    <div className="p-4 bg-white/50 dark:bg-slate-900/50 rounded-xl border border-slate-200 dark:border-slate-800 flex gap-4 group hover:border-purple-500/30 transition-colors">
+                                    <div className="p-4 bg-white dark:bg-slate-800 shadow-md rounded-xl border border-slate-200 dark:border-slate-700 flex gap-4 group hover:border-purple-500/50 hover:shadow-lg transition-all">
                                         <div className="bg-purple-500/10 p-2 rounded-lg h-fit"><ShieldCheck className="text-purple-500" size={18} /></div>
                                         <div>
                                             <h4 className="text-[10px] font-black text-slate-900 dark:text-white uppercase mb-1">Data Sharding</h4>
@@ -507,7 +506,7 @@ const WelcomeScreen = (props) => {
                                     </div>
                                 </div>
 
-                                <button disabled className="w-full py-4 bg-slate-100 dark:bg-slate-800 text-slate-400 font-bold rounded-xl cursor-not-allowed uppercase text-[10px] tracking-[0.2em] border border-slate-200 dark:border-slate-700">
+                                <button disabled className="w-full py-4 bg-slate-100 dark:bg-slate-800 text-slate-400 font-bold rounded-xl cursor-not-allowed uppercase text-[10px] tracking-[0.2em] border border-slate-200 dark:border-slate-700 shadow-inner">
                                     Registration Restricted
                                 </button>
                                 <p className="mt-4 text-[9px] text-slate-400 font-bold uppercase">Contact Admin for whitelisting.</p>
