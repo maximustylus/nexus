@@ -742,6 +742,8 @@ const getClinicalData = (staffId) => {
          {currentView === 'archive' && renderDashboardView(true)}
          {currentView === 'roster' && <RosterView />}
          {currentView === 'pulse' && <WellbeingView user={user} />}
+
+         <div className="h-32 md:h-24 w-full shrink-0" />
        </div>
      )}
       
