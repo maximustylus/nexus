@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react'; // 🛡️ FIX: Added useEffect here
 import { db } from '../firebase';
 import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
 import { MessageSquare, X, Send, Bug, Lightbulb } from 'lucide-react';
@@ -11,6 +11,7 @@ const FeedbackWidget = ({ user }) => {
     const [message, setMessage] = useState('');
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [success, setSuccess] = useState(false);
+    
     const handleSubmit = async (e) => {
         e.preventDefault();
         if (!message.trim()) return;
@@ -54,10 +55,12 @@ const FeedbackWidget = ({ user }) => {
 
     return (
         <>
-            {/* 🛡️ FIX: Stacks on mobile, sits beside AURA on iPad, sits beside AURA on Desktop */}
+            {/* 🛡️ FIX: Dynamic classes added to hide the widget when AURA opens */}
             <button 
                 onClick={() => setIsOpen(true)}
-                className="fixed bottom-[180px] md:bottom-24 xl:bottom-6 right-4 md:right-24 xl:right-28 w-16 h-16 bg-indigo-600 hover:bg-indigo-700 text-white rounded-full shadow-[0_0_20px_rgba(79,70,229,0.4)] transition-all hover:scale-110 z-[85] flex items-center justify-center p-0 m-0"
+                className={`fixed bottom-[180px] md:bottom-24 xl:bottom-6 right-4 md:right-24 xl:right-28 w-16 h-16 bg-indigo-600 hover:bg-indigo-700 text-white rounded-full shadow-[0_0_20px_rgba(79,70,229,0.4)] transition-all duration-300 ease-in-out hover:scale-110 z-[85] flex items-center justify-center p-0 m-0 ${
+                    isAuraOpen ? 'opacity-0 scale-75 pointer-events-none' : 'opacity-100 scale-100'
+                }`}
             >
                 <MessageSquare size={26} />
             </button>
@@ -66,7 +69,6 @@ const FeedbackWidget = ({ user }) => {
             {isOpen && (
                 <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center z-[100] p-4 animate-in fade-in duration-200">
                     <div className="bg-white dark:bg-slate-900 w-full max-w-md rounded-3xl shadow-2xl overflow-hidden border border-slate-200 dark:border-slate-800 animate-in zoom-in-95 duration-300">
-                        
                         <div className="flex justify-between items-center p-6 border-b border-slate-100 dark:border-slate-800">
                             <h3 className="text-lg font-black text-slate-800 dark:text-white uppercase tracking-tight flex items-center gap-2">
                                 <MessageSquare size={20} className="text-indigo-500"/> 
