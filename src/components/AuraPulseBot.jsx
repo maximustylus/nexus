@@ -1,11 +1,12 @@
 import { Document, Packer, Paragraph, TextRun, HeadingLevel } from 'docx';
 import { DEMO_PERSONAS, LIVE_PERSONAS } from '../config/personas';
 import { X, Send, BrainCircuit, Shield, Ghost, Users, Zap, RefreshCw, AlertTriangle, WifiOff, 
-         FileText, CheckCircle, Database, Trash2, Download, Mic, ChevronLeft } from 'lucide-react';
+         FileText, CheckCircle, Database, Trash2, Download, Mic, ChevronLeft, CalendarCheck } from 'lucide-react';
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { db } from '../firebase'; 
 import { getFunctions, httpsCallable } from 'firebase/functions';
-import { doc, setDoc, getDoc, updateDoc, arrayUnion } from 'firebase/firestore';
+// 🛡️ NEW: Imported collection, query, where, onSnapshot for the Swap Engine
+import { doc, setDoc, getDoc, updateDoc, arrayUnion, collection, query, where, onSnapshot } from 'firebase/firestore';
 import { useNexus } from '../context/NexusContext';
 
 // ─── CLOUD FUNCTION LINK ──────────────────────────────────────────────────────
@@ -43,7 +44,7 @@ export default function AuraPulseBot({ user }) {
     const [isOpen, setIsOpen] = useState(false);
     const [view,             setView]             = useState('SELECT');
     const [selectedPersona, setSelectedPersona] = useState(null); 
-    const [input,            setInput]            = useState('');
+    const [input,             setInput]             = useState('');
     const [loading,          setLoading]          = useState(false);
     const [isSending,        setIsSending]        = useState(false);
     const [pendingLog,       setPendingLog]       = useState(null);
@@ -86,6 +87,43 @@ export default function AuraPulseBot({ user }) {
         window.dispatchEvent(new CustomEvent('aura-toggled', { detail: isOpen }));
     }, [isOpen]);
 
+    // ── 🛡️ NEW: SHIFT SWAP LISTENER ──────────────────────────────────────────
+    useEffect(() => {
+        // We only want to listen for live data if they are logged in and not in Demo Mode
+        if (isDemo || !user?.name) return;
+
+        const q = query(
+            collection(db, 'shift_swaps'), 
+            where('targetStaff', '==', user.name),
+            where('status', '==', 'PENDING')
+        );
+
+        const unsubscribe = onSnapshot(q, (snapshot) => {
+            snapshot.docChanges().forEach((change) => {
+                // If a NEW request was just added, pop open AURA and notify!
+                if (change.type === 'added') {
+                    const data = change.doc.data();
+                    
+                    // Force AURA open
+                    setIsOpen(true);
+                    
+                    // Format the message
+                    setMessages(prev => [...prev, {
+                        role: 'bot',
+                        text: `🔔 **URGENT COVERAGE REQUEST**\n\n**${data.requestedBy}** has requested to swap their **${data.originalTask}** shift on **${data.originalShiftDate}** with you.\n\n_Reason provided:_ "${data.reason || 'None provided'}"\n\nWould you like to accept this coverage?`,
+                        mode: 'ROSTER_ALERT',
+                        swapData: {
+                            docId: change.doc.id,
+                            ...data
+                        }
+                    }]);
+                }
+            });
+        });
+
+        return () => unsubscribe();
+    }, [isDemo, user, setMessages]);
+
     // ── Session start ─────────────────────────────────────────────────────────
     const startSession = useCallback((persona) => {
         setSelectedPersona(persona);
@@ -108,7 +146,6 @@ export default function AuraPulseBot({ user }) {
         safeTimeout(() => inputRef.current?.focus(), 300);
     }, [isDemo, user, safeTimeout, setMessages]);
 
-    // 🛡️ UX FIX: Go Back to Grid function (Wipes chat, returns to selection)
     const handleBackToGrid = useCallback(() => {
         setView('SELECT');
         setSelectedPersona(null);
@@ -116,10 +153,8 @@ export default function AuraPulseBot({ user }) {
         setPendingLog(null);
     }, [setMessages]);
 
-    // ── State for the Mic ─────────────────────────────────────────────────────
     const [isListening, setIsListening] = useState(false);
 
-    // ── Clear Chat History (Trash Icon) ───────────────────────────────────────
     const handleClearChat = useCallback(() => {
         if (!window.confirm("Clear this conversation and start fresh?")) return;
         
@@ -141,7 +176,6 @@ export default function AuraPulseBot({ user }) {
         setTimeout(() => inputRef.current?.focus(), 300);
     }, [isDemo, user, selectedPersona, liveMemory, setMessages]);
 
-    // ── Voice-to-Text Engine (Mic Icon) ───────────────────────────────────────
     const toggleListening = useCallback(() => {
         const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
         if (!SpeechRecognition) {
@@ -274,6 +308,69 @@ export default function AuraPulseBot({ user }) {
             }
         }, [handleSend]);
 
+    // ── Handle Swap Response ──────────────────────────────────────────────────
+    const handleSwapResponse = async (swapData, isAccepted, msgIndex) => {
+        if (!swapData || !swapData.docId) return;
+        setLoading(true);
+
+        try {
+            const swapRef = doc(db, 'shift_swaps', swapData.docId);
+            
+            if (isAccepted) {
+                // 1. Mark as Approved
+                await updateDoc(swapRef, { 
+                    status: 'APPROVED', 
+                    approvedAt: new Date().toISOString() 
+                });
+
+                // 2. Fetch the Master Roster
+                const rosterRef = doc(db, 'system_data', 'roster_2026');
+                const rosterSnap = await getDoc(rosterRef);
+                
+                if (rosterSnap.exists()) {
+                    const currentRoster = rosterSnap.data();
+                    const targetDateKey = swapData.originalShiftDate;
+                    
+                    if (currentRoster[targetDateKey]) {
+                        // 3. Find the exact shift and rewrite the staff name!
+                        const updatedDayShifts = currentRoster[targetDateKey].map(shift => {
+                            if (shift.staff === swapData.requestedBy && shift.task === swapData.originalTask) {
+                                return { ...shift, staff: user.name }; // Inject new owner
+                            }
+                            return shift;
+                        });
+
+                        // 4. Save the new matrix
+                        await updateDoc(rosterRef, {
+                            [targetDateKey]: updatedDayShifts
+                        });
+                    }
+                }
+
+                setMessages(prev => {
+                    const newHistory = [...prev];
+                    if (newHistory[msgIndex]) newHistory[msgIndex].swapData = null; 
+                    newHistory.push({ role: 'bot', text: `✅ Swap accepted! I have updated the master roster to reflect that you are now covering the ${swapData.originalTask} shift on ${swapData.originalShiftDate}.`, mode: 'ASSISTANT' });
+                    return newHistory;
+                });
+            } else {
+                // Denied
+                await updateDoc(swapRef, { status: 'DENIED' });
+                setMessages(prev => {
+                    const newHistory = [...prev];
+                    if (newHistory[msgIndex]) newHistory[msgIndex].swapData = null; 
+                    newHistory.push({ role: 'bot', text: `Got it. I have marked the request as declined. ${swapData.requestedBy} will be notified to find alternative coverage.`, mode: 'ASSISTANT' });
+                    return newHistory;
+                });
+            }
+        } catch (err) {
+            console.error('[AURA] Swap Response Error:', err);
+            setMessages(prev => [...prev, { role: 'bot', text: '⚠️ Database error while processing swap.', isError: true, mode: 'ASSISTANT' }]);
+        } finally {
+            setLoading(false);
+        }
+    };
+
     // ── Confirm & Sync Pulse Log (Mode 1) ────────────────────────────────────
     const confirmLog = useCallback(async () => {
         if (!pendingLog) return;
@@ -337,20 +434,17 @@ export default function AuraPulseBot({ user }) {
         if (!text) return;
 
         try {
-            // 1. Parse AURA's Markdown into native Word Paragraphs
             const lines = text.split('\n');
             const docChildren = [];
 
             for (const line of lines) {
                 const trimmed = line.trim();
                 
-                // Add empty space for line breaks
                 if (!trimmed) {
                     docChildren.push(new Paragraph({ text: "" }));
                     continue;
                 }
 
-                // Map markdown headers to Word Headers
                 if (trimmed.startsWith('### ')) {
                     docChildren.push(new Paragraph({ text: trimmed.replace('### ', ''), heading: HeadingLevel.HEADING_3 }));
                 } else if (trimmed.startsWith('## ')) {
@@ -358,16 +452,14 @@ export default function AuraPulseBot({ user }) {
                 } else if (trimmed.startsWith('# ')) {
                     docChildren.push(new Paragraph({ text: trimmed.replace('# ', ''), heading: HeadingLevel.HEADING_1 }));
                 } else {
-                    // Handle **bold** text within normal paragraphs
                     const parts = trimmed.split('**');
                     const textRuns = parts.map((part, index) => {
-                        return new TextRun({ text: part, bold: index % 2 === 1 }); // Every odd index was inside **bold** markers
+                        return new TextRun({ text: part, bold: index % 2 === 1 }); 
                     });
                     docChildren.push(new Paragraph({ children: textRuns }));
                 }
             }
 
-            // 2. Build the official DOCX file
             const wordDoc = new Document({
                 sections: [{
                     properties: {},
@@ -375,7 +467,6 @@ export default function AuraPulseBot({ user }) {
                 }]
             });
 
-            // 3. Pack it into a true ZIP/Blob and trigger the native download
             const blob = await Packer.toBlob(wordDoc);
             const url = URL.createObjectURL(blob);
             const link = document.createElement('a');
@@ -386,7 +477,6 @@ export default function AuraPulseBot({ user }) {
             document.body.removeChild(link);
             URL.revokeObjectURL(url);
 
-            // 4. Silent Audit Backup (Leaves a trace in Firebase)
             const timestamp   = new Date().toISOString();
             const displayDate = new Date().toLocaleDateString();
             const activeUser  = isDemo ? selectedPersona : user;
@@ -479,7 +569,6 @@ export default function AuraPulseBot({ user }) {
             const docRef = doc(db, collectionName, safeDocId);
             let updatedMessage = '';
 
-            // 🛡️ UX FIX: Translating backend schema into human-readable success text
             if (workload.target_collection === 'staff_loads') {
                 const monthIndex = parseInt(workload.target_month);
                 if (isNaN(monthIndex) || monthIndex < 0 || monthIndex > 11) {
@@ -616,18 +705,20 @@ export default function AuraPulseBot({ user }) {
                         ) : (
                             <div className="space-y-4">
                                 {messages.map((m, i) => {
-                                    // 🛡️ UX FIX: Show document export box for Research too
                                     const isAssistant = m.mode === 'ASSISTANT' || m.mode === 'RESEARCH';
                                     const isDataEntry = m.mode === 'DATA_ENTRY';
+                                    const isAlert = m.mode === 'ROSTER_ALERT';
                                     const bubbleStyle = m.role === 'user' 
                                         ? (isAnonymous ? 'bg-purple-600 text-white rounded-tr-none' : 'bg-indigo-600 text-white rounded-tr-none')
                                         : m.isError 
                                             ? 'bg-red-50 text-red-600 rounded-tl-none border border-red-200'
-                                            : isDataEntry
-                                                ? 'bg-slate-900 text-emerald-50 rounded-tl-none border border-emerald-900 shadow-lg'
-                                                : isAssistant 
-                                                    ? 'bg-slate-800 text-blue-50 rounded-tl-none border border-slate-700 shadow-lg'
-                                                    : 'bg-white text-slate-700 rounded-tl-none border border-slate-100 shadow-sm';
+                                            : isAlert
+                                                ? 'bg-amber-50 text-amber-900 rounded-tl-none border border-amber-200 shadow-xl ring-2 ring-amber-400/50'
+                                                : isDataEntry
+                                                    ? 'bg-slate-900 text-emerald-50 rounded-tl-none border border-emerald-900 shadow-lg'
+                                                    : isAssistant 
+                                                        ? 'bg-slate-800 text-blue-50 rounded-tl-none border border-slate-700 shadow-lg'
+                                                        : 'bg-white text-slate-700 rounded-tl-none border border-slate-100 shadow-sm';
 
                                     return (
                                         <div key={i} className={`flex ${m.role === 'bot' ? 'justify-start' : 'justify-end'} animate-in fade-in slide-in-from-bottom-1`}>
@@ -677,13 +768,32 @@ export default function AuraPulseBot({ user }) {
                                                     </div>
                                                 )}
 
+                                                {/* 🛡️ NEW: ROSTER SWAP ACTION BUTTONS */}
+                                                {isAlert && m.swapData && (
+                                                    <div className="mt-4 pt-3 border-t border-amber-200 grid grid-cols-2 gap-2">
+                                                        <button 
+                                                            onClick={() => handleSwapResponse(m.swapData, false, i)}
+                                                            disabled={loading}
+                                                            className="py-2.5 bg-white text-slate-500 hover:bg-slate-50 border border-slate-200 disabled:opacity-50 text-[11px] font-black uppercase tracking-wider rounded-xl transition-all"
+                                                        >
+                                                            Decline
+                                                        </button>
+                                                        <button 
+                                                            onClick={() => handleSwapResponse(m.swapData, true, i)}
+                                                            disabled={loading}
+                                                            className="py-2.5 bg-emerald-500 hover:bg-emerald-600 text-white disabled:opacity-50 text-[11px] font-black uppercase tracking-wider rounded-xl shadow-lg transition-all flex items-center justify-center gap-1.5"
+                                                        >
+                                                            <CalendarCheck size={14} /> Accept Swap
+                                                        </button>
+                                                    </div>
+                                                )}
+
                                                 {isDataEntry && m.db_workload && m.db_workload.target_collection && m.db_workload.target_collection !== 'null' && m.role === 'bot' && !m.isGreeting && (
                                                     <div className="mt-4 pt-3 border-t border-emerald-900/50">
                                                         <p className="text-[10px] font-bold text-emerald-400 mb-2 uppercase tracking-widest flex items-center gap-1">
                                                             <Zap size={12} /> Pending Workload Transaction
                                                         </p>
                                                         
-                                                        {/* 🛡️ UX FIX: Secure, Human-readable translation of the backend schema */}
                                                         <div className="bg-slate-950 p-3 rounded-lg border border-emerald-900/50 text-xs text-slate-300 mb-3 leading-relaxed">
                                                             {m.db_workload.target_collection === 'staff_loads' ? (
                                                                 <div>
