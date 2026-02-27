@@ -56,8 +56,15 @@ const AppGuide = ({ isOpen, onClose }) => {
         if (currentStep > 0) setCurrentStep(currentStep - 1);
     };
 
-    // 🛡️ FIX: Centers on mobile, bottom-left above nav on iPad, bottom-left on Desktop
-        return (
+    return (
+        <>
+            {/* 🛡️ UX FIX: The Frosted Glass Blur Background */}
+            <div 
+                className="fixed inset-0 z-[85] bg-slate-900/40 backdrop-blur-sm transition-all animate-in fade-in duration-300"
+                onClick={onClose} 
+            />
+
+            {/* 🛡️ The Existing Guide UI */}
             <div className="fixed top-[15%] md:top-auto bottom-auto md:bottom-24 xl:bottom-6 left-4 md:left-6 z-[90] w-[calc(100%-2rem)] md:w-80 bg-slate-900 border border-slate-700 rounded-2xl shadow-[0_0_40px_rgba(0,0,0,0.5)] overflow-hidden animate-in fade-in zoom-in-95 md:slide-in-from-bottom-8 duration-500">
                 <div className="bg-gradient-to-r from-emerald-600 to-teal-600 p-4 flex justify-between items-center text-white">
                     <div className="flex items-center gap-2">
@@ -69,44 +76,45 @@ const AppGuide = ({ isOpen, onClose }) => {
                     </button>
                 </div>
 
-            <div className="p-5">
-                <div className="flex items-start gap-3 mb-2">
-                    <div className="bg-slate-800 p-2 rounded-lg text-emerald-400 mt-1 shrink-0">
-                        <Lightbulb size={16} />
-                    </div>
-                    <div>
-                        <h4 className="font-bold text-slate-100 text-sm mb-1">{GUIDE_STEPS[currentStep].title}</h4>
-                        <p className="text-xs text-slate-400 leading-relaxed">
-                            {GUIDE_STEPS[currentStep].content}
-                        </p>
+                <div className="p-5">
+                    <div className="flex items-start gap-3 mb-2">
+                        <div className="bg-slate-800 p-2 rounded-lg text-emerald-400 mt-1 shrink-0">
+                            <Lightbulb size={16} />
+                        </div>
+                        <div>
+                            <h4 className="font-bold text-slate-100 text-sm mb-1">{GUIDE_STEPS[currentStep].title}</h4>
+                            <p className="text-xs text-slate-400 leading-relaxed">
+                                {GUIDE_STEPS[currentStep].content}
+                            </p>
+                        </div>
                     </div>
                 </div>
-            </div>
 
-            <div className="px-5 pb-5 pt-2 flex justify-between items-center">
-                <div className="flex gap-1">
-                    {GUIDE_STEPS.map((_, idx) => (
-                        <div key={idx} className={`h-1.5 rounded-full transition-all duration-300 ${idx === currentStep ? 'w-4 bg-emerald-500' : 'w-1.5 bg-slate-700'}`} />
-                    ))}
-                </div>
-                
-                <div className="flex gap-2">
-                    <button 
-                        onClick={prevStep}
-                        disabled={currentStep === 0}
-                        className="p-2 text-slate-400 hover:text-white disabled:opacity-30 transition-colors"
-                    >
-                        <ChevronLeft size={16} />
-                    </button>
-                    <button 
-                        onClick={nextStep}
-                        className="flex items-center gap-1 text-[10px] font-black uppercase tracking-widest bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 px-3 py-1.5 rounded-lg transition-colors border border-emerald-500/20"
-                    >
-                        {currentStep === GUIDE_STEPS.length - 1 ? 'Finish' : 'Next'} <ChevronRight size={14} />
-                    </button>
+                <div className="px-5 pb-5 pt-2 flex justify-between items-center">
+                    <div className="flex gap-1">
+                        {GUIDE_STEPS.map((_, idx) => (
+                            <div key={idx} className={`h-1.5 rounded-full transition-all duration-300 ${idx === currentStep ? 'w-4 bg-emerald-500' : 'w-1.5 bg-slate-700'}`} />
+                        ))}
+                    </div>
+                    
+                    <div className="flex gap-2">
+                        <button 
+                            onClick={prevStep}
+                            disabled={currentStep === 0}
+                            className="p-2 text-slate-400 hover:text-white disabled:opacity-30 transition-colors"
+                        >
+                            <ChevronLeft size={16} />
+                        </button>
+                        <button 
+                            onClick={nextStep}
+                            className="flex items-center gap-1 text-[10px] font-black uppercase tracking-widest bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 px-3 py-1.5 rounded-lg transition-colors border border-emerald-500/20"
+                        >
+                            {currentStep === GUIDE_STEPS.length - 1 ? 'Finish' : 'Next'} <ChevronRight size={14} />
+                        </button>
+                    </div>
                 </div>
             </div>
-        </div>
+        </>
     );
 };
 
