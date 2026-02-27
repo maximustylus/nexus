@@ -58,16 +58,14 @@ const AppGuide = ({ isOpen, onClose }) => {
 
     return (
         <>
-            {/* 🛡️ UX FIX: The Frosted Glass Blur Background */}
+            {/* 🛡️ UX FIX: The Frosted Glass Blur Background on z-[100] */}
             <div 
-                className="fixed inset-0 z-100] bg-slate-900/40 backdrop-blur-sm transition-all animate-in fade-in duration-300"
+                className="fixed inset-0 z-[100] bg-slate-900/40 backdrop-blur-sm transition-all animate-in fade-in duration-300"
                 onClick={onClose} 
             />
+            
+            {/* 🛡️ UX FIX: Dead-center on all devices + z-[110] */}
             <div className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-[110] w-[calc(100%-2rem)] md:w-[400px] bg-slate-900 border border-slate-700 rounded-2xl shadow-[0_0_40px_rgba(0,0,0,0.5)] overflow-hidden animate-in fade-in zoom-in-95 duration-500">
-            />
-                
-            {/* 🛡️ The Existing Guide UI */}
-            <div className="fixed top-[15%] md:top-auto bottom-auto md:bottom-24 xl:bottom-6 left-4 md:left-6 z-[110] w-[calc(100%-2rem)] md:w-80 bg-slate-900 border border-slate-700 rounded-2xl shadow-[0_0_40px_rgba(0,0,0,0.5)] overflow-hidden animate-in fade-in zoom-in-95 md:slide-in-from-bottom-8 duration-500">
                 <div className="bg-gradient-to-r from-emerald-600 to-teal-600 p-4 flex justify-between items-center text-white">
                     <div className="flex items-center gap-2">
                         <Sparkles size={18} />
