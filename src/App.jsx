@@ -740,7 +740,7 @@ const getClinicalData = (staffId) => {
          {/* 🛡️ FIREWALL APPLIED TO DASHBOARDS (DashboardView now directly uses activeTeamData internally!) */}
          {currentView === 'dashboard' && renderDashboardView(false)}
          {currentView === 'archive' && renderDashboardView(true)}
-         {currentView === 'roster' && <RosterView />}
+         {currentView === 'roster' && <RosterView user={user} />}
          {currentView === 'pulse' && <WellbeingView user={user} />}
 
          <div className="h-32 md:h-24 w-full shrink-0" />
