@@ -1,3 +1,4 @@
+import ScrollToTop from './components/ScrollToTop';
 import React, { useState, useEffect, useRef } from 'react';
 import AppGuide from './components/AppGuide';
 import FeedbackWidget from './components/FeedbackWidget';
@@ -154,7 +155,7 @@ function NexusApp() {
   // --- UNIVERSE SWITCHER ---
   // In Demo Mode, use mock names. In Live Mode, use real names/IDs.
   const activeStaffList = isDemo ? MOCK_STAFF_NAMES : STAFF_LIST;
-  const activeStaffIds = isDemo ? MOCK_STAFF_NAMES : STAFF_IDS; // For mock, IDs are names.
+  const activeStaffIds = isDemo ? MOCK_STAFF_NAMES : STAFF_IDS;
 
 // --- EFFECT: AUTH LISTENER ---
   useEffect(() => {
@@ -172,7 +173,7 @@ function NexusApp() {
       } else {
         setUser(null);
       }
-      setAuthLoading(false); // <--- This is what tells your app to stop spinning!
+      setAuthLoading(false);
     });
     return () => unsubscribe();
   }, []);
@@ -182,15 +183,11 @@ function NexusApp() {
     let unsubStaff, unsubAttendance;
     const unsubLoads = [];
 
-    // Safety: If these aren't defined yet, don't try to fetch
     if (!currentView || !archiveYear) return;
-
-    // 🛡️ THE AUTH GATE: Do not fetch if they aren't logged in and aren't in Demo mode!
     if (!isDemo && !user) return;
 
     if (isDemo) {
       console.log("🧪 [NEXUS] Loading Marvel Universe...");
-      // No firebase fetching occurs here.
     } else {
       
       // 1. Determine Target Collection dynamically for ANY archive year
@@ -319,7 +316,6 @@ function NexusApp() {
     filteredTeamData.forEach(staff => {
       (staff.projects || []).forEach(p => {
         const status = p.status_dots || (isArchive ? 5 : 2);
-        // Fallback: If item_type is missing in JSON, assume it's a Project
         const type = p.item_type || 'Project'; 
         
         if (type === 'Project') projects[status]++; 
@@ -347,14 +343,12 @@ const getClinicalData = (staffId) => {
       if (clinicalItem && Array.isArray(clinicalItem.monthly_hours)) {
         return MONTHS.map((m, i) => {
             const hours = clinicalItem.monthly_hours[i] || 0;
-            // 🛡️ SENSITIVE CONVERSION: Convert hours to percentage of 42hr week (168 total/mo)
             const percentage = Math.round((hours / 168) * 100);
             return { name: m, value: percentage };
         });
       }
     }
 
-// Live Mode Fallback (2026) using Data Firewall
     // 🛡️ THE FIX: Find the correct name regardless of uppercase/lowercase
     const staffKey = Object.keys(activeStaffLoads).find(k => k.toLowerCase() === staffId.toLowerCase()) || staffId;
     const data = activeStaffLoads[staffKey] || Array(12).fill(0);
@@ -631,11 +625,10 @@ const getClinicalData = (staffId) => {
   return (
     <ResponsiveLayout 
       activeTab={currentView} 
-      onNavigate={setCurrentView}
-      
-      // 🛡️ PASSING THE WIDGETS INTO THE SAFE ZONE
+      onNavigate={setCurrentView}  
       floatingWidgets={
         <>
+          <ScrollToTop />
           <AppGuide isOpen={isGuideOpen} onClose={() => setIsGuideOpen(false)} />
           <AuraPulseBot user={user} />
           <FeedbackWidget user={user} />
