@@ -60,12 +60,12 @@ const AppGuide = ({ isOpen, onClose }) => {
         <>
             {/* 🛡️ UX FIX: The Frosted Glass Blur Background */}
             <div 
-                className="fixed inset-0 z-[85] bg-slate-900/40 backdrop-blur-sm transition-all animate-in fade-in duration-300"
+                className="fixed inset-0 z-100] bg-slate-900/40 backdrop-blur-sm transition-all animate-in fade-in duration-300"
                 onClick={onClose} 
             />
 
             {/* 🛡️ The Existing Guide UI */}
-            <div className="fixed top-[15%] md:top-auto bottom-auto md:bottom-24 xl:bottom-6 left-4 md:left-6 z-[90] w-[calc(100%-2rem)] md:w-80 bg-slate-900 border border-slate-700 rounded-2xl shadow-[0_0_40px_rgba(0,0,0,0.5)] overflow-hidden animate-in fade-in zoom-in-95 md:slide-in-from-bottom-8 duration-500">
+            <div className="fixed top-[15%] md:top-auto bottom-auto md:bottom-24 xl:bottom-6 left-4 md:left-6 z-[110] w-[calc(100%-2rem)] md:w-80 bg-slate-900 border border-slate-700 rounded-2xl shadow-[0_0_40px_rgba(0,0,0,0.5)] overflow-hidden animate-in fade-in zoom-in-95 md:slide-in-from-bottom-8 duration-500">
                 <div className="bg-gradient-to-r from-emerald-600 to-teal-600 p-4 flex justify-between items-center text-white">
                     <div className="flex items-center gap-2">
                         <Sparkles size={18} />
