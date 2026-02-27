@@ -11,7 +11,6 @@ const FeedbackWidget = ({ user }) => {
     const [message, setMessage] = useState('');
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [success, setSuccess] = useState(false);
-
     const handleSubmit = async (e) => {
         e.preventDefault();
         if (!message.trim()) return;
@@ -42,6 +41,16 @@ const FeedbackWidget = ({ user }) => {
             setIsSubmitting(false);
         }
     };
+
+    // 1. Add state to track AURA
+    const [isAuraOpen, setIsAuraOpen] = useState(false);
+
+    // 2. Listen for the broadcast
+    useEffect(() => {
+        const handleAuraToggle = (e) => setIsAuraOpen(e.detail);
+        window.addEventListener('aura-toggled', handleAuraToggle);
+        return () => window.removeEventListener('aura-toggled', handleAuraToggle);
+    }, []);
 
     return (
         <>
