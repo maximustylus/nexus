@@ -60,24 +60,42 @@ const SmartAnalysis = ({ teamData, staffLoads, onClose }) => {
         console.log("Starting Analysis for:", targetYear);
         
         try {
+            // 🧪 🛡️ THE FIX: SANDBOX BYPASS
+            // If we are in Demo Mode, DO NOT call Google Cloud. Just simulate it!
+            if (isDemo) {
+                setStatus('Simulating Neural Link with AURA...');
+                
+                // Wait 2.5 seconds to make it feel real
+                await new Promise(resolve => setTimeout(resolve, 2500));
+                
+                // Return a perfectly formatted Marvel Report
+                setResult({
+                    private: "## Executive Summary\nPrivate: Peter (JG11) is experiencing severe scope creep and burnout risk. Reallocate his Inpatient Ward duties to Steve to balance clinical load across the department.\n\n## Executive Wins\n- **Steve:** Maintaining 100% on Shield Integration protocols.\n- **Charles:** Successfully securing the Mutant Genome research grant.\n\n## Risk Factors & Strategic Focus\n- **Burnout:** Peter's On-Call frequency has exceeded healthy parameters.\n- **Isolation:** Tony's remote Work-From-Home status is creating a silo effect. Schedule mandatory on-site check-ins.",
+                    public: "## Team Summary\nPublic: The Marvel CEP Team is crushing Q1! Shield Integration is complete, and clinical targets are being met across the board. Excellent cross-departmental collaboration.\n\n## Team Wins\n- **Milestone:** Shield Integration Completed ahead of schedule.\n- **Clinical:** New Web Shooter operational protocols are now fully active.\n\n## Strategic Focus for Q2\n- Maintain clear communication channels during remote work rotations.\n- Continue to monitor high-volume ward capacities during peak periods."
+                });
+                
+                console.log("Mock AI Analysis Generated");
+                return; // Stop here, do not execute the live code below!
+            }
+
+            // 🔌 LIVE MODE: Execute the real Google Cloud Function
             const sourceData = importedData || teamData || [];
             const filteredYearData = sourceData.map(staff => ({
                 name: staff.staff_name || staff.name,
                 projects: (staff.projects || []).filter(p => String(p.year || '2026') === String(targetYear))
             }));
 
-            const currentProfiles = isDemo ? MARVEL_PROFILES : STAFF_PROFILES;
+            const currentProfiles = STAFF_PROFILES;
             const profileArray = Object.values(currentProfiles);
 
             setStatus('Connecting to Neural Link (This may take up to 5 minutes)...');
 
-            // 🛡️ CALLING THE AI (Now with Clinical Loads included!)
             const response = await generateSmartAnalysis({
                 targetYear: Number(targetYear),
                 teamName: "SSMC@KKH CEP Team",
                 staffProfiles: profileArray,
                 yearData: filteredYearData,
-                staffLoads: staffLoads // 🎯 THE MISSING LINK: The AI can finally see the clinical hours!
+                staffLoads: staffLoads 
             });
 
             setResult({ 
@@ -85,6 +103,7 @@ const SmartAnalysis = ({ teamData, staffLoads, onClose }) => {
                 public: response.data.public 
             });
             console.log("AI Analysis Received");
+            
         } catch (err) {
             console.error("Analysis Error:", err);
             setError('Analysis Failed: ' + err.message);
@@ -135,7 +154,8 @@ const SmartAnalysis = ({ teamData, staffLoads, onClose }) => {
                     <div className="flex items-center gap-3">
                         <ShieldCheck size={28} />
                         <div>
-                            <h2 className="text-2xl font-black tracking-tight uppercase">AI Performance Audit</h2>
+                            {/* 🛡️ THE FIX: Renamed Header */}
+                            <h2 className="text-2xl font-black tracking-tight uppercase">AURA Deep Audit</h2>
                             <p className="text-xs opacity-70 font-bold uppercase tracking-widest">Year {targetYear}</p>
                         </div>
                     </div>
@@ -161,7 +181,7 @@ const SmartAnalysis = ({ teamData, staffLoads, onClose }) => {
                                         {importedData ? 'DATA LOADED' : 'IMPORT BULK .JSON'}
                                     </button>
                                 </div>
-                                <button onClick={handleAnalyze} disabled={loading} className="w-full py-4 bg-slate-900 dark:bg-indigo-600 text-white font-black rounded-xl uppercase hover:bg-slate-800 transition-all flex items-center justify-center gap-2">
+                                <button onClick={handleAnalyze} disabled={loading} className={`w-full py-4 text-white font-black rounded-xl uppercase transition-all flex items-center justify-center gap-2 ${isDemo ? 'bg-emerald-600 hover:bg-emerald-500' : 'bg-slate-900 dark:bg-indigo-600 hover:bg-slate-800'}`}>
                                     {loading ? <Sparkles className="animate-spin" size={18} /> : null}
                                     {loading ? <span>{status}</span> : `Generate ${targetYear} Report`}
                                 </button>
@@ -172,15 +192,13 @@ const SmartAnalysis = ({ teamData, staffLoads, onClose }) => {
                         <div className="space-y-6">
                             <div className="bg-white dark:bg-slate-800 p-6 rounded-2xl border-2 border-indigo-500 shadow-sm">
                                 <h3 className="text-xs font-black text-indigo-500 mb-2 uppercase">Private Brief ({targetYear})</h3>
-                                {/* 🛡️ TALLER BOX: Increased from h-32 to h-64 to fit the new massive text */}
                                 <div className="whitespace-pre-wrap text-sm text-slate-700 dark:text-slate-300 h-64 overflow-y-auto border border-slate-100 dark:border-slate-700 p-4 rounded-lg bg-slate-50 dark:bg-slate-900 shadow-inner">{result.private}</div>
                             </div>
                             <div className="bg-slate-50 dark:bg-slate-800/50 p-6 rounded-2xl border border-slate-200 dark:border-slate-700">
                                 <h3 className="text-xs font-black text-slate-500 mb-2 uppercase">Team Pulse ({targetYear})</h3>
-                                {/* 🛡️ TALLER BOX: Increased from h-24 to h-48 */}
                                 <div className="whitespace-pre-wrap text-sm text-slate-600 dark:text-slate-400 h-48 overflow-y-auto border border-slate-200 dark:border-slate-700 p-4 rounded-lg bg-white dark:bg-slate-900 shadow-inner">{result.public}</div>
                             </div>
-                            <button onClick={handlePublish} className="w-full py-4 bg-indigo-600 text-white font-black rounded-xl shadow-lg uppercase hover:bg-indigo-700 transition-all">
+                            <button onClick={handlePublish} className={`w-full py-4 text-white font-black rounded-xl shadow-lg uppercase transition-all ${isDemo ? 'bg-emerald-600 hover:bg-emerald-700' : 'bg-indigo-600 hover:bg-indigo-700'}`}>
                                 PUBLISH TO {targetYear} ARCHIVE
                             </button>
                         </div>
