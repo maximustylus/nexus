@@ -5,7 +5,6 @@ import { X, Send, BrainCircuit, Shield, Ghost, Users, Zap, RefreshCw, AlertTrian
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { db } from '../firebase'; 
 import { getFunctions, httpsCallable } from 'firebase/functions';
-// 🛡️ NEW: Imported collection, query, where, onSnapshot for the Swap Engine
 import { doc, setDoc, getDoc, updateDoc, arrayUnion, collection, query, where, onSnapshot } from 'firebase/firestore';
 import { useNexus } from '../context/NexusContext';
 
@@ -51,7 +50,6 @@ export default function AuraPulseBot({ user }) {
     const [isOnline,         setIsOnline]         = useState(navigator.onLine);
     const [liveMemory,       setLiveMemory]       = useState(null);
     
-    // History tied strictly to context to prevent amnesia
     const messages = auraHistory;
     const setMessages = setAuraHistory;   
 
@@ -87,9 +85,8 @@ export default function AuraPulseBot({ user }) {
         window.dispatchEvent(new CustomEvent('aura-toggled', { detail: isOpen }));
     }, [isOpen]);
 
-    // ── 🛡️ NEW: SHIFT SWAP LISTENER ──────────────────────────────────────────
+    // ── SHIFT SWAP LISTENER ──────────────────────────────────────────
     useEffect(() => {
-        // We only want to listen for live data if they are logged in and not in Demo Mode
         if (isDemo || !user?.name) return;
 
         const q = query(
@@ -100,14 +97,9 @@ export default function AuraPulseBot({ user }) {
 
         const unsubscribe = onSnapshot(q, (snapshot) => {
             snapshot.docChanges().forEach((change) => {
-                // If a NEW request was just added, pop open AURA and notify!
                 if (change.type === 'added') {
                     const data = change.doc.data();
-                    
-                    // Force AURA open
                     setIsOpen(true);
-                    
-                    // Format the message
                     setMessages(prev => [...prev, {
                         role: 'bot',
                         text: `🔔 **URGENT COVERAGE REQUEST**\n\n**${data.requestedBy}** has requested to swap their **${data.originalTask}** shift on **${data.originalShiftDate}** with you.\n\n_Reason provided:_ "${data.reason || 'None provided'}"\n\nWould you like to accept this coverage?`,
@@ -317,13 +309,11 @@ export default function AuraPulseBot({ user }) {
             const swapRef = doc(db, 'shift_swaps', swapData.docId);
             
             if (isAccepted) {
-                // 1. Mark as Approved
                 await updateDoc(swapRef, { 
                     status: 'APPROVED', 
                     approvedAt: new Date().toISOString() 
                 });
 
-                // 2. Fetch the Master Roster
                 const rosterRef = doc(db, 'system_data', 'roster_2026');
                 const rosterSnap = await getDoc(rosterRef);
                 
@@ -332,15 +322,13 @@ export default function AuraPulseBot({ user }) {
                     const targetDateKey = swapData.originalShiftDate;
                     
                     if (currentRoster[targetDateKey]) {
-                        // 3. Find the exact shift and rewrite the staff name!
                         const updatedDayShifts = currentRoster[targetDateKey].map(shift => {
                             if (shift.staff === swapData.requestedBy && shift.task === swapData.originalTask) {
-                                return { ...shift, staff: user.name }; // Inject new owner
+                                return { ...shift, staff: user.name }; 
                             }
                             return shift;
                         });
 
-                        // 4. Save the new matrix
                         await updateDoc(rosterRef, {
                             [targetDateKey]: updatedDayShifts
                         });
@@ -354,7 +342,6 @@ export default function AuraPulseBot({ user }) {
                     return newHistory;
                 });
             } else {
-                // Denied
                 await updateDoc(swapRef, { status: 'DENIED' });
                 setMessages(prev => {
                     const newHistory = [...prev];
@@ -371,7 +358,6 @@ export default function AuraPulseBot({ user }) {
         }
     };
 
-    // ── Confirm & Sync Pulse Log (Mode 1) ────────────────────────────────────
     const confirmLog = useCallback(async () => {
         if (!pendingLog) return;
         setLoading(true);
@@ -429,7 +415,6 @@ export default function AuraPulseBot({ user }) {
         }
     }, [pendingLog, isDemo, selectedPersona, user, safeTimeout, setMessages]);
 
-    // ─── Export Document to TRUE .docx (Bulletproof for iOS/Mobile) ──────────
     const exportToDoc = useCallback(async (text, msgIndex) => {
         if (!text) return;
 
@@ -511,7 +496,6 @@ export default function AuraPulseBot({ user }) {
         }
     }, [isDemo, selectedPersona, user, setMessages]);
          
-    // ── Confirm Admin Document (Mode 2) With UI Cleanup ──────────────────────
     const confirmAdminAction = useCallback(async (actionText, msgIndex) => {
         if (!actionText) return;
         setLoading(true);
@@ -552,7 +536,6 @@ export default function AuraPulseBot({ user }) {
         }
     }, [isDemo, selectedPersona, user, setMessages]);
     
-    // ── Execute Precise Data Entry (Mode 3) ──────────────────────────────────
     const executeDataEntry = useCallback(async (workload) => {
         if (!workload || !workload.target_collection) return;
         setLoading(true);
@@ -626,309 +609,318 @@ export default function AuraPulseBot({ user }) {
     const isNearLimit = inputLength > MAX_INPUT * 0.8;
 
     return (
-        <div className="fixed bottom-24 xl:bottom-6 right-4 xl:right-6 z-50 flex flex-col items-end drop-shadow-2xl">
+        <>
+            {/* 🛡️ UX FIX: The Frosted Glass Blur Background */}
             {isOpen && (
-                <div
-                    role="dialog" aria-modal="true" aria-label="AURA Pulse wellbeing assistant"
-                    className="mb-4 w-[380px] h-[660px] bg-white dark:bg-slate-900 rounded-[2rem] shadow-2xl border border-slate-200 dark:border-slate-800 flex flex-col overflow-hidden animate-in slide-in-from-bottom-4 zoom-in-95 duration-300"
-                >
-                    {/* Header */}
-                    <div className={`p-5 text-white flex justify-between items-center bg-gradient-to-r ${isAnonymous ? 'from-purple-800 to-indigo-900' : 'from-slate-900 to-indigo-950'}`}>
-                        <div className="flex items-center gap-3">
-                            {view === 'CHAT' ? (
-                                <button 
-                                    onClick={handleBackToGrid} 
-                                    aria-label="Back to Identity Matrix"
-                                    className="p-1 hover:bg-white/20 rounded-lg transition-all active:scale-90"
-                                >
-                                    <ChevronLeft size={20} className="text-white" />
-                                </button>
-                            ) : (
-                                isAnonymous ? <Ghost size={20} className="text-purple-300 animate-pulse" /> : <BrainCircuit size={20} className="text-indigo-400 animate-pulse" />
-                            )}
-                            
-                            <div>
-                                <h3 className="font-bold text-xs uppercase tracking-widest">
-                                    {selectedPersona ? selectedPersona.name : (isAnonymous ? 'Ghost Protocol' : 'AURA Intelligence')}
-                                </h3>
-                                <p className="text-[9px] opacity-60 uppercase tracking-tight">{isDemo ? 'Full AI Simulation' : (isOnline ? 'Secure Live Link' : 'Offline')}</p>
-                            </div>
-                        </div>
-                        <div className="flex items-center gap-1.5">
-                            {!isOnline && <WifiOff size={13} className="text-yellow-300" />}
-                            
-                            {view === 'CHAT' && (
-                                <button 
-                                    onClick={handleClearChat} 
-                                    aria-label="Clear Chat" 
-                                    title="Clear Conversation"
-                                    className="p-1.5 hover:bg-white/20 rounded-lg transition-all text-white/80 hover:text-white"
-                                >
-                                    <Trash2 size={16} />
-                                </button>
-                            )}
+                <div 
+                    className="fixed inset-0 z-[90] bg-slate-900/40 backdrop-blur-sm transition-all animate-in fade-in duration-300"
+                    onClick={() => setIsOpen(false)} 
+                />
+            )}
 
-                            <button onClick={() => setIsOpen(false)} aria-label="Close AURA" className="p-1.5 hover:bg-white/20 rounded-lg transition-all">
-                                <X size={18} />
-                            </button>
-                        </div>
-                    </div>
-
-                    {!isOnline && (
-                        <div className="flex items-center gap-2 px-4 py-2 bg-yellow-50 border-b border-yellow-200">
-                            <WifiOff size={12} className="text-yellow-600 flex-shrink-0" />
-                            <p className="text-[10px] font-semibold text-yellow-700">You are offline. AURA cannot process new requests.</p>
-                        </div>
-                    )}
-
-                    {/* Scroll Area */}
-                    <div className="flex-1 overflow-y-auto p-5 bg-slate-50 dark:bg-slate-950/50 scroll-smooth">
-                        {view === 'SELECT' ? (
-                            <div className="space-y-5 animate-in fade-in duration-300">
-                                <div className="text-center">
-                                    <div className="w-10 h-10 bg-indigo-500/10 rounded-2xl flex items-center justify-center mx-auto mb-2 border border-indigo-500/20">
-                                        <Users size={20} className="text-indigo-500" />
-                                    </div>
-                                    <h2 className="text-xs font-black text-slate-800 dark:text-white uppercase tracking-tighter">Identity Matrix</h2>
-                                    <p className="text-[10px] text-slate-400 font-semibold uppercase tracking-widest mt-0.5">Select a persona</p>
-                                </div>
-                                <div role="listbox" className="grid grid-cols-2 gap-3">
-                                    {(isDemo ? DEMO_PERSONAS : LIVE_PERSONAS).map(p => (
-                                        <button key={p.id} onClick={() => startSession(p)} className="p-4 rounded-2xl bg-white border border-slate-200 hover:border-indigo-500 hover:-translate-y-0.5 transition-all text-left">
-                                            <div className={`w-7 h-7 ${p.color} rounded-full mb-2.5 ring-2 ring-white`} />
-                                            <h4 className="text-[11px] font-black text-slate-900 uppercase truncate">{p.name}</h4>
-                                            <p className="text-[9px] text-slate-400 font-semibold uppercase truncate mb-2">{p.title}</p>
-                                        </button>
-                                    ))}
-                                </div>
-                            </div>
-                        ) : (
-                            <div className="space-y-4">
-                                {messages.map((m, i) => {
-                                    const isAssistant = m.mode === 'ASSISTANT' || m.mode === 'RESEARCH';
-                                    const isDataEntry = m.mode === 'DATA_ENTRY';
-                                    const isAlert = m.mode === 'ROSTER_ALERT';
-                                    const bubbleStyle = m.role === 'user' 
-                                        ? (isAnonymous ? 'bg-purple-600 text-white rounded-tr-none' : 'bg-indigo-600 text-white rounded-tr-none')
-                                        : m.isError 
-                                            ? 'bg-red-50 text-red-600 rounded-tl-none border border-red-200'
-                                            : isAlert
-                                                ? 'bg-amber-50 text-amber-900 rounded-tl-none border border-amber-200 shadow-xl ring-2 ring-amber-400/50'
-                                                : isDataEntry
-                                                    ? 'bg-slate-900 text-emerald-50 rounded-tl-none border border-emerald-900 shadow-lg'
-                                                    : isAssistant 
-                                                        ? 'bg-slate-800 text-blue-50 rounded-tl-none border border-slate-700 shadow-lg'
-                                                        : 'bg-white text-slate-700 rounded-tl-none border border-slate-100 shadow-sm';
-
-                                    return (
-                                        <div key={i} className={`flex ${m.role === 'bot' ? 'justify-start' : 'justify-end'} animate-in fade-in slide-in-from-bottom-1`}>
-                                            <div className={`max-w-[87%] px-4 py-3.5 rounded-[1.5rem] text-sm leading-relaxed ${bubbleStyle}`}>
-                                                
-                                                {isAssistant && m.role === 'bot' && !m.isGreeting && (
-                                                    <div className="flex items-center gap-1.5 mb-2 text-[10px] font-black uppercase tracking-widest text-blue-400">
-                                                        <FileText size={12} /> {m.mode === 'RESEARCH' ? 'Academic Review' : 'Operations Assist'}
-                                                    </div>
-                                                )}
-                                                {isDataEntry && m.role === 'bot' && !m.isGreeting && (
-                                                    <div className="flex items-center gap-1.5 mb-2 text-[10px] font-black uppercase tracking-widest text-emerald-400">
-                                                        <Database size={12} /> Database Agent
-                                                    </div>
-                                                )}
-
-                                                {m.isError && <AlertTriangle size={13} className="inline mr-1.5 mb-0.5 text-red-500" />}
-                                                
-                                                <div className="whitespace-pre-wrap">{m.text}</div>
-                                                
-                                                {isAssistant && m.action && !m.isGreeting && (
-                                                    <div className="mt-4 pt-3 border-t border-slate-600/50">
-                                                        <p className="text-[10px] font-medium text-slate-400 mb-2 uppercase tracking-wide">Extracted Data/Action:</p>
-                                                        <p className="text-xs text-blue-200 bg-slate-900/50 p-2 rounded-lg mb-3 border border-slate-700 font-mono line-clamp-3 overflow-hidden">
-                                                            {m.action}
-                                                        </p>
-                                                        
-                                                        <div className="grid grid-cols-2 gap-2">
-                                                            <button 
-                                                                onClick={() => confirmAdminAction(m.action, i)}
-                                                                disabled={loading}
-                                                                className="py-2 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white text-[10px] font-bold uppercase tracking-wider rounded-xl transition-colors flex items-center justify-center gap-1.5"
-                                                            >
-                                                                {loading ? <RefreshCw size={13} className="animate-spin" /> : <CheckCircle size={13} />} 
-                                                                Save to DB
-                                                            </button>
-
-                                                            <button 
-                                                                onClick={() => exportToDoc(m.action, i)}
-                                                                disabled={loading}
-                                                                className="py-2 bg-slate-700 hover:bg-slate-600 disabled:opacity-50 text-white text-[10px] font-bold uppercase tracking-wider rounded-xl transition-colors flex items-center justify-center gap-1.5 border border-slate-600"
-                                                            >
-                                                                <Download size={13} /> 
-                                                                Export .DOC
-                                                            </button>
-                                                        </div>
-                                                    </div>
-                                                )}
-
-                                                {/* 🛡️ NEW: ROSTER SWAP ACTION BUTTONS */}
-                                                {isAlert && m.swapData && (
-                                                    <div className="mt-4 pt-3 border-t border-amber-200 grid grid-cols-2 gap-2">
-                                                        <button 
-                                                            onClick={() => handleSwapResponse(m.swapData, false, i)}
-                                                            disabled={loading}
-                                                            className="py-2.5 bg-white text-slate-500 hover:bg-slate-50 border border-slate-200 disabled:opacity-50 text-[11px] font-black uppercase tracking-wider rounded-xl transition-all"
-                                                        >
-                                                            Decline
-                                                        </button>
-                                                        <button 
-                                                            onClick={() => handleSwapResponse(m.swapData, true, i)}
-                                                            disabled={loading}
-                                                            className="py-2.5 bg-emerald-500 hover:bg-emerald-600 text-white disabled:opacity-50 text-[11px] font-black uppercase tracking-wider rounded-xl shadow-lg transition-all flex items-center justify-center gap-1.5"
-                                                        >
-                                                            <CalendarCheck size={14} /> Accept Swap
-                                                        </button>
-                                                    </div>
-                                                )}
-
-                                                {isDataEntry && m.db_workload && m.db_workload.target_collection && m.db_workload.target_collection !== 'null' && m.role === 'bot' && !m.isGreeting && (
-                                                    <div className="mt-4 pt-3 border-t border-emerald-900/50">
-                                                        <p className="text-[10px] font-bold text-emerald-400 mb-2 uppercase tracking-widest flex items-center gap-1">
-                                                            <Zap size={12} /> Pending Workload Transaction
-                                                        </p>
-                                                        
-                                                        <div className="bg-slate-950 p-3 rounded-lg border border-emerald-900/50 text-xs text-slate-300 mb-3 leading-relaxed">
-                                                            {m.db_workload.target_collection === 'staff_loads' ? (
-                                                                <div>
-                                                                    Preparing to log <span className="text-emerald-400 font-bold text-sm">{m.db_workload.target_value}</span> patients for <span className="text-amber-400 font-bold">{m.db_workload.target_month !== null && m.db_workload.target_month !== undefined ? ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"][m.db_workload.target_month] : 'Unknown Month'}</span>.
-                                                                </div>
-                                                            ) : (
-                                                                <div>
-                                                                    Preparing to update team <span className="text-amber-400 font-bold">{m.db_workload.target_field?.replace(/_/g, ' ')}</span> to <span className="text-emerald-400 font-bold text-sm">{m.db_workload.target_value}</span>.
-                                                                </div>
-                                                            )}
-                                                        </div>
-
-                                                        <button 
-                                                            onClick={() => executeDataEntry(m.db_workload)}
-                                                            disabled={loading}
-                                                            className="w-full py-2 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white text-[11px] font-bold uppercase tracking-wider rounded-xl transition-colors flex items-center justify-center gap-2"
-                                                        >
-                                                            {loading ? <RefreshCw size={14} className="animate-spin" /> : <Shield size={14} />} 
-                                                            Commit Workload
-                                                        </button>
-                                                    </div>
-                                                )}
-
-                                            </div>
-                                        </div>
-                                    );
-                                })}
-
-                                {pendingLog && (() => {
-                                    const cfg = getPhaseConfig(pendingLog.phase);
-                                    return (
-                                        <div className="mx-0.5 bg-white rounded-2xl border-2 border-indigo-100 p-5 shadow-xl animate-in zoom-in-95">
-                                            <div className="flex justify-between items-center mb-4 text-[10px] font-black uppercase text-slate-400 tracking-widest">
-                                                <span className="flex items-center gap-1.5"><Zap size={12} className="text-amber-500 animate-bounce" /> Pulse Reading</span>
-                                                <span className="text-[9px] bg-indigo-50 text-indigo-600 px-2.5 py-1 rounded-full border border-indigo-100 font-bold">5A Protocol</span>
-                                            </div>
-                                            <div className="grid grid-cols-2 gap-3 mb-4">
-                                                <div className={`p-3 rounded-xl border text-center ${cfg.badge}`}>
-                                                    <div className="text-[8px] font-black uppercase opacity-60 mb-1">Zone</div>
-                                                    <div className="text-xs font-black">{cfg.icon} {cfg.label}</div>
-                                                </div>
-                                                <div className="p-3 rounded-xl border bg-blue-50 text-blue-700 border-blue-100 text-center">
-                                                    <div className="text-[8px] font-black uppercase opacity-60 mb-1">Energy</div>
-                                                    <div className="text-xs font-black mb-1.5">{pendingLog.energy}%</div>
-                                                    <div className="w-full bg-blue-100 rounded-full h-1">
-                                                        <div className="bg-blue-500 h-1 rounded-full transition-all duration-700" style={{ width: `${pendingLog.energy}%` }} />
-                                                    </div>
-                                                </div>
-                                            </div>
-                                            {pendingLog.action && (
-                                                <div className="bg-slate-50 p-3.5 rounded-xl mb-4 border border-slate-100 text-center">
-                                                    <p className="text-[9px] font-black text-slate-400 uppercase mb-1">Recommended Action</p>
-                                                    <p className="text-xs italic font-medium text-slate-600">"{pendingLog.action}"</p>
-                                                </div>
-                                            )}
-                                            {pendingLog.phase === 'ILL' && (
-                                                <div className="mb-4 px-3.5 py-3 rounded-xl bg-red-50 border border-red-200">
-                                                    <p className="text-[10px] text-red-600 font-semibold text-center leading-relaxed">
-                                                        You do not have to carry this alone. Please reach out to your Employee Assistance Programme or a trusted colleague today.
-                                                    </p>
-                                                </div>
-                                            )}
-                                            <div className="flex gap-2">
-                                                <button onClick={() => setPendingLog(null)} className="flex-1 py-2.5 text-xs font-black text-slate-500 rounded-xl border border-slate-200 hover:bg-slate-50 transition-all flex items-center justify-center gap-1.5">
-                                                    <X size={12} /> Dismiss
-                                                </button>
-                                                <button onClick={confirmLog} disabled={loading} className={`flex-[2] py-2.5 text-white text-xs font-black rounded-xl shadow-md transition-all active:scale-95 disabled:opacity-50 flex items-center justify-center gap-2 ${isAnonymous ? 'bg-purple-600' : 'bg-indigo-600'}`}>
-                                                    {loading ? <RefreshCw size={13} className="animate-spin" /> : <Shield size={13} />}
-                                                    {isAnonymous ? 'Confirm Ghost Log' : 'Sync to Dashboard'}
-                                                </button>
-                                            </div>
-                                        </div>
-                                    );
-                                })()}
-
-                                {loading && (
-                                    <div className="flex items-center gap-2 text-[10px] font-bold text-slate-400 animate-pulse pl-1">
-                                        <span className="flex gap-1">
-                                            <span className="w-1.5 h-1.5 bg-indigo-400 rounded-full animate-bounce [animation-delay:0ms]" />
-                                            <span className="w-1.5 h-1.5 bg-indigo-400 rounded-full animate-bounce [animation-delay:150ms]" />
-                                            <span className="w-1.5 h-1.5 bg-indigo-400 rounded-full animate-bounce [animation-delay:300ms]" />
-                                        </span>
-                                        AURA is processing...
-                                    </div>
+            <div className={`fixed bottom-24 xl:bottom-6 right-4 xl:right-6 flex flex-col items-end drop-shadow-2xl ${isOpen ? 'z-[100]' : 'z-50'}`}>
+                {isOpen && (
+                    <div
+                        role="dialog" aria-modal="true" aria-label="AURA Pulse wellbeing assistant"
+                        className="mb-4 w-[380px] h-[660px] bg-white dark:bg-slate-900 rounded-[2rem] shadow-2xl border border-slate-200 dark:border-slate-800 flex flex-col overflow-hidden animate-in slide-in-from-bottom-4 zoom-in-95 duration-300"
+                    >
+                        {/* Header */}
+                        <div className={`p-5 text-white flex justify-between items-center bg-gradient-to-r ${isAnonymous ? 'from-purple-800 to-indigo-900' : 'from-slate-900 to-indigo-950'}`}>
+                            <div className="flex items-center gap-3">
+                                {view === 'CHAT' ? (
+                                    <button 
+                                        onClick={handleBackToGrid} 
+                                        aria-label="Back to Identity Matrix"
+                                        className="p-1 hover:bg-white/20 rounded-lg transition-all active:scale-90"
+                                    >
+                                        <ChevronLeft size={20} className="text-white" />
+                                    </button>
+                                ) : (
+                                    isAnonymous ? <Ghost size={20} className="text-purple-300 animate-pulse" /> : <BrainCircuit size={20} className="text-indigo-400 animate-pulse" />
                                 )}
-                                <div ref={messagesEndRef} className="h-1" />
+                                
+                                <div>
+                                    <h3 className="font-bold text-xs uppercase tracking-widest">
+                                        {selectedPersona ? selectedPersona.name : (isAnonymous ? 'Ghost Protocol' : 'AURA Intelligence')}
+                                    </h3>
+                                    <p className="text-[9px] opacity-60 uppercase tracking-tight">{isDemo ? 'Full AI Simulation' : (isOnline ? 'Secure Live Link' : 'Offline')}</p>
+                                </div>
+                            </div>
+                            <div className="flex items-center gap-1.5">
+                                {!isOnline && <WifiOff size={13} className="text-yellow-300" />}
+                                
+                                {view === 'CHAT' && (
+                                    <button 
+                                        onClick={handleClearChat} 
+                                        aria-label="Clear Chat" 
+                                        title="Clear Conversation"
+                                        className="p-1.5 hover:bg-white/20 rounded-lg transition-all text-white/80 hover:text-white"
+                                    >
+                                        <Trash2 size={16} />
+                                    </button>
+                                )}
+
+                                <button onClick={() => setIsOpen(false)} aria-label="Close AURA" className="p-1.5 hover:bg-white/20 rounded-lg transition-all">
+                                    <X size={18} />
+                                </button>
+                            </div>
+                        </div>
+
+                        {!isOnline && (
+                            <div className="flex items-center gap-2 px-4 py-2 bg-yellow-50 border-b border-yellow-200">
+                                <WifiOff size={12} className="text-yellow-600 flex-shrink-0" />
+                                <p className="text-[10px] font-semibold text-yellow-700">You are offline. AURA cannot process new requests.</p>
+                            </div>
+                        )}
+
+                        {/* Scroll Area */}
+                        <div className="flex-1 overflow-y-auto p-5 bg-slate-50 dark:bg-slate-950/50 scroll-smooth">
+                            {view === 'SELECT' ? (
+                                <div className="space-y-5 animate-in fade-in duration-300">
+                                    <div className="text-center">
+                                        <div className="w-10 h-10 bg-indigo-500/10 rounded-2xl flex items-center justify-center mx-auto mb-2 border border-indigo-500/20">
+                                            <Users size={20} className="text-indigo-500" />
+                                        </div>
+                                        <h2 className="text-xs font-black text-slate-800 dark:text-white uppercase tracking-tighter">Identity Matrix</h2>
+                                        <p className="text-[10px] text-slate-400 font-semibold uppercase tracking-widest mt-0.5">Select a persona</p>
+                                    </div>
+                                    <div role="listbox" className="grid grid-cols-2 gap-3">
+                                        {(isDemo ? DEMO_PERSONAS : LIVE_PERSONAS).map(p => (
+                                            <button key={p.id} onClick={() => startSession(p)} className="p-4 rounded-2xl bg-white border border-slate-200 hover:border-indigo-500 hover:-translate-y-0.5 transition-all text-left">
+                                                <div className={`w-7 h-7 ${p.color} rounded-full mb-2.5 ring-2 ring-white`} />
+                                                <h4 className="text-[11px] font-black text-slate-900 uppercase truncate">{p.name}</h4>
+                                                <p className="text-[9px] text-slate-400 font-semibold uppercase truncate mb-2">{p.title}</p>
+                                            </button>
+                                        ))}
+                                    </div>
+                                </div>
+                            ) : (
+                                <div className="space-y-4">
+                                    {messages.map((m, i) => {
+                                        const isAssistant = m.mode === 'ASSISTANT' || m.mode === 'RESEARCH';
+                                        const isDataEntry = m.mode === 'DATA_ENTRY';
+                                        const isAlert = m.mode === 'ROSTER_ALERT';
+                                        const bubbleStyle = m.role === 'user' 
+                                            ? (isAnonymous ? 'bg-purple-600 text-white rounded-tr-none' : 'bg-indigo-600 text-white rounded-tr-none')
+                                            : m.isError 
+                                                ? 'bg-red-50 text-red-600 rounded-tl-none border border-red-200'
+                                                : isAlert
+                                                    ? 'bg-amber-50 text-amber-900 rounded-tl-none border border-amber-200 shadow-xl ring-2 ring-amber-400/50'
+                                                    : isDataEntry
+                                                        ? 'bg-slate-900 text-emerald-50 rounded-tl-none border border-emerald-900 shadow-lg'
+                                                        : isAssistant 
+                                                            ? 'bg-slate-800 text-blue-50 rounded-tl-none border border-slate-700 shadow-lg'
+                                                            : 'bg-white text-slate-700 rounded-tl-none border border-slate-100 shadow-sm';
+
+                                        return (
+                                            <div key={i} className={`flex ${m.role === 'bot' ? 'justify-start' : 'justify-end'} animate-in fade-in slide-in-from-bottom-1`}>
+                                                <div className={`max-w-[87%] px-4 py-3.5 rounded-[1.5rem] text-sm leading-relaxed ${bubbleStyle}`}>
+                                                    
+                                                    {isAssistant && m.role === 'bot' && !m.isGreeting && (
+                                                        <div className="flex items-center gap-1.5 mb-2 text-[10px] font-black uppercase tracking-widest text-blue-400">
+                                                            <FileText size={12} /> {m.mode === 'RESEARCH' ? 'Academic Review' : 'Operations Assist'}
+                                                        </div>
+                                                    )}
+                                                    {isDataEntry && m.role === 'bot' && !m.isGreeting && (
+                                                        <div className="flex items-center gap-1.5 mb-2 text-[10px] font-black uppercase tracking-widest text-emerald-400">
+                                                            <Database size={12} /> Database Agent
+                                                        </div>
+                                                    )}
+
+                                                    {m.isError && <AlertTriangle size={13} className="inline mr-1.5 mb-0.5 text-red-500" />}
+                                                    
+                                                    <div className="whitespace-pre-wrap">{m.text}</div>
+                                                    
+                                                    {isAssistant && m.action && !m.isGreeting && (
+                                                        <div className="mt-4 pt-3 border-t border-slate-600/50">
+                                                            <p className="text-[10px] font-medium text-slate-400 mb-2 uppercase tracking-wide">Extracted Data/Action:</p>
+                                                            <p className="text-xs text-blue-200 bg-slate-900/50 p-2 rounded-lg mb-3 border border-slate-700 font-mono line-clamp-3 overflow-hidden">
+                                                                {m.action}
+                                                            </p>
+                                                            
+                                                            <div className="grid grid-cols-2 gap-2">
+                                                                <button 
+                                                                    onClick={() => confirmAdminAction(m.action, i)}
+                                                                    disabled={loading}
+                                                                    className="py-2 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white text-[10px] font-bold uppercase tracking-wider rounded-xl transition-colors flex items-center justify-center gap-1.5"
+                                                                >
+                                                                    {loading ? <RefreshCw size={13} className="animate-spin" /> : <CheckCircle size={13} />} 
+                                                                    Save to DB
+                                                                </button>
+
+                                                                <button 
+                                                                    onClick={() => exportToDoc(m.action, i)}
+                                                                    disabled={loading}
+                                                                    className="py-2 bg-slate-700 hover:bg-slate-600 disabled:opacity-50 text-white text-[10px] font-bold uppercase tracking-wider rounded-xl transition-colors flex items-center justify-center gap-1.5 border border-slate-600"
+                                                                >
+                                                                    <Download size={13} /> 
+                                                                    Export .DOC
+                                                                </button>
+                                                            </div>
+                                                        </div>
+                                                    )}
+
+                                                    {isAlert && m.swapData && (
+                                                        <div className="mt-4 pt-3 border-t border-amber-200 grid grid-cols-2 gap-2">
+                                                            <button 
+                                                                onClick={() => handleSwapResponse(m.swapData, false, i)}
+                                                                disabled={loading}
+                                                                className="py-2.5 bg-white text-slate-500 hover:bg-slate-50 border border-slate-200 disabled:opacity-50 text-[11px] font-black uppercase tracking-wider rounded-xl transition-all"
+                                                            >
+                                                                Decline
+                                                            </button>
+                                                            <button 
+                                                                onClick={() => handleSwapResponse(m.swapData, true, i)}
+                                                                disabled={loading}
+                                                                className="py-2.5 bg-emerald-500 hover:bg-emerald-600 text-white disabled:opacity-50 text-[11px] font-black uppercase tracking-wider rounded-xl shadow-lg transition-all flex items-center justify-center gap-1.5"
+                                                            >
+                                                                <CalendarCheck size={14} /> Accept Swap
+                                                            </button>
+                                                        </div>
+                                                    )}
+
+                                                    {isDataEntry && m.db_workload && m.db_workload.target_collection && m.db_workload.target_collection !== 'null' && m.role === 'bot' && !m.isGreeting && (
+                                                        <div className="mt-4 pt-3 border-t border-emerald-900/50">
+                                                            <p className="text-[10px] font-bold text-emerald-400 mb-2 uppercase tracking-widest flex items-center gap-1">
+                                                                <Zap size={12} /> Pending Workload Transaction
+                                                            </p>
+                                                            
+                                                            <div className="bg-slate-950 p-3 rounded-lg border border-emerald-900/50 text-xs text-slate-300 mb-3 leading-relaxed">
+                                                                {m.db_workload.target_collection === 'staff_loads' ? (
+                                                                    <div>
+                                                                        Preparing to log <span className="text-emerald-400 font-bold text-sm">{m.db_workload.target_value}</span> patients for <span className="text-amber-400 font-bold">{m.db_workload.target_month !== null && m.db_workload.target_month !== undefined ? ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"][m.db_workload.target_month] : 'Unknown Month'}</span>.
+                                                                    </div>
+                                                                ) : (
+                                                                    <div>
+                                                                        Preparing to update team <span className="text-amber-400 font-bold">{m.db_workload.target_field?.replace(/_/g, ' ')}</span> to <span className="text-emerald-400 font-bold text-sm">{m.db_workload.target_value}</span>.
+                                                                    </div>
+                                                                )}
+                                                            </div>
+
+                                                            <button 
+                                                                onClick={() => executeDataEntry(m.db_workload)}
+                                                                disabled={loading}
+                                                                className="w-full py-2 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white text-[11px] font-bold uppercase tracking-wider rounded-xl transition-colors flex items-center justify-center gap-2"
+                                                            >
+                                                                {loading ? <RefreshCw size={14} className="animate-spin" /> : <Shield size={14} />} 
+                                                                Commit Workload
+                                                            </button>
+                                                        </div>
+                                                    )}
+
+                                                </div>
+                                            </div>
+                                        );
+                                    })}
+
+                                    {pendingLog && (() => {
+                                        const cfg = getPhaseConfig(pendingLog.phase);
+                                        return (
+                                            <div className="mx-0.5 bg-white rounded-2xl border-2 border-indigo-100 p-5 shadow-xl animate-in zoom-in-95">
+                                                <div className="flex justify-between items-center mb-4 text-[10px] font-black uppercase text-slate-400 tracking-widest">
+                                                    <span className="flex items-center gap-1.5"><Zap size={12} className="text-amber-500 animate-bounce" /> Pulse Reading</span>
+                                                    <span className="text-[9px] bg-indigo-50 text-indigo-600 px-2.5 py-1 rounded-full border border-indigo-100 font-bold">5A Protocol</span>
+                                                </div>
+                                                <div className="grid grid-cols-2 gap-3 mb-4">
+                                                    <div className={`p-3 rounded-xl border text-center ${cfg.badge}`}>
+                                                        <div className="text-[8px] font-black uppercase opacity-60 mb-1">Zone</div>
+                                                        <div className="text-xs font-black">{cfg.icon} {cfg.label}</div>
+                                                    </div>
+                                                    <div className="p-3 rounded-xl border bg-blue-50 text-blue-700 border-blue-100 text-center">
+                                                        <div className="text-[8px] font-black uppercase opacity-60 mb-1">Energy</div>
+                                                        <div className="text-xs font-black mb-1.5">{pendingLog.energy}%</div>
+                                                        <div className="w-full bg-blue-100 rounded-full h-1">
+                                                            <div className="bg-blue-500 h-1 rounded-full transition-all duration-700" style={{ width: `${pendingLog.energy}%` }} />
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                                {pendingLog.action && (
+                                                    <div className="bg-slate-50 p-3.5 rounded-xl mb-4 border border-slate-100 text-center">
+                                                        <p className="text-[9px] font-black text-slate-400 uppercase mb-1">Recommended Action</p>
+                                                        <p className="text-xs italic font-medium text-slate-600">"{pendingLog.action}"</p>
+                                                    </div>
+                                                )}
+                                                {pendingLog.phase === 'ILL' && (
+                                                    <div className="mb-4 px-3.5 py-3 rounded-xl bg-red-50 border border-red-200">
+                                                        <p className="text-[10px] text-red-600 font-semibold text-center leading-relaxed">
+                                                            You do not have to carry this alone. Please reach out to your Employee Assistance Programme or a trusted colleague today.
+                                                        </p>
+                                                    </div>
+                                                )}
+                                                <div className="flex gap-2">
+                                                    <button onClick={() => setPendingLog(null)} className="flex-1 py-2.5 text-xs font-black text-slate-500 rounded-xl border border-slate-200 hover:bg-slate-50 transition-all flex items-center justify-center gap-1.5">
+                                                        <X size={12} /> Dismiss
+                                                    </button>
+                                                    <button onClick={confirmLog} disabled={loading} className={`flex-[2] py-2.5 text-white text-xs font-black rounded-xl shadow-md transition-all active:scale-95 disabled:opacity-50 flex items-center justify-center gap-2 ${isAnonymous ? 'bg-purple-600' : 'bg-indigo-600'}`}>
+                                                        {loading ? <RefreshCw size={13} className="animate-spin" /> : <Shield size={13} />}
+                                                        {isAnonymous ? 'Confirm Ghost Log' : 'Sync to Dashboard'}
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        );
+                                    })()}
+
+                                    {loading && (
+                                        <div className="flex items-center gap-2 text-[10px] font-bold text-slate-400 animate-pulse pl-1">
+                                            <span className="flex gap-1">
+                                                <span className="w-1.5 h-1.5 bg-indigo-400 rounded-full animate-bounce [animation-delay:0ms]" />
+                                                <span className="w-1.5 h-1.5 bg-indigo-400 rounded-full animate-bounce [animation-delay:150ms]" />
+                                                <span className="w-1.5 h-1.5 bg-indigo-400 rounded-full animate-bounce [animation-delay:300ms]" />
+                                            </span>
+                                            AURA is processing...
+                                        </div>
+                                    )}
+                                    <div ref={messagesEndRef} className="h-1" />
+                                </div>
+                            )}
+                        </div>
+
+                        {/* Input Bar */}
+                        {view === 'CHAT' && (
+                            <div className="p-4 bg-white border-t border-slate-100 shrink-0">
+                                {isNearLimit && <p className={`text-[9px] font-bold text-right mb-1 ${inputLength >= MAX_INPUT ? 'text-red-500' : 'text-amber-500'}`}>{inputLength} / {MAX_INPUT}</p>}
+                                <div className={`flex items-center gap-2 bg-slate-50 rounded-full pl-5 pr-3 py-3 border transition-all ${loading || isSending ? 'opacity-60 border-slate-200' : `border-slate-200 focus-within:border-${isAnonymous ? 'purple' : 'indigo'}-500`}`}>
+                                    <input
+                                        ref={inputRef} 
+                                        type="text" 
+                                        value={input}
+                                        onChange={e => setInput(e.target.value.slice(0, MAX_INPUT))}
+                                        onKeyDown={handleKeyDown}
+                                        placeholder={loading || isSending ? 'AURA is processing...' : 'Type a message or request...'}
+                                        className="flex-1 bg-transparent text-sm text-slate-700 outline-none placeholder:text-slate-400 disabled:cursor-not-allowed"
+                                        disabled={loading || isSending || !isOnline}
+                                        autoComplete="off" 
+                                        spellCheck 
+                                        maxLength={MAX_INPUT}
+                                    />
+                                    
+                                    <div className="flex items-center gap-1">
+                                        <button 
+                                            onClick={toggleListening} 
+                                            disabled={loading || isSending || !isOnline} 
+                                            title="Click to dictate"
+                                            className={`p-2 rounded-full transition-all active:scale-90 disabled:opacity-30 ${isListening ? 'bg-red-100 text-red-600 animate-pulse' : 'text-slate-400 hover:text-indigo-600 hover:bg-slate-100'}`}
+                                        >
+                                            <Mic size={17} />
+                                        </button>
+
+                                        <button 
+                                            onClick={handleSend} 
+                                            disabled={!input.trim() || loading || isSending || !isOnline} 
+                                            className={`p-2 rounded-full transition-all active:scale-90 disabled:opacity-30 ${isAnonymous ? 'text-purple-600 hover:bg-purple-50' : 'text-indigo-600 hover:bg-indigo-50'}`}
+                                        >
+                                            <Send size={17} />
+                                        </button>
+                                    </div>
+                                </div>
                             </div>
                         )}
                     </div>
-
-                    {/* Input Bar */}
-                    {view === 'CHAT' && (
-                        <div className="p-4 bg-white border-t border-slate-100 shrink-0">
-                            {isNearLimit && <p className={`text-[9px] font-bold text-right mb-1 ${inputLength >= MAX_INPUT ? 'text-red-500' : 'text-amber-500'}`}>{inputLength} / {MAX_INPUT}</p>}
-                            <div className={`flex items-center gap-2 bg-slate-50 rounded-full pl-5 pr-3 py-3 border transition-all ${loading || isSending ? 'opacity-60 border-slate-200' : `border-slate-200 focus-within:border-${isAnonymous ? 'purple' : 'indigo'}-500`}`}>
-                                <input
-                                    ref={inputRef} 
-                                    type="text" 
-                                    value={input}
-                                    onChange={e => setInput(e.target.value.slice(0, MAX_INPUT))}
-                                    onKeyDown={handleKeyDown}
-                                    placeholder={loading || isSending ? 'AURA is processing...' : 'Type a message or request...'}
-                                    className="flex-1 bg-transparent text-sm text-slate-700 outline-none placeholder:text-slate-400 disabled:cursor-not-allowed"
-                                    disabled={loading || isSending || !isOnline}
-                                    autoComplete="off" 
-                                    spellCheck 
-                                    maxLength={MAX_INPUT}
-                                />
-                                
-                                <div className="flex items-center gap-1">
-                                    <button 
-                                        onClick={toggleListening} 
-                                        disabled={loading || isSending || !isOnline} 
-                                        title="Click to dictate"
-                                        className={`p-2 rounded-full transition-all active:scale-90 disabled:opacity-30 ${isListening ? 'bg-red-100 text-red-600 animate-pulse' : 'text-slate-400 hover:text-indigo-600 hover:bg-slate-100'}`}
-                                    >
-                                        <Mic size={17} />
-                                    </button>
-
-                                    <button 
-                                        onClick={handleSend} 
-                                        disabled={!input.trim() || loading || isSending || !isOnline} 
-                                        className={`p-2 rounded-full transition-all active:scale-90 disabled:opacity-30 ${isAnonymous ? 'text-purple-600 hover:bg-purple-50' : 'text-indigo-600 hover:bg-indigo-50'}`}
-                                    >
-                                        <Send size={17} />
-                                    </button>
-                                </div>
-                            </div>
-                        </div>
-                    )}
-                </div>
-            )}
-            <button onClick={() => setIsOpen(o => !o)} className={`w-16 h-16 rounded-full shadow-2xl text-white flex items-center justify-center transition-all duration-300 hover:scale-110 active:scale-95 ${isOpen ? 'bg-slate-800 rotate-90' : isAnonymous ? 'bg-purple-700 shadow-purple-600/30' : 'bg-indigo-600 shadow-indigo-600/30'}`}>
-                {isOpen ? <X size={26} /> : <BrainCircuit size={28} />}
-            </button>
-        </div>
+                )}
+                <button onClick={() => setIsOpen(o => !o)} className={`w-16 h-16 rounded-full shadow-2xl text-white flex items-center justify-center transition-all duration-300 hover:scale-110 active:scale-95 ${isOpen ? 'bg-slate-800 rotate-90' : isAnonymous ? 'bg-purple-700 shadow-purple-600/30' : 'bg-indigo-600 shadow-indigo-600/30'}`}>
+                    {isOpen ? <X size={26} /> : <BrainCircuit size={28} />}
+                </button>
+            </div>
+        </>
     );
 }
