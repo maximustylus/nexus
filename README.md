@@ -55,4 +55,4 @@ This tool is for the exclusive use of the KKH Sport & Exercise Medicine Centre t
 ---
 
 ## ⚖️ License & Copyright
-**© 2026 Muhammad Alif. All Rights Reserved.** This repository is provided for portfolio, demonstration, and recruitment purposes only. You may not copy, reproduce, distribute, publish, display, perform, modify, create derivative works, transmit, or in any way exploit any such content, nor may you distribute any part of this content over any network, sell or offer it for sale, or use such content to construct any kind of database.
+**© 2026 Muhammad Alif. All Rights Reserved.** This repository is provided for portfolio and demonstration purposes only. You may not copy, reproduce, distribute, publish, display, perform, modify, create derivative works, transmit, or in any way exploit any such content, nor may you distribute any part of this content over any network, sell or offer it for sale, or use such content to construct any kind of database.
