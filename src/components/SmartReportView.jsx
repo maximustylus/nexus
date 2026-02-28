@@ -127,7 +127,6 @@ const SmartReportView = ({ year, teamData, staffLoads, user, forceAdminView }) =
               }
             };
           } else {
-             // Generic mock for other years
              mockReport = {
               private: { 
                 preview: "Archived Private Report. Standard operational parameters maintained.", 
@@ -175,7 +174,6 @@ const SmartReportView = ({ year, teamData, staffLoads, user, forceAdminView }) =
   const activeReport = reports[viewMode] || reports.public;
   const isPrivateView = viewMode === 'private';
 
-  // Modal Text Formatter (Applies Headers and Bullets cleanly)
   const formatAIText = (text) => {
     if (!text) return null;
 
@@ -196,7 +194,6 @@ const SmartReportView = ({ year, teamData, staffLoads, user, forceAdminView }) =
       let isHeader = false;
       let headerClass = "";
       
-      // 🛡️ THE FIX: Added deep header support (H4 and H5)
       if (trimmedLine.startsWith('##### ')) {
         trimmedLine = trimmedLine.replace(/^#####\s/, '');
         isHeader = true;
@@ -219,11 +216,9 @@ const SmartReportView = ({ year, teamData, staffLoads, user, forceAdminView }) =
         headerClass = `text-xl mt-5 mb-3 uppercase tracking-widest ${boldColor}`;
       }
 
-      // Clean dash bullets
       const isBullet = trimmedLine.startsWith('- ');
       if (isBullet) trimmedLine = trimmedLine.replace(/^\-\s/, '');
 
-      // Apply bolding to **text**
       const parts = trimmedLine.split(/(\*\*.*?\*\*)/g);
       const formattedLine = parts.map((part, i) => {
         if (part.startsWith('**') && part.endsWith('**')) {
@@ -232,10 +227,8 @@ const SmartReportView = ({ year, teamData, staffLoads, user, forceAdminView }) =
         return part.replace(/\*\*/g, ''); 
       });
 
-      // Render Headers
       if (isHeader) return <div key={index} className={headerClass}>{formattedLine}</div>;
 
-      // Render Bullets
       if (isBullet) {
         return (
           <div key={index} className="flex items-start mb-1 ml-2">
@@ -245,7 +238,6 @@ const SmartReportView = ({ year, teamData, staffLoads, user, forceAdminView }) =
         );
       }
       
-      // Render Standard Paragraphs
       return <p key={index} className={`mb-2 leading-relaxed ${textColor}`}>{formattedLine}</p>;
     });
   };
@@ -256,7 +248,6 @@ const SmartReportView = ({ year, teamData, staffLoads, user, forceAdminView }) =
         
         <div className="relative z-10 grid grid-cols-1 md:grid-cols-3 gap-8">
           
-          {/* COLUMN 1: AURA HEADER, TOGGLES, SCORE, AND SUMMARY */}
           <div className="md:col-span-1 pr-6 flex flex-col">
             
             <div className="flex items-center gap-2 mb-4 opacity-80">
@@ -289,7 +280,6 @@ const SmartReportView = ({ year, teamData, staffLoads, user, forceAdminView }) =
               {isPrivateView ? 'PRIVATE ARCHIVE' : 'PUBLIC ARCHIVE'}
             </div>
             
-           {/* 🛡️ THE PREVIEW FIX: Displays the extracted summary blurb here */}
            <div className="text-xs leading-relaxed font-bold opacity-80 line-clamp-3 italic">
               {activeReport?.preview}
             </div>
@@ -302,7 +292,6 @@ const SmartReportView = ({ year, teamData, staffLoads, user, forceAdminView }) =
             </button>
           </div>
 
-          {/* COLUMNS 2 & 3: WINS AND RISKS COLUMNS */}
           <div className="md:col-span-2 flex flex-col justify-between">
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-8">
               <div>
@@ -340,13 +329,15 @@ const SmartReportView = ({ year, teamData, staffLoads, user, forceAdminView }) =
                         onClick={() => setIsAnalysisOpen(true)}
                         className="px-6 py-3 bg-white text-indigo-700 font-black rounded-xl uppercase text-[10px] shadow-xl hover:bg-indigo-50 transition-all flex items-center gap-2 shrink-0"
                     >
+                        {/* 🛡️ THE FIX: Renamed the Action Button */}
                         <ShieldCheck size={16} />
-                        Deep Audit ({year})
+                        AURA DEEP AUDIT ({year})
                     </button>
                 ) : (
                     <div className="px-6 py-3 bg-white/10 text-white font-black rounded-xl uppercase text-[10px] flex items-center gap-2 shrink-0">
+                        {/* 🛡️ THE FIX: Renamed the Display Label */}
                         <Sparkles size={16} />
-                        AI Verified ({year})
+                        AURA VERIFIED ({year})
                     </div>
                 )}
                 <div className="bg-black/20 rounded-xl px-4 py-3 border border-white/10 flex-1 hidden sm:block">
@@ -359,7 +350,6 @@ const SmartReportView = ({ year, teamData, staffLoads, user, forceAdminView }) =
         </div>
       </div>
 
-      {/* FULL REPORT MODAL */}
       {isFullReportOpen && (
         <div className="fixed inset-0 bg-slate-900/90 backdrop-blur-sm z-[150] flex items-center justify-center p-4">
           <div className="bg-white dark:bg-slate-900 w-full max-w-3xl rounded-3xl shadow-2xl overflow-hidden animate-in fade-in zoom-in duration-200 border border-slate-200 dark:border-slate-800 flex flex-col max-h-[90vh]">
@@ -373,7 +363,6 @@ const SmartReportView = ({ year, teamData, staffLoads, user, forceAdminView }) =
               <button className="text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-white" onClick={() => setIsFullReportOpen(false)}><X size={20} /></button>
             </div>
             
-            {/* 🛡️ THE MODAL FIX: Displays the 100% complete, unadulterated essay here */}
             <div className="p-8 overflow-y-auto flex-1">
              <div className="text-slate-700 dark:text-slate-300 leading-relaxed font-medium">
               {formatAIText(activeReport?.fullText)}
