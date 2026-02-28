@@ -1,111 +1,65 @@
-# AURA — v2.1 → v2.2 Migration Guide
+# NEXUS: Unified Operations & Intelligence Dashboard
 
-## The "Dual-Mode & Backend" Update
+![Status](https://img.shields.io/badge/Status-v1.4%20Beta-emerald) ![Org](https://img.shields.io/badge/Unit-Sport%20%26%20Exercise%20Medicine-indigo) ![Tech](https://img.shields.io/badge/AI-Gemini%20Powered-purple) ![PWA](https://img.shields.io/badge/PWA-Native%20Push%20Enabled-blue) ![CI/CD](https://img.shields.io/badge/CI%2FCD-GitHub%20Actions-2ea44f)
 
-v2.2 represents a complete paradigm shift in AURA's architecture. The AI has been physically extracted from the client-side browser and securely nested within Firebase Cloud Functions. It has also been upgraded from a single-track conversational bot to a multi-agent Intent Router.
+**NEXUS** (formerly IDC App) is a clinician-led innovation platform designed to revolutionize workload management, optimize skill-mix routing, and actively protect staff wellbeing at the Sport & Exercise Medicine Centre.
+
+> **Master the Grind • Protect the Pulse • Build the Future**
+> *Note: This application is currently in active Beta and is being evaluated by the Senior Clinical team for internal efficiency, burnout prevention, and resource allocation.*
 
 ---
 
-## Breaking Changes (v2.1 → v2.2)
+## 🚀 The Three Pillars of NEXUS
 
-### 1. API Security: The Client-Side Purge
+### Pillar A: AURA Intelligence (The AI Agent Layer)
+AURA is an autonomous operational agent integrated into the system's core, capable of dynamic intent-routing and real-time mediation:
+* **The Auto-Healer (Roster Mediation):** AURA intercepts peer-to-peer shift swap requests, automates staff notifications, and upon approval, autonomously rewrites the master calendar matrix.
+* **The Wellbeing Coach:** Utilizes Motivational Interviewing (OARS) and the Mental Health Continuum to provide psychological first aid based on real-time "Social Battery" indexing.
+* **The Clinical Assistant:** Instantly transitions to an analytical mode to execute secure database entries, document formatting, and enterprise-standard reports.
+
+### Pillar B: Smart Workload & AI Audits (The Predictive Layer)
+* **Deep AI Audits:** Powered by Google's Gemini models, NEXUS transforms raw data into high-level strategic insights. It generates **Private Executive Briefs** (flagging Job Grade imbalances and scope creep) and **Public Team Pulses** to align department morale.
+* **Time Travel Archive:** Instantly access and analyze historical workload data to track team progression across fiscal years.
+
+### Pillar C: Auto Rostering (The Structural Layer)
+* **Zero-Conflict Architecture:** Eliminates manual scheduling friction by generating mathematically safe rosters based on predicted case volumes and specific skill-mix requirements.
+* **Unified Interface:** A high-fidelity calendar view that allows staff to view coverage, sync with external calendars, and trigger integrated shift-swaps instantly.
+
+---
+
+## 🧪 Interactive Demo Sandbox
+To facilitate safe stakeholder demonstrations and leadership training without exposing sensitive hospital data, NEXUS features a fully functional **Demo Sandbox**:
+* **Simulated Environment:** Populated by a "Marvel Superhero" Healthcare Team to demonstrate complex team dynamics.
+* **Risk-Free Training:** Allows future leaders to practice resolving rostering conflicts and generating AI audits without writing to the live database.
+* **Feedback Loop:** Includes a native **In-App Feedback Widget** for real-time bug reporting and feature requests.
+
+---
+
+## ⚠️ Access & Security Policy
+
+**RESTRICTED: INTERNAL SSMC@KKH STAFF ONLY (LIVE MODE)**
+
+This tool is for the exclusive use of the KKH Sport & Exercise Medicine Centre team. Live Mode is locked behind enterprise-grade authentication.
+1. **Strict Whitelisting:** Access is exclusively limited to pre-approved `@kkh.com.sg` email addresses.
+2. **PDPA Compliance:** **Do NOT** upload sensitive patient data or PHI. NEXUS tracks *operational load*, not patient records.
+3. **Data Sharding:** Live production data and Demo simulation data operate on strictly isolated Firebase collections.
+
+---
+---
+
+# 🤖 AURA Technical Architecture (v3.0)
+
+## The "Autonomous Agent & Roster Middleware" Update
+AURA has evolved from a reactive conversational bot (Intent Router) into a proactive, autonomous database agent. AURA now possesses the ability to actively listen to Firebase collections, intercept peer-to-peer network requests, and execute sanitized writes directly to the Firestore database.
+
+### 1. Proactive Event Listening (The Swap Engine)
+AURA is no longer strictly bound to the user's `[Enter]` key. She now utilizes Firebase `onSnapshot` listeners to act as a background middleware agent.
 ```javascript
-// v2.1
-const genAI = new GoogleGenerativeAI(import.meta.env.VITE_GEMINI_API_KEY); 
-// ⚠️ DANGER: API Key was bundled into the React frontend and exposed to the browser.
+// AURA actively listens to the 'shift_swaps' collection
+const q = query(
+    collection(db, 'shift_swaps'), 
+    where('targetStaff', '==', user.name),
+    where('status', '==', 'PENDING')
+);
 
-// v2.2
-const secureChatWithAura = httpsCallable(functions, 'chatWithAura');
-// ✅ SECURE: The React frontend no longer holds the API key. It sends a secure payload to Firebase, which handles the Gemini connection server-side.
-```
-
-### 2. Payload Schema Evolution (Dual-Mode)
-AURA now returns a heavily structured JSON payload to dictate UI rendering.
-```javascript
-// v2.1 JSON Output:
-{ "reply": "...", "diagnosis_ready": true, "phase": "HEALTHY" }
-
-// v2.2 JSON Output (New UI triggers):
-{ 
-  "reply": "...", 
-  "mode": "ASSISTANT", // 🛡️ NEW: Triggers the Admin UI shape-shifter
-  "action": "...",     // 🛡️ NEW: Populates the confirmation action button
-  "diagnosis_ready": false, 
-  "phase": null
-}
-```
-
----
-
-## Resolved Technical Debt (Fixed in v2.2)
-
-### 1. 🟢 RESOLVED: Client-Visible API Key
-**Old Issue:** `VITE_GEMINI_API_KEY` was exposed to anyone opening Chrome DevTools.
-**Resolution:** The Express proxy workaround is no longer required. Firebase Cloud Functions (`functions/index.js`) now securely stores the `GEMINI_API_KEY` environment variable. The browser never sees it.
-
-### 2. 🟢 RESOLVED: The "Not Okay" Regex Bug
-**Old Issue:** The hardcoded simulation brain used regex `\b(okay)\b` which incorrectly categorized "not okay" as "Healthy".
-**Resolution:** The local simulation regex brain has been completely deprecated. All requests (Demo and Live) are now routed through the Gemini LLM, which possesses full semantic understanding of negation context.
-
----
-
-## Updated Architecture Diagram
-
-```text
-┌─────────────────────────────────────────────────────┐
-│  AuraPulseBot.jsx (React Presentation & State)      │
-│                                                     │
-│  State: messages[], pendingLog, selectedPersona     │
-│  UI Logic: Dynamic Tailwind (Coach vs. Assistant)   │
-│                                                     │
-│  [User Input] ────► sanitize ────► httpsCallable()  │
-│  [UI Render]  ◄──── JSON parse ◄── Firebase Return  │
-└─────────────────────────┬───────────────────────────┘
-                          │ (Secure HTTPS RPC)
-                          ▼
-┌─────────────────────────────────────────────────────┐
-│  Firebase Cloud Functions (Backend Orchestration)   │
-│                                                     │
-│  1. Auth Verification (Is user allowed?)            │
-│  2. Prompt Assembly (Dual-Mode System Prompt)       │
-│  3. LLM Communication (Gemini 1.5/2.0 API)          │
-│  4. Safety Fallbacks & JSON Validation              │
-└─────────────────────────┬───────────────────────────┘
-                          │ (Server-to-Server RPC)
-                          ▼
-┌─────────────────────────────────────────────────────┐
-│  Google Gemini API (The Engine)                     │
-│  - Mode 1: Empathy & OARS Protocol                  │
-│  - Mode 2: PDPA-Compliant Admin Generation          │
-└─────────────────────────────────────────────────────┘
-```
-
----
-
-## Known Limitations (v2.2)
-
-### 1. Cloud Function "Cold Starts"
-If AURA has not been used for several hours, Google Cloud spins down the server instance. The *first* message sent by a user may take 3-5 seconds to resolve while the container boots up. Subsequent messages will be nearly instant. 
-**Workaround:** The frontend `loading` state accurately reflects this delay to prevent user frustration.
-
-### 2. Gemini Chat History Growth
-Long sessions pass increasingly large history arrays to the API.
-**Current State:** The Cloud Function implements a hard truncation `history.slice(-MAX_HISTORY_LEN)` to prevent token overflow. Very old context in the immediate session will be forgotten.
-
-### 3. Anonymous Log Growth
-Firebase anonymous logs use `arrayUnion`, meaning the `_anonymous_logs` document will grow unboundedly.
-**Recommendation for v2.3:** Add a scheduled Cloud Function to rotate or archive logs older than 90 days.
-
----
-
-## Quick Smoke Test (v2.2 Dual-Mode)
-
-1. Open the panel → Identity Matrix renders 6 personas ✓
-2. Select **Peter** → greeting appears with sandbox prefix ✓
-3. Type: *"I am exhausted from this shift."*
-   * **Expected:** AURA bubble is Indigo (Coach Mode). OARS validation is used. Reacting/Injured card appears. ✓
-4. Type: *"Draft a 1-page SOP for rooming workflow."*
-   * **Expected:** AURA bubble turns Dark Grey (Assistant Mode). "Operations Assist" badge appears. A clear SOP is generated. ✓
-5. Disconnect network → offline banner appears instantly ✓
-6. Type 480 chars → character counter appears in amber ✓
-7. Type 500 chars → counter turns red; input is hard-capped ✓
+// Upon detection, AURA forces her UI open and injects a high-priority 'ROSTER_ALERT' message.
