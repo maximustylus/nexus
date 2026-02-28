@@ -58,8 +58,8 @@ const FeedbackWidget = ({ user }) => {
             {/* 🛡️ FIX: Dynamic classes added to hide the widget when AURA opens */}
             <button 
                 onClick={() => setIsOpen(true)}
-                className={`fixed bottom-[180px] md:bottom-24 xl:bottom-6 right-4 md:right-24 xl:right-28 w-16 h-16 bg-indigo-600 hover:bg-indigo-700 text-white rounded-full shadow-[0_0_20px_rgba(79,70,229,0.4)] transition-all duration-300 ease-in-out hover:scale-110 z-[85] flex items-center justify-center p-0 m-0 ${
-                    isAuraOpen ? 'opacity-0 scale-75 pointer-events-none' : 'opacity-100 scale-100'
+                className={`fixed bottom-[180px] md:bottom-24 xl:bottom-6 right-4 md:right-24 xl:right-28 w-16 h-16 bg-indigo-600 hover:bg-indigo-700 text-white rounded-full shadow-[0_0_20px_rgba(79,70,229,0.4)] transition-all duration-300 ease-in-out hover:scale-110 flex items-center justify-center p-0 m-0 ${
+                    isAuraOpen ? 'opacity-0 scale-75 pointer-events-none -z-50' : 'opacity-100 scale-100 pointer-events-auto z-[85]'
                 }`}
             >
                 <MessageSquare size={26} />
