@@ -79,7 +79,7 @@ function NexusApp() {
   const { isDemo, toggleDemo } = useNexus(); 
   
 // --- UI STATE (SMART THEME) ---
-  const [currentView, setCurrentView] = useState('dashboard');
+  const [currentView, setCurrentView] = useState('pulse');
   const [archiveYear, setArchiveYear] = useState('2025');
   const [isAdminOpen, setIsAdminOpen] = useState(false);
 
