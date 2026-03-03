@@ -71,8 +71,8 @@ const AuraGreeting = ({ openAuraChat, dailyPatientLoad = 120 }) => {
   if (!isVisible) return null;
 
   return (
-    // Positioned safely above your mobile navigation bar (bottom-24)
-    <div className="fixed bottom-24 right-4 z-[90] flex flex-col items-end space-y-3 animate-in fade-in slide-in-from-bottom-8 duration-700">
+    // Positioned safely above your mobile navigation bar (adjusted to bottom-20)
+    <div className="fixed bottom-20 right-4 z-[90] flex flex-col items-end space-y-3 animate-in fade-in slide-in-from-bottom-8 duration-700 pointer-events-none">
       
       {/* 💬 The Frosted Glass Speech Bubble */}
       <div 
@@ -80,7 +80,7 @@ const AuraGreeting = ({ openAuraChat, dailyPatientLoad = 120 }) => {
             setIsVisible(false);
             openAuraChat(); // Triggers the main panel to open
         }}
-        className="group relative cursor-pointer max-w-[280px] bg-white/90 dark:bg-slate-900/90 backdrop-blur-md border border-indigo-100 dark:border-slate-800 shadow-xl rounded-2xl rounded-br-none p-4 transition-all duration-500 hover:scale-105 hover:shadow-indigo-500/20"
+        className="pointer-events-auto group relative cursor-pointer max-w-[280px] bg-white/90 dark:bg-slate-900/90 backdrop-blur-md border border-indigo-100 dark:border-slate-800 shadow-xl rounded-2xl rounded-br-none p-4 transition-all duration-500 hover:scale-105 hover:shadow-indigo-500/20"
       >
         {/* Subtle Close Button (Appears on Hover) */}
         <button 
@@ -108,11 +108,6 @@ const AuraGreeting = ({ openAuraChat, dailyPatientLoad = 120 }) => {
           </div>
         )}
       </div>
-
-         {/* Subtle radar ping animation behind the icon */}
-        <span className="absolute inline-flex h-full w-full rounded-full bg-indigo-400 opacity-30 animate-ping"></span>
-        <Bot className="text-white w-7 h-7" />
-      </button>
     </div>
   );
 };
