@@ -125,4 +125,3 @@ const AuraGreeting = ({ openAuraChat, dailyPatientLoad = 120 }) => {
 };
 
 export default AuraGreeting;
-export default AuraGreeting;
