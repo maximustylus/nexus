@@ -2,7 +2,6 @@ import AuraGreeting from './components/AuraGreeting';
 import ScrollToTop from './components/ScrollToTop';
 import React, { useState, useEffect, useRef } from 'react';
 import AppGuide from './components/AppGuide';
-import FeedbackWidget from './components/FeedbackWidget';
 import { getMessaging, onMessage } from "firebase/messaging";
 import { createPortal } from 'react-dom';
 import { db, auth } from './firebase';
@@ -628,9 +627,6 @@ const getClinicalData = (staffId) => {
                   onNavigate={setCurrentView}
                   floatingWidgets={
                     <>
-                      {/* 1. The Bug Reporter */}
-                      <FeedbackWidget />
-                      
                       {/* 2. The Greeting component */}
                       <AuraGreeting openAuraChat={() => setIsAuraOpen(true)} dailyPatientLoad={145} />
                       
