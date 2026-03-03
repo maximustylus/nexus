@@ -71,21 +71,20 @@ const AuraGreeting = ({ openAuraChat, dailyPatientLoad = 120 }) => {
   if (!isVisible) return null;
 
   return (
-    // Positioned safely above your mobile navigation bar (adjusted to bottom-20)
+    // Positioned safely above your mobile navigation bar
     <div className="fixed bottom-20 right-4 z-[90] flex flex-col items-end space-y-3 animate-in fade-in slide-in-from-bottom-8 duration-700 pointer-events-none">
       
       {/* 💬 The Frosted Glass Speech Bubble */}
       <div 
         onClick={() => {
             setIsVisible(false);
-            openAuraChat(); // Triggers the main panel to open
+            openAuraChat(); // ✅ Opens AURA
         }}
         className="pointer-events-auto group relative cursor-pointer max-w-[280px] bg-white/90 dark:bg-slate-900/90 backdrop-blur-md border border-indigo-100 dark:border-slate-800 shadow-xl rounded-2xl rounded-br-none p-4 transition-all duration-500 hover:scale-105 hover:shadow-indigo-500/20"
       >
-        {/* Subtle Close Button (Appears on Hover) */}
         <button 
           onClick={(e) => {
-            e.stopPropagation(); // Prevents opening the chat when dismissing
+            e.stopPropagation(); 
             setIsVisible(false);
           }}
           className="absolute -top-2 -right-2 bg-slate-100 dark:bg-slate-800 text-slate-400 hover:text-slate-600 rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity shadow-sm"
@@ -108,8 +107,22 @@ const AuraGreeting = ({ openAuraChat, dailyPatientLoad = 120 }) => {
           </div>
         )}
       </div>
+
+      {/* 🤖 THE RESTORED AURA BUTTON */}
+      <button 
+        onClick={() => {
+            setIsVisible(false);
+            openAuraChat(); // ✅ Opens AURA
+        }}
+        className="pointer-events-auto relative flex items-center justify-center w-14 h-14 bg-gradient-to-tr from-indigo-600 to-purple-600 rounded-full shadow-lg shadow-indigo-500/30 hover:shadow-indigo-500/50 hover:scale-110 transition-all duration-300"
+      >
+        <span className="absolute inline-flex h-full w-full rounded-full bg-indigo-400 opacity-30 animate-ping"></span>
+        <Bot className="text-white w-7 h-7" />
+      </button>
+
     </div>
   );
 };
 
+export default AuraGreeting;
 export default AuraGreeting;
