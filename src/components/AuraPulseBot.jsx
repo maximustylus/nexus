@@ -1,3 +1,4 @@
+import { X, Bot, Bug } from 'lucide-react';
 import { Document, Packer, Paragraph, TextRun, HeadingLevel } from 'docx';
 import { DEMO_PERSONAS, LIVE_PERSONAS } from '../config/personas';
 import { X, Send, BrainCircuit, Shield, Ghost, Users, Zap, RefreshCw, AlertTriangle, WifiOff, 
@@ -672,6 +673,31 @@ export default function AuraPulseBot({ user }) {
                                 <p className="text-[10px] font-semibold text-yellow-700">You are offline. AURA cannot process new requests.</p>
                             </div>
                         )}
+                             <div className="flex items-center justify-between p-4 border-b border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 rounded-t-2xl">
+                             <div className="flex items-center space-x-2">
+                               <Bot className="text-indigo-600" />
+                               <h2 className="font-bold text-slate-800 dark:text-white">AURA</h2>
+                             </div>
+                             
+                             <div className="flex items-center space-x-3">
+                               {/* 🐞 NEW NATIVE BUG BUTTON */}
+                               <button 
+                                 onClick={() => {
+                                   // Trigger your bug reporting logic here, or open a bug reporting modal
+                                   console.log("Bug report initiated from AURA");
+                                 }}
+                                 className="flex items-center space-x-1 text-xs font-bold text-amber-600 bg-amber-50 dark:bg-amber-900/30 px-2 py-1 rounded hover:bg-amber-100 transition-colors"
+                               >
+                                 <Bug size={14} />
+                                 <span>Report Bug</span>
+                               </button>
+                           
+                               {/* Existing Close Button */}
+                               <button onClick={onClose} className="text-slate-400 hover:text-slate-600">
+                                 <X size={20} />
+                               </button>
+                             </div>
+                           </div>
 
                         {/* Scroll Area */}
                         <div className="flex-1 overflow-y-auto p-5 bg-slate-50 dark:bg-slate-950/50 scroll-smooth">
