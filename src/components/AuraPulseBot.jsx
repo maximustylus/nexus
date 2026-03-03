@@ -1,9 +1,11 @@
-import { Bot, Bug } from 'lucide-react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { 
+  Bot, Bug, X, Send, BrainCircuit, Shield, Ghost, Users, Zap, RefreshCw, 
+  AlertTriangle, WifiOff, FileText, CheckCircle, Database, Trash2, Download, 
+  Mic, ChevronLeft, CalendarCheck 
+} from 'lucide-react';
 import { Document, Packer, Paragraph, TextRun, HeadingLevel } from 'docx';
 import { DEMO_PERSONAS, LIVE_PERSONAS } from '../config/personas';
-import { X, Send, BrainCircuit, Shield, Ghost, Users, Zap, RefreshCw, AlertTriangle, WifiOff, 
-         FileText, CheckCircle, Database, Trash2, Download, Mic, ChevronLeft, CalendarCheck } from 'lucide-react';
-import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { db } from '../firebase'; 
 import { getFunctions, httpsCallable } from 'firebase/functions';
 import { doc, setDoc, getDoc, updateDoc, arrayUnion, collection, query, where, onSnapshot } from 'firebase/firestore';
@@ -35,14 +37,14 @@ const MAX_INPUT       = 500;
 const SEND_COOLDOWN_MS = 2000;
 
 // =============================================================================
-// COMPONENT
+// COMPONENT: Now fully controlled by props (isOpen, onClose, onOpen)
 // =============================================================================
-export default function AuraPulseBot({ user }) {
+export default function AuraPulseBot({ user, isOpen, onClose, onOpen }) {
     const { isDemo, auraHistory, setAuraHistory } = useNexus();
 
     // ── State ─────────────────────────────────────────────────────────────────
-    const [isOpen, setIsOpen] = useState(false);
-    const [view,             setView]             = useState('SELECT');
+    // 🛡️ REMOVED: const [isOpen, setIsOpen] = useState(false); (Now managed by App.jsx)
+    const [view,              setView]              = useState('SELECT');
     const [selectedPersona, setSelectedPersona] = useState(null); 
     const [input,             setInput]             = useState('');
     const [loading,          setLoading]          = useState(false);
@@ -59,6 +61,7 @@ export default function AuraPulseBot({ user }) {
     const inputRef       = useRef(null);
     const lastSendRef    = useRef(0);
     const timeoutsRef    = useRef([]);
+    
     const safeTimeout = useCallback((fn, ms) => {
         const id = setTimeout(fn, ms);
         timeoutsRef.current.push(id);
@@ -100,7 +103,7 @@ export default function AuraPulseBot({ user }) {
             snapshot.docChanges().forEach((change) => {
                 if (change.type === 'added') {
                     const data = change.doc.data();
-                    setIsOpen(true);
+                    if (onOpen) onOpen(); // Call parent to open AURA
                     setMessages(prev => [...prev, {
                         role: 'bot',
                         text: `🔔 **URGENT COVERAGE REQUEST**\n\n**${data.requestedBy}** has requested to swap their **${data.originalTask}** shift on **${data.originalShiftDate}** with you.\n\n_Reason provided:_ "${data.reason || 'None provided'}"\n\nWould you like to accept this coverage?`,
@@ -115,7 +118,7 @@ export default function AuraPulseBot({ user }) {
         });
 
         return () => unsubscribe();
-    }, [isDemo, user, setMessages]);
+    }, [isDemo, user, setMessages, onOpen]);
 
     // ── Session start ─────────────────────────────────────────────────────────
     const startSession = useCallback((persona) => {
@@ -404,7 +407,9 @@ export default function AuraPulseBot({ user }) {
                 role: 'bot', text: '✅ Insights synced to your dashboard. Take care of yourself today.', mode: 'COACH'
             }]);
             setPendingLog(null);
-            safeTimeout(() => setIsOpen(false), 2500);
+            
+            // Close properly via prop
+            safeTimeout(() => { if (onClose) onClose(); }, 2500);
 
         } catch (err) {
             console.error('[AURA] Sync failed:', err);
@@ -414,7 +419,7 @@ export default function AuraPulseBot({ user }) {
         } finally {
             setLoading(false);
         }
-    }, [pendingLog, isDemo, selectedPersona, user, safeTimeout, setMessages]);
+    }, [pendingLog, isDemo, selectedPersona, user, safeTimeout, setMessages, onClose]);
 
     const exportToDoc = useCallback(async (text, msgIndex) => {
         if (!text) return;
@@ -615,7 +620,7 @@ export default function AuraPulseBot({ user }) {
             {isOpen && (
                 <div 
                     className="fixed inset-0 z-[90] bg-slate-900/40 backdrop-blur-sm transition-all animate-in fade-in duration-300"
-                    onClick={() => setIsOpen(false)} 
+                    onClick={onClose} // Replaced setIsOpen(false) with onClose
                 />
             )}
 
@@ -661,7 +666,8 @@ export default function AuraPulseBot({ user }) {
                                     </button>
                                 )}
 
-                                <button onClick={() => setIsOpen(false)} aria-label="Close AURA" className="p-1.5 hover:bg-white/20 rounded-lg transition-all">
+                                {/* Correctly uses onClose */}
+                                <button onClick={onClose} aria-label="Close AURA" className="p-1.5 hover:bg-white/20 rounded-lg transition-all">
                                     <X size={18} />
                                 </button>
                             </div>
@@ -683,7 +689,8 @@ export default function AuraPulseBot({ user }) {
                                {/* 🐞 NEW NATIVE BUG BUTTON */}
                                <button 
                                  onClick={() => {
-                                   // Trigger your bug reporting logic here, or open a bug reporting modal
+                                   // Placeholder action for bug report
+                                   alert("Bug report functionality opened from AURA!");
                                    console.log("Bug report initiated from AURA");
                                  }}
                                  className="flex items-center space-x-1 text-xs font-bold text-amber-600 bg-amber-50 dark:bg-amber-900/30 px-2 py-1 rounded hover:bg-amber-100 transition-colors"
@@ -901,11 +908,15 @@ export default function AuraPulseBot({ user }) {
                             )}
                         </div>
 
-                        {/* Input Bar */}
+                        {/* Input Bar with safe Tailwind classes */}
                         {view === 'CHAT' && (
                             <div className="p-4 bg-white border-t border-slate-100 shrink-0">
                                 {isNearLimit && <p className={`text-[9px] font-bold text-right mb-1 ${inputLength >= MAX_INPUT ? 'text-red-500' : 'text-amber-500'}`}>{inputLength} / {MAX_INPUT}</p>}
-                                <div className={`flex items-center gap-2 bg-slate-50 rounded-full pl-5 pr-3 py-3 border transition-all ${loading || isSending ? 'opacity-60 border-slate-200' : `border-slate-200 focus-within:border-${isAnonymous ? 'purple' : 'indigo'}-500`}`}>
+                                <div className={`flex items-center gap-2 bg-slate-50 rounded-full pl-5 pr-3 py-3 border transition-all ${
+                                    loading || isSending 
+                                        ? 'opacity-60 border-slate-200' 
+                                        : `border-slate-200 ${isAnonymous ? 'focus-within:border-purple-500' : 'focus-within:border-indigo-500'}`
+                                }`}>
                                     <input
                                         ref={inputRef} 
                                         type="text" 
@@ -943,9 +954,6 @@ export default function AuraPulseBot({ user }) {
                         )}
                     </div>
                 )}
-                <button onClick={() => setIsOpen(o => !o)} className={`w-16 h-16 rounded-full shadow-2xl text-white flex items-center justify-center transition-all duration-300 hover:scale-110 active:scale-95 ${isOpen ? 'bg-slate-800 rotate-90' : isAnonymous ? 'bg-purple-700 shadow-purple-600/30' : 'bg-indigo-600 shadow-indigo-600/30'}`}>
-                    {isOpen ? <X size={26} /> : <BrainCircuit size={28} />}
-                </button>
             </div>
         </>
     );
