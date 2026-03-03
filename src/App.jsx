@@ -1,3 +1,4 @@
+import FeedbackWidget from './components/FeedbackWidget';
 import AuraGreeting from './components/AuraGreeting';
 import ScrollToTop from './components/ScrollToTop';
 import React, { useState, useEffect, useRef } from 'react';
