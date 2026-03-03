@@ -61,7 +61,7 @@ const AuraGreeting = ({ openAuraChat, dailyPatientLoad = 120 }) => {
     // 3. The Morph Timer (Quote -> Greeting after 4.5 seconds)
     const timer = setTimeout(() => {
       setPhase('greeting');
-    }, 4500);
+    }, 10000);
 
     return () => clearTimeout(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
