@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { BrainCircuit, Sparkles, X } from 'lucide-react'; // ✅ Changed Bot to BrainCircuit
+import { BrainCircuit, Sparkles, X } from 'lucide-react';
 
 const AuraGreeting = ({ openAuraChat, dailyPatientLoad = 120 }) => {
   const [showBubble, setShowBubble] = useState(false);
+  const [isExiting, setIsExiting] = useState(false); // 🌟 NEW: Controls the macOS minimize animation
   const [phase, setPhase] = useState('quote'); 
   const [currentQuote, setCurrentQuote] = useState('');
 
@@ -38,63 +39,81 @@ const AuraGreeting = ({ openAuraChat, dailyPatientLoad = 120 }) => {
 
     setCurrentQuote(getDailySmartQuote());
 
-    // ⚠️ ONCE-A-DAY RULE DISABLED FOR TESTING. 
-    // (To turn it back on later, wrap these lines in: if (lastSeen !== today) { ... })
-    setShowBubble(true);
-    localStorage.setItem('aura_greeting_date', today);
-    
-    const timer = setTimeout(() => {
-      setPhase('greeting');
-    }, 10000);
-    
-    return () => clearTimeout(timer);
-    
+    // ⚠️ ONCE-A-DAY RULE: Disabled for testing!
+    // if (lastSeen !== today) {
+        setShowBubble(true);
+        localStorage.setItem('aura_greeting_date', today);
+        
+        const timer = setTimeout(() => {
+          setPhase('greeting');
+        }, 10000);
+        
+        return () => clearTimeout(timer);
+    // }
   }, [dailyPatientLoad]);
 
+  // 🌟 THE GENIE EFFECT HANDLERS
+  const handleDismiss = (e) => {
+    e.stopPropagation();
+    setIsExiting(true); // Trigger the "suck in" animation
+    setTimeout(() => {
+        setShowBubble(false); // Actually remove it from DOM after animation finishes
+    }, 500); 
+  };
+
+  const handleOpenAura = () => {
+    setIsExiting(true); // Trigger the "suck in" animation
+    setTimeout(() => {
+        setShowBubble(false);
+        openAuraChat(); // Open the main AURA panel
+    }, 400); 
+  };
+
   return (
-    <div className="fixed bottom-20 right-4 z-[90] flex flex-col items-end space-y-3 animate-in fade-in slide-in-from-bottom-8 duration-700 pointer-events-none">
+    <div className="fixed bottom-20 right-4 z-[90] flex flex-col items-end space-y-3 pointer-events-none">
       
       {showBubble && (
         <div 
-          onClick={() => {
-              setShowBubble(false);
-              openAuraChat(); 
-          }}
-          className="pointer-events-auto group relative cursor-pointer max-w-[280px] bg-white/90 dark:bg-slate-900/90 backdrop-blur-md border border-indigo-100 dark:border-slate-800 shadow-xl rounded-2xl rounded-br-none p-4 transition-all duration-500 hover:scale-105 hover:shadow-indigo-500/20"
+          onClick={handleOpenAura}
+          // 🌟 THE MAGIC CSS: origin-bottom-right makes it scale down perfectly into the AURA button
+          // isExiting applies the scale-0 and extreme translate to mimic the macOS minimize
+          className={`pointer-events-auto group relative cursor-pointer max-w-[320px] bg-slate-900/95 backdrop-blur-xl border border-indigo-500/40 shadow-[0_0_40px_-10px_rgba(99,102,241,0.5)] rounded-[2rem] rounded-br-none p-5 transform transition-all duration-500 ease-[cubic-bezier(0.16,1,0.3,1)] origin-bottom-right
+            ${isExiting ? 'scale-0 opacity-0 translate-y-12 translate-x-8' : 'scale-100 opacity-100 translate-y-0 translate-x-0'}
+            ${!isExiting && 'animate-in fade-in zoom-in-50 slide-in-from-bottom-12'}
+          `}
         >
+          {/* Subtle Close Button */}
           <button 
-            onClick={(e) => {
-              e.stopPropagation(); 
-              setShowBubble(false);
-            }}
-            className="absolute -top-2 -right-2 bg-slate-100 dark:bg-slate-800 text-slate-400 hover:text-slate-600 rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity shadow-sm"
+            onClick={handleDismiss}
+            className="absolute -top-2 -right-2 bg-slate-800 text-slate-400 hover:text-white rounded-full p-1.5 opacity-0 group-hover:opacity-100 transition-opacity shadow-lg border border-slate-700"
           >
             <X size={14} />
           </button>
 
           {phase === 'quote' ? (
-            <div className="flex items-start space-x-2 animate-in fade-in zoom-in duration-500">
-              <Sparkles className="w-4 h-4 text-amber-500 flex-shrink-0 mt-0.5" />
-              <p className="text-sm font-medium text-slate-700 dark:text-slate-300 italic leading-snug">
-                "{currentQuote}"
-              </p>
+            <div className={`flex items-start space-x-3 transition-opacity duration-500 ${isExiting ? 'opacity-0' : 'opacity-100'}`}>
+              <Sparkles className="w-5 h-5 text-amber-400 flex-shrink-0 mt-0.5" />
+              <div className="flex flex-col">
+                 <span className="text-[9px] font-black text-indigo-400 uppercase tracking-widest mb-1.5 drop-shadow-md">Aura Daily Briefing</span>
+                 <p className="text-sm font-medium text-slate-200 italic leading-relaxed">
+                   "{currentQuote}"
+                 </p>
+              </div>
             </div>
           ) : (
-            <div className="flex items-start space-x-2 animate-in fade-in zoom-in duration-500">
-              <p className="text-sm font-bold text-indigo-600 dark:text-indigo-400">
-                How can I help you today?
+            <div className="flex items-center space-x-3 animate-in fade-in zoom-in duration-500">
+              <BrainCircuit className="w-5 h-5 text-indigo-400" />
+              <p className="text-sm font-bold text-white tracking-wide">
+                How can I support your shift today?
               </p>
             </div>
           )}
         </div>
       )}
 
-      {/* ✅ COHERENT ICON: Using BrainCircuit to match AURA's identity */}
+      {/* THE GLOWING AURA BUTTON */}
       <button 
-        onClick={() => {
-            setShowBubble(false); 
-            openAuraChat(); 
-        }}
+        onClick={showBubble ? handleOpenAura : openAuraChat} // If bubble is open, suck it in first. Otherwise just open.
         className="pointer-events-auto relative flex items-center justify-center w-14 h-14 bg-gradient-to-tr from-indigo-600 to-purple-600 rounded-full shadow-lg shadow-indigo-500/30 hover:shadow-indigo-500/50 hover:scale-110 transition-all duration-300"
       >
         <span className="absolute inline-flex h-full w-full rounded-full bg-indigo-400 opacity-30 animate-ping"></span>
