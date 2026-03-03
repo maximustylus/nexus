@@ -614,13 +614,13 @@ export default function AuraPulseBot({ user, isOpen, onClose, onOpen }) {
     const inputLength = input.length;
     const isNearLimit = inputLength > MAX_INPUT * 0.8;
 
-    return (
+return (
         <>
             {/* 🛡️ UX FIX: The Frosted Glass Blur Background */}
             {isOpen && (
                 <div 
                     className="fixed inset-0 z-[90] bg-slate-900/40 backdrop-blur-sm transition-all animate-in fade-in duration-300"
-                    onClick={onClose} // Replaced setIsOpen(false) with onClose
+                    onClick={onClose} 
                 />
             )}
 
@@ -630,8 +630,8 @@ export default function AuraPulseBot({ user, isOpen, onClose, onOpen }) {
                         role="dialog" aria-modal="true" aria-label="AURA Pulse wellbeing assistant"
                         className="mb-4 w-[380px] h-[660px] bg-white dark:bg-slate-900 rounded-[2rem] shadow-2xl border border-slate-200 dark:border-slate-800 flex flex-col overflow-hidden animate-in slide-in-from-bottom-4 zoom-in-95 duration-300"
                     >
-                        {/* Header */}
-                        <div className={`p-5 text-white flex justify-between items-center bg-gradient-to-r ${isAnonymous ? 'from-purple-800 to-indigo-900' : 'from-slate-900 to-indigo-950'}`}>
+                        {/* 🌟 THE SINGLE, UNIFIED HEADER */}
+                        <div className={`p-4 text-white flex justify-between items-center bg-gradient-to-r ${isAnonymous ? 'from-purple-800 to-indigo-900' : 'from-slate-900 to-indigo-950'}`}>
                             <div className="flex items-center gap-3">
                                 {view === 'CHAT' ? (
                                     <button 
@@ -652,6 +652,8 @@ export default function AuraPulseBot({ user, isOpen, onClose, onOpen }) {
                                     <p className="text-[9px] opacity-60 uppercase tracking-tight">{isDemo ? 'Full AI Simulation' : (isOnline ? 'Secure Live Link' : 'Offline')}</p>
                                 </div>
                             </div>
+
+                            {/* 🌟 TOP RIGHT ACTION BUTTONS */}
                             <div className="flex items-center gap-1.5">
                                 {!isOnline && <WifiOff size={13} className="text-yellow-300" />}
                                 
@@ -666,7 +668,22 @@ export default function AuraPulseBot({ user, isOpen, onClose, onOpen }) {
                                     </button>
                                 )}
 
-                                {/* Correctly uses onClose */}
+                                {/* 🐞 SLEEK INTEGRATED BUG BUTTON */}
+                                <button 
+                                    onClick={() => {
+                                        // 1. Send invisible signal to FeedbackWidget
+                                        window.dispatchEvent(new CustomEvent('open-bug-report'));
+                                        // 2. Close AURA instantly
+                                        if (onClose) onClose(); 
+                                    }}
+                                    title="Report a Bug"
+                                    className="flex items-center gap-1 px-2 py-1.5 bg-white/10 hover:bg-white/20 rounded-lg transition-all text-white text-[10px] font-bold uppercase tracking-wider"
+                                >
+                                    <Bug size={13} className="text-amber-400" />
+                                    <span className="hidden sm:inline">Report</span>
+                                </button>
+
+                                {/* CLOSE BUTTON */}
                                 <button onClick={onClose} aria-label="Close AURA" className="p-1.5 hover:bg-white/20 rounded-lg transition-all">
                                     <X size={18} />
                                 </button>
@@ -679,34 +696,8 @@ export default function AuraPulseBot({ user, isOpen, onClose, onOpen }) {
                                 <p className="text-[10px] font-semibold text-yellow-700">You are offline. AURA cannot process new requests.</p>
                             </div>
                         )}
-                             <div className="flex items-center justify-between p-4 border-b border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 rounded-t-2xl">
-                             <div className="flex items-center space-x-2">
-                               <Bot className="text-indigo-600" />
-                               <h2 className="font-bold text-slate-800 dark:text-white">AURA</h2>
-                             </div>
-                             
-                             <div className="flex items-center space-x-3">
-                               
-                              {/* 🐞 NATIVE BUG BUTTON */}
-                                <button 
-                                  onClick={() => {
-                                    // 1. Send an invisible signal to your app to open the bug reporter
-                                    window.dispatchEvent(new CustomEvent('open-bug-report'));
-                                    // 2. Close AURA so it gets out of the way
-                                    if (onClose) onClose(); 
-                                  }}
-                                  className="flex items-center space-x-1 text-xs font-bold text-amber-600 bg-amber-50 dark:bg-amber-900/30 px-2 py-1 rounded hover:bg-amber-100 transition-colors"
-                                >
-                                  <Bug size={14} />
-                                  <span>Report Bug</span>
-                                </button>
-                           
-                               {/* Existing Close Button */}
-                               <button onClick={onClose} className="text-slate-400 hover:text-slate-600">
-                                 <X size={20} />
-                               </button>
-                             </div>
-                           </div>
+
+                        {/* 🛑 THE REDUNDANT WHITE HEADER HAS BEEN COMPLETELY DELETED FROM HERE 🛑 */}
 
                         {/* Scroll Area */}
                         <div className="flex-1 overflow-y-auto p-5 bg-slate-50 dark:bg-slate-950/50 scroll-smooth">
@@ -910,7 +901,7 @@ export default function AuraPulseBot({ user, isOpen, onClose, onOpen }) {
                             )}
                         </div>
 
-                        {/* Input Bar with safe Tailwind classes */}
+                        {/* Input Bar */}
                         {view === 'CHAT' && (
                             <div className="p-4 bg-white border-t border-slate-100 shrink-0">
                                 {isNearLimit && <p className={`text-[9px] font-bold text-right mb-1 ${inputLength >= MAX_INPUT ? 'text-red-500' : 'text-amber-500'}`}>{inputLength} / {MAX_INPUT}</p>}
@@ -959,4 +950,3 @@ export default function AuraPulseBot({ user, isOpen, onClose, onOpen }) {
             </div>
         </>
     );
-}
