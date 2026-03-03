@@ -83,6 +83,7 @@ function NexusApp() {
   const [currentView, setCurrentView] = useState('pulse');
   const [archiveYear, setArchiveYear] = useState('2025');
   const [isAdminOpen, setIsAdminOpen] = useState(false);
+  const [isAuraOpen, setIsAuraOpen] = useState(false);
 
   // 1. Initialize based on Saved Memory OR System Preference
   const [isDark, setIsDark] = useState(() => {
@@ -251,9 +252,7 @@ function NexusApp() {
       const handleServiceWorkerMessage = (event) => {
         if (event.data?.type === 'NAVIGATE_TO_PULSE') {
           console.log('[NEXUS] Deep Link Triggered: Routing to Pulse');
-          
-          // 🛡️ THE FIX: Use setCurrentView instead of setActiveTab
-          if (typeof setCurrentView === 'function') {
+            if (typeof setCurrentView === 'function') {
             setCurrentView('pulse'); 
           }
         }
@@ -272,7 +271,7 @@ function NexusApp() {
   
   // --- HELPERS & TRANSFORMERS ---
 
-  // 🛡️ THE DATA FIREWALL: Placed HERE so all charts use it!
+  // 🛡️ THE DATA FIREWALL:
   const activeTeamData = isDemo ? MOCK_TEAM_DATA : teamData;
   const activeStaffLoads = isDemo ? MOCK_STAFF_LOADS : staffLoads;
 
@@ -624,19 +623,19 @@ const getClinicalData = (staffId) => {
 
 // --- MAIN RENDER RETURN ---
   return (
-      <ResponsiveLayout 
-        activeTab={activeTab} 
-        onNavigate={setActiveTab}
-        floatingWidgets={
-          <>
-            {/* Add the Greeting component */}
-            <AuraGreeting openAuraChat={() => setIsAuraOpen(true)} dailyPatientLoad={145} />
-            
-            {/* Your existing AURA Bot */}
-            <AuraPulseBot isOpen={isAuraOpen} onClose={() => setIsAuraOpen(false)} />
-          </>
-        }
-      >
+          <ResponsiveLayout 
+                  activeTab={currentView}       
+                  onNavigate={setCurrentView}   
+                  floatingWidgets={
+                    <>
+                      {/* Add the Greeting component */}
+                      <AuraGreeting openAuraChat={() => setIsAuraOpen(true)} dailyPatientLoad={145} />
+                      
+                      {/* Your existing AURA Bot */}
+                      <AuraPulseBot isOpen={isAuraOpen} onClose={() => setIsAuraOpen(false)} />
+                    </>
+                  }
+                >
       
       {/* DEMO BANNER */}
       {isDemo && (
