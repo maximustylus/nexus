@@ -624,18 +624,21 @@ const getClinicalData = (staffId) => {
 // --- MAIN RENDER RETURN ---
   return (
           <ResponsiveLayout 
-                  activeTab={currentView} 
-                  onNavigate={setCurrentView}
-                  floatingWidgets={
-                    <>
-                      {/* 2. The Greeting component */}
-                      <AuraGreeting openAuraChat={() => setIsAuraOpen(true)} dailyPatientLoad={145} />
-                      
-                      {/* 3. Your existing AURA Bot */}
-                      <AuraPulseBot isOpen={isAuraOpen} onClose={() => setIsAuraOpen(false)} />
-                    </>
-                  }
-                >
+        activeTab={currentView} 
+        onNavigate={setCurrentView}
+        floatingWidgets={
+          <>
+            {/* 1. The Invisible Bug Listener */}
+            <FeedbackWidget user={user} />
+            
+            {/* 2. The Greeting component */}
+            <AuraGreeting openAuraChat={() => setIsAuraOpen(true)} dailyPatientLoad={145} />
+            
+            {/* 3. Your AURA Bot */}
+            <AuraPulseBot isOpen={isAuraOpen} onClose={() => setIsAuraOpen(false)} />
+          </>
+        }
+      >
       
       {/* DEMO BANNER */}
       {isDemo && (
