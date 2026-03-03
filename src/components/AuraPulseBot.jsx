@@ -1,4 +1,4 @@
-import { X, Bot, Bug } from 'lucide-react';
+import { Bot, Bug } from 'lucide-react';
 import { Document, Packer, Paragraph, TextRun, HeadingLevel } from 'docx';
 import { DEMO_PERSONAS, LIVE_PERSONAS } from '../config/personas';
 import { X, Send, BrainCircuit, Shield, Ghost, Users, Zap, RefreshCw, AlertTriangle, WifiOff, 
