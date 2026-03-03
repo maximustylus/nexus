@@ -686,18 +686,20 @@ export default function AuraPulseBot({ user, isOpen, onClose, onOpen }) {
                              </div>
                              
                              <div className="flex items-center space-x-3">
-                               {/* 🐞 NEW NATIVE BUG BUTTON */}
-                               <button 
-                                 onClick={() => {
-                                   // Placeholder action for bug report
-                                   alert("Bug report functionality opened from AURA!");
-                                   console.log("Bug report initiated from AURA");
-                                 }}
-                                 className="flex items-center space-x-1 text-xs font-bold text-amber-600 bg-amber-50 dark:bg-amber-900/30 px-2 py-1 rounded hover:bg-amber-100 transition-colors"
-                               >
-                                 <Bug size={14} />
-                                 <span>Report Bug</span>
-                               </button>
+                               
+                              {/* 🐞 NATIVE BUG BUTTON */}
+                                <button 
+                                  onClick={() => {
+                                    // 1. Send an invisible signal to your app to open the bug reporter
+                                    window.dispatchEvent(new CustomEvent('open-bug-report'));
+                                    // 2. Close AURA so it gets out of the way
+                                    if (onClose) onClose(); 
+                                  }}
+                                  className="flex items-center space-x-1 text-xs font-bold text-amber-600 bg-amber-50 dark:bg-amber-900/30 px-2 py-1 rounded hover:bg-amber-100 transition-colors"
+                                >
+                                  <Bug size={14} />
+                                  <span>Report Bug</span>
+                                </button>
                            
                                {/* Existing Close Button */}
                                <button onClick={onClose} className="text-slate-400 hover:text-slate-600">
