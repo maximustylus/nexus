@@ -109,14 +109,6 @@ const AuraGreeting = ({ openAuraChat, dailyPatientLoad = 120 }) => {
         )}
       </div>
 
-      {/* 🤖 The Glowing AURA Icon */}
-      <button 
-        onClick={() => {
-            setIsVisible(false);
-            openAuraChat();
-        }}
-        className="relative flex items-center justify-center w-14 h-14 bg-gradient-to-tr from-indigo-600 to-purple-600 rounded-full shadow-lg shadow-indigo-500/30 hover:shadow-indigo-500/50 hover:scale-110 transition-all duration-300"
-      >
          {/* Subtle radar ping animation behind the icon */}
         <span className="absolute inline-flex h-full w-full rounded-full bg-indigo-400 opacity-30 animate-ping"></span>
         <Bot className="text-white w-7 h-7" />
