@@ -104,7 +104,7 @@ const AuraGreeting = ({ openAuraChat, dailyPatientLoad = 120 }) => {
             <div className="flex items-center space-x-3 animate-in fade-in zoom-in duration-500">
               <BrainCircuit className="w-5 h-5 text-indigo-400" />
               <p className="text-sm font-bold text-white tracking-wide">
-                How can I support your shift today?
+                AURA here, how can I help?
               </p>
             </div>
           )}
