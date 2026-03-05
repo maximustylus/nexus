@@ -623,18 +623,19 @@ const getClinicalData = (staffId) => {
 
 // --- MAIN RENDER RETURN ---
   return (
-          <ResponsiveLayout 
+      <ResponsiveLayout 
         activeTab={currentView} 
         onNavigate={setCurrentView}
         floatingWidgets={
           <>
-            {/* 1. The Invisible Bug Listener */}
+            {/* 📖 THE GUIDE COMPONENT */}
+            <AppGuide isOpen={isGuideOpen} onClose={() => setIsGuideOpen(false)} />
+    
+            {/* The Invisible Bug Listener */}
             <FeedbackWidget user={user} />
             
-            {/* 2. The Greeting component */}
+            {/* The AURA Greeting & Bot */}
             <AuraGreeting openAuraChat={() => setIsAuraOpen(true)} dailyPatientLoad={145} />
-            
-            {/* 3. Your AURA Bot */}
             <AuraPulseBot isOpen={isAuraOpen} onClose={() => setIsAuraOpen(false)} />
           </>
         }
@@ -654,7 +655,7 @@ const getClinicalData = (staffId) => {
         </div>
       )}
 
-{/* HEADER BAR */}
+      {/* HEADER BAR */}
       <div className="md:col-span-2 flex items-center justify-between mb-6 bg-white dark:bg-slate-800 p-4 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 w-full overflow-hidden">
         
         {/* BRANDING */}
@@ -677,7 +678,7 @@ const getClinicalData = (staffId) => {
           </div>
         </div>
 
-        {/* CENTER NAVIGATION (🛡️ FIXED: hidden xl:flex completely hides this on all iPads) */}
+        {/* CENTER NAVIGATION */}
         <div className="hidden xl:flex bg-slate-100 dark:bg-slate-900/50 p-1 rounded-lg shrink-0">
            {['dashboard', 'archive', 'roster', 'pulse', 'guide'].map(view => (
              <button 
@@ -741,7 +742,7 @@ const getClinicalData = (staffId) => {
        </div>
      ) : (
        <div className="md:col-span-2 w-full animate-in fade-in duration-500">
-         {/* 🛡️ FIREWALL APPLIED TO DASHBOARDS (DashboardView now directly uses activeTeamData internally!) */}
+         {/* 🛡️ FIREWALL APPLIED TO DASHBOARDS */}
          {currentView === 'dashboard' && renderDashboardView(false)}
          {currentView === 'archive' && renderDashboardView(true)}
          {currentView === 'roster' && <RosterView user={user} />}
@@ -751,23 +752,7 @@ const getClinicalData = (staffId) => {
        </div>
      )}
       
-    <ResponsiveLayout 
-            activeTab={currentView} 
-            onNavigate={setCurrentView}
-            floatingWidgets={
-              <>
-                {/* 📖 THE MISSING GUIDE COMPONENT */}
-                <AppGuide isOpen={isGuideOpen} onClose={() => setIsGuideOpen(false)} />
-    
-                {/* The Invisible Bug Listener */}
-                <FeedbackWidget user={user} />
-                
-                {/* The AURA Greeting & Bot */}
-                <AuraGreeting openAuraChat={() => setIsAuraOpen(true)} dailyPatientLoad={145} />
-                <AuraPulseBot isOpen={isAuraOpen} onClose={() => setIsAuraOpen(false)} />
-              </>
-            }
-          >
+    </ResponsiveLayout>
   );
 }
 
