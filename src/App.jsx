@@ -438,7 +438,7 @@ const getClinicalData = (staffId) => {
       <div className="bg-white dark:bg-slate-800 p-6 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-700 mb-6">
         <h2 className="text-sm font-bold text-slate-400 uppercase tracking-wider mb-4">Domain Distribution (2026)</h2>
           <div className="h-[500px] w-full flex items-center justify-center overflow-visible"> 
-          <Container width="100%" height="100%">
+          <ResponsiveContainer width="100%" height="100%">
             <PieChart margin={{ top: 20, left: 0, right: 0, bottom: 40 }}>
               <Pie 
                 data={getPieData()} 
@@ -470,7 +470,7 @@ const getClinicalData = (staffId) => {
                 )}
               />
             </PieChart>
-          </Container>
+          </ResponsiveContainer>
         </div>
       </div>
 
@@ -478,7 +478,7 @@ const getClinicalData = (staffId) => {
       <div className="bg-white dark:bg-slate-800 p-6 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-700">
         <h2 className="text-sm font-bold text-slate-400 uppercase tracking-wider mb-4">Task & Project Completion {isArchive ? `(${archiveYear})` : '(2026)'}</h2>
         <div className="h-64">
-          <Container width="100%" height="100%">
+          <ResponsiveContainer width="100%" height="100%">
             <BarChart data={getStatusData()} layout="vertical" margin={{ left: 10, right: 20 }}>
               <XAxis type="number" hide />
               <YAxis dataKey="name" type="category" width={80} tick={{fontSize: 12, fontWeight: 'bold'}} axisLine={false} tickLine={false} />
@@ -490,7 +490,7 @@ const getClinicalData = (staffId) => {
               <Bar dataKey="4" stackId="a" fill={STATUS_COLORS[4]} name="Review" barSize={30} />
               <Bar dataKey="5" stackId="a" fill={STATUS_COLORS[5]} name="Done" radius={[0, 4, 4, 0]} barSize={30} />
             </BarChart>
-          </Container>
+          </ResponsiveContainer>
         </div>
       </div>
 
@@ -500,7 +500,7 @@ const getClinicalData = (staffId) => {
             Monthly Patient Attendance {isArchive ? `(${archiveYear})` : '(2026)'}
         </h2>
         <div className="h-64">
-          <Container width="100%" height="100%">
+          <ResponsiveContainer width="100%" height="100%">
             <LineChart data={getAttendanceForView()}>
               <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
               <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{fontSize: 12, fill: '#94a3b8'}} dy={10} />
@@ -509,7 +509,7 @@ const getClinicalData = (staffId) => {
               <Line type="monotone" dataKey={() => 180} stroke="#ef4444" strokeDasharray="5 5" strokeWidth={1} dot={false} name="Target" />
               <Line type="monotone" dataKey="value" stroke="#3b82f6" strokeWidth={3} dot={{r: 4, fill: '#3b82f6', strokeWidth: 2, stroke: '#fff'}} activeDot={{r: 6}} />
             </LineChart>
-          </Container>
+          </ResponsiveContainer>
         </div>
       </div>
 
@@ -538,7 +538,7 @@ const getClinicalData = (staffId) => {
                 </div>
                 
                 <div className="h-32 mt-4">
-                  <Container width="100%" height="100%">
+                  <ResponsiveContainer width="100%" height="100%">
                     <BarChart data={chartData}>
                       <YAxis domain={[0, 60]} hide={true} />
                         <ReferenceLine 
@@ -556,7 +556,7 @@ const getClinicalData = (staffId) => {
                           ))}
                       </Bar>
                     </BarChart>
-                  </Container>
+                  </ResponsiveContainer>
                 </div>
 
                 <div className="flex justify-between mt-2 px-1">
@@ -751,7 +751,23 @@ const getClinicalData = (staffId) => {
        </div>
      )}
       
-    </ResponsiveLayout>
+    <ResponsiveLayout 
+            activeTab={currentView} 
+            onNavigate={setCurrentView}
+            floatingWidgets={
+              <>
+                {/* 📖 THE MISSING GUIDE COMPONENT */}
+                <AppGuide isOpen={isGuideOpen} onClose={() => setIsGuideOpen(false)} />
+    
+                {/* The Invisible Bug Listener */}
+                <FeedbackWidget user={user} />
+                
+                {/* The AURA Greeting & Bot */}
+                <AuraGreeting openAuraChat={() => setIsAuraOpen(true)} dailyPatientLoad={145} />
+                <AuraPulseBot isOpen={isAuraOpen} onClose={() => setIsAuraOpen(false)} />
+              </>
+            }
+          >
   );
 }
 
