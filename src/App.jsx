@@ -395,11 +395,11 @@ function NexusApp() {
               <YAxis dataKey="name" type="category" width={80} tick={{fontSize: 12, fontWeight: 'bold'}} axisLine={false} tickLine={false} />
               <Tooltip cursor={{fill: 'transparent'}} contentStyle={{ backgroundColor: '#1e293b', border: 'none', borderRadius: '12px' }} itemStyle={{ color: '#ffffff', fontSize: '12px', fontWeight: 'bold' }} />
               <Legend wrapperStyle={{ paddingTop: '20px' }} />
-              <Bar dataKey="1" stackId="a" fill={STATUS_COLORS[1]} name="Stuck" radius={[4, 0, 0, 4]} barSize={30} />
-              <Bar dataKey="2" stackId="a" fill={STATUS_COLORS[2]} name="Planning" barSize={30} />
-              <Bar dataKey="3" stackId="a" fill={STATUS_COLORS[3]} name="Working" barSize={30} />
-              <Bar dataKey="4" stackId="a" fill={STATUS_COLORS[4]} name="Review" barSize={30} />
-              <Bar dataKey="5" stackId="a" fill={STATUS_COLORS[5]} name="Done" radius={[0, 4, 4, 0]} barSize={30} />
+              <Bar dataKey="1" stackId="a" fill={STATUS_COLORS[1]} name="Obsolete" radius={[4, 0, 0, 4]} barSize={30} />
+              <Bar dataKey="2" stackId="a" fill={STATUS_COLORS[2]} name="Not Started" barSize={30} />
+              <Bar dataKey="3" stackId="a" fill={STATUS_COLORS[3]} name="Behind" barSize={30} />
+              <Bar dataKey="4" stackId="a" fill={STATUS_COLORS[4]} name="On Track" barSize={30} />
+              <Bar dataKey="5" stackId="a" fill={STATUS_COLORS[5]} name="Completed" radius={[0, 4, 4, 0]} barSize={30} />
             </BarChart>
           </ResponsiveContainer>
         </div>
@@ -590,7 +590,7 @@ function NexusApp() {
 
         {/* 🌟 CENTER NAVIGATION (Archive Replaced by Feeds) */}
         <div className="hidden xl:flex bg-slate-100 dark:bg-slate-900/50 p-1 rounded-lg shrink-0">
-           {['dashboard', 'feeds', 'roster', 'pulse', 'guide'].map(view => (
+           {['dashboard', 'feeds', 'pulse', 'roster', 'guide'].map(view => (
              <button 
                key={view} 
                onClick={() => setCurrentView(view)} 
@@ -598,8 +598,8 @@ function NexusApp() {
              >
                {view === 'dashboard' && <LayoutDashboard size={14} />}
                {view === 'feeds' && <MessageCircle size={14} />}
-               {view === 'roster' && <Calendar size={14} />}
                {view === 'pulse' && <Activity size={14} />}
+               {view === 'roster' && <Calendar size={14} />}
                {view === 'guide' && <BookOpen size={14} />} 
                {view}
              </button>
