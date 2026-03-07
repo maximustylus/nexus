@@ -302,9 +302,10 @@ exports.chatWithAura = onCall({
         const turnIndex      = history.length;
         const diagnosisReady = turnIndex >= 4;
 
+        // FIXED: Removed the prompt override from the user message. 
+        // We will inject it into the System Instruction instead.
         const contextualMessage = [
             `USER ROLE: ${role}`,
-            prompt ? `CONTEXT/OVERRIDE: ${prompt}` : '',
             `CONVERSATION TURN: ${Math.floor(turnIndex/2) + 1}`,
             diagnosisReady
                 ? 'INSTRUCTION: If in COACH mode, and sufficient context is gathered, provide full Phase/Energy/Action assessment now.'
@@ -312,8 +313,13 @@ exports.chatWithAura = onCall({
             `USER SAYS: "${userText.trim()}"`,
         ].filter(Boolean).join('\n');
 
-        const isStrictFormatting = prompt.includes('Project HUGE') || prompt.includes('Magnify Mama');
+        // FIXED: Updated the trigger condition to match your specific prompts.
+        const isStrictFormatting = prompt.includes('System Override: You are an elite') || prompt.includes('Magnify Mama');
         const dynamicTemperature = isStrictFormatting ? 0.1 : 0.7;
+        
+        // FIXED: Dynamically merge the persona prompt into the master System Prompt
+        const activeSystemPrompt = prompt ? `${AURA_SYSTEM_PROMPT}\n\n[ACTIVE PERSONA OVERRIDE]\n${prompt}` : AURA_SYSTEM_PROMPT;
+
         const userParts = [{ text: contextualMessage }];
         
         if (attachments.length > 0) {
@@ -334,7 +340,7 @@ exports.chatWithAura = onCall({
             signal:  AbortSignal.timeout(30000), 
             body: JSON.stringify({
                 systemInstruction: {                
-                    parts: [{ text: AURA_SYSTEM_PROMPT }],
+                    parts: [{ text: activeSystemPrompt }], // <--- Now holds system-level authority
                 },
                 contents: [
                     ...history
