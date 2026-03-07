@@ -7,11 +7,14 @@
     <title>NEXUS Smart Dashboard</title>
     <meta name="description" content="Smart and Interactive Dashboard for Healthcare Professionals" />
     
+    <link rel="manifest" href="/manifest.json" />
+    
     <link rel="icon" href="/nexus-n-light-icon.png" type="image/png" media="(prefers-color-scheme: light)">
     <link rel="icon" href="/nexus-n-dark-icon.png" type="image/png" media="(prefers-color-scheme: dark)">    
     <link rel="apple-touch-icon" href="/apple-touch-icon.png?v=3" />
     
-    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-title" content="NEXUS" />
     <meta name="apple-mobile-web-app-status-bar-style" content="default" />
     <meta name="theme-color" content="#f8fafc" />
@@ -23,19 +26,19 @@
         top: 0;
         left: 0;
         width: 100vw;
-        height: 100vh; /* Keep as fallback for older devices */
-        height: 100dvh; /* The iOS fix */
+        height: 100vh; 
+        height: 100dvh; 
         background-color: #5849df; 
         display: flex;
         justify-content: center;
         align-items: center;
         z-index: 9999;
-        transition: all 0.8s cubic-bezier(0.85, 0, 0.15, 1); /* Changed transform to all */
+        transition: all 0.8s cubic-bezier(0.85, 0, 0.15, 1);
       }
 
       /* 2. SVG Sizing */
       #nexus-logo {
-        width: 160px; /* Adjust this value to make the logo larger or smaller */
+        width: 160px; 
         height: auto;
       }
 
@@ -58,8 +61,8 @@
 
       /* 4. The Move Up & Reveal */
       body.app-ready #nexus-splash {
-        transform: translateY(-120%); /* Over-slides to guarantee it clears the top */
-        opacity: 0; /* Forces it to visually vanish */
+        transform: translateY(-120%); 
+        opacity: 0; 
         pointer-events: none;
       }
       
@@ -71,7 +74,7 @@
 
       body.app-ready #root {
         opacity: 1;
-        transform: translateY(0); /* Slides your light dashboard up */
+        transform: translateY(0); 
       }
     </style>
   </head>
