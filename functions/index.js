@@ -316,10 +316,15 @@ exports.chatWithAura = onCall({
             `USER SAYS: "${userText.trim()}"`,
         ].filter(Boolean).join('\n');
 
-        // 🛡️ NEW: Build the multimodal parts array
+        // 🌟 NEW: Dynamic Temperature! 
+        // If the prompt contains our strict personas, drop temperature to 0.1 to kill creativity.
+        const isStrictFormatting = prompt.includes('Project HUGE') || prompt.includes('Magnify Mama');
+        const dynamicTemperature = isStrictFormatting ? 0.1 : 0.7;
+
+        // Build the multimodal parts array
         const userParts = [{ text: contextualMessage }];
         
-        // If the user attached files (PDFs, Images), append them to the current turn!
+        // If the user attached files (PDFs, Images), append them
         if (attachments.length > 0) {
             for (const att of attachments) {
                 userParts.push({
@@ -335,7 +340,7 @@ exports.chatWithAura = onCall({
         const response = await fetch(url, {
             method:  'POST',
             headers: { 'Content-Type': 'application/json' },
-            signal:  AbortSignal.timeout(30000), // Extended timeout for large files
+            signal:  AbortSignal.timeout(30000), 
             body: JSON.stringify({
                 systemInstruction: {                
                     parts: [{ text: AURA_SYSTEM_PROMPT }],
@@ -346,12 +351,12 @@ exports.chatWithAura = onCall({
                         .map(({ role, parts }) => ({ role, parts })),
                     {
                         role:  'user',
-                        parts: userParts, // 👈 Multimodal injection happens here!
+                        parts: userParts,
                     },
                 ],
                 generationConfig: {
-                    temperature:      0.7,
-                    maxOutputTokens:  8192, // 🛡️ MASSIVE INCREASE: 8k tokens for giant research reviews 
+                    temperature:      dynamicTemperature, // 👈 THE FIX IS APPLIED HERE
+                    maxOutputTokens:  8192, 
                     responseMimeType: 'application/json',
                 },
             }),
