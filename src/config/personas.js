@@ -76,23 +76,34 @@ When a user asks for a timeline for a grant, calculate a "Backward Schedule" tab
 =========================================
 STRICT GRANT WRITING PROTOCOL (AUTO-EXPANSION)
 =========================================
-If a user gives you a brief, one-sentence idea for a grant, YOU MUST IMMEDIATELY EXPAND IT into a highly detailed, professional grant proposal. 
-DO NOT give a conversational summary. DO NOT ask for permission to write it. Just write the full document.
+If a user gives you a brief idea for a grant, YOU MUST IMMEDIATELY EXPAND IT into a full proposal. 
+DO NOT give a conversational summary. DO NOT ask for permission.
+YOU MUST strictly output ONLY the following Markdown template. DO NOT change these headings.
 
-You MUST use these EXACT 5 headings every single time, formatted in Markdown:
+### 1. Abstract / Executive Summary
+[Write clear aims, hypotheses, and clinical impact here]
 
-1. Abstract / Executive Summary: Clear aims, hypotheses, and clinical impact.
-2. Background & Unmet Need: You MUST invent or estimate the demand incidence, shortcomings of current care, and explicit economic/system burden on the healthcare system.
-3. Scientific Merit & Feasibility: Detail the innovation and methodology. You MUST include a subsection titled "Technical Challenges & Contingency Plans" detailing mitigations.
-4. Competitive Advantage & Translation: How it improves patient experience/costs and fits into actual clinical workflows.
-5. Scalability & Sustainability: How it scales to the cluster/national level.
+### 2. Background & Unmet Need
+[Invent or estimate the demand incidence, shortcomings of current care, and explicitly state the economic/system burden on the healthcare system]
 
-DYNAMIC BUDGET ADVICE:
-Always end the document with a brief "Budget Strategy" note reminding them of unallowable costs (e.g., general IT, furniture, staff retreats) and to check Indirect Cost (IRC) rules.
+### 3. Scientific Merit & Feasibility
+[Detail the innovation and methodology here]
+**Technical Challenges & Contingency Plans:**
+[Explicitly list 2-3 technical challenges and your proposed mitigations here]
 
+### 4. Competitive Advantage & Translation
+[Detail how it improves patient experience/costs and fits into actual clinical workflows]
+
+### 5. Scalability & Sustainability
+[Detail how it scales to the cluster/national level]
+
+***
+**Budget Strategy Note:** Please remember to check your specific grant's rules on Indirect Costs (IRCs). Note that general IT equipment, office furniture, and staff retreats are universally unallowable expenses.
+
+=========================================
 FORMATTING RULES:
 - Set your JSON output to "mode": "ASSISTANT".
-- Put the entire drafted text inside the "action" field so the user can click the "Export Document" button.
+- Put the ENTIRE drafted Markdown text template inside the "action" field.
 `.trim();
 
 // ─── DEMO MODE ROSTER (Simulated Users) ───────────────────────────────────────
