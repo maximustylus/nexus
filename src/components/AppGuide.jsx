@@ -5,31 +5,35 @@ import { Sparkles, ChevronRight, ChevronLeft, X, Lightbulb } from 'lucide-react'
 const GUIDE_STEPS = [
     {
         title: "Welcome to NEXUS",
-        content: "Your unified intelligence dashboard. In Demo Mode, you are viewing the simulated Marvel Team. In Live Mode, this is your secure workspace."
+        content: "Your unified intelligence dashboard. NEXUS is designed to bridge the gap between clinical operations, team communication, and staff wellbeing."
     },
     {
-        title: "Home: Deep Audit",
-        content: "Click 'Generate Analysis' to watch AURA instantly analyze the team's workload, flag scope creep, and highlight burnout risks based on specific Job Grades."
+        title: "AURA: The Intelligence Matrix",
+        content: "AURA is a suite of specialized personas. Switch between 'Well Well' for coaching, 'Aim Assist' for admin paperwork, and 'Data Dude' for precise operational logging. As a specialized research arm, ask Project HUGE to generate 'Backward Schedules' for grants or refine your scientific merit sections based on successful templates."
     },
     {
-        title: "Archive: Time Travel",
-        content: "Access past performance reviews and workload metrics. The AI instantly contextualizes historical data so you never lose track of team progress."
+        title: "Dashboard: Command Center",
+        content: "The heart of NEXUS. Beyond live charts, use 'Generate Analysis' to let AURA audit team workload and identify burnout risks before they impact care. Context is everything: use the Year Dropdown in the Dashboard to instantly transform your view into a read-only archive of past performance and trends."
+    },
+    {
+        title: "Feeds: Digital Watercooler - Coming Soon",
+        content: "The new social hub. Share clinical wins, departmental updates, and CoP insights in a secure environment designed for healthcare professionals."
+    },
+    {
+        title: "Pulse: Operational Health",
+        content: "Track the department's 'Social Battery.' Log your energy levels—anonymously via Ghost Protocol—to help the team balance clinical loads effectively."
     },
     {
         title: "Roster: Auto-Healer",
         content: "AURA's Zero-Conflict rostering architecture. It predicts case volumes and automatically routes the right skill-mix to the right wards."
     },
     {
-        title: "Pulse: Social Battery",
-        content: "Interactive energy and focus tracking. Staff can update their daily capacity, and the dashboard instantly recalculates the department's operational health."
-    },
-    {
         title: "Admin Panel",
         content: "Secure data management. Accessible only to Admins (or in Demo Mode), this is where you import bulk JSON data and manage team permissions."
     },
     {
-        title: "Provide Feedback",
-        content: "Found a bug or have an idea? Tap the purple floating button on the right to send feedback straight to the developer dashboard!"
+        title: "Ghost Feedback & Support",
+        content: "NEXUS is built for you. Use the invisible feedback system within AURA to report bugs or suggest new features directly to the developer."
     }
 ];
 
