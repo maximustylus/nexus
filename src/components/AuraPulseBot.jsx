@@ -43,7 +43,6 @@ export default function AuraPulseBot({ user, isOpen, onClose, onOpen }) {
     const { isDemo, auraHistory, setAuraHistory } = useNexus();
 
     // ── State ─────────────────────────────────────────────────────────────────
-    // 🛡️ REMOVED: const [isOpen, setIsOpen] = useState(false); (Now managed by App.jsx)
     const [view,              setView]              = useState('SELECT');
     const [selectedPersona, setSelectedPersona] = useState(null); 
     const [input,             setInput]             = useState('');
@@ -614,7 +613,7 @@ export default function AuraPulseBot({ user, isOpen, onClose, onOpen }) {
     const inputLength = input.length;
     const isNearLimit = inputLength > MAX_INPUT * 0.8;
 
-return (
+    return (
         <>
             {/* 🛡️ UX FIX: The Frosted Glass Blur Background */}
             {isOpen && (
@@ -628,10 +627,11 @@ return (
                 {isOpen && (
                     <div
                         role="dialog" aria-modal="true" aria-label="AURA Pulse wellbeing assistant"
-                        className="mb-4 w-[380px] h-[660px] bg-white dark:bg-slate-900 rounded-[2rem] shadow-2xl border border-slate-200 dark:border-slate-800 flex flex-col overflow-hidden animate-in slide-in-from-bottom-4 zoom-in-95 duration-300"
+                        // 🌟 THE FIX: Fluid Height (max-h-dvh) and Fluid Width (calc 100vw)
+                        className="mb-2 sm:mb-4 w-[calc(100vw-2rem)] sm:w-[380px] h-[100dvh] md:h-[660px] max-h-[calc(100dvh-100px)] bg-white dark:bg-slate-900 rounded-[2rem] shadow-2xl border border-slate-200 dark:border-slate-800 flex flex-col overflow-hidden animate-in slide-in-from-bottom-4 zoom-in-95 duration-300"
                     >
-                        {/* 🌟 THE SINGLE, UNIFIED HEADER */}
-                        <div className={`p-4 text-white flex justify-between items-center bg-gradient-to-r ${isAnonymous ? 'from-purple-800 to-indigo-900' : 'from-slate-900 to-indigo-950'}`}>
+                        {/* 🌟 THE HEADER (Added shrink-0) */}
+                        <div className={`shrink-0 p-4 text-white flex justify-between items-center bg-gradient-to-r ${isAnonymous ? 'from-purple-800 to-indigo-900' : 'from-slate-900 to-indigo-950'}`}>
                             <div className="flex items-center gap-3">
                                 {view === 'CHAT' ? (
                                     <button 
@@ -668,12 +668,10 @@ return (
                                     </button>
                                 )}
 
-                                {/* 🐞 SLEEK INTEGRATED BUG BUTTON */}
+                                {/* 🐞 BUG BUTTON */}
                                 <button 
                                     onClick={() => {
-                                        // 1. Send invisible signal to FeedbackWidget
                                         window.dispatchEvent(new CustomEvent('open-bug-report'));
-                                        // 2. Close AURA instantly
                                         if (onClose) onClose(); 
                                     }}
                                     title="Report a Bug"
@@ -691,13 +689,11 @@ return (
                         </div>
 
                         {!isOnline && (
-                            <div className="flex items-center gap-2 px-4 py-2 bg-yellow-50 border-b border-yellow-200">
+                            <div className="shrink-0 flex items-center gap-2 px-4 py-2 bg-yellow-50 border-b border-yellow-200">
                                 <WifiOff size={12} className="text-yellow-600 flex-shrink-0" />
                                 <p className="text-[10px] font-semibold text-yellow-700">You are offline. AURA cannot process new requests.</p>
                             </div>
                         )}
-
-                        {/* 🛑 THE REDUNDANT WHITE HEADER HAS BEEN COMPLETELY DELETED FROM HERE 🛑 */}
 
                         {/* Scroll Area */}
                         <div className="flex-1 overflow-y-auto p-5 bg-slate-50 dark:bg-slate-950/50 scroll-smooth">
@@ -901,9 +897,9 @@ return (
                             )}
                         </div>
 
-                        {/* Input Bar */}
+                        {/* Input Bar (Added shrink-0) */}
                         {view === 'CHAT' && (
-                            <div className="p-4 bg-white border-t border-slate-100 shrink-0">
+                            <div className="shrink-0 p-4 bg-white border-t border-slate-100">
                                 {isNearLimit && <p className={`text-[9px] font-bold text-right mb-1 ${inputLength >= MAX_INPUT ? 'text-red-500' : 'text-amber-500'}`}>{inputLength} / {MAX_INPUT}</p>}
                                 <div className={`flex items-center gap-2 bg-slate-50 rounded-full pl-5 pr-3 py-3 border transition-all ${
                                     loading || isSending 
