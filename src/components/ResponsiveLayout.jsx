@@ -1,12 +1,11 @@
-import { LayoutDashboard, Archive, Calendar, Activity, BookOpen } from 'lucide-react';
+import { LayoutDashboard, Calendar, Activity, BookOpen, MessageCircle } from 'lucide-react';
 import React from 'react';
 
 const ResponsiveLayout = ({ children, activeTab, onNavigate, floatingWidgets }) => {
-  // 1. REORDERED: Pulse is now dead center (index 2 of 4)
-  // 2. FLAG ADDED: 'isHero: true' gives it unique styling logic below
+  // 🌟 UPDATED: Archive removed, Feeds added!
   const navItems = [
     { id: 'dashboard', icon: LayoutDashboard, label: 'Dashboard' },
-    { id: 'archive', icon: Archive, label: 'Archive' },
+    { id: 'feeds', icon: MessageCircle, label: 'Feeds' },
     { id: 'pulse', icon: Activity, label: 'Pulse', isHero: true },
     { id: 'roster', icon: Calendar, label: 'Roster' },
     { id: 'guide', icon: BookOpen, label: 'Guide' }
