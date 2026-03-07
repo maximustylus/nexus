@@ -1,4 +1,4 @@
-# NEXUS: SSMC Smart Dashboard
+# NEXUS Smart Dashboard
 **Version:** 1.4-OFFICIAL  
 **Core Function:** Clinical Capacity Management, Staff Wellbeing (Pulse), and AI-Augmented Operations.
 
@@ -10,31 +10,37 @@ NEXUS is built on a dual-environment architecture, designed to switch seamlessly
 
 ### Tech Stack
 * **Frontend:** React (Vite build system)
-* **Styling:** Tailwind CSS (with specific `animate-in` plugin utilities)
+* **Styling:** Tailwind CSS (with specific `animate-in` plugin utilities and dynamic `dvh` math for mobile responsiveness)
 * **Icons:** `lucide-react`
 * **Charts:** `recharts` (utilizing `<ResponsiveContainer>`)
 * **Backend / Auth:** Firebase (Firestore, Authentication, Cloud Functions)
 * **Document Generation:** `docx`
 
-### The "Data Firewall"
-To ensure safe demonstrations and testing, the application utilizes a Context Provider (`NexusContext.jsx`) to manage an `isDemo` state.
-* **Demo Mode:** Injects `MOCK_TEAM_DATA` and `MOCK_STAFF_LOADS`. Prevents actual Firebase writes. Uses `DEMO_PERSONAS` for AURA.
-* **Live Mode:** Subscribes to live Firestore collections (`cep_team`, `staff_loads`, `system_data`).
+### The "Data Firewall" & Security
+To ensure safe demonstrations and strict PDPA/HR compliance, NEXUS utilizes multiple layers of security:
+* **Demo Mode (Frontend Firewall):** Injects `MOCK_TEAM_DATA` and `MOCK_STAFF_LOADS` via `NexusContext.jsx`. Prevents actual Firebase writes and uses `DEMO_PERSONAS` for AURA.
+* **Live Mode (Backend Firewall):** Firebase Security Rules strictly enforce that only verified `@kkh.com.sg` emails can read or write to the live Firestore database.
+* **Dynamic Time-Routing:** The application automatically shifts its database subscription target (e.g., `cep_team` vs `archive_2025`) based on the user's selected Data Year.
 
 ---
 
 ## 🧩 Core Components
 
 ### 1. Layout & Navigation (`App.jsx` & `ResponsiveLayout.jsx`)
-The main entry point controls the global state for the active view (`currentView`). It renders the `<ResponsiveLayout>` which handles the responsive shell (bottom navigation on mobile, side navigation on desktop).
-* **Views Managed:** Dashboard (Charts & AI Report), Archive (Read-only historical data), Roster, Pulse (Wellbeing Matrix), Guide.
+The main entry point controls the global state for the active view (`currentView`) and the active timeline (`dataYear`). It renders the `<ResponsiveLayout>` which handles the responsive shell (bottom navigation on mobile, side navigation on desktop).
+* **Views Managed:** * **Dashboard:** A unified Live Command Center that seamlessly morphs into a Read-Only Historical Archive when a past year is selected from the dropdown.
+  * **Feeds:** A placeholder and hype-builder for the upcoming v1.5 Digital Watercooler.
+  * **Roster:** Calendar and shift management.
+  * **Pulse:** The Wellbeing Matrix and Heatmap.
+  * **Guide:** The application manual.
 
 ### 2. AURA Intelligence Engine (`AuraPulseBot.jsx`)
 AURA is a controlled component (managed by `App.jsx` via `isOpen` and `onClose` props) that communicates with a secure Firebase Cloud Function (`chatWithAura`).
 * **Phase Configuration:** Uses a 5A Protocol with strict energy bounds (Healthy, Reacting, Injured, Ill).
+* **Fluid Responsive UI:** Utilizes dynamic viewport height constraints (`max-h-[calc(100dvh-100px)]`) and `shrink-0` classes to prevent layout collapse during mobile landscape viewing and virtual keyboard intrusion.
 * **Capabilities:** * Parses JSON from the LLM to extract operational commands.
-  * Can execute database writes (e.g., updating `staff_loads`).
-  * Can generate and trigger downloads of `.docx` files natively.
+  * Executes database writes (e.g., updating `staff_loads`).
+  * Generates and triggers downloads of `.docx` files natively.
   * Listens to Firestore for pending `shift_swaps` and intercepts the user with an alert.
 
 ### 3. Contextual Greeting (`AuraGreeting.jsx`)
@@ -63,7 +69,10 @@ Vite compiles Tailwind classes statically. **Do not string-interpolate Tailwind 
 
 ---
 
-## 🚀 Future Roadmap (Pending)
-1. **Workload Traffic Light System:** Automated Red/Yellow/Green capacity indicators based on daily patient load vs. rostered staff.
-2. **Interactive Onboarding:** A swipeable carousel inside `<AppGuide>` to train clinical staff on using AURA.
-3. **Advanced AURA Actions:** Expanding the JSON-parser to handle more complex Firestore batch updates.
+## 🚀 Future Roadmap (Pending v1.5)
+
+### 1. NEXUS Feeds
+A secure, PDPA-compliant Digital Watercooler for sharing clinical insights, wins, and CoP updates. Features will include frontend image compression, granular edit tracking, and a 90-day auto-purge lifecycle rule.
+
+### 2. Enterprise Scaling & Multi-Tenancy
+Transitioning the app from a hardcoded single-team environment to a dynamic, database-driven configuration. This will allow multiple departments/hospitals to utilize NEXUS with completely isolated data sub-collections, custom domain swimlanes, and custom organization logos.
