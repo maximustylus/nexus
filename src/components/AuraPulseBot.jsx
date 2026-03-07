@@ -488,7 +488,7 @@ export default function AuraPulseBot({ user, isOpen, onClose, onOpen }) {
                     newHistory[msgIndex].action = null; 
                 }
                 newHistory.push({
-                    role: 'bot', text: '✅ Document exported as a true .docx file (iOS compatible).', mode: 'ASSISTANT'
+                    role: 'bot', text: '✅ Document exported.', mode: 'ASSISTANT'
                 });
                 return newHistory;
             });
