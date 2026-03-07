@@ -529,7 +529,7 @@ function NexusApp() {
           The Digital Watercooler is <span className="text-indigo-600 dark:text-indigo-400">Coming Soon</span>
         </h2>
         <p className="text-slate-500 dark:text-slate-400 max-w-md mx-auto font-medium leading-relaxed">
-          We are building a new secure space for the team to share wins, CoP updates, and clinical insights. Get ready for the Feeds tab in v1.5!
+          We are building a new secure space for the team to share wins, updates, and insights. Get ready for the Feeds tab in v1.5!
         </p>
         <div className="mt-8 px-4 py-2 bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 rounded-full text-xs font-bold uppercase tracking-widest border border-indigo-100 dark:border-indigo-800/50 shadow-sm">
           ETA: Next Major Update
