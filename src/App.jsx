@@ -11,7 +11,7 @@ import { signOut } from 'firebase/auth';
 import { BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, 
   Tooltip, ResponsiveContainer, Cell, PieChart, Pie, Legend, ReferenceLine } from 'recharts';
 import { Sun, Moon, LogOut, LayoutDashboard, Archive, 
-  Calendar, Activity, Filter, ShieldAlert, BookOpen } from 'lucide-react';
+  Calendar, Activity, Filter, ShieldAlert, BookOpen, MessageCircle, Gift, History } from 'lucide-react';
 
 // --- CONTEXT & DATA STRATEGY ---
 import { NexusProvider, useNexus } from './context/NexusContext';
@@ -81,7 +81,7 @@ function NexusApp() {
   
 // --- UI STATE (SMART THEME) ---
   const [currentView, setCurrentView] = useState('pulse');
-  const [archiveYear, setArchiveYear] = useState('2025');
+  const [dataYear, setDataYear] = useState('2026'); // Unified Year State
   const [isAdminOpen, setIsAdminOpen] = useState(false);
   const [isAuraOpen, setIsAuraOpen] = useState(false);
 
@@ -185,15 +185,15 @@ function NexusApp() {
     let unsubStaff, unsubAttendance;
     const unsubLoads = [];
 
-    if (!currentView || !archiveYear) return;
+    if (!currentView || !dataYear) return;
     if (!isDemo && !user) return;
 
     if (isDemo) {
       console.log("🧪 [NEXUS] Loading Marvel Universe...");
     } else {
       
-      // 1. Determine Target Collection dynamically for ANY archive year
-      const targetCollection = currentView === 'archive' ? `archive_${archiveYear}` : 'cep_team';
+      // 1. Determine Target Collection dynamically for ANY data year
+      const targetCollection = dataYear === '2026' ? 'cep_team' : `archive_${dataYear}`;
 
       console.log(`📡 [NEXUS] Fetching from: ${targetCollection}`);
 
@@ -208,8 +208,8 @@ function NexusApp() {
           setTeamData(sortedData);
         }, (err) => console.error("Snapshot Error:", err));
 
-        // 3. Fetch Loads
-        if (currentView !== 'archive') {          
+        // 3. Fetch Loads (Only for 2026 currently)
+        if (dataYear === '2026') {          
           activeStaffIds.forEach(staffId => {
             const u = onSnapshot(doc(db, 'staff_loads', staffId), (docSnap) => {
               if (docSnap.exists()) {
@@ -235,7 +235,7 @@ function NexusApp() {
       unsubLoads.forEach(u => u());
     };
     // CRITICAL: Ensure all these are in the array!
-  }, [isDemo, currentView, archiveYear, activeStaffList, activeStaffIds, user]);
+  }, [isDemo, currentView, dataYear, activeStaffList, activeStaffIds, user]);
 
 // --- NEXUS NOTIFICATION & DEEP LINK HANDLER ---
   useEffect(() => {
@@ -277,7 +277,7 @@ function NexusApp() {
 
 // 1. FILTER DATA (Strict Timeline Isolation)
   const getFilteredData = () => {
-    const targetYear = currentView === 'archive' ? archiveYear : '2026';
+    const targetYear = dataYear;
     return activeTeamData.map(staff => ({
       ...staff,
       // Strict Filter: If a project has no year, it defaults to '2026', NOT the targetYear
@@ -311,7 +311,7 @@ function NexusApp() {
   const getStatusData = () => {
     const tasks = { name: 'Tasks', 1:0, 2:0, 3:0, 4:0, 5:0 };
     const projects = { name: 'Projects', 1:0, 2:0, 3:0, 4:0, 5:0 };
-    const isArchive = currentView === 'archive';
+    const isArchive = dataYear !== '2026';
 
     filteredTeamData.forEach(staff => {
       (staff.projects || []).forEach(p => {
@@ -326,7 +326,7 @@ function NexusApp() {
   };
 
 const getClinicalData = (staffId) => {
-    const isArchive = currentView === 'archive' && String(archiveYear) === '2025';
+    const isArchive = dataYear !== '2026';
 
     if (isArchive) {
       const normalize = (str) => String(str || "").toLowerCase().replace(/[\s_]/g, '');
@@ -357,7 +357,7 @@ const getClinicalData = (staffId) => {
 
   // 5. ATTENDANCE CHART
   const getAttendanceForView = () => {
-      const targetYear = currentView === 'archive' ? archiveYear : '2026';
+      const targetYear = dataYear;
       // Fallback for demo attendance
       const rawValues = isDemo 
         ? [120, 145, 160, 155, 180, 190, 195, 185, 200, 210, 190, 180] 
@@ -402,32 +402,43 @@ const getClinicalData = (staffId) => {
   }
 
   // --- SUB-COMPONENT: DASHBOARD VIEW ---
-  const renderDashboardView = (isArchive = false) => (
+  const renderDashboardView = () => (
     <>
-      {/* Archive Header Banner */}
-      {isArchive && (
-        <div className="md:col-span-2 bg-amber-100 dark:bg-amber-900/30 border border-amber-200 p-4 rounded-lg mb-4 flex justify-between items-center animate-in fade-in slide-in-from-top-4">
-          <div className="flex items-center gap-3">
-             <Archive className="text-amber-600" />
-             <span className="font-bold text-amber-800 dark:text-amber-200">Viewing Archived Data:</span>
-             <select 
-               value={archiveYear} 
-               onChange={(e) => setArchiveYear(e.target.value)} 
-               className="bg-white dark:bg-slate-800 border border-amber-300 rounded px-3 py-1 font-bold text-slate-700 dark:text-white"
-             >
-               <option value="2023">2023</option>
-               <option value="2024">2024</option>
-               <option value="2025">2025</option>
-             </select>
-          </div>
-          <span className="text-xs font-mono text-amber-700 uppercase">Read Only Mode</span>
-        </div>
-      )}
+      {/* 🌟 NEW: The Unified Dashboard/Archive Header */}
+      <div className="md:col-span-2 flex flex-col md:flex-row md:justify-between md:items-center bg-white dark:bg-slate-800 p-5 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 mb-6 gap-4">
+         <div className="flex items-center gap-3">
+            <div className={`p-2 rounded-xl ${dataYear === '2026' ? 'bg-indigo-100 text-indigo-600 dark:bg-indigo-900/30 dark:text-indigo-400' : 'bg-amber-100 text-amber-600 dark:bg-amber-900/30 dark:text-amber-400'}`}>
+              {dataYear === '2026' ? <LayoutDashboard size={20} /> : <History size={20} />}
+            </div>
+            <div>
+              <h2 className="text-lg font-black text-slate-800 dark:text-white tracking-tight">
+                {dataYear === '2026' ? 'Live Command Center' : 'Historical Archive'}
+              </h2>
+              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+                {dataYear === '2026' ? 'Real-time Metrics' : 'Read-Only Mode'}
+              </p>
+            </div>
+         </div>
+         
+         <div className="flex items-center gap-2 bg-slate-50 dark:bg-slate-900 p-1.5 rounded-xl border border-slate-200 dark:border-slate-700">
+            <span className="text-[10px] font-bold text-slate-400 uppercase px-2">Data Year:</span>
+            <select 
+              value={dataYear} 
+              onChange={(e) => setDataYear(e.target.value)} 
+              className="bg-white dark:bg-slate-800 border-none rounded-lg px-3 py-1.5 text-sm font-black text-slate-700 dark:text-white shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all cursor-pointer outline-none"
+            >
+              <option value="2026">2026</option>
+              <option value="2025">2025</option>
+              <option value="2024">2024</option>
+              <option value="2023">2023</option>
+            </select>
+         </div>
+      </div>
 
    {/* AI Smart Report */}
       <div className="md:col-span-2 mb-6">
         <SmartReportView 
-          year={isArchive ? archiveYear : '2026'} 
+          year={dataYear} 
           teamData={activeTeamData} 
           staffLoads={activeStaffLoads} 
           user={user}
@@ -436,7 +447,7 @@ const getClinicalData = (staffId) => {
 
       {/* PIE CHART SECTION */}
       <div className="bg-white dark:bg-slate-800 p-6 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-700 mb-6">
-        <h2 className="text-sm font-bold text-slate-400 uppercase tracking-wider mb-4">Domain Distribution (2026)</h2>
+        <h2 className="text-sm font-bold text-slate-400 uppercase tracking-wider mb-4">Domain Distribution ({dataYear})</h2>
           <div className="h-[500px] w-full flex items-center justify-center overflow-visible"> 
           <ResponsiveContainer width="100%" height="100%">
             <PieChart margin={{ top: 20, left: 0, right: 0, bottom: 40 }}>
@@ -476,7 +487,7 @@ const getClinicalData = (staffId) => {
 
       {/* TASK & PROJECT COMPLETION SECTION */}
       <div className="bg-white dark:bg-slate-800 p-6 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-700">
-        <h2 className="text-sm font-bold text-slate-400 uppercase tracking-wider mb-4">Task & Project Completion {isArchive ? `(${archiveYear})` : '(2026)'}</h2>
+        <h2 className="text-sm font-bold text-slate-400 uppercase tracking-wider mb-4">Task & Project Completion ({dataYear})</h2>
         <div className="h-64">
           <ResponsiveContainer width="100%" height="100%">
             <BarChart data={getStatusData()} layout="vertical" margin={{ left: 10, right: 20 }}>
@@ -497,7 +508,7 @@ const getClinicalData = (staffId) => {
       {/* Row 2: Attendance Line Chart */}
       <div className="md:col-span-2 bg-white dark:bg-slate-800 p-6 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-700 mt-6">
         <h2 className="text-sm font-bold text-slate-400 uppercase tracking-wider mb-6">
-            Monthly Patient Attendance {isArchive ? `(${archiveYear})` : '(2026)'}
+            Monthly Patient Attendance ({dataYear})
         </h2>
         <div className="h-64">
           <ResponsiveContainer width="100%" height="100%">
@@ -515,7 +526,7 @@ const getClinicalData = (staffId) => {
 
 {/* Row 3: Individual Clinical Load (UNIFIED & FIXED) */}
       <div className="md:col-span-2 bg-white dark:bg-slate-800 p-6 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-700 mt-6">
-        <h2 className="text-sm font-bold text-slate-400 uppercase tracking-wider mb-6">Individual Clinical Load</h2>
+        <h2 className="text-sm font-bold text-slate-400 uppercase tracking-wider mb-6">Individual Clinical Load ({dataYear})</h2>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           
           {/* UNIFIED LOGIC: Handles both Demo and Live perfectly */}
@@ -571,13 +582,13 @@ const getClinicalData = (staffId) => {
       {/* Row 4: Department Overview */}
       <div className="md:col-span-2 mt-8">
         <h2 className="text-sm font-bold text-slate-400 uppercase tracking-wider mb-6">
-            Department Overview {isArchive ? `(${archiveYear})` : '(2026)'}
+            Department Overview ({dataYear})
         </h2>
         
         {filteredTeamData.every(staff => (staff.projects || []).length === 0) ? (
-            <div className="p-12 text-center border-2 border-dashed border-slate-200 rounded-2xl bg-slate-50">
-                <Filter className="mx-auto text-slate-300 mb-2" size={32} />
-                <h3 className="text-slate-400 font-bold uppercase">No data found</h3>
+            <div className="p-12 text-center border-2 border-dashed border-slate-200 rounded-2xl bg-slate-50 dark:bg-slate-800/50">
+                <Filter className="mx-auto text-slate-300 dark:text-slate-600 mb-2" size={32} />
+                <h3 className="text-slate-400 dark:text-slate-500 font-bold uppercase tracking-widest">No data found</h3>
             </div>
         ) : (
             <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
@@ -617,6 +628,41 @@ const getClinicalData = (staffId) => {
               ))}
             </div>
         )}
+      </div>
+    </>
+  );
+
+  // --- SUB-COMPONENT: FEEDS PLACEHOLDER ---
+  const renderFeedsPlaceholder = () => (
+    <>
+      <style>
+      {`
+        @keyframes shake {
+          0%, 100% { transform: rotate(0deg); }
+          25% { transform: rotate(-8deg); }
+          50% { transform: rotate(8deg); }
+          75% { transform: rotate(-8deg); }
+        }
+        .animate-shake {
+          animation: shake 0.6s ease-in-out infinite;
+        }
+      `}
+      </style>
+      <div className="md:col-span-2 flex flex-col items-center justify-center py-24 md:py-32 px-4 text-center animate-in fade-in zoom-in duration-500">
+        <div className="relative mb-8">
+          <div className="absolute inset-0 bg-indigo-500 blur-3xl opacity-20 rounded-full w-32 h-32 animate-pulse" />
+          {/* The Shaking Gift Icon */}
+          <Gift size={80} className="text-indigo-500 relative z-10 animate-shake origin-bottom drop-shadow-2xl" />
+        </div>
+        <h2 className="text-3xl font-black text-slate-800 dark:text-white tracking-tight mb-4">
+          The Digital Watercooler is <span className="text-indigo-600 dark:text-indigo-400">Coming Soon</span>
+        </h2>
+        <p className="text-slate-500 dark:text-slate-400 max-w-md mx-auto font-medium leading-relaxed">
+          We are building a new secure space for the team to share wins, CoP updates, and clinical insights. Get ready for the Feeds tab in v1.5!
+        </p>
+        <div className="mt-8 px-4 py-2 bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 rounded-full text-xs font-bold uppercase tracking-widest border border-indigo-100 dark:border-indigo-800/50 shadow-sm">
+          ETA: Next Major Update
+        </div>
       </div>
     </>
   );
@@ -678,16 +724,16 @@ const getClinicalData = (staffId) => {
           </div>
         </div>
 
-        {/* CENTER NAVIGATION */}
+        {/* 🌟 CENTER NAVIGATION (Archive Replaced by Feeds) */}
         <div className="hidden xl:flex bg-slate-100 dark:bg-slate-900/50 p-1 rounded-lg shrink-0">
-           {['dashboard', 'archive', 'roster', 'pulse', 'guide'].map(view => (
+           {['dashboard', 'feeds', 'roster', 'pulse', 'guide'].map(view => (
              <button 
                key={view} 
                onClick={() => setCurrentView(view)} 
                className={`flex items-center gap-2 px-4 py-2 rounded-md text-xs font-bold transition-all capitalize ${currentView === view ? 'bg-white dark:bg-slate-700 shadow text-blue-600 dark:text-white' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'}`}
              >
                {view === 'dashboard' && <LayoutDashboard size={14} />}
-               {view === 'archive' && <Archive size={14} />}
+               {view === 'feeds' && <MessageCircle size={14} />}
                {view === 'roster' && <Calendar size={14} />}
                {view === 'pulse' && <Activity size={14} />}
                {view === 'guide' && <BookOpen size={14} />} 
@@ -742,9 +788,9 @@ const getClinicalData = (staffId) => {
        </div>
      ) : (
        <div className="md:col-span-2 w-full animate-in fade-in duration-500">
-         {/* 🛡️ FIREWALL APPLIED TO DASHBOARDS */}
-         {currentView === 'dashboard' && renderDashboardView(false)}
-         {currentView === 'archive' && renderDashboardView(true)}
+         {/* 🌟 NEW ROUTING LOGIC */}
+         {currentView === 'dashboard' && renderDashboardView()}
+         {currentView === 'feeds' && renderFeedsPlaceholder()}
          {currentView === 'roster' && <RosterView user={user} />}
          {currentView === 'pulse' && <WellbeingView user={user} />}
 
