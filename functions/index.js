@@ -23,7 +23,7 @@ if (!API_KEY) {
 }
 
 const MODEL_PRIORITY = [
-    'gemini-2.5-pro', // 🛡️ NEW: Future-proofing for multimodal heavy lifting
+    'gemini-2.5-pro',
     'gemini-2.0-flash',
     'gemini-1.5-pro',
     'gemini-1.5-flash',
@@ -74,7 +74,6 @@ const MAX_HISTORY_LEN  = 20;
 const MAX_PROMPT_LEN   = 8000;  
 const MAX_ROLE_LEN     = 100;
 
-// 🛡️ NEW: Validate incoming attachments (PDFs, Docs, Images)
 function validateChatInput({ userText, history, role, prompt, attachments }) {
     if (!userText || typeof userText !== 'string') {
         throw new HttpsError('invalid-argument', 'userText is required and must be a string.');
@@ -197,7 +196,6 @@ function parseJsonResponse(rawText, requiredFields = []) {
     return { text: jsonStr, parsed };
 }
 
-// 🛡️ UPGRADED TRI-MODE AI PROMPT (v3.0 - Multimodal Edition)
 const AURA_SYSTEM_PROMPT = `
 ROLE:
 You are AURA (Adaptive Understanding and Real-time Analytics). You are a Quad-Mode AI deployed at KKH/SingHealth. You must dynamically analyze the user's conversational intent and instantly switch your active persona to MODE 1 (Coach), MODE 2 (Assistant), MODE 3 (Data Entry), or MODE 4 (Research).
@@ -269,7 +267,6 @@ STRICT JSON OUTPUT FORMAT (Return ONLY this exact structure, no markdown code bl
 }
 `.trim();
 
-// 🛡️ SMART ANALYSIS PROMPT: Automated Deep Audits
 const SMART_ANALYSIS_SYSTEM_PROMPT = `
 ROLE:
 You are an Expert Organizational Analyst and Wellbeing Advisor for KKH/SingHealth.
@@ -293,7 +290,6 @@ exports.chatWithAura = onCall({
     secrets: ['GEMINI_API_KEY'],
 }, async (request) => {
 
-    // 🛡️ NEW: Extract attachments from the incoming request
     const { userText, history = [], role = 'Staff', prompt = '', isDemo, attachments = [] } = request.data;
 
     if (!API_KEY) throw new HttpsError('failed-precondition', 'AI service is not configured.');
@@ -316,15 +312,10 @@ exports.chatWithAura = onCall({
             `USER SAYS: "${userText.trim()}"`,
         ].filter(Boolean).join('\n');
 
-        // 🌟 NEW: Dynamic Temperature! 
-        // If the prompt contains our strict personas, drop temperature to 0.1 to kill creativity.
         const isStrictFormatting = prompt.includes('Project HUGE') || prompt.includes('Magnify Mama');
         const dynamicTemperature = isStrictFormatting ? 0.1 : 0.7;
-
-        // Build the multimodal parts array
         const userParts = [{ text: contextualMessage }];
         
-        // If the user attached files (PDFs, Images), append them
         if (attachments.length > 0) {
             for (const att of attachments) {
                 userParts.push({
@@ -351,11 +342,11 @@ exports.chatWithAura = onCall({
                         .map(({ role, parts }) => ({ role, parts })),
                     {
                         role:  'user',
-                        parts: userParts,
+                        parts: userParts, 
                     },
                 ],
                 generationConfig: {
-                    temperature:      dynamicTemperature, // 👈 THE FIX IS APPLIED HERE
+                    temperature:      dynamicTemperature, 
                     maxOutputTokens:  8192, 
                     responseMimeType: 'application/json',
                 },
