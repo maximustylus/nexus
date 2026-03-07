@@ -767,7 +767,7 @@ export default function AuraPulseBot({ user, isOpen, onClose, onOpen }) {
                                                                     className="py-2 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white text-[10px] font-bold uppercase tracking-wider rounded-xl transition-colors flex items-center justify-center gap-1.5"
                                                                 >
                                                                     {loading ? <RefreshCw size={13} className="animate-spin" /> : <CheckCircle size={13} />} 
-                                                                    Save to DB
+                                                                    Save to Database
                                                                 </button>
 
                                                                 <button 
@@ -776,7 +776,7 @@ export default function AuraPulseBot({ user, isOpen, onClose, onOpen }) {
                                                                     className="py-2 bg-slate-700 hover:bg-slate-600 disabled:opacity-50 text-white text-[10px] font-bold uppercase tracking-wider rounded-xl transition-colors flex items-center justify-center gap-1.5 border border-slate-600"
                                                                 >
                                                                     <Download size={13} /> 
-                                                                    Export .DOC
+                                                                    Export Document
                                                                 </button>
                                                             </div>
                                                         </div>
