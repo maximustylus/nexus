@@ -10,8 +10,8 @@ import { collection, onSnapshot, doc } from 'firebase/firestore';
 import { signOut } from 'firebase/auth';
 import { BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, 
   Tooltip, ResponsiveContainer, Cell, PieChart, Pie, Legend, ReferenceLine } from 'recharts';
-import { Sun, Moon, LogOut, LayoutDashboard, Archive, 
-  Calendar, Activity, Filter, ShieldAlert, BookOpen, MessageCircle, Gift, History } from 'lucide-react';
+import { Sun, Moon, LogOut, LayoutDashboard, Calendar, Activity, 
+  Filter, ShieldAlert, BookOpen, MessageCircle, Gift, History } from 'lucide-react';
 
 // --- CONTEXT & DATA STRATEGY ---
 import { NexusProvider, useNexus } from './context/NexusContext';
@@ -34,30 +34,25 @@ import { STAFF_LIST, STAFF_IDS, MONTHS, checkAccess, TEAM_DIRECTORY } from './ut
 // CONFIGURATION & CONSTANTS
 // ==========================================
 
-// 1. Official SingHealth CDP Colors
 const DOMAIN_COLORS = {
-  MANAGEMENT: '#FFFF00', // Bright Yellow
-  CLINICAL: '#FFCC99',   // Light Peach/Orange
-  EDUCATION: '#FFC000',   // Golden Amber
-  RESEARCH: '#CCFFCC'    // Pale Mint Green
+  MANAGEMENT: '#FFFF00', 
+  CLINICAL: '#FFCC99',   
+  EDUCATION: '#FFC000',   
+  RESEARCH: '#CCFFCC'    
 };
 
-// 2. Clinical Load Gradient (Jan to Dec)
 const CLINICAL_GRADIENT = [
   '#FFF5EC', '#FFEBDA', '#FFE1C8', '#FFD7B6', 
   '#FFCDA4', '#FFC392', '#FFB980', '#FFAF6E', 
   '#FFA55C', '#FF9B4A', '#FF9138', '#FFCC99'
 ];
 
-// 3. Status Colors
 const STATUS_COLORS = { 
   1: '#EF4444', 2: '#A855F7', 3: '#F59E0B', 4: '#3B82F6', 5: '#10B981' 
 };
 
-// 4. Domain Swimlane Order
 const CUSTOM_DOMAIN_ORDER = ['MANAGEMENT', 'CLINICAL', 'RESEARCH', 'EDUCATION'];
 
-// 5. CUSTOM BAR TOOLTIP
 const CustomBarTooltip = ({ active, payload, label }) => {
     if (active && payload && payload.length) {
       const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
@@ -76,29 +71,22 @@ const CustomBarTooltip = ({ active, payload, label }) => {
 };
 
 function NexusApp() {
-  // --- HOOKS ---
   const { isDemo, toggleDemo } = useNexus(); 
   
-// --- UI STATE (SMART THEME) ---
   const [currentView, setCurrentView] = useState('pulse');
-  const [dataYear, setDataYear] = useState('2026'); // Unified Year State
+  const [dataYear, setDataYear] = useState('2026'); // 🌟 NEW UNIFIED YEAR
   const [isAdminOpen, setIsAdminOpen] = useState(false);
   const [isAuraOpen, setIsAuraOpen] = useState(false);
 
-  // 1. Initialize based on Saved Memory OR System Preference
   const [isDark, setIsDark] = useState(() => {
     if (typeof window !== 'undefined') {
       const savedTheme = localStorage.getItem('nexus_theme');
-      if (savedTheme) {
-        return savedTheme === 'dark';
-      }
-      // If no saved preference, fall back to system preference
+      if (savedTheme) return savedTheme === 'dark';
       return window.matchMedia('(prefers-color-scheme: dark)').matches;
     }
     return false;
   });
 
-  // 2. EFFECT: Sync the DOM and Local Memory whenever state changes
   useEffect(() => {
     if (isDark) {
       document.documentElement.classList.add('dark');
@@ -109,33 +97,24 @@ function NexusApp() {
     }
   }, [isDark]);
 
-  // 3. EFFECT: Listen for System OS changes (only if they haven't manually set a preference)
   useEffect(() => {
     const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
     const handleChange = (e) => {
-      if (!localStorage.getItem('nexus_theme')) {
-        setIsDark(e.matches);
-      }
+      if (!localStorage.getItem('nexus_theme')) setIsDark(e.matches);
     };
     mediaQuery.addEventListener('change', handleChange);
     return () => mediaQuery.removeEventListener('change', handleChange);
   }, []);
   
-  // 4. Manual Toggle (Bulletproof Override using previous state)
-  const toggleTheme = () => { 
-        setIsDark(!isDark); 
-  };
+  const toggleTheme = () => setIsDark(!isDark); 
 
-  // 5. App Guide Pop-up
   const [isGuideOpen, setIsGuideOpen] = useState(false);
   const previousView = useRef('dashboard');
 
-  // Auto-open guide ONLY when entering Demo Mode
   useEffect(() => {
     if (isDemo) setIsGuideOpen(true);
   }, [isDemo]);
 
-  // Intercept the "guide" tab click
   useEffect(() => {
     if (currentView === 'guide') {
       setIsGuideOpen(true);
@@ -145,33 +124,22 @@ function NexusApp() {
     }
   }, [currentView]);
   
-  // --- AUTH STATE ---
   const [user, setUser] = useState(null);
   const [authLoading, setAuthLoading] = useState(true);
   
-  // --- DATA STATE ---
   const [teamData, setTeamData] = useState([]); 
   const [staffLoads, setStaffLoads] = useState({});
   const [attendanceData, setAttendanceData] = useState({}); 
 
-  // --- UNIVERSE SWITCHER ---
-  // In Demo Mode, use mock names. In Live Mode, use real names/IDs.
   const activeStaffList = isDemo ? MOCK_STAFF_NAMES : STAFF_LIST;
   const activeStaffIds = isDemo ? MOCK_STAFF_NAMES : STAFF_IDS;
 
-// --- EFFECT: AUTH LISTENER ---
   useEffect(() => {
     const unsubscribe = auth.onAuthStateChanged((u) => {
       if (u) {
-        // Look up the user in our TEAM_DIRECTORY
         const profile = checkAccess(u.email);
-        
-        if (profile) {
-          setUser(profile);
-        } else {
-          setUser(null);
-          signOut(auth);
-        }
+        if (profile) setUser(profile);
+        else { setUser(null); signOut(auth); }
       } else {
         setUser(null);
       }
@@ -180,7 +148,7 @@ function NexusApp() {
     return () => unsubscribe();
   }, []);
   
-// --- EFFECT: DATA FETCHING (v1.5 STABILIZED) ---
+  // --- DATA FETCHING ---
   useEffect(() => {
     let unsubStaff, unsubAttendance;
     const unsubLoads = [];
@@ -191,24 +159,19 @@ function NexusApp() {
     if (isDemo) {
       console.log("🧪 [NEXUS] Loading Marvel Universe...");
     } else {
-      
-      // 1. Determine Target Collection dynamically for ANY data year
+      // 🌟 MAGIC: Target Collection shifts automatically based on the Year Dropdown
       const targetCollection = dataYear === '2026' ? 'cep_team' : `archive_${dataYear}`;
-
       console.log(`📡 [NEXUS] Fetching from: ${targetCollection}`);
 
-      // 2. Fetch Team Data
       try {
         unsubStaff = onSnapshot(collection(db, targetCollection), (snapshot) => {        
           const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-          
           const sortedData = TEAM_DIRECTORY.map(member => {
             return data.find(d => d.id === member.id) || { id: member.id, staff_name: member.name, projects: [] };
           });
           setTeamData(sortedData);
         }, (err) => console.error("Snapshot Error:", err));
 
-        // 3. Fetch Loads (Only for 2026 currently)
         if (dataYear === '2026') {          
           activeStaffIds.forEach(staffId => {
             const u = onSnapshot(doc(db, 'staff_loads', staffId), (docSnap) => {
@@ -220,7 +183,6 @@ function NexusApp() {
           });
         }
 
-        // 4. Fetch Attendance
         unsubAttendance = onSnapshot(doc(db, 'system_data', 'monthly_attendance'), (docSnap) => {
             if (docSnap.exists()) { setAttendanceData(docSnap.data()); }
         });
@@ -234,80 +196,55 @@ function NexusApp() {
       if (unsubAttendance) unsubAttendance();
       unsubLoads.forEach(u => u());
     };
-    // CRITICAL: Ensure all these are in the array!
   }, [isDemo, currentView, dataYear, activeStaffList, activeStaffIds, user]);
 
-// --- NEXUS NOTIFICATION & DEEP LINK HANDLER ---
   useEffect(() => {
-    // 1. Initialize Messaging
     const messaging = getMessaging();
-
-    // 2. Handle Foreground Notifications (App is active)
     const unsubscribe = onMessage(messaging, (payload) => {
       console.log('[NEXUS] Foreground Nudge Received:', payload);
     });
 
-    // 3. Handle Notification Clicks (App opened from tray)
     if ('serviceWorker' in navigator) {
       const handleServiceWorkerMessage = (event) => {
         if (event.data?.type === 'NAVIGATE_TO_PULSE') {
-          console.log('[NEXUS] Deep Link Triggered: Routing to Pulse');
-            if (typeof setCurrentView === 'function') {
-            setCurrentView('pulse'); 
-          }
+            if (typeof setCurrentView === 'function') setCurrentView('pulse'); 
         }
       };
-
       navigator.serviceWorker.addEventListener('message', handleServiceWorkerMessage);
-      
       return () => {
         unsubscribe();
         navigator.serviceWorker.removeEventListener('message', handleServiceWorkerMessage);
       };
     }
-
     return () => unsubscribe();
   }, [setCurrentView]);
   
   // --- HELPERS & TRANSFORMERS ---
-
-  // 🛡️ THE DATA FIREWALL:
   const activeTeamData = isDemo ? MOCK_TEAM_DATA : teamData;
   const activeStaffLoads = isDemo ? MOCK_STAFF_LOADS : staffLoads;
 
-// 1. FILTER DATA (Strict Timeline Isolation)
   const getFilteredData = () => {
-    const targetYear = dataYear;
     return activeTeamData.map(staff => ({
       ...staff,
-      // Strict Filter: If a project has no year, it defaults to '2026', NOT the targetYear
-      projects: (staff.projects || []).filter(p => String(p.year || '2026') === String(targetYear))
+      projects: (staff.projects || []).filter(p => String(p.year || '2026') === String(dataYear))
     }));
   };
 
   const filteredTeamData = getFilteredData(); 
 
-  // 2. PIE CHART DATA
   const getPieData = () => {
     const counts = { MANAGEMENT: 0, CLINICAL: 0, EDUCATION: 0, RESEARCH: 0 };
     filteredTeamData.forEach(staff => {
       (staff.projects || []).forEach(p => {
         let rawDomain = (p.domain_type || p.category || 'CLINICAL').toUpperCase();
         if (rawDomain === 'ADMIN' || rawDomain === 'COMMUNITY') rawDomain = 'MANAGEMENT';
-
-        if (counts[rawDomain] !== undefined) {
-            counts[rawDomain]++;
-        } else {
-            counts['CLINICAL']++;
-        }
+        if (counts[rawDomain] !== undefined) counts[rawDomain]++;
+        else counts['CLINICAL']++;
       });
     });
-    return Object.keys(counts)
-      .map(key => ({ name: key, value: counts[key], fill: DOMAIN_COLORS[key] }))
-      .filter(d => d.value > 0);
+    return Object.keys(counts).map(key => ({ name: key, value: counts[key], fill: DOMAIN_COLORS[key] })).filter(d => d.value > 0);
   };
 
-  // 3. TASK & PROJECT STATUS
   const getStatusData = () => {
     const tasks = { name: 'Tasks', 1:0, 2:0, 3:0, 4:0, 5:0 };
     const projects = { name: 'Projects', 1:0, 2:0, 3:0, 4:0, 5:0 };
@@ -317,7 +254,6 @@ function NexusApp() {
       (staff.projects || []).forEach(p => {
         const status = p.status_dots || (isArchive ? 5 : 2);
         const type = p.item_type || 'Project'; 
-        
         if (type === 'Project') projects[status]++; 
         else tasks[status]++;
       });
@@ -325,57 +261,42 @@ function NexusApp() {
     return [tasks, projects];
   };
 
-const getClinicalData = (staffId) => {
+  const getClinicalData = (staffId) => {
     const isArchive = dataYear !== '2026';
 
     if (isArchive) {
       const normalize = (str) => String(str || "").toLowerCase().replace(/[\s_]/g, '');
       const cleanStaffId = normalize(staffId);
-
-      const staffMember = filteredTeamData.find(s => 
-        normalize(s.id) === cleanStaffId || normalize(s.staff_name) === cleanStaffId
-      );
-
-      const clinicalItem = staffMember?.projects?.find(p => 
-        p.title && String(p.title).toLowerCase().includes("clinical load")
-      );
+      const staffMember = filteredTeamData.find(s => normalize(s.id) === cleanStaffId || normalize(s.staff_name) === cleanStaffId);
+      const clinicalItem = staffMember?.projects?.find(p => p.title && String(p.title).toLowerCase().includes("clinical load"));
 
       if (clinicalItem && Array.isArray(clinicalItem.monthly_hours)) {
         return MONTHS.map((m, i) => {
             const hours = clinicalItem.monthly_hours[i] || 0;
-            const percentage = Math.round((hours / 168) * 100);
-            return { name: m, value: percentage };
+            return { name: m, value: Math.round((hours / 168) * 100) };
         });
       }
     }
 
-    // 🛡️ THE FIX: Find the correct name regardless of uppercase/lowercase
     const staffKey = Object.keys(activeStaffLoads).find(k => k.toLowerCase() === staffId.toLowerCase()) || staffId;
     const data = activeStaffLoads[staffKey] || Array(12).fill(0);
     return MONTHS.map((m, i) => ({ name: m, value: data[i] || 0 }));
   };
 
-  // 5. ATTENDANCE CHART
   const getAttendanceForView = () => {
-      const targetYear = dataYear;
-      // Fallback for demo attendance
       const rawValues = isDemo 
         ? [120, 145, 160, 155, 180, 190, 195, 185, 200, 210, 190, 180] 
-        : (attendanceData[targetYear] || Array(12).fill(0));
+        : (attendanceData[dataYear] || Array(12).fill(0));
       return MONTHS.map((m, i) => ({ name: m, value: rawValues[i] }));
   };
   
   const handleLogout = async () => { 
-    if (isDemo) {
-      toggleDemo();
-    } else {
-      await signOut(auth); 
-    }
+    if (isDemo) toggleDemo();
+    else await signOut(auth); 
     setIsAdminOpen(false); 
     setCurrentView('dashboard');
   };
   
-  // Custom Pie Label
   const renderCustomizedLabel = ({ cx, cy, midAngle, innerRadius, outerRadius, percent }) => {
     const radius = innerRadius + (outerRadius - innerRadius) * 0.5;
     const x = cx + radius * Math.cos(-midAngle * Math.PI / 180);
@@ -389,8 +310,6 @@ const getClinicalData = (staffId) => {
     );
   };
 
-  // --- RENDER GUARDS ---
-  
   if (authLoading) return (
       <div className="min-h-screen flex items-center justify-center bg-slate-50 dark:bg-slate-900">
           <div className="animate-spin w-10 h-10 border-4 border-indigo-600 rounded-full border-t-transparent"></div>
@@ -435,7 +354,6 @@ const getClinicalData = (staffId) => {
          </div>
       </div>
 
-   {/* AI Smart Report */}
       <div className="md:col-span-2 mb-6">
         <SmartReportView 
           year={dataYear} 
@@ -445,7 +363,6 @@ const getClinicalData = (staffId) => {
         />
       </div>
 
-      {/* PIE CHART SECTION */}
       <div className="bg-white dark:bg-slate-800 p-6 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-700 mb-6">
         <h2 className="text-sm font-bold text-slate-400 uppercase tracking-wider mb-4">Domain Distribution ({dataYear})</h2>
           <div className="h-[500px] w-full flex items-center justify-center overflow-visible"> 
@@ -462,30 +379,13 @@ const getClinicalData = (staffId) => {
               >
                 {getPieData().map((entry, index) => <Cell key={`cell-${index}`} fill={entry.fill} />)}
               </Pie> 
-              
-              <Tooltip 
-                contentStyle={{ backgroundColor: '#1e293b', border: 'none', borderRadius: '12px' }}
-                itemStyle={{ color: '#ffffff', fontSize: '12px', fontWeight: 'bold' }}
-                labelStyle={{ color: '#ffffff', marginBottom: '4px' }}
-              />
-              
-              <Legend 
-                verticalAlign="bottom" 
-                height={36} 
-                iconType="circle" 
-                wrapperStyle={{ paddingTop: '50px' }}
-                formatter={(value) => (
-                  <span className="text-slate-700 dark:text-slate-300 font-bold ml-1 text-xs uppercase tracking-wide">
-                    {value}
-                  </span>
-                )}
-              />
+              <Tooltip contentStyle={{ backgroundColor: '#1e293b', border: 'none', borderRadius: '12px' }} itemStyle={{ color: '#ffffff', fontSize: '12px', fontWeight: 'bold' }} labelStyle={{ color: '#ffffff', marginBottom: '4px' }} />
+              <Legend verticalAlign="bottom" height={36} iconType="circle" wrapperStyle={{ paddingTop: '50px' }} formatter={(value) => (<span className="text-slate-700 dark:text-slate-300 font-bold ml-1 text-xs uppercase tracking-wide">{value}</span>)} />
             </PieChart>
           </ResponsiveContainer>
         </div>
       </div>
 
-      {/* TASK & PROJECT COMPLETION SECTION */}
       <div className="bg-white dark:bg-slate-800 p-6 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-700">
         <h2 className="text-sm font-bold text-slate-400 uppercase tracking-wider mb-4">Task & Project Completion ({dataYear})</h2>
         <div className="h-64">
@@ -505,7 +405,6 @@ const getClinicalData = (staffId) => {
         </div>
       </div>
 
-      {/* Row 2: Attendance Line Chart */}
       <div className="md:col-span-2 bg-white dark:bg-slate-800 p-6 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-700 mt-6">
         <h2 className="text-sm font-bold text-slate-400 uppercase tracking-wider mb-6">
             Monthly Patient Attendance ({dataYear})
@@ -524,43 +423,27 @@ const getClinicalData = (staffId) => {
         </div>
       </div>
 
-{/* Row 3: Individual Clinical Load (UNIFIED & FIXED) */}
       <div className="md:col-span-2 bg-white dark:bg-slate-800 p-6 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-700 mt-6">
-        <h2 className="text-sm font-bold text-slate-400 uppercase tracking-wider mb-6">Individual Clinical Load ({dataYear})</h2>
+        <h2 className="text-sm font-bold text-slate-400 uppercase tracking-wider mb-6">Individual Clinical Load</h2>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          
-          {/* UNIFIED LOGIC: Handles both Demo and Live perfectly */}
           {(isDemo ? activeStaffList.map(name => ({ id: name.toLowerCase(), name })) : TEAM_DIRECTORY.filter(m => m.role === 'staff' || m.id === 'alif')).map((member) => {
-            
-            // 🧮 1. DO THE MATH INSIDE THE LOOP USING "member.id"
             const chartData = getClinicalData(member.id);
             const yearlyTotal = chartData.reduce((sum, month) => sum + (month.value || 0), 0);
 
-            // 🖼️ 2. RENDER THE CARD
             return (
               <div key={member.id} className="bg-slate-50 dark:bg-slate-900/50 p-4 rounded-xl border border-slate-200 dark:border-slate-700">
                 <div className="flex justify-between items-center mb-4">
                   <h3 className="font-bold text-slate-700 dark:text-slate-200">{member.name}</h3>
-                  
-                  {/* 👇 THE DYNAMIC TOTAL BADGE */}
                   <span className="text-[10px] font-black uppercase text-orange-500 bg-orange-50 dark:bg-orange-900/30 px-2 py-0.5 rounded-full">
                     Total: {Math.round(yearlyTotal)} hours
                   </span>
                 </div>
-                
                 <div className="h-32 mt-4">
                   <ResponsiveContainer width="100%" height="100%">
                     <BarChart data={chartData}>
                       <YAxis domain={[0, 60]} hide={true} />
-                        <ReferenceLine 
-                        y={30} 
-                        stroke="#f59e0b" 
-                        strokeDasharray="3 3" 
-                        label={{ position: 'right', value: '30%', fill: '#f59e0b', fontSize: 10, fontWeight: 'bold' }} 
-                      />
-                      
+                        <ReferenceLine y={30} stroke="#f59e0b" strokeDasharray="3 3" label={{ position: 'right', value: '30%', fill: '#f59e0b', fontSize: 10, fontWeight: 'bold' }} />
                       <Tooltip cursor={{fill: 'rgba(0,0,0,0.05)', radius: 4}} content={<CustomBarTooltip />} />
-                      
                       <Bar dataKey="value" radius={[4, 4, 0, 0]}>
                           {chartData.map((entry, index) => (
                               <Cell key={`cell-${index}`} fill={CLINICAL_GRADIENT[index] || '#FFCC99'} />
@@ -569,7 +452,6 @@ const getClinicalData = (staffId) => {
                     </BarChart>
                   </ResponsiveContainer>
                 </div>
-
                 <div className="flex justify-between mt-2 px-1">
                   {['Jan', 'Apr', 'Jul', 'Oct'].map(m => <span key={m} className="text-[10px] text-slate-400 font-bold">{m}</span>)}
                 </div>
@@ -579,7 +461,6 @@ const getClinicalData = (staffId) => {
         </div>
       </div>
 
-      {/* Row 4: Department Overview */}
       <div className="md:col-span-2 mt-8">
         <h2 className="text-sm font-bold text-slate-400 uppercase tracking-wider mb-6">
             Department Overview ({dataYear})
@@ -594,18 +475,9 @@ const getClinicalData = (staffId) => {
             <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
               {CUSTOM_DOMAIN_ORDER.map((domain) => (
                 <div key={domain} className="flex flex-col gap-3">
-                  
-                  {/* SOLID COLOR COLUMN HEADERS */}
-                  <div 
-                    className="p-3 rounded-lg text-center shadow-sm border border-slate-200/50" 
-                    style={{ backgroundColor: DOMAIN_COLORS[domain] }} 
-                  >
-                    <h3 className="font-black text-slate-900 text-sm tracking-wide uppercase">
-                      {domain}
-                    </h3>
+                  <div className="p-3 rounded-lg text-center shadow-sm border border-slate-200/50" style={{ backgroundColor: DOMAIN_COLORS[domain] }}>
+                    <h3 className="font-black text-slate-900 text-sm tracking-wide uppercase">{domain}</h3>
                   </div>
-
-                  {/* Project Cards */}
                   <div className="flex flex-col gap-2">
                     {filteredTeamData.map(staff => (
                       (staff.projects || []).filter(p => p.domain_type === domain).map((p, idx) => (
@@ -651,7 +523,6 @@ const getClinicalData = (staffId) => {
       <div className="md:col-span-2 flex flex-col items-center justify-center py-24 md:py-32 px-4 text-center animate-in fade-in zoom-in duration-500">
         <div className="relative mb-8">
           <div className="absolute inset-0 bg-indigo-500 blur-3xl opacity-20 rounded-full w-32 h-32 animate-pulse" />
-          {/* The Shaking Gift Icon */}
           <Gift size={80} className="text-indigo-500 relative z-10 animate-shake origin-bottom drop-shadow-2xl" />
         </div>
         <h2 className="text-3xl font-black text-slate-800 dark:text-white tracking-tight mb-4">
@@ -667,27 +538,20 @@ const getClinicalData = (staffId) => {
     </>
   );
 
-// --- MAIN RENDER RETURN ---
   return (
       <ResponsiveLayout 
         activeTab={currentView} 
         onNavigate={setCurrentView}
         floatingWidgets={
           <>
-            {/* 📖 THE GUIDE COMPONENT */}
             <AppGuide isOpen={isGuideOpen} onClose={() => setIsGuideOpen(false)} />
-    
-            {/* The Invisible Bug Listener */}
             <FeedbackWidget user={user} />
-            
-            {/* The AURA Greeting & Bot */}
             <AuraGreeting openAuraChat={() => setIsAuraOpen(true)} dailyPatientLoad={145} />
             <AuraPulseBot isOpen={isAuraOpen} onClose={() => setIsAuraOpen(false)} />
           </>
         }
       >
       
-      {/* DEMO BANNER */}
       {isDemo && (
         <div className="md:col-span-2 bg-emerald-50 border border-emerald-200 rounded-lg p-3 mb-4 flex items-center justify-between animate-in slide-in-from-top">
           <div className="flex items-center gap-2">
@@ -744,8 +608,6 @@ const getClinicalData = (staffId) => {
           
         {/* ACTION BUTTONS */}
         <div className="flex items-center justify-end gap-2 md:gap-3 shrink-0">
-          
-          {/* Toggle */}
           <div className="flex items-center gap-2 border-r border-slate-200 dark:border-slate-700 pr-2 mr-1">
             <span className={`text-[10px] font-bold uppercase ${isDemo ? 'text-emerald-600' : 'text-slate-400'}`}>
                {isDemo ? 'Demo' : 'Live'}
@@ -758,12 +620,10 @@ const getClinicalData = (staffId) => {
             </button>
           </div>
 
-          {/* Theme Toggle */}
           <button onClick={toggleTheme} className="p-2 rounded-full transition-all text-slate-600 dark:text-slate-300 active:scale-95 active:bg-slate-200 dark:active:bg-slate-700 sm:hover:bg-slate-100 dark:sm:hover:bg-slate-700 border border-transparent sm:hover:border-slate-200">
             {isDark ? <Sun size={18} /> : <Moon size={18} />}
           </button>
           
-          {/* Admin Button */}
           {(user?.role === 'admin' || isDemo) && (
             <button 
               onClick={() => setIsAdminOpen(!isAdminOpen)} 
@@ -773,7 +633,6 @@ const getClinicalData = (staffId) => {
             </button>
           )}
 
-          {/* Logout Button */}
           <button onClick={handleLogout} className="p-2 text-slate-400 hover:text-red-500 transition-colors bg-slate-50 dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700">
               <LogOut size={18} />
           </button>
@@ -783,7 +642,6 @@ const getClinicalData = (staffId) => {
      {/* MAIN CONTENT AREA */}
      {(isAdminOpen && (user?.role === 'admin' || isDemo)) ? (
        <div className="md:col-span-2">
-         {/* 🛡️ FIREWALL APPLIED TO ADMIN */}
          <AdminPanel teamData={activeTeamData} staffLoads={activeStaffLoads} user={user} />
        </div>
      ) : (
