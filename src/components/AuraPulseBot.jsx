@@ -124,20 +124,23 @@ export default function AuraPulseBot({ user, isOpen, onClose, onOpen }) {
     }, [isDemo, user, setMessages, onOpen]);
 
     // ── Session start ─────────────────────────────────────────────────────────
-    const startSession = useCallback((persona) => {
+const startSession = useCallback((persona) => {
         setSelectedPersona(persona);
         setPendingLog(null);
+
+        // Safely grab the first name from either displayName or name
+        const firstName = (user?.displayName || user?.name || 'there').split(' ')[0];
 
         const isAnon = persona.id === 'anon';
         let greeting;
         if (isDemo) {
             greeting = isAnon
                 ? '🔒 Ghost Protocol engaged. Your identity is masked. How can I support you today?'
-                : `[SIMULATION] Hi ${persona.name}. AURA here. What kind of support do you need today?`;
+                : `[SIMULATION] Hi ${persona.name}. AURA here. What do you need?`;
         } else if (persona.memory) {
-            greeting = `Welcome back, ${(user?.name ?? 'there').split(' ')[0]}. Last time we spoke, I noted: "${persona.memory}". How can I support your workflow or wellbeing today?`;
+            greeting = `Welcome back, ${firstName}. Last time we spoke, I noted: "${persona.memory}". How can I support your workflow or wellbeing today?`;
         } else {
-            greeting = `Hi ${(user?.name ?? 'there').split(' ')[0]}. AURA here. What kind of support do you need today?`;
+            greeting = `Hi ${firstName}. AURA here. What kind of support do you need today?`;
         }
 
         setMessages([{ role: 'bot', text: greeting, isGreeting: true, mode: 'NEUTRAL' }]);
@@ -154,21 +157,24 @@ export default function AuraPulseBot({ user, isOpen, onClose, onOpen }) {
 
     const [isListening, setIsListening] = useState(false);
 
-    const handleClearChat = useCallback(() => {
+   const handleClearChat = useCallback(() => {
         if (!window.confirm("Clear this conversation and start fresh?")) return;
         
         setPendingLog(null);
+        
+        // Safely grab the first name from either displayName or name
+        const firstName = (user?.displayName || user?.name || 'there').split(' ')[0];
         
         const isAnon = selectedPersona?.id === 'anon';
         let greeting;
         if (isDemo) {
             greeting = isAnon
                 ? '🔒 Ghost Protocol engaged. Your identity is masked. How can I support you today?'
-                : `[SIMULATION] Hi ${selectedPersona?.name}. AURA here. What kind of support do you need today?`;
+                : `[SIMULATION] Hi ${selectedPersona?.name}. AURA here. How can I help?`;
         } else if (liveMemory) {
-            greeting = `Welcome back, ${(user?.name ?? 'there').split(' ')[0]}. Last time we spoke, I noted: "${liveMemory}". How can I support your workflow or wellbeing today?`;
+            greeting = `Welcome back, ${firstName}. Last time we spoke, I noted: "${liveMemory}". How can I support your workflow or wellbeing today?`;
         } else {
-            greeting = `Hi ${(user?.name ?? 'there').split(' ')[0]}. AURA here. What kind of support do you need today?`;
+            greeting = `Hi ${firstName}. AURA here. What kind of support do you need today?`;
         }
 
         setMessages([{ role: 'bot', text: greeting, isGreeting: true, mode: 'NEUTRAL' }]);
