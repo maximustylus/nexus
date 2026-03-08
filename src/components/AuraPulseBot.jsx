@@ -8,7 +8,6 @@ import {
   AlertTriangle, WifiOff, FileText, CheckCircle, Database, Trash2, Download, 
   Mic, ChevronLeft, CalendarCheck 
 } from 'lucide-react';
-import { Document, Packer, Paragraph, TextRun, HeadingLevel } from 'docx';
 import { DEMO_PERSONAS, LIVE_PERSONAS } from '../config/personas';
 import { db } from '../firebase'; 
 import { getFunctions, httpsCallable } from 'firebase/functions';
