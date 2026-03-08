@@ -234,13 +234,15 @@ export default function AuraPulseBot({ user, isOpen, onClose, onOpen }) {
                 }));
 
             const contextPrompt = isDemo
-                ? `System Note: The user's exact database ID is '${selectedPersona?.id}'.\n${selectedPersona?.prompt ?? ''}`
+                ? `System Note: The user's exact database ID is '${selectedPersona?.id}'.\n\n${selectedPersona?.prompt ?? ''}`
                 : [
                     `System Note: The user's exact database ID is '${user?.id}'.`,
                     user?.title ? `This staff member is a ${user.title} at KKH/SingHealth.` : '',
                     user?.department ? `Department: ${user.department}.` : '',
                     liveMemory ? `Prior session note: "${liveMemory}".` : 'This is their first session with AURA.',
-                  ].filter(Boolean).join(' ');
+                    // ↓ THIS WAS MISSING IN LIVE MODE ↓
+                    selectedPersona?.prompt ? `\n\n${selectedPersona.prompt}` : '' 
+                  ].filter(Boolean).join('\n');
 
             const result = await secureChatWithAura({
                 userText: text,
