@@ -74,7 +74,7 @@ function NexusApp() {
   const { isDemo, toggleDemo } = useNexus(); 
   
   const [currentView, setCurrentView] = useState('pulse');
-  const [dataYear, setDataYear] = useState('2026'); // 🌟 NEW UNIFIED YEAR
+  const [dataYear, setDataYear] = useState('2026');
   const [isAdminOpen, setIsAdminOpen] = useState(false);
   const [isAuraOpen, setIsAuraOpen] = useState(false);
 
@@ -159,7 +159,6 @@ function NexusApp() {
     if (isDemo) {
       console.log("🧪 [NEXUS] Loading Marvel Universe...");
     } else {
-      // 🌟 MAGIC: Target Collection shifts automatically based on the Year Dropdown
       const targetCollection = dataYear === '2026' ? 'cep_team' : `archive_${dataYear}`;
       console.log(`📡 [NEXUS] Fetching from: ${targetCollection}`);
 
@@ -542,12 +541,12 @@ function NexusApp() {
       <ResponsiveLayout 
         activeTab={currentView} 
         onNavigate={setCurrentView}
-        floatingWidgets={
+floatingWidgets={
           <>
             <AppGuide isOpen={isGuideOpen} onClose={() => setIsGuideOpen(false)} />
             <FeedbackWidget user={user} />
             <AuraGreeting openAuraChat={() => setIsAuraOpen(true)} dailyPatientLoad={145} />
-            <AuraPulseBot isOpen={isAuraOpen} onClose={() => setIsAuraOpen(false)} />
+            <AuraPulseBot isOpen={isAuraOpen} onClose={() => setIsAuraOpen(false)} user={user} />
           </>
         }
       >
