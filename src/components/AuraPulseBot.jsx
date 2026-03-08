@@ -42,8 +42,8 @@ const SEND_COOLDOWN_MS = 2000;
 // =============================================================================
 // COMPONENT: Now fully controlled by props (isOpen, onClose, onOpen)
 // =============================================================================
-export default function AuraPulseBot({ isOpen, onClose, onOpen }) {
-    const { isDemo, auraHistory, setAuraHistory, user } = useNexus();
+export default function AuraPulseBot({ isOpen, onClose, onOpen, user }) {
+    const { isDemo, auraHistory, setAuraHistory } = useNexus();
 
     // ── State ─────────────────────────────────────────────────────────────────
     const [view,              setView]              = useState('SELECT');
