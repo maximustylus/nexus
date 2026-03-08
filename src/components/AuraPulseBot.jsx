@@ -1,3 +1,7 @@
+import { 
+  Document, Packer, Paragraph, TextRun, HeadingLevel, 
+  Table, TableRow, TableCell, WidthType 
+} from 'docx';
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { 
   Bot, Bug, X, Send, BrainCircuit, Shield, Ghost, Users, Zap, RefreshCw, 
@@ -428,15 +432,71 @@ export default function AuraPulseBot({ user, isOpen, onClose, onOpen }) {
         try {
             const lines = text.split('\n');
             const docChildren = [];
+            
+            // State trackers for table generation
+            let inTable = false;
+            let tableRows = [];
 
-            for (const line of lines) {
-                const trimmed = line.trim();
+            // Helper function: Parses bold text (**) for both regular paragraphs and table cells
+            const processTextWithBold = (textStr) => {
+                const parts = textStr.split('**');
+                return parts.map((part, index) => {
+                    return new TextRun({ text: part, bold: index % 2 === 1 }); 
+                });
+            };
+
+            for (let i = 0; i < lines.length; i++) {
+                const trimmed = lines[i].trim();
                 
+                // 1. Handle Empty Lines
                 if (!trimmed) {
+                    if (inTable) {
+                        // Close and render the table if we hit an empty line
+                        docChildren.push(new Table({ 
+                            rows: tableRows, 
+                            width: { size: 100, type: WidthType.PERCENTAGE } 
+                        }));
+                        inTable = false;
+                        tableRows = [];
+                    }
                     docChildren.push(new Paragraph({ text: "" }));
                     continue;
                 }
 
+                // 2. Handle Markdown Tables (Lines starting and ending with the pipe character)
+                if (trimmed.startsWith('|') && trimmed.endsWith('|')) {
+                    inTable = true;
+                    
+                    // Skip the markdown separator row (e.g., |:---|:---|)
+                    if (/^\|[\s\-:]+\|/.test(trimmed)) continue;
+
+                    // Extract cell content, ignoring the first and last empty splits from the outer pipes
+                    const cellContents = trimmed.split('|').slice(1, -1).map(c => c.trim());
+                    
+                    const tableRow = new TableRow({
+                        children: cellContents.map(cellText => {
+                            return new TableCell({
+                                children: [new Paragraph({ children: processTextWithBold(cellText) })],
+                                margins: { top: 100, bottom: 100, left: 100, right: 100 },
+                            });
+                        })
+                    });
+                    
+                    tableRows.push(tableRow);
+                    continue;
+                }
+
+                // 3. Handle End of Table (If the next line has text but is NOT a table row)
+                if (inTable) {
+                    docChildren.push(new Table({ 
+                        rows: tableRows, 
+                        width: { size: 100, type: WidthType.PERCENTAGE } 
+                    }));
+                    inTable = false;
+                    tableRows = [];
+                }
+
+                // 4. Handle Standard Headings and Text
                 if (trimmed.startsWith('### ')) {
                     docChildren.push(new Paragraph({ text: trimmed.replace('### ', ''), heading: HeadingLevel.HEADING_3 }));
                 } else if (trimmed.startsWith('## ')) {
@@ -444,14 +504,19 @@ export default function AuraPulseBot({ user, isOpen, onClose, onOpen }) {
                 } else if (trimmed.startsWith('# ')) {
                     docChildren.push(new Paragraph({ text: trimmed.replace('# ', ''), heading: HeadingLevel.HEADING_1 }));
                 } else {
-                    const parts = trimmed.split('**');
-                    const textRuns = parts.map((part, index) => {
-                        return new TextRun({ text: part, bold: index % 2 === 1 }); 
-                    });
-                    docChildren.push(new Paragraph({ children: textRuns }));
+                    docChildren.push(new Paragraph({ children: processTextWithBold(trimmed) }));
                 }
             }
 
+            // Catch any table that reaches the very end of the document text
+            if (inTable && tableRows.length > 0) {
+                docChildren.push(new Table({ 
+                    rows: tableRows, 
+                    width: { size: 100, type: WidthType.PERCENTAGE } 
+                }));
+            }
+
+            // Build the final document
             const wordDoc = new Document({
                 sections: [{
                     properties: {},
@@ -490,7 +555,7 @@ export default function AuraPulseBot({ user, isOpen, onClose, onOpen }) {
                     newHistory[msgIndex].action = null; 
                 }
                 newHistory.push({
-                    role: 'bot', text: '✅ Document exported.', mode: 'ASSISTANT'
+                    role: 'bot', text: '✅ Document exported successfully with formatted tables.', mode: 'ASSISTANT'
                 });
                 return newHistory;
             });
