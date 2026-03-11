@@ -288,6 +288,7 @@ STRICT JSON OUTPUT FORMAT:
 exports.chatWithAura = onCall({
     cors: true,
     secrets: ['GEMINI_API_KEY'],
+    timeoutSeconds: 120, // 🌟 FIX 1: Give the Firebase server 2 full minutes to stay awake
 }, async (request) => {
 
     const { userText, history = [], role = 'Staff', prompt = '', isDemo, attachments = [] } = request.data;
@@ -302,10 +303,9 @@ exports.chatWithAura = onCall({
         const turnIndex      = history.length;
         const diagnosisReady = turnIndex >= 4;
 
-        // FIXED: Removed the prompt override from the user message. 
-        // We will inject it into the System Instruction instead.
         const contextualMessage = [
             `USER ROLE: ${role}`,
+            prompt ? `CONTEXT/OVERRIDE: ${prompt}` : '',
             `CONVERSATION TURN: ${Math.floor(turnIndex/2) + 1}`,
             diagnosisReady
                 ? 'INSTRUCTION: If in COACH mode, and sufficient context is gathered, provide full Phase/Energy/Action assessment now.'
@@ -313,12 +313,8 @@ exports.chatWithAura = onCall({
             `USER SAYS: "${userText.trim()}"`,
         ].filter(Boolean).join('\n');
 
-        // FIXED: Updated the trigger condition to match your specific prompts.
-        const isStrictFormatting = prompt.includes('System Override: You are an elite') || prompt.includes('Magnify Mama');
+        const isStrictFormatting = prompt.includes('Project HUGE') || prompt.includes('Magnify Mama');
         const dynamicTemperature = isStrictFormatting ? 0.1 : 0.7;
-        
-        // FIXED: Dynamically merge the persona prompt into the master System Prompt
-        const activeSystemPrompt = prompt ? `${AURA_SYSTEM_PROMPT}\n\n[ACTIVE PERSONA OVERRIDE]\n${prompt}` : AURA_SYSTEM_PROMPT;
 
         const userParts = [{ text: contextualMessage }];
         
@@ -337,10 +333,10 @@ exports.chatWithAura = onCall({
         const response = await fetch(url, {
             method:  'POST',
             headers: { 'Content-Type': 'application/json' },
-            signal:  AbortSignal.timeout(30000), 
+            signal:  AbortSignal.timeout(90000), // 🌟 FIX 2: Give Gemini 90 seconds to write the Grant
             body: JSON.stringify({
                 systemInstruction: {                
-                    parts: [{ text: activeSystemPrompt }], // <--- Now holds system-level authority
+                    parts: [{ text: AURA_SYSTEM_PROMPT }],
                 },
                 contents: [
                     ...history
@@ -348,7 +344,7 @@ exports.chatWithAura = onCall({
                         .map(({ role, parts }) => ({ role, parts })),
                     {
                         role:  'user',
-                        parts: userParts, 
+                        parts: userParts,
                     },
                 ],
                 generationConfig: {
