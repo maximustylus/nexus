@@ -892,7 +892,6 @@ export default function AuraPulseBot({ isOpen, onClose, onOpen, user }) {
                                 </div>
                             </div>
                           
-                                ) : (
                                     <div className="space-y-4">
                                         {messages.map((m, i) => {
                                             const isAssistant = m.mode === 'ASSISTANT' || m.mode === 'RESEARCH';
