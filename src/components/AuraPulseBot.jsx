@@ -6,7 +6,7 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { 
   Bot, Bug, X, Send, BrainCircuit, Shield, Ghost, Users, Zap, RefreshCw, 
   AlertTriangle, WifiOff, FileText, CheckCircle, Database, Trash2, Download, 
-  Mic, ChevronLeft, CalendarCheck 
+  Mic, ChevronLeft, CalendarCheck, Maximize2, Minimize2, Minus 
 } from 'lucide-react';
 import { DEMO_PERSONAS, LIVE_PERSONAS } from '../config/personas';
 import { db } from '../firebase'; 
@@ -47,6 +47,7 @@ export default function AuraPulseBot({ isOpen, onClose, onOpen, user }) {
 
     // ── State ─────────────────────────────────────────────────────────────────
     const [view,              setView]              = useState('SELECT');
+    const [chatSize,          setChatSize]          = useState('normal'); // 🌟 NEW: 'normal' | 'maximized' | 'minimized'
     const [selectedPersona, setSelectedPersona] = useState(null); 
     const [input,             setInput]             = useState('');
     const [loading,          setLoading]          = useState(false);
@@ -85,8 +86,10 @@ export default function AuraPulseBot({ isOpen, onClose, onOpen, user }) {
     }, []);
 
     useEffect(() => {
-        messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-    }, [messages, loading, pendingLog]);
+        if (chatSize !== 'minimized') {
+            messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+        }
+    }, [messages, loading, pendingLog, chatSize]);
     
     useEffect(() => {
         window.dispatchEvent(new CustomEvent('aura-toggled', { detail: isOpen }));
@@ -227,6 +230,11 @@ export default function AuraPulseBot({ isOpen, onClose, onOpen, user }) {
         if (typeof overrideText !== 'string') setInput('');
         setLoading(true);
         setPendingLog(null);
+        
+        // Auto-expand if user sends a message while minimized
+        if (chatSize === 'minimized') {
+            setChatSize('normal');
+        }
 
         try {
             const rawHistory = messages.filter(
@@ -301,7 +309,7 @@ export default function AuraPulseBot({ isOpen, onClose, onOpen, user }) {
             setLoading(false);
             setIsSending(false);
         }
-    }, [input, loading, isSending, isOnline, messages, selectedPersona, isDemo, liveMemory, user, setMessages]);
+    }, [input, loading, isSending, isOnline, messages, selectedPersona, isDemo, liveMemory, user, setMessages, chatSize]);
 
     const handleKeyDown = useCallback((e) => {
             if (e.key === 'Enter' && !e.repeat) {
@@ -739,13 +747,47 @@ export default function AuraPulseBot({ isOpen, onClose, onOpen, user }) {
         }
     }, [isDemo, user, setMessages]);
 
+    // 🌟 NEW: Built-in Markdown Parser for Chat Bubbles
+    const formatChatText = (text) => {
+        if (!text) return null;
+        return text.split('\n').map((line, i) => {
+            const trimmedLine = line.trim();
+            if (!trimmedLine) return <div key={i} className="h-2" />; // Spacing
+
+            // Handle Bolding
+            const parts = trimmedLine.split(/(\*\*.*?\*\*)/g);
+            const formattedLine = parts.map((part, j) => {
+                if (part.startsWith('**') && part.endsWith('**')) {
+                    return <strong key={j} className="font-bold">{part.replace(/\*\*/g, '')}</strong>;
+                }
+                return part;
+            });
+
+            // Handle Bullet Points
+            if (trimmedLine.startsWith('* ') || trimmedLine.startsWith('- ')) {
+                // Slice off the "* " or "- " and render the rest
+                const bulletContent = formattedLine.map((part, j) => 
+                    typeof part === 'string' && j === 0 ? part.replace(/^[\*\-]\s/, '') : part
+                );
+                return (
+                    <div key={i} className="flex items-start mt-1.5 ml-1">
+                        <span className="mr-2 text-current opacity-70">•</span>
+                        <span>{bulletContent}</span>
+                    </div>
+                );
+            }
+
+            return <div key={i} className="mt-1.5">{formattedLine}</div>;
+        });
+    };
+
     const isAnonymous = selectedPersona?.id === 'anon';
     const inputLength = input.length;
     const isNearLimit = inputLength > MAX_INPUT * 0.8;
 
     return (
         <>
-            {isOpen && (
+            {isOpen && chatSize !== 'minimized' && (
                 <div 
                     className="fixed inset-0 z-[90] bg-slate-900/40 backdrop-blur-sm transition-all animate-in fade-in duration-300"
                     onClick={onClose} 
@@ -756,7 +798,12 @@ export default function AuraPulseBot({ isOpen, onClose, onOpen, user }) {
                 {isOpen && (
                     <div
                         role="dialog" aria-modal="true" aria-label="AURA Pulse wellbeing assistant"
-                        className="mb-2 sm:mb-4 w-[calc(100vw-2rem)] sm:w-[380px] h-[100dvh] md:h-[660px] max-h-[calc(100dvh-100px)] bg-white dark:bg-slate-900 rounded-[2rem] shadow-2xl border border-slate-200 dark:border-slate-800 flex flex-col overflow-hidden animate-in slide-in-from-bottom-4 zoom-in-95 duration-300"
+                        // 🌟 THE FIX: Dynamic Tailwind classes based on chatSize
+                        className={`mb-2 sm:mb-4 bg-white dark:bg-slate-900 shadow-2xl border border-slate-200 dark:border-slate-800 flex flex-col overflow-hidden transition-all duration-300 ease-in-out
+                            ${chatSize === 'minimized' ? 'w-[calc(100vw-2rem)] sm:w-[380px] h-[64px] rounded-[1.5rem]' : ''}
+                            ${chatSize === 'normal' ? 'w-[calc(100vw-2rem)] sm:w-[380px] h-[100dvh] md:h-[660px] max-h-[calc(100dvh-100px)] rounded-[2rem]' : ''}
+                            ${chatSize === 'maximized' ? 'w-[calc(100vw-2rem)] sm:w-[85vw] max-w-[1200px] h-[100dvh] md:h-[85vh] max-h-[900px] rounded-[2rem]' : ''}
+                        `}
                     >
                         <div className={`shrink-0 p-4 text-white flex justify-between items-center bg-gradient-to-r ${isAnonymous ? 'from-purple-800 to-indigo-900' : 'from-slate-900 to-indigo-950'}`}>
                             <div className="flex items-center gap-3">
@@ -783,7 +830,7 @@ export default function AuraPulseBot({ isOpen, onClose, onOpen, user }) {
                             <div className="flex items-center gap-1.5">
                                 {!isOnline && <WifiOff size={13} className="text-yellow-300" />}
                                 
-                                {view === 'CHAT' && (
+                                {view === 'CHAT' && chatSize !== 'minimized' && (
                                     <button 
                                         onClick={handleClearChat} 
                                         aria-label="Clear Chat" 
@@ -794,250 +841,273 @@ export default function AuraPulseBot({ isOpen, onClose, onOpen, user }) {
                                     </button>
                                 )}
 
-                                <button 
-                                    onClick={() => {
-                                        window.dispatchEvent(new CustomEvent('open-bug-report'));
-                                        if (onClose) onClose(); 
-                                    }}
-                                    title="Report a Bug"
-                                    className="flex items-center gap-1 px-2 py-1.5 bg-white/10 hover:bg-white/20 rounded-lg transition-all text-white text-[10px] font-bold uppercase tracking-wider"
-                                >
-                                    <Bug size={13} className="text-amber-400" />
-                                    <span className="hidden sm:inline">Report</span>
-                                </button>
+                                {chatSize !== 'minimized' && (
+                                    <button 
+                                        onClick={() => {
+                                            window.dispatchEvent(new CustomEvent('open-bug-report'));
+                                            if (onClose) onClose(); 
+                                        }}
+                                        title="Report a Bug"
+                                        className="flex items-center gap-1 px-2 py-1.5 bg-white/10 hover:bg-white/20 rounded-lg transition-all text-white text-[10px] font-bold uppercase tracking-wider"
+                                    >
+                                        <Bug size={13} className="text-amber-400" />
+                                        <span className="hidden sm:inline">Report</span>
+                                    </button>
+                                )}
 
-                                <button onClick={onClose} aria-label="Close AURA" className="p-1.5 hover:bg-white/20 rounded-lg transition-all">
+                                {/* 🌟 NEW: WINDOW CONTROLS */}
+                                <div className="flex items-center gap-1 bg-white/10 rounded-lg p-0.5 ml-2">
+                                    <button 
+                                        onClick={() => setChatSize(chatSize === 'minimized' ? 'normal' : 'minimized')}
+                                        className="p-1 hover:bg-white/20 rounded-md transition-all text-white/80 hover:text-white"
+                                        title="Minimize"
+                                    >
+                                        <Minus size={14} />
+                                    </button>
+                                    <button 
+                                        onClick={() => setChatSize(chatSize === 'maximized' ? 'normal' : 'maximized')}
+                                        className="p-1 hover:bg-white/20 rounded-md transition-all text-white/80 hover:text-white"
+                                        title={chatSize === 'maximized' ? 'Restore' : 'Maximize'}
+                                    >
+                                        {chatSize === 'maximized' ? <Minimize2 size={14} /> : <Maximize2 size={14} />}
+                                    </button>
+                                </div>
+
+                                <button onClick={onClose} aria-label="Close AURA" className="p-1.5 hover:bg-white/20 rounded-lg transition-all ml-1">
                                     <X size={18} />
                                 </button>
                             </div>
                         </div>
 
-                        {!isOnline && (
+                        {!isOnline && chatSize !== 'minimized' && (
                             <div className="shrink-0 flex items-center gap-2 px-4 py-2 bg-yellow-50 border-b border-yellow-200">
                                 <WifiOff size={12} className="text-yellow-600 flex-shrink-0" />
                                 <p className="text-[10px] font-semibold text-yellow-700">You are offline. AURA cannot process new requests.</p>
                             </div>
                         )}
 
-                        <div className="flex-1 overflow-y-auto p-5 bg-slate-50 dark:bg-slate-950/50 scroll-smooth">
-                            {view === 'SELECT' ? (
-                                <div className="space-y-5 animate-in fade-in duration-300">
-                                    <div className="text-center">
-                                        <div className="w-10 h-10 bg-indigo-500/10 rounded-2xl flex items-center justify-center mx-auto mb-2 border border-indigo-500/20">
-                                            <Users size={20} className="text-indigo-500" />
+                        {chatSize !== 'minimized' && (
+                            <div className="flex-1 overflow-y-auto p-5 bg-slate-50 dark:bg-slate-950/50 scroll-smooth">
+                                {view === 'SELECT' ? (
+                                    <div className="space-y-5 animate-in fade-in duration-300">
+                                        <div className="text-center">
+                                            <div className="w-10 h-10 bg-indigo-500/10 rounded-2xl flex items-center justify-center mx-auto mb-2 border border-indigo-500/20">
+                                                <Users size={20} className="text-indigo-500" />
+                                            </div>
+                                            <h2 className="text-xs font-black text-slate-800 dark:text-white uppercase tracking-tighter">Identity Matrix</h2>
+                                            <p className="text-[10px] text-slate-400 font-semibold uppercase tracking-widest mt-0.5">Select a persona</p>
                                         </div>
-                                        <h2 className="text-xs font-black text-slate-800 dark:text-white uppercase tracking-tighter">Identity Matrix</h2>
-                                        <p className="text-[10px] text-slate-400 font-semibold uppercase tracking-widest mt-0.5">Select a persona</p>
+                                        <div role="listbox" className="grid grid-cols-2 gap-3">
+                                            {(isDemo ? DEMO_PERSONAS : LIVE_PERSONAS).map(p => (
+                                                <button key={p.id} onClick={() => startSession(p)} className="p-4 rounded-2xl bg-white border border-slate-200 hover:border-indigo-500 hover:-translate-y-0.5 transition-all text-left">
+                                                    <div className={`w-7 h-7 ${p.color} rounded-full mb-2.5 ring-2 ring-white`} />
+                                                    <h4 className="text-[11px] font-black text-slate-900 uppercase truncate">{p.name}</h4>
+                                                    <p className="text-[9px] text-slate-400 font-semibold uppercase truncate mb-2">{p.title}</p>
+                                                </button>
+                                            ))}
+                                        </div>
                                     </div>
-                                    <div role="listbox" className="grid grid-cols-2 gap-3">
-                                        {(isDemo ? DEMO_PERSONAS : LIVE_PERSONAS).map(p => (
-                                            <button key={p.id} onClick={() => startSession(p)} className="p-4 rounded-2xl bg-white border border-slate-200 hover:border-indigo-500 hover:-translate-y-0.5 transition-all text-left">
-                                                <div className={`w-7 h-7 ${p.color} rounded-full mb-2.5 ring-2 ring-white`} />
-                                                <h4 className="text-[11px] font-black text-slate-900 uppercase truncate">{p.name}</h4>
-                                                <p className="text-[9px] text-slate-400 font-semibold uppercase truncate mb-2">{p.title}</p>
-                                            </button>
-                                        ))}
-                                    </div>
-                                </div>
-                            ) : (
-                                <div className="space-y-4">
-                                    {messages.map((m, i) => {
-                                        const isAssistant = m.mode === 'ASSISTANT' || m.mode === 'RESEARCH';
-                                        const isDataEntry = m.mode === 'DATA_ENTRY';
-                                        const isAlert = m.mode === 'ROSTER_ALERT';
-                                        const bubbleStyle = m.role === 'user' 
-                                            ? (isAnonymous ? 'bg-purple-600 text-white rounded-tr-none' : 'bg-indigo-600 text-white rounded-tr-none')
-                                            : m.isError 
-                                                ? 'bg-red-50 text-red-600 rounded-tl-none border border-red-200'
-                                                : isAlert
-                                                    ? 'bg-amber-50 text-amber-900 rounded-tl-none border border-amber-200 shadow-xl ring-2 ring-amber-400/50'
-                                                    : isDataEntry
-                                                        ? 'bg-slate-900 text-emerald-50 rounded-tl-none border border-emerald-900 shadow-lg'
-                                                        : isAssistant 
-                                                            ? 'bg-slate-800 text-blue-50 rounded-tl-none border border-slate-700 shadow-lg'
-                                                            : 'bg-white text-slate-700 rounded-tl-none border border-slate-100 shadow-sm';
+                                ) : (
+                                    <div className="space-y-4">
+                                        {messages.map((m, i) => {
+                                            const isAssistant = m.mode === 'ASSISTANT' || m.mode === 'RESEARCH';
+                                            const isDataEntry = m.mode === 'DATA_ENTRY';
+                                            const isAlert = m.mode === 'ROSTER_ALERT';
+                                            const bubbleStyle = m.role === 'user' 
+                                                ? (isAnonymous ? 'bg-purple-600 text-white rounded-tr-none' : 'bg-indigo-600 text-white rounded-tr-none')
+                                                : m.isError 
+                                                    ? 'bg-red-50 text-red-600 rounded-tl-none border border-red-200'
+                                                    : isAlert
+                                                        ? 'bg-amber-50 text-amber-900 rounded-tl-none border border-amber-200 shadow-xl ring-2 ring-amber-400/50'
+                                                        : isDataEntry
+                                                            ? 'bg-slate-900 text-emerald-50 rounded-tl-none border border-emerald-900 shadow-lg'
+                                                            : isAssistant 
+                                                                ? 'bg-slate-800 text-blue-50 rounded-tl-none border border-slate-700 shadow-lg'
+                                                                : 'bg-white text-slate-700 rounded-tl-none border border-slate-100 shadow-sm';
 
-                                        // 🌟 Check if this message contains timeline dates
-                                        const hasTimelineDates = m.action && /\b\d{1,2}\s[A-Za-z]{3,9}\s\d{4}\b/.test(m.action);
+                                            const hasTimelineDates = m.action && /\b\d{1,2}\s[A-Za-z]{3,9}\s\d{4}\b/.test(m.action);
 
-                                        return (
-                                            <div key={i} className={`flex ${m.role === 'bot' ? 'justify-start' : 'justify-end'} animate-in fade-in slide-in-from-bottom-1`}>
-                                                <div className={`max-w-[87%] px-4 py-3.5 rounded-[1.5rem] text-sm leading-relaxed ${bubbleStyle}`}>
-                                                    
-                                                    {isAssistant && m.role === 'bot' && !m.isGreeting && (
-                                                        <div className="flex items-center gap-1.5 mb-2 text-[10px] font-black uppercase tracking-widest text-blue-400">
-                                                            <FileText size={12} /> {m.mode === 'RESEARCH' ? 'Academic Review' : 'Operations Assist'}
+                                            return (
+                                                <div key={i} className={`flex ${m.role === 'bot' ? 'justify-start' : 'justify-end'} animate-in fade-in slide-in-from-bottom-1`}>
+                                                    <div className={`max-w-[87%] px-4 py-3.5 rounded-[1.5rem] text-sm leading-relaxed ${bubbleStyle}`}>
+                                                        
+                                                        {isAssistant && m.role === 'bot' && !m.isGreeting && (
+                                                            <div className="flex items-center gap-1.5 mb-2 text-[10px] font-black uppercase tracking-widest text-blue-400">
+                                                                <FileText size={12} /> {m.mode === 'RESEARCH' ? 'Academic Review' : 'Operations Assist'}
+                                                            </div>
+                                                        )}
+                                                        {isDataEntry && m.role === 'bot' && !m.isGreeting && (
+                                                            <div className="flex items-center gap-1.5 mb-2 text-[10px] font-black uppercase tracking-widest text-emerald-400">
+                                                                <Database size={12} /> Database Agent
+                                                            </div>
+                                                        )}
+
+                                                        {m.isError && <AlertTriangle size={13} className="inline mr-1.5 mb-0.5 text-red-500" />}
+                                                        
+                                                        {/* 🌟 THE FIX: Render parsed Markdown instead of raw text */}
+                                                        <div className="leading-relaxed">
+                                                            {formatChatText(m.text)}
                                                         </div>
-                                                    )}
-                                                    {isDataEntry && m.role === 'bot' && !m.isGreeting && (
-                                                        <div className="flex items-center gap-1.5 mb-2 text-[10px] font-black uppercase tracking-widest text-emerald-400">
-                                                            <Database size={12} /> Database Agent
-                                                        </div>
-                                                    )}
+                                                        
+                                                        {isAssistant && m.action && !m.isGreeting && (
+                                                            <div className="mt-4 pt-3 border-t border-slate-600/50">
+                                                                <p className="text-[10px] font-medium text-slate-400 mb-2 uppercase tracking-wide">Extracted Data/Action:</p>
+                                                                <p className="text-xs text-blue-200 bg-slate-900/50 p-2 rounded-lg mb-3 border border-slate-700 font-mono line-clamp-3 overflow-hidden">
+                                                                    {m.action}
+                                                                </p>
+                                                                
+                                                                <div className="flex flex-col gap-2">
+                                                                    <div className="grid grid-cols-2 gap-2">
+                                                                        <button 
+                                                                            onClick={() => confirmAdminAction(m.action, i)}
+                                                                            disabled={loading}
+                                                                            className="py-2 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white text-[10px] font-bold uppercase tracking-wider rounded-xl transition-colors flex items-center justify-center gap-1.5"
+                                                                        >
+                                                                            {loading ? <RefreshCw size={13} className="animate-spin" /> : <CheckCircle size={13} />} 
+                                                                            Save to DB
+                                                                        </button>
 
-                                                    {m.isError && <AlertTriangle size={13} className="inline mr-1.5 mb-0.5 text-red-500" />}
-                                                    
-                                                    <div className="whitespace-pre-wrap">{m.text}</div>
-                                                    
-                                                    {isAssistant && m.action && !m.isGreeting && (
-                                                        <div className="mt-4 pt-3 border-t border-slate-600/50">
-                                                            <p className="text-[10px] font-medium text-slate-400 mb-2 uppercase tracking-wide">Extracted Data/Action:</p>
-                                                            <p className="text-xs text-blue-200 bg-slate-900/50 p-2 rounded-lg mb-3 border border-slate-700 font-mono line-clamp-3 overflow-hidden">
-                                                                {m.action}
-                                                            </p>
-                                                            
-                                                            <div className="flex flex-col gap-2">
-                                                                <div className="grid grid-cols-2 gap-2">
-                                                                    <button 
-                                                                        onClick={() => confirmAdminAction(m.action, i)}
-                                                                        disabled={loading}
-                                                                        className="py-2 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white text-[10px] font-bold uppercase tracking-wider rounded-xl transition-colors flex items-center justify-center gap-1.5"
-                                                                    >
-                                                                        {loading ? <RefreshCw size={13} className="animate-spin" /> : <CheckCircle size={13} />} 
-                                                                        Save to DB
-                                                                    </button>
+                                                                        <button 
+                                                                            onClick={() => exportToDoc(m.action, i)}
+                                                                            disabled={loading}
+                                                                            className="py-2 bg-slate-700 hover:bg-slate-600 disabled:opacity-50 text-white text-[10px] font-bold uppercase tracking-wider rounded-xl transition-colors flex items-center justify-center gap-1.5 border border-slate-600"
+                                                                        >
+                                                                            <Download size={13} /> 
+                                                                            Export Doc
+                                                                        </button>
+                                                                    </div>
 
-                                                                    <button 
-                                                                        onClick={() => exportToDoc(m.action, i)}
-                                                                        disabled={loading}
-                                                                        className="py-2 bg-slate-700 hover:bg-slate-600 disabled:opacity-50 text-white text-[10px] font-bold uppercase tracking-wider rounded-xl transition-colors flex items-center justify-center gap-1.5 border border-slate-600"
-                                                                    >
-                                                                        <Download size={13} /> 
-                                                                        Export Doc
-                                                                    </button>
+                                                                    {hasTimelineDates && (
+                                                                        <button 
+                                                                            onClick={() => exportToICS(m.action)}
+                                                                            disabled={loading}
+                                                                            className="py-2 w-full bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white text-[10px] font-bold uppercase tracking-wider rounded-xl transition-colors flex items-center justify-center gap-1.5 shadow-md"
+                                                                        >
+                                                                            <CalendarCheck size={13} /> 
+                                                                            Sync Timeline to Outlook (.ics)
+                                                                        </button>
+                                                                    )}
+                                                                </div>
+                                                            </div>
+                                                        )}
+
+                                                        {isAlert && m.swapData && (
+                                                            <div className="mt-4 pt-3 border-t border-amber-200 grid grid-cols-2 gap-2">
+                                                                <button 
+                                                                    onClick={() => handleSwapResponse(m.swapData, false, i)}
+                                                                    disabled={loading}
+                                                                    className="py-2.5 bg-white text-slate-500 hover:bg-slate-50 border border-slate-200 disabled:opacity-50 text-[11px] font-black uppercase tracking-wider rounded-xl transition-all"
+                                                                >
+                                                                    Decline
+                                                                </button>
+                                                                <button 
+                                                                    onClick={() => handleSwapResponse(m.swapData, true, i)}
+                                                                    disabled={loading}
+                                                                    className="py-2.5 bg-emerald-500 hover:bg-emerald-600 text-white disabled:opacity-50 text-[11px] font-black uppercase tracking-wider rounded-xl shadow-lg transition-all flex items-center justify-center gap-1.5"
+                                                                >
+                                                                    <CalendarCheck size={14} /> Accept Swap
+                                                                </button>
+                                                            </div>
+                                                        )}
+
+                                                        {isDataEntry && m.db_workload && m.db_workload.target_collection && m.db_workload.target_collection !== 'null' && m.role === 'bot' && !m.isGreeting && (
+                                                            <div className="mt-4 pt-3 border-t border-emerald-900/50">
+                                                                <p className="text-[10px] font-bold text-emerald-400 mb-2 uppercase tracking-widest flex items-center gap-1">
+                                                                    <Zap size={12} /> Pending Workload Transaction
+                                                                </p>
+                                                                
+                                                                <div className="bg-slate-950 p-3 rounded-lg border border-emerald-900/50 text-xs text-slate-300 mb-3 leading-relaxed">
+                                                                    {m.db_workload.target_collection === 'staff_loads' ? (
+                                                                        <div>
+                                                                            Preparing to log <span className="text-emerald-400 font-bold text-sm">{m.db_workload.target_value}</span> patients for <span className="text-amber-400 font-bold">{m.db_workload.target_month !== null && m.db_workload.target_month !== undefined ? ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"][m.db_workload.target_month] : 'Unknown Month'}</span>.
+                                                                        </div>
+                                                                    ) : (
+                                                                        <div>
+                                                                            Preparing to update team <span className="text-amber-400 font-bold">{m.db_workload.target_field?.replace(/_/g, ' ')}</span> to <span className="text-emerald-400 font-bold text-sm">{m.db_workload.target_value}</span>.
+                                                                        </div>
+                                                                    )}
                                                                 </div>
 
-                                                                {/* 🌟 NEW: Dynamic Outlook Button */}
-                                                                {hasTimelineDates && (
-                                                                    <button 
-                                                                        onClick={() => exportToICS(m.action)}
-                                                                        disabled={loading}
-                                                                        className="py-2 w-full bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white text-[10px] font-bold uppercase tracking-wider rounded-xl transition-colors flex items-center justify-center gap-1.5 shadow-md"
-                                                                    >
-                                                                        <CalendarCheck size={13} /> 
-                                                                        Sync Timeline to Outlook (.ics)
-                                                                    </button>
-                                                                )}
+                                                                <button 
+                                                                    onClick={() => executeDataEntry(m.db_workload)}
+                                                                    disabled={loading}
+                                                                    className="w-full py-2 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white text-[11px] font-bold uppercase tracking-wider rounded-xl transition-colors flex items-center justify-center gap-2"
+                                                                >
+                                                                    {loading ? <RefreshCw size={14} className="animate-spin" /> : <Shield size={14} />} 
+                                                                    Commit Workload
+                                                                </button>
+                                                            </div>
+                                                        )}
+
+                                                    </div>
+                                                </div>
+                                            );
+                                        })}
+
+                                        {pendingLog && (() => {
+                                            const cfg = getPhaseConfig(pendingLog.phase);
+                                            return (
+                                                <div className="mx-0.5 bg-white rounded-2xl border-2 border-indigo-100 p-5 shadow-xl animate-in zoom-in-95">
+                                                    <div className="flex justify-between items-center mb-4 text-[10px] font-black uppercase text-slate-400 tracking-widest">
+                                                        <span className="flex items-center gap-1.5"><Zap size={12} className="text-amber-500 animate-bounce" /> Pulse Reading</span>
+                                                        <span className="text-[9px] bg-indigo-50 text-indigo-600 px-2.5 py-1 rounded-full border border-indigo-100 font-bold">5A Protocol</span>
+                                                    </div>
+                                                    <div className="grid grid-cols-2 gap-3 mb-4">
+                                                        <div className={`p-3 rounded-xl border text-center ${cfg.badge}`}>
+                                                            <div className="text-[8px] font-black uppercase opacity-60 mb-1">Zone</div>
+                                                            <div className="text-xs font-black">{cfg.icon} {cfg.label}</div>
+                                                        </div>
+                                                        <div className="p-3 rounded-xl border bg-blue-50 text-blue-700 border-blue-100 text-center">
+                                                            <div className="text-[8px] font-black uppercase opacity-60 mb-1">Energy</div>
+                                                            <div className="text-xs font-black mb-1.5">{pendingLog.energy}%</div>
+                                                            <div className="w-full bg-blue-100 rounded-full h-1">
+                                                                <div className="bg-blue-500 h-1 rounded-full transition-all duration-700" style={{ width: `${pendingLog.energy}%` }} />
                                                             </div>
                                                         </div>
-                                                    )}
-
-                                                    {isAlert && m.swapData && (
-                                                        <div className="mt-4 pt-3 border-t border-amber-200 grid grid-cols-2 gap-2">
-                                                            <button 
-                                                                onClick={() => handleSwapResponse(m.swapData, false, i)}
-                                                                disabled={loading}
-                                                                className="py-2.5 bg-white text-slate-500 hover:bg-slate-50 border border-slate-200 disabled:opacity-50 text-[11px] font-black uppercase tracking-wider rounded-xl transition-all"
-                                                            >
-                                                                Decline
-                                                            </button>
-                                                            <button 
-                                                                onClick={() => handleSwapResponse(m.swapData, true, i)}
-                                                                disabled={loading}
-                                                                className="py-2.5 bg-emerald-500 hover:bg-emerald-600 text-white disabled:opacity-50 text-[11px] font-black uppercase tracking-wider rounded-xl shadow-lg transition-all flex items-center justify-center gap-1.5"
-                                                            >
-                                                                <CalendarCheck size={14} /> Accept Swap
-                                                            </button>
+                                                    </div>
+                                                    {pendingLog.action && (
+                                                        <div className="bg-slate-50 p-3.5 rounded-xl mb-4 border border-slate-100 text-center">
+                                                            <p className="text-[9px] font-black text-slate-400 uppercase mb-1">Recommended Action</p>
+                                                            <p className="text-xs italic font-medium text-slate-600">"{pendingLog.action}"</p>
                                                         </div>
                                                     )}
-
-                                                    {isDataEntry && m.db_workload && m.db_workload.target_collection && m.db_workload.target_collection !== 'null' && m.role === 'bot' && !m.isGreeting && (
-                                                        <div className="mt-4 pt-3 border-t border-emerald-900/50">
-                                                            <p className="text-[10px] font-bold text-emerald-400 mb-2 uppercase tracking-widest flex items-center gap-1">
-                                                                <Zap size={12} /> Pending Workload Transaction
+                                                    {pendingLog.phase === 'ILL' && (
+                                                        <div className="mb-4 px-3.5 py-3 rounded-xl bg-red-50 border border-red-200">
+                                                            <p className="text-[10px] text-red-600 font-semibold text-center leading-relaxed">
+                                                                You do not have to carry this alone. Please reach out to your Employee Assistance Programme or a trusted colleague today.
                                                             </p>
-                                                            
-                                                            <div className="bg-slate-950 p-3 rounded-lg border border-emerald-900/50 text-xs text-slate-300 mb-3 leading-relaxed">
-                                                                {m.db_workload.target_collection === 'staff_loads' ? (
-                                                                    <div>
-                                                                        Preparing to log <span className="text-emerald-400 font-bold text-sm">{m.db_workload.target_value}</span> patients for <span className="text-amber-400 font-bold">{m.db_workload.target_month !== null && m.db_workload.target_month !== undefined ? ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"][m.db_workload.target_month] : 'Unknown Month'}</span>.
-                                                                    </div>
-                                                                ) : (
-                                                                    <div>
-                                                                        Preparing to update team <span className="text-amber-400 font-bold">{m.db_workload.target_field?.replace(/_/g, ' ')}</span> to <span className="text-emerald-400 font-bold text-sm">{m.db_workload.target_value}</span>.
-                                                                    </div>
-                                                                )}
-                                                            </div>
-
-                                                            <button 
-                                                                onClick={() => executeDataEntry(m.db_workload)}
-                                                                disabled={loading}
-                                                                className="w-full py-2 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white text-[11px] font-bold uppercase tracking-wider rounded-xl transition-colors flex items-center justify-center gap-2"
-                                                            >
-                                                                {loading ? <RefreshCw size={14} className="animate-spin" /> : <Shield size={14} />} 
-                                                                Commit Workload
-                                                            </button>
                                                         </div>
                                                     )}
-
+                                                    <div className="flex gap-2">
+                                                        <button onClick={() => setPendingLog(null)} className="flex-1 py-2.5 text-xs font-black text-slate-500 rounded-xl border border-slate-200 hover:bg-slate-50 transition-all flex items-center justify-center gap-1.5">
+                                                            <X size={12} /> Dismiss
+                                                        </button>
+                                                        <button onClick={confirmLog} disabled={loading} className={`flex-[2] py-2.5 text-white text-xs font-black rounded-xl shadow-md transition-all active:scale-95 disabled:opacity-50 flex items-center justify-center gap-2 ${isAnonymous ? 'bg-purple-600' : 'bg-indigo-600'}`}>
+                                                            {loading ? <RefreshCw size={13} className="animate-spin" /> : <Shield size={13} />}
+                                                            {isAnonymous ? 'Confirm Ghost Log' : 'Sync to Dashboard'}
+                                                        </button>
+                                                    </div>
                                                 </div>
+                                            );
+                                        })()}
+
+                                        {loading && (
+                                            <div className="flex items-center gap-2 text-[10px] font-bold text-slate-400 animate-pulse pl-1">
+                                                <span className="flex gap-1">
+                                                    <span className="w-1.5 h-1.5 bg-indigo-400 rounded-full animate-bounce [animation-delay:0ms]" />
+                                                    <span className="w-1.5 h-1.5 bg-indigo-400 rounded-full animate-bounce [animation-delay:150ms]" />
+                                                    <span className="w-1.5 h-1.5 bg-indigo-400 rounded-full animate-bounce [animation-delay:300ms]" />
+                                                </span>
+                                                AURA is processing...
                                             </div>
-                                        );
-                                    })}
+                                        )}
+                                        <div ref={messagesEndRef} className="h-1" />
+                                    </div>
+                                )}
+                            </div>
+                        )}
 
-                                    {pendingLog && (() => {
-                                        const cfg = getPhaseConfig(pendingLog.phase);
-                                        return (
-                                            <div className="mx-0.5 bg-white rounded-2xl border-2 border-indigo-100 p-5 shadow-xl animate-in zoom-in-95">
-                                                <div className="flex justify-between items-center mb-4 text-[10px] font-black uppercase text-slate-400 tracking-widest">
-                                                    <span className="flex items-center gap-1.5"><Zap size={12} className="text-amber-500 animate-bounce" /> Pulse Reading</span>
-                                                    <span className="text-[9px] bg-indigo-50 text-indigo-600 px-2.5 py-1 rounded-full border border-indigo-100 font-bold">5A Protocol</span>
-                                                </div>
-                                                <div className="grid grid-cols-2 gap-3 mb-4">
-                                                    <div className={`p-3 rounded-xl border text-center ${cfg.badge}`}>
-                                                        <div className="text-[8px] font-black uppercase opacity-60 mb-1">Zone</div>
-                                                        <div className="text-xs font-black">{cfg.icon} {cfg.label}</div>
-                                                    </div>
-                                                    <div className="p-3 rounded-xl border bg-blue-50 text-blue-700 border-blue-100 text-center">
-                                                        <div className="text-[8px] font-black uppercase opacity-60 mb-1">Energy</div>
-                                                        <div className="text-xs font-black mb-1.5">{pendingLog.energy}%</div>
-                                                        <div className="w-full bg-blue-100 rounded-full h-1">
-                                                            <div className="bg-blue-500 h-1 rounded-full transition-all duration-700" style={{ width: `${pendingLog.energy}%` }} />
-                                                        </div>
-                                                    </div>
-                                                </div>
-                                                {pendingLog.action && (
-                                                    <div className="bg-slate-50 p-3.5 rounded-xl mb-4 border border-slate-100 text-center">
-                                                        <p className="text-[9px] font-black text-slate-400 uppercase mb-1">Recommended Action</p>
-                                                        <p className="text-xs italic font-medium text-slate-600">"{pendingLog.action}"</p>
-                                                    </div>
-                                                )}
-                                                {pendingLog.phase === 'ILL' && (
-                                                    <div className="mb-4 px-3.5 py-3 rounded-xl bg-red-50 border border-red-200">
-                                                        <p className="text-[10px] text-red-600 font-semibold text-center leading-relaxed">
-                                                            You do not have to carry this alone. Please reach out to your Employee Assistance Programme or a trusted colleague today.
-                                                        </p>
-                                                    </div>
-                                                )}
-                                                <div className="flex gap-2">
-                                                    <button onClick={() => setPendingLog(null)} className="flex-1 py-2.5 text-xs font-black text-slate-500 rounded-xl border border-slate-200 hover:bg-slate-50 transition-all flex items-center justify-center gap-1.5">
-                                                        <X size={12} /> Dismiss
-                                                    </button>
-                                                    <button onClick={confirmLog} disabled={loading} className={`flex-[2] py-2.5 text-white text-xs font-black rounded-xl shadow-md transition-all active:scale-95 disabled:opacity-50 flex items-center justify-center gap-2 ${isAnonymous ? 'bg-purple-600' : 'bg-indigo-600'}`}>
-                                                        {loading ? <RefreshCw size={13} className="animate-spin" /> : <Shield size={13} />}
-                                                        {isAnonymous ? 'Confirm Ghost Log' : 'Sync to Dashboard'}
-                                                    </button>
-                                                </div>
-                                            </div>
-                                        );
-                                    })()}
-
-                                    {loading && (
-                                        <div className="flex items-center gap-2 text-[10px] font-bold text-slate-400 animate-pulse pl-1">
-                                            <span className="flex gap-1">
-                                                <span className="w-1.5 h-1.5 bg-indigo-400 rounded-full animate-bounce [animation-delay:0ms]" />
-                                                <span className="w-1.5 h-1.5 bg-indigo-400 rounded-full animate-bounce [animation-delay:150ms]" />
-                                                <span className="w-1.5 h-1.5 bg-indigo-400 rounded-full animate-bounce [animation-delay:300ms]" />
-                                            </span>
-                                            AURA is processing...
-                                        </div>
-                                    )}
-                                    <div ref={messagesEndRef} className="h-1" />
-                                </div>
-                            )}
-                        </div>
-
-                        {view === 'CHAT' && (
+                        {view === 'CHAT' && chatSize !== 'minimized' && (
                             <div className="shrink-0 p-4 bg-white border-t border-slate-100">
                                 {isNearLimit && <p className={`text-[9px] font-bold text-right mb-1 ${inputLength >= MAX_INPUT ? 'text-red-500' : 'text-amber-500'}`}>{inputLength} / {MAX_INPUT}</p>}
                                 <div className={`flex items-center gap-2 bg-slate-50 rounded-full pl-5 pr-3 py-3 border transition-all ${
