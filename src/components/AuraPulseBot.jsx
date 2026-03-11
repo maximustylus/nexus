@@ -827,70 +827,70 @@ export default function AuraPulseBot({ isOpen, onClose, onOpen, user }) {
                                 </div>
                             </div>
 
-                          <div className="flex items-center gap-3">
-                                {/* APP ACTIONS (Trash, Bug) */}
-                                <div className="flex items-center gap-2 border-r border-white/20 pr-3">
-                                    {!isOnline && <WifiOff size={13} className="text-yellow-300" />}
-                                    
-                                    {view === 'CHAT' && chatSize !== 'minimized' && (
-                                        <button 
-                                            onClick={handleClearChat} 
-                                            title="Clear Conversation"
-                                            className="p-1.5 hover:bg-white/20 rounded-lg transition-all text-white/80 hover:text-white"
-                                        >
-                                            <Trash2 size={14} />
-                                        </button>
-                                    )}
-
-                                    {chatSize !== 'minimized' && (
-                                        <button 
-                                            onClick={() => {
-                                                window.dispatchEvent(new CustomEvent('open-bug-report'));
-                                                if (onClose) onClose(); 
-                                            }}
-                                            title="Report a Bug"
-                                            className="flex items-center gap-1 px-2 py-1 bg-white/10 hover:bg-white/20 rounded-lg transition-all text-white text-[10px] font-bold uppercase tracking-wider"
-                                        >
-                                            <Bug size={12} className="text-amber-400" />
-                                            <span className="hidden sm:inline">Report</span>
-                                        </button>
-                                    )}
-                                </div>
-
-                                {/* 🌟 MAC-STYLE WINDOW CONTROLS 🌟 */}
-                                <div className="flex items-center gap-2 group/window pl-1">
-                                    {/* Minimize (Yellow) */}
-                                    <button 
-                                        onClick={() => setChatSize(chatSize === 'minimized' ? 'normal' : 'minimized')}
-                                        className="w-3.5 h-3.5 rounded-full bg-amber-400 hover:bg-amber-300 flex items-center justify-center transition-colors shadow-sm"
-                                        title={chatSize === 'minimized' ? 'Restore' : 'Minimize'}
-                                    >
-                                        <Minus size={8} strokeWidth={4} className="opacity-0 group-hover/window:opacity-100 text-amber-900 transition-opacity" />
-                                    </button>
-                                    
-                                    {/* Maximize (Green) */}
-                                    <button 
-                                        onClick={() => setChatSize(chatSize === 'maximized' ? 'normal' : 'maximized')}
-                                        className="w-3.5 h-3.5 rounded-full bg-emerald-400 hover:bg-emerald-300 flex items-center justify-center transition-colors shadow-sm"
-                                        title={chatSize === 'maximized' ? 'Restore' : 'Maximize'}
-                                    >
-                                        {chatSize === 'maximized' ? (
-                                             <Minimize2 size={8} strokeWidth={4} className="opacity-0 group-hover/window:opacity-100 text-emerald-900 transition-opacity" />
-                                        ) : (
-                                             <Maximize2 size={8} strokeWidth={4} className="opacity-0 group-hover/window:opacity-100 text-emerald-900 transition-opacity" />
+                         <div className="flex items-center gap-3">
+                                    {/* APP ACTIONS (Trash, Bug) */}
+                                    <div className="flex items-center gap-2 border-r border-white/20 pr-3">
+                                        {!isOnline && <WifiOff size={13} className="text-yellow-300" />}
+                                        
+                                        {view === 'CHAT' && chatSize !== 'minimized' && (
+                                            <button 
+                                                onClick={handleClearChat} 
+                                                title="Clear Conversation"
+                                                className="p-1.5 hover:bg-white/20 rounded-lg transition-all text-white/80 hover:text-white"
+                                            >
+                                                <Trash2 size={14} />
+                                            </button>
                                         )}
-                                    </button>
-
-                                    {/* Close (Red) */}
-                                    <button 
-                                        onClick={onClose} 
-                                        className="w-3.5 h-3.5 rounded-full bg-rose-500 hover:bg-rose-400 flex items-center justify-center transition-colors shadow-sm"
-                                        title="Close"
-                                    >
-                                        <X size={8} strokeWidth={4} className="opacity-0 group-hover/window:opacity-100 text-rose-900 transition-opacity" />
-                                    </button>
+                                
+                                        {chatSize !== 'minimized' && (
+                                            <button 
+                                                onClick={() => {
+                                                    window.dispatchEvent(new CustomEvent('open-bug-report'));
+                                                    if (onClose) onClose(); 
+                                                }}
+                                                title="Report a Bug"
+                                                className="flex items-center gap-1 px-2 py-1 bg-white/10 hover:bg-white/20 rounded-lg transition-all text-white text-[10px] font-bold uppercase tracking-wider shadow-sm"
+                                            >
+                                                <Bug size={12} className="text-amber-400" />
+                                                <span className="hidden sm:inline">Report</span>
+                                            </button>
+                                        )}
+                                    </div>
+                                
+                                    {/* 🌟 REFINED MAC-STYLE WINDOW CONTROLS 🌟 */}
+                                    <div className="flex items-center gap-2 group/window pl-1">
+                                        {/* Minimize (Yellow/Amber) */}
+                                        <button 
+                                            onClick={() => setChatSize(chatSize === 'minimized' ? 'normal' : 'minimized')}
+                                            className="w-3.5 h-3.5 rounded-full bg-amber-400 hover:bg-amber-300 flex items-center justify-center transition-colors shadow-sm border border-amber-500/50"
+                                            title={chatSize === 'minimized' ? 'Restore' : 'Minimize'}
+                                        >
+                                            <Minus size={9} strokeWidth={3} className="opacity-0 group-hover/window:opacity-100 text-amber-800/80 transition-opacity" />
+                                        </button>
+                                        
+                                        {/* Maximize (Green/Emerald) */}
+                                        <button 
+                                            onClick={() => setChatSize(chatSize === 'maximized' ? 'normal' : 'maximized')}
+                                            className="w-3.5 h-3.5 rounded-full bg-emerald-400 hover:bg-emerald-300 flex items-center justify-center transition-colors shadow-sm border border-emerald-500/50"
+                                            title={chatSize === 'maximized' ? 'Restore' : 'Maximize'}
+                                        >
+                                            {chatSize === 'maximized' ? (
+                                                 <Minimize2 size={8} strokeWidth={3} className="opacity-0 group-hover/window:opacity-100 text-emerald-800/80 transition-opacity" />
+                                            ) : (
+                                                 <Maximize2 size={8} strokeWidth={3} className="opacity-0 group-hover/window:opacity-100 text-emerald-800/80 transition-opacity" />
+                                            )}
+                                        </button>
+                                
+                                        {/* Close (Red/Rose) */}
+                                        <button 
+                                            onClick={onClose} 
+                                            className="w-3.5 h-3.5 rounded-full bg-rose-500 hover:bg-rose-400 flex items-center justify-center transition-colors shadow-sm border border-rose-600/50"
+                                            title="Close"
+                                        >
+                                            <X size={9} strokeWidth={3} className="opacity-0 group-hover/window:opacity-100 text-rose-900/80 transition-opacity" />
+                                        </button>
+                                    </div>
                                 </div>
-                            </div>
                           
                                     <div className="space-y-4">
                                         {messages.map((m, i) => {
