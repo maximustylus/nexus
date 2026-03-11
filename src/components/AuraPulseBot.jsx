@@ -827,86 +827,71 @@ export default function AuraPulseBot({ isOpen, onClose, onOpen, user }) {
                                 </div>
                             </div>
 
-                            <div className="flex items-center gap-1.5">
-                                {!isOnline && <WifiOff size={13} className="text-yellow-300" />}
-                                
-                                {view === 'CHAT' && chatSize !== 'minimized' && (
-                                    <button 
-                                        onClick={handleClearChat} 
-                                        aria-label="Clear Chat" 
-                                        title="Clear Conversation"
-                                        className="p-1.5 hover:bg-white/20 rounded-lg transition-all text-white/80 hover:text-white"
-                                    >
-                                        <Trash2 size={16} />
-                                    </button>
-                                )}
+                          <div className="flex items-center gap-3">
+                                {/* APP ACTIONS (Trash, Bug) */}
+                                <div className="flex items-center gap-2 border-r border-white/20 pr-3">
+                                    {!isOnline && <WifiOff size={13} className="text-yellow-300" />}
+                                    
+                                    {view === 'CHAT' && chatSize !== 'minimized' && (
+                                        <button 
+                                            onClick={handleClearChat} 
+                                            title="Clear Conversation"
+                                            className="p-1.5 hover:bg-white/20 rounded-lg transition-all text-white/80 hover:text-white"
+                                        >
+                                            <Trash2 size={14} />
+                                        </button>
+                                    )}
 
-                                {chatSize !== 'minimized' && (
-                                    <button 
-                                        onClick={() => {
-                                            window.dispatchEvent(new CustomEvent('open-bug-report'));
-                                            if (onClose) onClose(); 
-                                        }}
-                                        title="Report a Bug"
-                                        className="flex items-center gap-1 px-2 py-1.5 bg-white/10 hover:bg-white/20 rounded-lg transition-all text-white text-[10px] font-bold uppercase tracking-wider"
-                                    >
-                                        <Bug size={13} className="text-amber-400" />
-                                        <span className="hidden sm:inline">Report</span>
-                                    </button>
-                                )}
-
-                                {/* 🌟 NEW: WINDOW CONTROLS */}
-                                <div className="flex items-center gap-1 bg-white/10 rounded-lg p-0.5 ml-2">
-                                    <button 
-                                        onClick={() => setChatSize(chatSize === 'minimized' ? 'normal' : 'minimized')}
-                                        className="p-1 hover:bg-white/20 rounded-md transition-all text-white/80 hover:text-white"
-                                        title="Minimize"
-                                    >
-                                        <Minus size={14} />
-                                    </button>
-                                    <button 
-                                        onClick={() => setChatSize(chatSize === 'maximized' ? 'normal' : 'maximized')}
-                                        className="p-1 hover:bg-white/20 rounded-md transition-all text-white/80 hover:text-white"
-                                        title={chatSize === 'maximized' ? 'Restore' : 'Maximize'}
-                                    >
-                                        {chatSize === 'maximized' ? <Minimize2 size={14} /> : <Maximize2 size={14} />}
-                                    </button>
+                                    {chatSize !== 'minimized' && (
+                                        <button 
+                                            onClick={() => {
+                                                window.dispatchEvent(new CustomEvent('open-bug-report'));
+                                                if (onClose) onClose(); 
+                                            }}
+                                            title="Report a Bug"
+                                            className="flex items-center gap-1 px-2 py-1 bg-white/10 hover:bg-white/20 rounded-lg transition-all text-white text-[10px] font-bold uppercase tracking-wider"
+                                        >
+                                            <Bug size={12} className="text-amber-400" />
+                                            <span className="hidden sm:inline">Report</span>
+                                        </button>
+                                    )}
                                 </div>
 
-                                <button onClick={onClose} aria-label="Close AURA" className="p-1.5 hover:bg-white/20 rounded-lg transition-all ml-1">
-                                    <X size={18} />
-                                </button>
-                            </div>
-                        </div>
+                                {/* 🌟 MAC-STYLE WINDOW CONTROLS 🌟 */}
+                                <div className="flex items-center gap-2 group/window pl-1">
+                                    {/* Minimize (Yellow) */}
+                                    <button 
+                                        onClick={() => setChatSize(chatSize === 'minimized' ? 'normal' : 'minimized')}
+                                        className="w-3.5 h-3.5 rounded-full bg-amber-400 hover:bg-amber-300 flex items-center justify-center transition-colors shadow-sm"
+                                        title={chatSize === 'minimized' ? 'Restore' : 'Minimize'}
+                                    >
+                                        <Minus size={8} strokeWidth={4} className="opacity-0 group-hover/window:opacity-100 text-amber-900 transition-opacity" />
+                                    </button>
+                                    
+                                    {/* Maximize (Green) */}
+                                    <button 
+                                        onClick={() => setChatSize(chatSize === 'maximized' ? 'normal' : 'maximized')}
+                                        className="w-3.5 h-3.5 rounded-full bg-emerald-400 hover:bg-emerald-300 flex items-center justify-center transition-colors shadow-sm"
+                                        title={chatSize === 'maximized' ? 'Restore' : 'Maximize'}
+                                    >
+                                        {chatSize === 'maximized' ? (
+                                             <Minimize2 size={8} strokeWidth={4} className="opacity-0 group-hover/window:opacity-100 text-emerald-900 transition-opacity" />
+                                        ) : (
+                                             <Maximize2 size={8} strokeWidth={4} className="opacity-0 group-hover/window:opacity-100 text-emerald-900 transition-opacity" />
+                                        )}
+                                    </button>
 
-                        {!isOnline && chatSize !== 'minimized' && (
-                            <div className="shrink-0 flex items-center gap-2 px-4 py-2 bg-yellow-50 border-b border-yellow-200">
-                                <WifiOff size={12} className="text-yellow-600 flex-shrink-0" />
-                                <p className="text-[10px] font-semibold text-yellow-700">You are offline. AURA cannot process new requests.</p>
+                                    {/* Close (Red) */}
+                                    <button 
+                                        onClick={onClose} 
+                                        className="w-3.5 h-3.5 rounded-full bg-rose-500 hover:bg-rose-400 flex items-center justify-center transition-colors shadow-sm"
+                                        title="Close"
+                                    >
+                                        <X size={8} strokeWidth={4} className="opacity-0 group-hover/window:opacity-100 text-rose-900 transition-opacity" />
+                                    </button>
+                                </div>
                             </div>
-                        )}
-
-                        {chatSize !== 'minimized' && (
-                            <div className="flex-1 overflow-y-auto p-5 bg-slate-50 dark:bg-slate-950/50 scroll-smooth">
-                                {view === 'SELECT' ? (
-                                    <div className="space-y-5 animate-in fade-in duration-300">
-                                        <div className="text-center">
-                                            <div className="w-10 h-10 bg-indigo-500/10 rounded-2xl flex items-center justify-center mx-auto mb-2 border border-indigo-500/20">
-                                                <Users size={20} className="text-indigo-500" />
-                                            </div>
-                                            <h2 className="text-xs font-black text-slate-800 dark:text-white uppercase tracking-tighter">Identity Matrix</h2>
-                                            <p className="text-[10px] text-slate-400 font-semibold uppercase tracking-widest mt-0.5">Select a persona</p>
-                                        </div>
-                                        <div role="listbox" className="grid grid-cols-2 gap-3">
-                                            {(isDemo ? DEMO_PERSONAS : LIVE_PERSONAS).map(p => (
-                                                <button key={p.id} onClick={() => startSession(p)} className="p-4 rounded-2xl bg-white border border-slate-200 hover:border-indigo-500 hover:-translate-y-0.5 transition-all text-left">
-                                                    <div className={`w-7 h-7 ${p.color} rounded-full mb-2.5 ring-2 ring-white`} />
-                                                    <h4 className="text-[11px] font-black text-slate-900 uppercase truncate">{p.name}</h4>
-                                                    <p className="text-[9px] text-slate-400 font-semibold uppercase truncate mb-2">{p.title}</p>
-                                                </button>
-                                            ))}
-                                        </div>
-                                    </div>
+                          
                                 ) : (
                                     <div className="space-y-4">
                                         {messages.map((m, i) => {
