@@ -63,11 +63,16 @@ const WellbeingView = ({ user }) => {
     const calculateStats = (data) => {
         const values = Object.values(data);
         if (values.length === 0) return;
-        const total = values.reduce((acc, curr) => acc + (curr.energy || 0), 0);
-        const avg = Math.round(total / values.length);
+        
+        const validCheckIns = values.filter(curr => curr.energy > 0 || curr.lastUpdate);
+        const total = values.reduce((acc, curr) => acc + (curr.energy || 0), 0);        
+        const avg = validCheckIns.length > 0 
+            ? Math.round(total / validCheckIns.length) 
+            : 0;
+
         setStats({
             avg,
-            active: values.length,
+            active: validCheckIns.length,
             zone: avg > 79 ? 'HEALTHY' : avg > 49 ? 'REACTING' : 'INJURED'
         });
     };
