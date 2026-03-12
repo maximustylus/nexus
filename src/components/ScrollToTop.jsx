@@ -36,7 +36,8 @@ const ScrollToTop = () => {
     return (
         <button
             onClick={scrollToTop}
-            className={`fixed bottom-24 xl:bottom-6 left-1/2 -translate-x-1/2 z-[100] flex items-center gap-2 px-4 py-2.5 backdrop-blur-md border text-[10px] font-black uppercase tracking-widest rounded-full transition-all duration-300 ease-in-out md:hidden
+            // 🌟 THE FIX: Removed `md:hidden` so it shows on desktop, and boosted z-index
+            className={`fixed bottom-24 xl:bottom-10 left-1/2 -translate-x-1/2 z-[120] flex items-center gap-2 px-4 py-2.5 backdrop-blur-md border text-[10px] font-black uppercase tracking-widest rounded-full transition-all duration-300 ease-in-out
             bg-white/90 dark:bg-slate-900/90 
             hover:bg-slate-50 dark:hover:bg-slate-800 
             border-slate-200 dark:border-slate-700 
