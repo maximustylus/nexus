@@ -1136,7 +1136,7 @@ const handleKeyDown = useCallback((e) => {
                                             e.target.style.height = Math.min(e.target.scrollHeight, 120) + 'px';
                                         }}
                                         onKeyDown={handleKeyDown}
-                                        placeholder={loading || isSending ? 'AURA is processing...' : 'Type a message... (Shift+Enter for new line)'}
+                                        placeholder={loading || isSending ? 'AURA is processing...' : 'Ask AURA...'}
                                         className="flex-1 bg-transparent text-sm text-slate-700 outline-none placeholder:text-slate-400 disabled:cursor-not-allowed resize-none py-2.5 max-h-[120px] overflow-y-auto scrollbar-hide"
                                         disabled={loading || isSending || !isOnline}
                                         autoComplete="off" 
