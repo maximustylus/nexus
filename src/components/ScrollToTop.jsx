@@ -5,10 +5,12 @@ const ScrollToTop = () => {
     const [isVisible, setIsVisible] = useState(false);
 
     useEffect(() => {
-        // 🌟 THE FIX: Grab the exact inner div that handles scrolling in ResponsiveLayout
-        const scrollContainer = document.querySelector('.flex-1.overflow-y-auto');
+        const scrollContainer = document.getElementById('nexus-scroll-view');
         
-        if (!scrollContainer) return;
+        if (!scrollContainer) {
+            console.warn("ScrollToTop: Could not find #nexus-scroll-view");
+            return;
+        }
 
         const handleScroll = () => {
             if (scrollContainer.scrollTop > 300) {
@@ -18,17 +20,16 @@ const ScrollToTop = () => {
             }
         };
 
-        // Attach listener to the div, not the window
         scrollContainer.addEventListener('scroll', handleScroll);
         
-        // Trigger once on mount in case the user is already scrolled down
+        // Initial check
         handleScroll();
 
         return () => scrollContainer.removeEventListener('scroll', handleScroll);
-    }, []); // Empty dependency array ensures this runs when the layout mounts
+    }, []); 
 
     const scrollToTop = () => {
-        const scrollContainer = document.querySelector('.flex-1.overflow-y-auto');
+        const scrollContainer = document.getElementById('nexus-scroll-view');
         if (scrollContainer) {
             scrollContainer.scrollTo({ top: 0, behavior: 'smooth' });
         }
