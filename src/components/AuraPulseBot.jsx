@@ -201,6 +201,10 @@ export default function AuraPulseBot({ isOpen, onClose, onOpen, user }) {
         recognition.onresult = (event) => {
             const transcript = event.results[0][0].transcript;
             setInput(prev => (prev + ' ' + transcript).trim().slice(0, MAX_INPUT));
+            if (inputRef.current) {
+                inputRef.current.style.height = 'auto';
+                inputRef.current.style.height = Math.min(inputRef.current.scrollHeight, 120) + 'px';
+            }
         };
 
         recognition.onerror = (event) => {
@@ -226,7 +230,15 @@ export default function AuraPulseBot({ isOpen, onClose, onOpen, user }) {
 
         setIsSending(true);
         setMessages(prev => [...prev, { role: 'user', text }]);
-        if (typeof overrideText !== 'string') setInput('');
+        
+        if (typeof overrideText !== 'string') {
+            setInput('');
+            // 🌟 THE FIX: Reset the textarea height after sending
+            if (inputRef.current) {
+                inputRef.current.style.height = 'auto';
+            }
+        }
+        
         setLoading(true);
         setPendingLog(null);
         
@@ -309,12 +321,13 @@ export default function AuraPulseBot({ isOpen, onClose, onOpen, user }) {
         }
     }, [input, loading, isSending, isOnline, messages, selectedPersona, isDemo, liveMemory, user, setMessages, chatSize]);
 
+    // 🌟 THE FIX: Ensure Shift+Enter drops a line, but regular Enter sends
     const handleKeyDown = useCallback((e) => {
-            if (e.key === 'Enter' && !e.repeat) {
-                e.preventDefault();
-                handleSend();
-            }
-        }, [handleSend]);
+        if (e.key === 'Enter' && !e.shiftKey && !e.repeat) {
+            e.preventDefault();
+            handleSend();
+        }
+    }, [handleSend]);
 
     // ── Handle Swap Response ──────────────────────────────────────────────────
     const handleSwapResponse = async (swapData, isAccepted, msgIndex) => {
@@ -787,10 +800,11 @@ export default function AuraPulseBot({ isOpen, onClose, onOpen, user }) {
                 {isOpen && (
                     <div
                         role="dialog" aria-modal="true" aria-label="AURA Pulse wellbeing assistant"
+                        // 🌟 THE FIX: Dynamic height calculations to prevent top cutoff on mobile landscape
                         className={`mb-2 sm:mb-4 bg-white dark:bg-slate-900 shadow-2xl border border-slate-200 dark:border-slate-800 flex flex-col overflow-hidden transition-all duration-300 ease-in-out
                             ${chatSize === 'minimized' ? 'w-[calc(100vw-2rem)] sm:w-[380px] h-[64px] rounded-[1.5rem]' : ''}
-                            ${chatSize === 'normal' ? 'w-[calc(100vw-2rem)] sm:w-[380px] h-[100dvh] md:h-[660px] max-h-[calc(100dvh-100px)] rounded-[2rem]' : ''}
-                            ${chatSize === 'maximized' ? 'w-[calc(100vw-2rem)] sm:w-[85vw] max-w-[1200px] h-[100dvh] md:h-[85vh] max-h-[900px] rounded-[2rem]' : ''}
+                            ${chatSize === 'normal' ? 'w-[calc(100vw-2rem)] sm:w-[380px] h-[660px] max-h-[calc(100dvh-120px)] rounded-[2rem]' : ''}
+                            ${chatSize === 'maximized' ? 'w-[calc(100vw-2rem)] sm:w-[85vw] max-w-[1200px] h-[85vh] max-h-[900px] rounded-[2rem]' : ''}
                         `}
                     >
                         <div className={`shrink-0 p-4 text-white flex justify-between items-center bg-gradient-to-r ${isAnonymous ? 'from-purple-800 to-indigo-900' : 'from-slate-900 to-indigo-950'}`}>
@@ -816,8 +830,8 @@ export default function AuraPulseBot({ isOpen, onClose, onOpen, user }) {
                             </div>
 
                             <div className="flex items-center gap-3">
-                                {/* APP ACTIONS (Trash, Bug) */}
-                                <div className="flex items-center gap-2 border-r border-white/20 pr-3">
+                                {/* 🌟 THE FIX: Removed the border separator class from this div */}
+                                <div className="flex items-center gap-2 pr-2">
                                     {!isOnline && <WifiOff size={13} className="text-yellow-300" />}
                                     
                                     {view === 'CHAT' && chatSize !== 'minimized' && (
@@ -845,9 +859,8 @@ export default function AuraPulseBot({ isOpen, onClose, onOpen, user }) {
                                     )}
                                 </div>
 
-                                {/* 🌟 REFINED MAC-STYLE WINDOW CONTROLS 🌟 */}
+                                {/* MAC-STYLE WINDOW CONTROLS */}
                                 <div className="flex items-center gap-2 group/window pl-1">
-                                    {/* Minimize (Yellow/Amber) */}
                                     <button 
                                         onClick={() => setChatSize(chatSize === 'minimized' ? 'normal' : 'minimized')}
                                         className="w-3.5 h-3.5 rounded-full bg-amber-400 hover:bg-amber-300 flex items-center justify-center transition-colors shadow-sm border border-amber-500/50"
@@ -856,7 +869,6 @@ export default function AuraPulseBot({ isOpen, onClose, onOpen, user }) {
                                         <Minus size={9} strokeWidth={3} className="opacity-0 group-hover/window:opacity-100 text-amber-800/80 transition-opacity" />
                                     </button>
                                     
-                                    {/* Maximize (Green/Emerald) */}
                                     <button 
                                         onClick={() => setChatSize(chatSize === 'maximized' ? 'normal' : 'maximized')}
                                         className="w-3.5 h-3.5 rounded-full bg-emerald-400 hover:bg-emerald-300 flex items-center justify-center transition-colors shadow-sm border border-emerald-500/50"
@@ -869,7 +881,6 @@ export default function AuraPulseBot({ isOpen, onClose, onOpen, user }) {
                                         )}
                                     </button>
 
-                                    {/* Close (Red/Rose) */}
                                     <button 
                                         onClick={onClose} 
                                         className="w-3.5 h-3.5 rounded-full bg-rose-500 hover:bg-rose-400 flex items-center justify-center transition-colors shadow-sm border border-rose-600/50"
@@ -1111,26 +1122,35 @@ export default function AuraPulseBot({ isOpen, onClose, onOpen, user }) {
                         {view === 'CHAT' && chatSize !== 'minimized' && (
                             <div className="shrink-0 p-4 bg-white border-t border-slate-100">
                                 {isNearLimit && <p className={`text-[9px] font-bold text-right mb-1 ${inputLength >= MAX_INPUT ? 'text-red-500' : 'text-amber-500'}`}>{inputLength} / {MAX_INPUT}</p>}
-                                <div className={`flex items-center gap-2 bg-slate-50 rounded-full pl-5 pr-3 py-3 border transition-all ${
+                                
+                                {/* 🌟 THE FIX: Switched from items-center to items-end to align buttons with auto-growing textarea */}
+                                <div className={`flex items-end gap-2 bg-slate-50 rounded-3xl pl-5 pr-3 py-2 border transition-all ${
                                     loading || isSending 
                                         ? 'opacity-60 border-slate-200' 
                                         : `border-slate-200 ${isAnonymous ? 'focus-within:border-purple-500' : 'focus-within:border-indigo-500'}`
                                 }`}>
-                                    <input
+                                    
+                                    {/* 🌟 THE FIX: Replaced <input> with auto-growing <textarea> */}
+                                    <textarea
                                         ref={inputRef} 
-                                        type="text" 
                                         value={input}
-                                        onChange={e => setInput(e.target.value.slice(0, MAX_INPUT))}
+                                        onChange={e => {
+                                            setInput(e.target.value.slice(0, MAX_INPUT));
+                                            e.target.style.height = 'auto';
+                                            e.target.style.height = Math.min(e.target.scrollHeight, 120) + 'px';
+                                        }}
                                         onKeyDown={handleKeyDown}
-                                        placeholder={loading || isSending ? 'AURA is processing...' : 'Type a message or request...'}
-                                        className="flex-1 bg-transparent text-sm text-slate-700 outline-none placeholder:text-slate-400 disabled:cursor-not-allowed"
+                                        placeholder={loading || isSending ? 'AURA is processing...' : 'Type a message... (Shift+Enter for new line)'}
+                                        className="flex-1 bg-transparent text-sm text-slate-700 outline-none placeholder:text-slate-400 disabled:cursor-not-allowed resize-none py-2.5 max-h-[120px] overflow-y-auto scrollbar-hide"
                                         disabled={loading || isSending || !isOnline}
                                         autoComplete="off" 
                                         spellCheck 
                                         maxLength={MAX_INPUT}
+                                        rows={1}
+                                        style={{ minHeight: '40px' }}
                                     />
                                     
-                                    <div className="flex items-center gap-1">
+                                    <div className="flex items-center gap-1 pb-1">
                                         <button 
                                             onClick={toggleListening} 
                                             disabled={loading || isSending || !isOnline} 
