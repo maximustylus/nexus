@@ -3,32 +3,34 @@ import { ArrowUp } from 'lucide-react';
 
 const ScrollToTop = () => {
     const [isVisible, setIsVisible] = useState(false);
-    const [scrollContainer, setScrollContainer] = useState(null);
 
     useEffect(() => {
-        const handleScroll = (e) => {
-            const target = e.target;
-            const scrollTop = target.scrollTop || window.scrollY || document.documentElement.scrollTop;
-            
-            if (scrollTop > 300) {
+        // 🌟 THE FIX: Grab the exact inner div that handles scrolling in ResponsiveLayout
+        const scrollContainer = document.querySelector('.flex-1.overflow-y-auto');
+        
+        if (!scrollContainer) return;
+
+        const handleScroll = () => {
+            if (scrollContainer.scrollTop > 300) {
                 setIsVisible(true);
-                if (target.scrollTop) {
-                    setScrollContainer(target);
-                }
             } else {
                 setIsVisible(false);
             }
         };
 
-        window.addEventListener('scroll', handleScroll, true);
-        return () => window.removeEventListener('scroll', handleScroll, true);
-    }, []);
+        // Attach listener to the div, not the window
+        scrollContainer.addEventListener('scroll', handleScroll);
+        
+        // Trigger once on mount in case the user is already scrolled down
+        handleScroll();
+
+        return () => scrollContainer.removeEventListener('scroll', handleScroll);
+    }, []); // Empty dependency array ensures this runs when the layout mounts
 
     const scrollToTop = () => {
-        if (scrollContainer && typeof scrollContainer.scrollTo === 'function') {
+        const scrollContainer = document.querySelector('.flex-1.overflow-y-auto');
+        if (scrollContainer) {
             scrollContainer.scrollTo({ top: 0, behavior: 'smooth' });
-        } else {
-            window.scrollTo({ top: 0, behavior: 'smooth' });
         }
         setIsVisible(false);
     };
@@ -36,7 +38,6 @@ const ScrollToTop = () => {
     return (
         <button
             onClick={scrollToTop}
-            // 🌟 THE FIX: Removed `md:hidden` so it shows on desktop, and boosted z-index
             className={`fixed bottom-24 xl:bottom-10 left-1/2 -translate-x-1/2 z-[120] flex items-center gap-2 px-4 py-2.5 backdrop-blur-md border text-[10px] font-black uppercase tracking-widest rounded-full transition-all duration-300 ease-in-out
             bg-white/90 dark:bg-slate-900/90 
             hover:bg-slate-50 dark:hover:bg-slate-800 
