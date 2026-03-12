@@ -319,9 +319,10 @@ export default function AuraPulseBot({ isOpen, onClose, onOpen, user }) {
         }
     }, [input, loading, isSending, isOnline, messages, selectedPersona, isDemo, liveMemory, user, setMessages, chatSize]);
 
-    // 🌟 Shift+Enter Support added
-    const handleKeyDown = useCallback((e) => {
-        if (e.key === 'Enter' && !e.shiftKey && !e.repeat) {
+const handleKeyDown = useCallback((e) => {
+        const isDesktop = window.innerWidth > 768;
+        
+        if (e.key === 'Enter' && !e.shiftKey && !e.repeat && isDesktop) {
             e.preventDefault();
             handleSend();
         }
@@ -796,13 +797,12 @@ export default function AuraPulseBot({ isOpen, onClose, onOpen, user }) {
 
             <div className={`fixed bottom-24 xl:bottom-6 right-4 xl:right-6 flex flex-col items-end drop-shadow-2xl ${isOpen ? 'z-[100]' : 'z-50'} ${chatSize === 'maximized' ? 'xl:right-[7.5vw]' : ''}`}>
                 {isOpen && (
-                    <div
+<div
                         role="dialog" aria-modal="true" aria-label="AURA Pulse wellbeing assistant"
-                        // 🌟 THE FIX: Replaced 100dvh with max-h-[65vh] to prevent landscape cutoff
                         className={`mb-2 sm:mb-4 bg-white dark:bg-slate-900 shadow-2xl border border-slate-200 dark:border-slate-800 flex flex-col overflow-hidden transition-all duration-300 ease-in-out
                             ${chatSize === 'minimized' ? 'w-[calc(100vw-2rem)] sm:w-[380px] h-[64px] rounded-[1.5rem]' : ''}
-                            ${chatSize === 'normal' ? 'w-[calc(100vw-2rem)] sm:w-[380px] h-[660px] max-h-[65vh] md:max-h-[calc(100dvh-120px)] rounded-[2rem]' : ''}
-                            ${chatSize === 'maximized' ? 'w-[calc(100vw-2rem)] sm:w-[85vw] max-w-[1200px] h-[85vh] max-h-[900px] rounded-[2rem]' : ''}
+                            ${chatSize === 'normal' ? 'w-[calc(100vw-2rem)] sm:w-[380px] h-[660px] max-h-[calc(100dvh-100px)] rounded-[2rem]' : ''}
+                            ${chatSize === 'maximized' ? 'w-[calc(100vw-2rem)] sm:w-[85vw] max-w-[1200px] h-[900px] max-h-[calc(100dvh-100px)] rounded-[2rem]' : ''}
                         `}
                     >
                         <div className={`shrink-0 p-4 text-white flex justify-between items-center bg-gradient-to-r ${isAnonymous ? 'from-purple-800 to-indigo-900' : 'from-slate-900 to-indigo-950'}`}>
