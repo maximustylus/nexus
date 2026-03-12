@@ -47,7 +47,7 @@ export default function AuraPulseBot({ isOpen, onClose, onOpen, user }) {
 
     // ── State ─────────────────────────────────────────────────────────────────
     const [view,              setView]              = useState('SELECT');
-    const [chatSize,          setChatSize]          = useState('normal');
+    const [chatSize,          setChatSize]          = useState('normal'); 
     const [selectedPersona, setSelectedPersona] = useState(null); 
     const [input,             setInput]             = useState('');
     const [loading,          setLoading]          = useState(false);
@@ -109,7 +109,7 @@ export default function AuraPulseBot({ isOpen, onClose, onOpen, user }) {
             snapshot.docChanges().forEach((change) => {
                 if (change.type === 'added') {
                     const data = change.doc.data();
-                    if (onOpen) onOpen();
+                    if (onOpen) onOpen(); 
                     setMessages(prev => [...prev, {
                         role: 'bot',
                         text: `🔔 **URGENT COVERAGE REQUEST**\n\n**${data.requestedBy}** has requested to swap their **${data.originalTask}** shift on **${data.originalShiftDate}** with you.\n\n_Reason provided:_ "${data.reason || 'None provided'}"\n\nWould you like to accept this coverage?`,
@@ -132,9 +132,9 @@ export default function AuraPulseBot({ isOpen, onClose, onOpen, user }) {
         setPendingLog(null);
 
         const firstName = (user?.displayName || user?.name || 'there').split(' ')[0];
+
         const isAnon = persona.id === 'anon';
         let greeting;
-        
         if (isDemo) {
             greeting = isAnon
                 ? '🔒 Ghost Protocol engaged. Your identity is masked. How can I support you today?'
@@ -231,12 +231,10 @@ export default function AuraPulseBot({ isOpen, onClose, onOpen, user }) {
         setIsSending(true);
         setMessages(prev => [...prev, { role: 'user', text }]);
         
+        // Reset input and text area height
         if (typeof overrideText !== 'string') {
             setInput('');
-            // 🌟 THE FIX: Reset the textarea height after sending
-            if (inputRef.current) {
-                inputRef.current.style.height = 'auto';
-            }
+            if (inputRef.current) inputRef.current.style.height = '40px'; 
         }
         
         setLoading(true);
@@ -321,7 +319,7 @@ export default function AuraPulseBot({ isOpen, onClose, onOpen, user }) {
         }
     }, [input, loading, isSending, isOnline, messages, selectedPersona, isDemo, liveMemory, user, setMessages, chatSize]);
 
-    // 🌟 THE FIX: Ensure Shift+Enter drops a line, but regular Enter sends
+    // 🌟 Shift+Enter Support added
     const handleKeyDown = useCallback((e) => {
         if (e.key === 'Enter' && !e.shiftKey && !e.repeat) {
             e.preventDefault();
@@ -800,10 +798,10 @@ export default function AuraPulseBot({ isOpen, onClose, onOpen, user }) {
                 {isOpen && (
                     <div
                         role="dialog" aria-modal="true" aria-label="AURA Pulse wellbeing assistant"
-                        // 🌟 THE FIX: Dynamic height calculations to prevent top cutoff on mobile landscape
+                        // 🌟 THE FIX: Replaced 100dvh with max-h-[65vh] to prevent landscape cutoff
                         className={`mb-2 sm:mb-4 bg-white dark:bg-slate-900 shadow-2xl border border-slate-200 dark:border-slate-800 flex flex-col overflow-hidden transition-all duration-300 ease-in-out
                             ${chatSize === 'minimized' ? 'w-[calc(100vw-2rem)] sm:w-[380px] h-[64px] rounded-[1.5rem]' : ''}
-                            ${chatSize === 'normal' ? 'w-[calc(100vw-2rem)] sm:w-[380px] h-[660px] max-h-[calc(100dvh-120px)] rounded-[2rem]' : ''}
+                            ${chatSize === 'normal' ? 'w-[calc(100vw-2rem)] sm:w-[380px] h-[660px] max-h-[65vh] md:max-h-[calc(100dvh-120px)] rounded-[2rem]' : ''}
                             ${chatSize === 'maximized' ? 'w-[calc(100vw-2rem)] sm:w-[85vw] max-w-[1200px] h-[85vh] max-h-[900px] rounded-[2rem]' : ''}
                         `}
                     >
@@ -831,7 +829,7 @@ export default function AuraPulseBot({ isOpen, onClose, onOpen, user }) {
 
                             <div className="flex items-center gap-3">
                                 {/* 🌟 THE FIX: Removed the border separator class from this div */}
-                                <div className="flex items-center gap-2 pr-2">
+                                <div className="flex items-center gap-2 pr-1">
                                     {!isOnline && <WifiOff size={13} className="text-yellow-300" />}
                                     
                                     {view === 'CHAT' && chatSize !== 'minimized' && (
@@ -1123,14 +1121,12 @@ export default function AuraPulseBot({ isOpen, onClose, onOpen, user }) {
                             <div className="shrink-0 p-4 bg-white border-t border-slate-100">
                                 {isNearLimit && <p className={`text-[9px] font-bold text-right mb-1 ${inputLength >= MAX_INPUT ? 'text-red-500' : 'text-amber-500'}`}>{inputLength} / {MAX_INPUT}</p>}
                                 
-                                {/* 🌟 THE FIX: Switched from items-center to items-end to align buttons with auto-growing textarea */}
+                                {/* 🌟 THE FIX: Re-added auto-growing textarea and aligned items to the bottom */}
                                 <div className={`flex items-end gap-2 bg-slate-50 rounded-3xl pl-5 pr-3 py-2 border transition-all ${
                                     loading || isSending 
                                         ? 'opacity-60 border-slate-200' 
                                         : `border-slate-200 ${isAnonymous ? 'focus-within:border-purple-500' : 'focus-within:border-indigo-500'}`
                                 }`}>
-                                    
-                                    {/* 🌟 THE FIX: Replaced <input> with auto-growing <textarea> */}
                                     <textarea
                                         ref={inputRef} 
                                         value={input}
