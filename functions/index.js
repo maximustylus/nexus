@@ -501,3 +501,104 @@ exports.scheduledPulseNudge = onSchedule({
         return null;
     }
 });
+
+// =============================================================================
+// FUNCTION 4: FEEDS, SMART WATERCOOLER & PDPA GUARD
+// =============================================================================
+
+exports.processFeedPost = onCall(async (request) => {
+    // 1. Extract data sent from the React frontend
+    const { rawText, authorName, authorRole, isDemo } = request.data;
+
+    if (!rawText || rawText.trim() === '') {
+        throw new HttpsError('invalid-argument', 'Post content cannot be empty.');
+    }
+
+    // 2. The Strict System Prompt for Gemini
+    const systemInstruction = `
+    You are the NEXUS Feed Curator and PDPA Compliance Officer for a Singapore hospital.
+    Analyze the user's raw post. You MUST output a strictly valid JSON object (no markdown, no backticks).
+
+    STEP 1: COMPLIANCE CHECK (PDPA/PHI/Toxicity)
+    If the post contains patient names, NRIC/FIN, specific ward/bed identifiers linked to diagnoses, or toxic/unprofessional rants, REJECT IT.
+    Output: { "is_approved": false, "violation_type": "PDPA_WARNING" or "TOXICITY", "feedback": "Polite 1-sentence explanation of why it was blocked." }
+
+    STEP 2: CATEGORIZATION
+    If approved, categorize into EXACTLY ONE of these 4 pillars:
+    - "BOOKWORM": Clinical insights, medical papers, anonymized case studies, guidelines.
+    - "SOCIAL_BUTTERFLY": Kudos, team shoutouts, work culture, shift survivals.
+    - "BLUE_BEETLE": IT downtime, equipment updates, operational news.
+    - "BUSY_BEE": Courses, seminars, CME, grant deadlines, upskilling.
+
+    STEP 3: EXTRACTION & OUTPUT
+    Generate a concise 1-2 sentence "tldr". 
+    Generate 2-3 uppercase "tags".
+    If BLUE_BEETLE, assess "urgency" ("NORMAL" or "HIGH").
+    If BUSY_BEE, extract "event_date" and "location" if present.
+    
+    Approved Output Format:
+    {
+      "is_approved": true,
+      "category": "BOOKWORM" | "SOCIAL_BUTTERFLY" | "BLUE_BEETLE" | "BUSY_BEE",
+      "ai_enhancements": {
+        "tldr": "...",
+        "tags": ["...", "..."],
+        "urgency": "...", 
+        "event_date": "...", 
+        "location": "..." 
+      }
+    }
+    `;
+
+    try {
+        // We use Gemini 1.5 Flash because it is lightning fast for categorization
+        const model = genAI.getGenerativeModel({ 
+            model: "gemini-1.5-flash",
+            systemInstruction: systemInstruction 
+        });
+
+        // 3. Send the raw text to Gemini
+        const response = await model.generateContent(rawText);
+        const responseText = response.response.text();
+        
+        // Strip markdown formatting if Gemini accidentally wraps the JSON in ```json ... ```
+        const cleanJson = responseText.replace(/```json|```/g, '').trim();
+        const analysis = JSON.parse(cleanJson);
+
+        // 4. Handle Rejections (Air-Gap Protection)
+        if (!analysis.is_approved) {
+            console.log(`[AURA GUARD] Post rejected: ${analysis.violation_type}`);
+            return {
+                success: false,
+                feedback: analysis.feedback,
+                violation: analysis.violation_type
+            };
+        }
+
+        // 5. Build the final Database Object
+        const postDocument = {
+            author: authorName || 'Anonymous Staff',
+            role: authorRole || 'Staff',
+            timestamp: admin.firestore.FieldValue.serverTimestamp(),
+            raw_text: rawText,
+            category: analysis.category,
+            ai_enhancements: analysis.ai_enhancements,
+            likes: 0,
+            comments: 0,
+            isDemo: !!isDemo
+        };
+
+        // 6. Save to Firestore 'feed_posts' collection
+        const docRef = await admin.firestore().collection('feed_posts').add(postDocument);
+
+        return {
+            success: true,
+            postId: docRef.id,
+            category: analysis.category
+        };
+
+    } catch (error) {
+        console.error("[AURA] AI Feed Processing Error:", error);
+        throw new HttpsError('internal', 'AURA failed to process this post. Please try again.');
+    }
+});
