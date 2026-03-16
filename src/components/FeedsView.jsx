@@ -1,11 +1,12 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Sparkles, MessageSquare, ThumbsUp, Share2, ShieldAlert, Calendar, Link as LinkIcon, ExternalLink, Image as ImageIcon, Loader2, AlertTriangle, X } from 'lucide-react';
 import { useNexus } from '../context/NexusContext';
 
-// 🌟 FIREBASE IMPORTS
-import { db } from '../firebase';
+// 🌟 FIREBASE IMPORTS (Firestore, Functions, Storage)
+import { db, storage } from '../firebase';
 import { collection, query, orderBy, onSnapshot, doc, updateDoc, increment } from 'firebase/firestore';
 import { getFunctions, httpsCallable } from 'firebase/functions';
+import { ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
 
 // --- CATEGORY CONFIGURATION ---
 const CATEGORIES = {
@@ -88,7 +89,7 @@ const FeedsView = ({ user }) => {
     const [activeFilter, setActiveFilter] = useState('ALL');
     const [draftPost, setDraftPost] = useState('');
     
-    // 🌟 STATE: LIVE BACKEND
+    // 🌟 STATE: LIVE BACKEND & INTERACTIONS
     const [livePosts, setLivePosts] = useState([]);
     const [isPosting, setIsPosting] = useState(false);
     const [postError, setPostError] = useState(null);
@@ -97,6 +98,11 @@ const FeedsView = ({ user }) => {
     // 🌟 STATE: LINK PREVIEW
     const [linkPreview, setLinkPreview] = useState(null);
     const [isFetchingLink, setIsFetchingLink] = useState(false);
+
+    // 🌟 STATE: IMAGE UPLOAD
+    const [selectedImage, setSelectedImage] = useState(null);
+    const [imagePreviewUrl, setImagePreviewUrl] = useState(null);
+    const fileInputRef = useRef(null);
 
     // 🌟 EFFECT: THE URL WATCHER
     useEffect(() => {
@@ -133,6 +139,19 @@ const FeedsView = ({ user }) => {
         }
     };
 
+    // 🌟 HANDLE IMAGE SELECTION
+    const handleImageSelect = (e) => {
+        const file = e.target.files[0];
+        if (file) {
+            if (file.size > 5 * 1024 * 1024) { // 5MB limit
+                setPostError("Image is too large. Please select an image under 5MB.");
+                return;
+            }
+            setSelectedImage(file);
+            setImagePreviewUrl(URL.createObjectURL(file));
+        }
+    };
+
     // 🌟 EFFECT: REAL-TIME FIRESTORE LISTENER
     useEffect(() => {
         const q = query(collection(db, 'feed_posts'), orderBy('timestamp', 'desc'));
@@ -159,31 +178,48 @@ const FeedsView = ({ user }) => {
         ? combinedPosts 
         : combinedPosts.filter(post => post.category === activeFilter);
 
-    // 🌟 ACTION: POST TO DATABASE & GEMINI
+    // 🌟 ACTION: POST TO DATABASE & GEMINI (WITH IMAGE UPLOAD)
     const handlePostSubmit = async () => {
-        if (!draftPost.trim()) return;
+        if (!draftPost.trim() && !selectedImage) return; // Allow image-only posts
         setIsPosting(true); setPostError(null);
 
         try {
-            const functions = getFunctions(undefined, 'us-central1'); // Must match your region
+            let uploadedImageUrl = null;
+
+            // 1. Upload Image to Firebase Storage (if selected)
+            if (selectedImage) {
+                const imageRef = ref(storage, `feed_images/${Date.now()}_${selectedImage.name}`);
+                const uploadTask = await uploadBytesResumable(imageRef, selectedImage);
+                uploadedImageUrl = await getDownloadURL(uploadTask.ref);
+            }
+
+            // 2. Send to Gemini Cloud Function
+            const functions = getFunctions(undefined, 'us-central1'); // Must match your deployment region
             const processFeedPost = httpsCallable(functions, 'processFeedPost');
 
             const response = await processFeedPost({
-                rawText: draftPost,
+                rawText: draftPost || "[Image Post]",
                 authorName: user?.name || (isDemo ? 'S.H.I.E.L.D. Agent' : 'Staff Member'),
                 authorRole: user?.title || user?.role || 'Clinical Staff',
                 isDemo: isDemo,
-                externalLink: linkPreview
+                externalLink: linkPreview,
+                imageUrl: uploadedImageUrl // Pass the uploaded image URL!
             });
 
             if (response.data.success) {
+                // Clear the composer on success
                 setDraftPost('');
                 setLinkPreview(null);
+                setSelectedImage(null);
+                setImagePreviewUrl(null);
+                if (fileInputRef.current) fileInputRef.current.value = '';
             } else {
+                // Display Gemini's rejection reason (PDPA/Toxicity)
                 setPostError(response.data.feedback);
             }
         } catch (error) {
-            setPostError("Failed to connect to AURA. Please check your connection.");
+            console.error("Post Submission Error:", error);
+            setPostError("Failed to connect to AURA or upload media. Please try again.");
         } finally {
             setIsPosting(false);
         }
@@ -243,6 +279,19 @@ const FeedsView = ({ user }) => {
                             className="w-full bg-slate-50 dark:bg-slate-900 rounded-2xl p-4 text-sm text-slate-700 dark:text-slate-200 outline-none resize-none border border-slate-100 dark:border-slate-700 focus:border-indigo-300 dark:focus:border-indigo-600 transition-colors h-24 disabled:opacity-60"
                         />
 
+                        {/* IMAGE PREVIEW UI */}
+                        {imagePreviewUrl && (
+                            <div className="relative mt-2 mb-2 w-fit rounded-xl overflow-hidden border border-slate-200 shadow-sm animate-in zoom-in-95">
+                                <button 
+                                    onClick={() => { setSelectedImage(null); setImagePreviewUrl(null); if (fileInputRef.current) fileInputRef.current.value = ''; }}
+                                    className="absolute top-1.5 right-1.5 p-1 bg-slate-900/70 text-white rounded-full hover:bg-slate-900 transition-colors z-10"
+                                >
+                                    <X size={14} />
+                                </button>
+                                <img src={imagePreviewUrl} alt="Upload preview" className="h-32 w-auto object-cover" />
+                            </div>
+                        )}
+
                         {/* LINK PREVIEW UI */}
                         {isFetchingLink && (
                             <div className="flex items-center gap-2 text-[10px] font-bold text-slate-400 animate-pulse px-2">
@@ -285,7 +334,20 @@ const FeedsView = ({ user }) => {
                                     <ShieldAlert size={14} className={isDemo ? "text-rose-500" : "text-emerald-500"} />
                                     <span className="hidden sm:inline">{isDemo ? "S.H.I.E.L.D. SECURE COMMS" : "PDPA Guard Active"}</span>
                                 </div>
-                                <button className="p-1.5 text-slate-400 hover:text-indigo-500 transition-colors rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-50">
+                                
+                                {/* HIDDEN FILE INPUT & WIRED IMAGE BUTTON */}
+                                <input 
+                                    type="file" 
+                                    accept="image/png, image/jpeg, image/jpg, image/webp" 
+                                    className="hidden" 
+                                    ref={fileInputRef} 
+                                    onChange={handleImageSelect} 
+                                />
+                                <button 
+                                    onClick={() => fileInputRef.current.click()}
+                                    disabled={isPosting}
+                                    className="p-1.5 text-slate-400 hover:text-indigo-500 transition-colors rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-50"
+                                >
                                     <ImageIcon size={18} />
                                 </button>
                                 <button className="p-1.5 text-slate-400 hover:text-indigo-500 transition-colors rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-50">
@@ -295,7 +357,7 @@ const FeedsView = ({ user }) => {
                             
                             <button 
                                 onClick={handlePostSubmit}
-                                disabled={!draftPost.trim() || isPosting}
+                                disabled={(!draftPost.trim() && !selectedImage) || isPosting}
                                 className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed text-white px-5 py-2.5 rounded-xl text-xs font-black uppercase tracking-wider transition-all active:scale-95 shadow-md"
                             >
                                 {isPosting ? <><Loader2 size={14} className="animate-spin" /> Analyzing...</> : <><Sparkles size={14} /> Post & Enhance</>}
