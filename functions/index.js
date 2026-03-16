@@ -583,6 +583,7 @@ exports.processFeedPost = onCall(async (request) => {
             raw_text: rawText,
             category: analysis.category,
             ai_enhancements: analysis.ai_enhancements,
+            external_link: request.data.externalLink || null,
             likes: 0,
             comments: 0,
             isDemo: !!isDemo
