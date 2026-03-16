@@ -331,13 +331,12 @@ const getBatteryIcon = (level) => {
                                         </div>
                                     </div>
                                     <div className="flex flex-col items-end gap-2 shrink-0">
-                                        <div className="bg-slate-50 dark:bg-slate-700/50 p-3 rounded-xl">
-                                            {staffData ? getBatteryIcon(staffData.energy) : <Battery className="text-slate-300" size={28} />}
+                                        <div className="bg-slate-50 dark:bg-slate-700/50 p-3 rounded-xl flex items-center justify-center min-h-[44px]">
+                                            {getBatteryIcon(staffData ? staffData.energy : 0)}
                                         </div>
                                         {!canEdit && <Lock size={12} className="text-slate-300" />}
                                     </div>
                                 </div>
-
                                 <div className="space-y-2 mt-auto">
                                     <div className="flex justify-between items-end">
                                         <span className="text-[10px] font-bold text-slate-400 uppercase">Energy</span>
