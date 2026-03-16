@@ -172,10 +172,31 @@ const getStatusRecommendation = (energy, focus) => {
         return "Focused: Thriving & engaged. Prime for deep work or complex cases.";
     };
 
-    const getBatteryIcon = (level) => {
-        if (level > 75) return <BatteryFull className="text-emerald-500" size={24} />;
-        if (level > 40) return <BatteryCharging className="text-yellow-500" size={24} />;
-        return <BatteryWarning className="text-red-500" size={24} />;
+const getBatteryIcon = (level) => {
+        // Fallback to 0 if offline/no data
+        const e = level || 0;
+        
+        return (
+            <div className="flex items-center gap-[2px] p-[3px] border-2 border-slate-300 dark:border-slate-600 rounded-[6px] relative bg-white dark:bg-slate-800 shadow-inner shrink-0 mr-1">
+                {/* Battery Nub */}
+                <div className="absolute -right-2 top-1/2 -translate-y-1/2 w-1.5 h-3 bg-slate-300 dark:bg-slate-600 rounded-r-[3px]" />
+                
+                {/* Tier 5: Burnout (0-20%) */}
+                <div className={`w-2.5 h-4 rounded-[2px] transition-colors duration-500 ${e > 0 ? 'bg-rose-500 shadow-[0_0_5px_rgba(244,63,94,0.4)]' : 'bg-slate-100 dark:bg-slate-700'}`} />
+                
+                {/* Tier 4: Depleted (21-40%) */}
+                <div className={`w-2.5 h-4 rounded-[2px] transition-colors duration-500 ${e > 20 ? 'bg-orange-500 shadow-[0_0_5px_rgba(249,115,22,0.4)]' : 'bg-slate-100 dark:bg-slate-700'}`} />
+                
+                {/* Tier 3: Overworked (41-60%) */}
+                <div className={`w-2.5 h-4 rounded-[2px] transition-colors duration-500 ${e > 40 ? 'bg-amber-400 shadow-[0_0_5px_rgba(251,191,36,0.4)]' : 'bg-slate-100 dark:bg-slate-700'}`} />
+                
+                {/* Tier 2: Functioning (61-80%) */}
+                <div className={`w-2.5 h-4 rounded-[2px] transition-colors duration-500 ${e > 60 ? 'bg-emerald-500 shadow-[0_0_5px_rgba(16,185,129,0.4)]' : 'bg-slate-100 dark:bg-slate-700'}`} />
+                
+                {/* Tier 1: Focused (81-100%) */}
+                <div className={`w-2.5 h-4 rounded-[2px] transition-colors duration-500 ${e > 80 ? 'bg-blue-500 shadow-[0_0_5px_rgba(59,130,246,0.4)]' : 'bg-slate-100 dark:bg-slate-700'}`} />
+            </div>
+        );
     };
 
     const getBarColor = (level) => {
