@@ -1,3 +1,4 @@
+import FeedsView from './components/FeedsView';
 import FeedbackWidget from './components/FeedbackWidget';
 import AuraGreeting from './components/AuraGreeting';
 import ScrollToTop from './components/ScrollToTop';
@@ -638,22 +639,20 @@ floatingWidgets={
         </div>
       </div>
       
-     {/* MAIN CONTENT AREA */}
-     {(isAdminOpen && (user?.role === 'admin' || isDemo)) ? (
-       <div className="md:col-span-2">
-         <AdminPanel teamData={activeTeamData} staffLoads={activeStaffLoads} user={user} />
-       </div>
-     ) : (
-       <div className="md:col-span-2 w-full animate-in fade-in duration-500">
-         {/* 🌟 NEW ROUTING LOGIC */}
-         {currentView === 'dashboard' && renderDashboardView()}
-         {currentView === 'feeds' && renderFeedsPlaceholder()}
-         {currentView === 'roster' && <RosterView user={user} />}
-         {currentView === 'pulse' && <WellbeingView user={user} />}
-
-         <div className="h-32 md:h-24 w-full shrink-0" />
-       </div>
-     )}
+    {/* MAIN CONTENT AREA */}
+      {(isAdminOpen && (user?.role === 'admin' || isDemo)) ? (
+        <div className="md:col-span-2">
+          <AdminPanel teamData={activeTeamData} staffLoads={activeStaffLoads} user={user} />
+        </div>
+      ) : (
+        <div className="md:col-span-2 w-full animate-in fade-in duration-500">
+          {currentView === 'dashboard' && renderDashboardView()}
+          {currentView === 'feeds' && <FeedsView user={user} />}
+          {currentView === 'roster' && <RosterView user={user} />}
+          {currentView === 'pulse' && <WellbeingView user={user} />}
+          <div className="h-32 md:h-24 w-full shrink-0" />
+        </div>
+      )}
       
     </ResponsiveLayout>
   );
