@@ -1,11 +1,9 @@
-// Import the functions you need from the SDKs you need
+import { getStorage } from 'firebase/storage';
 import { initializeApp } from "firebase/app";
 import { getFirestore } from "firebase/firestore";
 import { getAuth } from "firebase/auth";
 import { getMessaging, getToken } from "firebase/messaging"; // 🛡️ NEW: Messaging imports
 
-// Your web app's Firebase configuration
-// (Recovered from your idc-app-e0c59 project settings)
 const firebaseConfig = {
   apiKey: "AIzaSyANs4oTfPMmFnALFSFGGCsIfqQMDjqxWK0",
   authDomain: "idc-app-e0c59.firebaseapp.com",
@@ -18,13 +16,11 @@ const firebaseConfig = {
 
 // Initialize Firebase Core
 const app = initializeApp(firebaseConfig);
+
+export const storage = getStorage(app);
 export const db = getFirestore(app);
 export const auth = getAuth(app);
-
-// 🛡️ NEW: Initialize Firebase Cloud Messaging
 export const messaging = getMessaging(app);
-
-// 🛡️ NEW: The Handshake Function (Requests permission, boots worker, gets token)
 export const requestForToken = async () => {
   try {
     console.log("Requesting notification permission...");
