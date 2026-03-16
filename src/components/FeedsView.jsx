@@ -20,7 +20,7 @@ const LIVE_MOCK_POSTS = [ /* ... your hospital posts ... */ ];
 const DEMO_MOCK_POSTS = [ /* ... your marvel posts ... */ ];
 
 // 🌟 PHASE 1: THE COMMENT COMPONENT 
-const CommentSection = ({ postId, user, isMock }) => {
+const CommentSection = ({ postId, user, isMock, postAuthor }) => {
     const [comments, setComments] = useState([]);
     const [draft, setDraft] = useState('');
     const [isSubmitting, setIsSubmitting] = useState(false);
@@ -35,7 +35,7 @@ const CommentSection = ({ postId, user, isMock }) => {
         return () => unsubscribe();
     }, [postId, isMock]);
 
-    const handleSubmit = async (e) => {
+const handleSubmit = async (e) => {
         e.preventDefault();
         if (!draft.trim()) return;
         if (isMock) {
@@ -46,17 +46,35 @@ const CommentSection = ({ postId, user, isMock }) => {
 
         setIsSubmitting(true);
         try {
+            // 1. Save the comment
             await addDoc(collection(db, 'feed_posts', postId, 'comments'), {
                 author: user?.name || 'Staff Member',
                 text: draft,
                 timestamp: serverTimestamp()
             });
+            
+            // 2. Increment comment count
             await updateDoc(doc(db, 'feed_posts', postId), { comments: increment(1) });
+            
+            // 3. 🌟 NEW: SILENTLY NOTIFY THE AUTHOR (If it's not their own post)
+            const commenterName = user?.name || 'Staff Member';
+            if (postAuthor !== commenterName) {
+                await addDoc(collection(db, 'notifications'), {
+                    recipient: postAuthor,          // Who gets the alert
+                    sender: commenterName,          // Who did the action
+                    type: 'COMMENT',
+                    postId: postId,
+                    preview: draft.substring(0, 40) + '...', // A tiny snippet of what they said
+                    read: false,
+                    timestamp: serverTimestamp()
+                });
+            }
+
             setDraft(''); 
         } catch (error) { console.error("Error posting comment:", error); } 
         finally { setIsSubmitting(false); }
     };
-
+    
     return (
         <div className="mt-4 pt-4 border-t border-slate-100 dark:border-slate-700 animate-in slide-in-from-top-2 fade-in duration-200">
             <div className="space-y-3 max-h-48 overflow-y-auto pr-2 scrollbar-thin mb-3">
@@ -202,7 +220,7 @@ const FeedsView = ({ user }) => {
         setDraftPost(post.raw_text || '');
         setLinkPreview(post.external_link || null);
         setImagePreviewUrl(post.image_url || null);
-        window.scrollTo({ top: 0, behavior: 'smooth' }); // Scroll user up to the composer!
+        window.scrollTo({ top: 0, behavior: 'smooth' });
     };
 
     const cancelEditSetup = () => {
@@ -214,12 +232,34 @@ const FeedsView = ({ user }) => {
         if (fileInputRef.current) fileInputRef.current.value = '';
     };
 
-    const handleLike = async (postId) => {
+const handleLike = async (postId) => {
         if (likedPosts.has(postId)) return;
         setLikedPosts(prev => new Set(prev).add(postId));
         if (String(postId).startsWith('m') || String(postId).startsWith('live')) return;
-        try { await updateDoc(doc(db, 'feed_posts', postId), { likes: increment(1) }); } 
-        catch (error) { setLikedPosts(prev => { const newSet = new Set(prev); newSet.delete(postId); return newSet; }); }
+        
+        try { 
+            // 1. Increment the Like Counter
+            await updateDoc(doc(db, 'feed_posts', postId), { likes: increment(1) }); 
+
+            // 2. SILENTLY NOTIFY THE AUTHOR
+            const post = combinedPosts.find(p => p.id === postId);
+            const likerName = user?.name || 'Staff Member';
+
+            if (post && post.author !== likerName) {
+                await addDoc(collection(db, 'notifications'), {
+                    recipient: post.author,
+                    sender: likerName,
+                    type: 'LIKE',
+                    postId: postId,
+                    read: false,
+                    timestamp: serverTimestamp()
+                });
+            }
+
+        } catch (error) { 
+            // Revert on failure
+            setLikedPosts(prev => { const newSet = new Set(prev); newSet.delete(postId); return newSet; }); 
+        }
     };
 
     const toggleComments = (postId) => {
@@ -392,8 +432,13 @@ const FeedsView = ({ user }) => {
                                 </button>
                             </div>
 
-                            {openComments.has(post.id) && (
-                                <CommentSection postId={post.id} user={user} isMock={isMock} />
+                                {openComments.has(post.id) && (
+                                <CommentSection 
+                                    postId={post.id} 
+                                    user={user} 
+                                    isMock={isMock} 
+                                    postAuthor={post.author}
+                                />
                             )}
 
                         </div>
