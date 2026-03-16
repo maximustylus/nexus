@@ -231,10 +231,11 @@ export default function AuraPulseBot({ isOpen, onClose, onOpen, user }) {
         setIsSending(true);
         setMessages(prev => [...prev, { role: 'user', text }]);
         
-        // Reset input and text area height
         if (typeof overrideText !== 'string') {
             setInput('');
-            if (inputRef.current) inputRef.current.style.height = '40px'; 
+            if (inputRef.current) {
+                inputRef.current.style.height = 'auto';
+            }
         }
         
         setLoading(true);
@@ -319,7 +320,7 @@ export default function AuraPulseBot({ isOpen, onClose, onOpen, user }) {
         }
     }, [input, loading, isSending, isOnline, messages, selectedPersona, isDemo, liveMemory, user, setMessages, chatSize]);
 
-const handleKeyDown = useCallback((e) => {
+    const handleKeyDown = useCallback((e) => {
         const isDesktop = window.innerWidth > 768;
         
         if (e.key === 'Enter' && !e.shiftKey && !e.repeat && isDesktop) {
@@ -797,7 +798,7 @@ const handleKeyDown = useCallback((e) => {
 
             <div className={`fixed bottom-24 xl:bottom-6 right-4 xl:right-6 flex flex-col items-end drop-shadow-2xl ${isOpen ? 'z-[100]' : 'z-50'} ${chatSize === 'maximized' ? 'xl:right-[7.5vw]' : ''}`}>
                 {isOpen && (
-<div
+                    <div
                         role="dialog" aria-modal="true" aria-label="AURA Pulse wellbeing assistant"
                         className={`mb-2 sm:mb-4 bg-white dark:bg-slate-900 shadow-2xl border border-slate-200 dark:border-slate-800 flex flex-col overflow-hidden transition-all duration-300 ease-in-out
                             ${chatSize === 'minimized' ? 'w-[calc(100vw-2rem)] sm:w-[380px] h-[64px] rounded-[1.5rem]' : ''}
@@ -828,7 +829,6 @@ const handleKeyDown = useCallback((e) => {
                             </div>
 
                             <div className="flex items-center gap-3">
-                                {/* 🌟 THE FIX: Removed the border separator class from this div */}
                                 <div className="flex items-center gap-2 pr-1">
                                     {!isOnline && <WifiOff size={13} className="text-yellow-300" />}
                                     
@@ -857,7 +857,6 @@ const handleKeyDown = useCallback((e) => {
                                     )}
                                 </div>
 
-                                {/* MAC-STYLE WINDOW CONTROLS */}
                                 <div className="flex items-center gap-2 group/window pl-1">
                                     <button 
                                         onClick={() => setChatSize(chatSize === 'minimized' ? 'normal' : 'minimized')}
@@ -1067,15 +1066,19 @@ const handleKeyDown = useCallback((e) => {
                                                             <div className="text-[8px] font-black uppercase opacity-60 mb-1">Zone</div>
                                                             <div className="text-xs font-black">{cfg.icon} {cfg.label}</div>
                                                         </div>
-                                                          {/* 🌟 ENHANCED 5-TIER MODAL BATTERY 🌟 */}
-                                                          <div className="flex items-center justify-between w-full gap-1 p-1 border-2 border-blue-100 rounded-md relative bg-white">
-                                                              <div className="absolute -right-[6px] top-1/2 -translate-y-1/2 w-1 h-3 bg-blue-100 rounded-r-sm" />
-                                                              <div className={`flex-1 h-2.5 rounded-sm transition-all duration-500 ${pendingLog.energy > 0 ? 'bg-rose-500' : 'bg-slate-100'}`} />
-                                                              <div className={`flex-1 h-2.5 rounded-sm transition-all duration-500 ${pendingLog.energy > 20 ? 'bg-orange-500' : 'bg-slate-100'}`} />
-                                                              <div className={`flex-1 h-2.5 rounded-sm transition-all duration-500 ${pendingLog.energy > 40 ? 'bg-amber-400' : 'bg-slate-100'}`} />
-                                                              <div className={`flex-1 h-2.5 rounded-sm transition-all duration-500 ${pendingLog.energy > 60 ? 'bg-emerald-500' : 'bg-slate-100'}`} />
-                                                              <div className={`flex-1 h-2.5 rounded-sm transition-all duration-500 ${pendingLog.energy > 80 ? 'bg-blue-500' : 'bg-slate-100'}`} />
-                                                          </div>
+                                                        <div className="p-3 rounded-xl border bg-blue-50 text-blue-700 border-blue-100 text-center">
+                                                            <div className="text-[8px] font-black uppercase opacity-60 mb-1">Energy</div>
+                                                            <div className="text-xs font-black mb-1.5">{pendingLog.energy}%</div>
+                                                            
+                                                            {/* 🌟 ENHANCED 5-TIER MODAL BATTERY 🌟 */}
+                                                            <div className="flex items-center justify-between w-full gap-1 p-1 border-2 border-blue-100 rounded-md relative bg-white">
+                                                                <div className="absolute -right-[6px] top-1/2 -translate-y-1/2 w-1 h-3 bg-blue-100 rounded-r-sm" />
+                                                                <div className={`flex-1 h-2.5 rounded-sm transition-all duration-500 ${pendingLog.energy > 0 ? 'bg-rose-500' : 'bg-slate-100'}`} />
+                                                                <div className={`flex-1 h-2.5 rounded-sm transition-all duration-500 ${pendingLog.energy > 20 ? 'bg-orange-500' : 'bg-slate-100'}`} />
+                                                                <div className={`flex-1 h-2.5 rounded-sm transition-all duration-500 ${pendingLog.energy > 40 ? 'bg-amber-400' : 'bg-slate-100'}`} />
+                                                                <div className={`flex-1 h-2.5 rounded-sm transition-all duration-500 ${pendingLog.energy > 60 ? 'bg-emerald-500' : 'bg-slate-100'}`} />
+                                                                <div className={`flex-1 h-2.5 rounded-sm transition-all duration-500 ${pendingLog.energy > 80 ? 'bg-blue-500' : 'bg-slate-100'}`} />
+                                                            </div>
                                                         </div>
                                                     </div>
                                                     {pendingLog.action && (
@@ -1124,7 +1127,6 @@ const handleKeyDown = useCallback((e) => {
                             <div className="shrink-0 p-4 bg-white border-t border-slate-100">
                                 {isNearLimit && <p className={`text-[9px] font-bold text-right mb-1 ${inputLength >= MAX_INPUT ? 'text-red-500' : 'text-amber-500'}`}>{inputLength} / {MAX_INPUT}</p>}
                                 
-                                {/* 🌟 THE FIX: Re-added auto-growing textarea and aligned items to the bottom */}
                                 <div className={`flex items-end gap-2 bg-slate-50 rounded-3xl pl-5 pr-3 py-2 border transition-all ${
                                     loading || isSending 
                                         ? 'opacity-60 border-slate-200' 
