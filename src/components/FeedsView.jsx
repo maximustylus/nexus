@@ -14,16 +14,86 @@ const CATEGORIES = {
 // --- REAL HOSPITAL DATA ---
 const LIVE_MOCK_POSTS = [
     {
-        id: 1, author: 'Dr. Sarah Lee', role: 'Senior Consultant', avatar: 'bg-emerald-100 text-emerald-700', timestamp: '2 hours ago', category: 'BOOKWORM',
-        raw_text: "Attached is the new NEJM paper regarding the updated pediatric asthma management protocols. We should discuss implementing the reduced corticosteroid scaling during tomorrow's grand round.",
-        ai_enhancements: { tldr: "Study shows 15% reduction in side-effects with revised corticosteroid scaling. Discussion slated for tomorrow's Grand Round.", tags: ['PEDIATRICS', 'CLINICAL GUIDELINES'] },
-        likes: 12, comments: 3
+        id: 1, 
+        author: 'Alif', 
+        role: 'Lead CEP', 
+        avatar: 'bg-emerald-100 text-emerald-700', 
+        timestamp: '1 hour ago', 
+        category: 'BOOKWORM',
+        raw_text: "The ACSM just released their updated position stand on resistance training. It is an excellent review on volume and intensity modulation. A must-read as we refine our exercise prescription protocols.",
+        ai_enhancements: { 
+            tldr: "Updated ACSM resistance training guidelines published. Key reading for exercise prescription protocols.", 
+            tags: ['ACSM', 'RESISTANCE TRAINING', 'CLINICAL GUIDELINES'] 
+        },
+        external_link: { 
+            title: "ACSM Position Stand on Resistance Training", 
+            url: "https://pmc.ncbi.nlm.nih.gov/articles/PMC12965823/", 
+            domain: "ncbi.nlm.nih.gov" 
+        },
+        likes: 14, 
+        comments: 3
     },
     {
-        id: 2, author: 'Alif', role: 'Nurse Manager', avatar: 'bg-purple-100 text-purple-700', timestamp: '4 hours ago', category: 'SOCIAL_BUTTERFLY',
-        raw_text: "Massive shoutout to the night shift team in Ward 4. It was absolute chaos from 2am to 5am but everyone covered for each other seamlessly. Couldn't ask for a better crew.",
-        ai_enhancements: { tldr: "Kudos to Ward 4 night shift for exceptional teamwork under pressure.", tags: ['KUDOS', 'NIGHT SHIFT', 'TEAMWORK'] },
-        likes: 34, comments: 8
+        id: 2, 
+        author: 'Nisa', 
+        role: 'Admin', 
+        avatar: 'bg-purple-100 text-purple-700', 
+        timestamp: '3 hours ago', 
+        category: 'SOCIAL_BUTTERFLY',
+        raw_text: "Where is your battery at today? Are you thriving or just surviving? We've updated our NEXUS dashboard to reflect both Physical and Emotional capacity based on this great visual framework. Remember to check in with yourselves and your colleagues!",
+        ai_enhancements: { 
+            tldr: "NEXUS dashboard updated to track both emotional and physical social batteries. Reminder to check in.", 
+            tags: ['WELLBEING', 'MENTAL HEALTH', 'TEAM CULTURE'] 
+        },
+        external_link: { 
+            title: "Social Battery: Emotional & Physical Matrix", 
+            url: "https://www.facebook.com/SocialButterflyCCS/posts/wheres-your-battery-at-today-are-you-thriving-or-just-surviving-this-visual-repr/1405645187438687/", 
+            domain: "facebook.com" 
+        },
+        image_url: "https://images.unsplash.com/photo-1499557408842-80695bf7124f?q=80&w=1200&auto=format&fit=crop", // Warm, abstract wellbeing aesthetic
+        likes: 42, 
+        comments: 8
+    },
+    {
+        id: 3, 
+        author: 'Linder', 
+        role: 'CEP', 
+        avatar: 'bg-amber-100 text-amber-700', 
+        timestamp: '5 hours ago', 
+        category: 'BUSY_BEE',
+        raw_text: "Highly recommend looking into the Active Health Lab's CALM (Combat Age-Related Loss of Muscle) program. It has fantastic insights on protein intake interventions specifically for our menopausal patients. Great structured approach we can learn from.",
+        ai_enhancements: { 
+            tldr: "Recommendation to review the CALM program for interventions on muscle loss and protein intake in menopausal patients.", 
+            tags: ['CALM', 'MENOPAUSE', 'NUTRITION'] 
+        },
+        external_link: { 
+            title: "Combat Age-Related Loss of Muscle (CALM)", 
+            url: "https://www.activesgcircle.gov.sg/activehealth/our-programmes?filter=just_getting_started&slide=combat-age-related-loss-of-muscle-calm-10-20", 
+            domain: "activesgcircle.gov.sg" 
+        },
+        likes: 21, 
+        comments: 4
+    },
+    {
+        id: 4, 
+        author: 'A/Prof. Ashik', 
+        role: 'HOD/HOS', 
+        avatar: 'bg-blue-100 text-blue-700', 
+        timestamp: '1 day ago', 
+        category: 'BLUE_BEETLE',
+        raw_text: "Anthropic just launched a series of free AI courses on Skilljar. Given our strong push towards integrating smart tools like AURA into our workflow, I highly encourage everyone to take a look and upskill on prompt engineering.",
+        ai_enhancements: { 
+            urgency: 'NORMAL', 
+            tldr: "HOD encourages staff to utilize free Anthropic AI courses to improve prompt engineering skills.", 
+            tags: ['AI TRAINING', 'ANTHROPIC', 'UPSKILLING'] 
+        },
+        external_link: { 
+            title: "Anthropic Educational Courses", 
+            url: "https://anthropic.skilljar.com/", 
+            domain: "anthropic.skilljar.com" 
+        },
+        likes: 38, 
+        comments: 5
     }
 ];
 
