@@ -1,10 +1,10 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Sparkles, MessageSquare, ThumbsUp, Share2, ShieldAlert, Calendar, Link as LinkIcon, ExternalLink, Image as ImageIcon, Loader2, AlertTriangle, X } from 'lucide-react';
+import { Sparkles, MessageSquare, ThumbsUp, Share2, ShieldAlert, Calendar, Link as LinkIcon, ExternalLink, Image as ImageIcon, Loader2, AlertTriangle, X, Send } from 'lucide-react';
 import { useNexus } from '../context/NexusContext';
 
-// 🌟 FIREBASE IMPORTS (Firestore, Functions, Storage)
+// 🌟 FIREBASE IMPORTS 
 import { db, storage } from '../firebase';
-import { collection, query, orderBy, onSnapshot, doc, updateDoc, increment } from 'firebase/firestore';
+import { collection, query, orderBy, onSnapshot, doc, updateDoc, increment, addDoc, serverTimestamp } from 'firebase/firestore';
 import { getFunctions, httpsCallable } from 'firebase/functions';
 import { ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
 
@@ -84,31 +84,120 @@ const DEMO_MOCK_POSTS = [
     }
 ];
 
+// 🌟 PHASE 1: THE COMMENT COMPONENT 🌟
+const CommentSection = ({ postId, user, isMock }) => {
+    const [comments, setComments] = useState([]);
+    const [draft, setDraft] = useState('');
+    const [isSubmitting, setIsSubmitting] = useState(false);
+
+    // Fetch live comments if it's a real database post
+    useEffect(() => {
+        if (isMock) return; 
+        const q = query(collection(db, 'feed_posts', postId, 'comments'), orderBy('timestamp', 'asc'));
+        const unsubscribe = onSnapshot(q, (snapshot) => {
+            const fetched = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+            setComments(fetched);
+        });
+        return () => unsubscribe();
+    }, [postId, isMock]);
+
+    const handleSubmit = async (e) => {
+        e.preventDefault();
+        if (!draft.trim()) return;
+
+        // If it's a Marvel/Hospital mock post, just fake the comment instantly
+        if (isMock) {
+            setComments(prev => [...prev, { id: Date.now().toString(), author: user?.name || 'You', text: draft }]);
+            setDraft('');
+            return;
+        }
+
+        setIsSubmitting(true);
+        try {
+            // 1. Save the comment to the subcollection
+            await addDoc(collection(db, 'feed_posts', postId, 'comments'), {
+                author: user?.name || 'Staff Member',
+                text: draft,
+                timestamp: serverTimestamp()
+            });
+            // 2. Tell the main post to +1 its comment counter
+            await updateDoc(doc(db, 'feed_posts', postId), {
+                comments: increment(1)
+            });
+            setDraft(''); // Clear input
+        } catch (error) {
+            console.error("Error posting comment:", error);
+        } finally {
+            setIsSubmitting(false);
+        }
+    };
+
+    return (
+        <div className="mt-4 pt-4 border-t border-slate-100 dark:border-slate-700 animate-in slide-in-from-top-2 fade-in duration-200">
+            {/* The Comment Thread */}
+            <div className="space-y-3 max-h-48 overflow-y-auto pr-2 scrollbar-thin mb-3">
+                {comments.length === 0 ? (
+                    <p className="text-xs text-slate-400 italic text-center py-2">No comments yet. Start the conversation!</p>
+                ) : (
+                    comments.map(c => (
+                        <div key={c.id} className="bg-slate-50 dark:bg-slate-800/50 p-3 rounded-2xl w-fit min-w-[60%]">
+                            <p className="text-[11px] font-bold text-slate-800 dark:text-slate-200">{c.author}</p>
+                            <p className="text-sm text-slate-600 dark:text-slate-300 mt-0.5">{c.text}</p>
+                        </div>
+                    ))
+                )}
+            </div>
+
+            {/* The Input Box */}
+            <form onSubmit={handleSubmit} className="flex gap-2 items-center">
+                <div className="w-8 h-8 rounded-full bg-indigo-100 text-indigo-700 flex items-center justify-center text-xs font-black shrink-0">
+                    {user?.name ? user.name.charAt(0) : 'U'}
+                </div>
+                <input
+                    type="text"
+                    placeholder="Write a comment..."
+                    value={draft}
+                    onChange={(e) => setDraft(e.target.value)}
+                    disabled={isSubmitting}
+                    className="flex-1 bg-slate-100 dark:bg-slate-900 border-none text-sm rounded-full px-4 py-2 focus:ring-2 focus:ring-indigo-500 outline-none text-slate-700 dark:text-slate-200 disabled:opacity-60 transition-all"
+                />
+                <button 
+                    type="submit" 
+                    disabled={!draft.trim() || isSubmitting} 
+                    className="text-white bg-indigo-600 hover:bg-indigo-700 disabled:bg-slate-200 disabled:text-slate-400 p-2 rounded-full transition-colors"
+                >
+                    {isSubmitting ? <Loader2 size={16} className="animate-spin" /> : <Send size={16} />}
+                </button>
+            </form>
+        </div>
+    );
+};
+
+// --- MAIN FEED COMPONENT ---
 const FeedsView = ({ user }) => {
     const { isDemo } = useNexus();
     const [activeFilter, setActiveFilter] = useState('ALL');
     const [draftPost, setDraftPost] = useState('');
     
-    // 🌟 STATE: LIVE BACKEND & INTERACTIONS
+    // LIVE STATE
     const [livePosts, setLivePosts] = useState([]);
     const [isPosting, setIsPosting] = useState(false);
     const [postError, setPostError] = useState(null);
     const [likedPosts, setLikedPosts] = useState(new Set());
+    
+    // 🌟 STATE: WHICH COMMENTS ARE OPEN?
+    const [openComments, setOpenComments] = useState(new Set());
 
-    // 🌟 STATE: LINK PREVIEW
+    // MEDIA STATE
     const [linkPreview, setLinkPreview] = useState(null);
     const [isFetchingLink, setIsFetchingLink] = useState(false);
-
-    // 🌟 STATE: IMAGE UPLOAD
     const [selectedImage, setSelectedImage] = useState(null);
     const [imagePreviewUrl, setImagePreviewUrl] = useState(null);
     const fileInputRef = useRef(null);
 
-    // 🌟 EFFECT: THE URL WATCHER
     useEffect(() => {
         const urlRegex = /(https?:\/\/[^\s]+)/g;
         const matches = draftPost.match(urlRegex);
-
         if (matches && matches.length > 0) {
             const detectedUrl = matches[0];
             if (!linkPreview || linkPreview.url !== detectedUrl) {
@@ -117,51 +206,32 @@ const FeedsView = ({ user }) => {
         }
     }, [draftPost]);
 
-    // 🌟 THE LINK SCRAPER (Microlink API)
     const fetchLinkPreview = async (url) => {
         setIsFetchingLink(true);
         try {
             const response = await fetch(`https://api.microlink.io?url=${encodeURIComponent(url)}`);
             const data = await response.json();
-            
             if (data.status === 'success') {
-                setLinkPreview({
-                    title: data.data.title || 'Shared Link',
-                    domain: data.data.publisher || new URL(url).hostname,
-                    url: url,
-                    image_url: data.data.image?.url || null
-                });
+                setLinkPreview({ title: data.data.title || 'Shared Link', domain: data.data.publisher || new URL(url).hostname, url: url, image_url: data.data.image?.url || null });
             }
-        } catch (error) {
-            console.error("Failed to fetch link preview:", error);
-        } finally {
-            setIsFetchingLink(false);
-        }
+        } catch (error) { console.error("Failed to fetch link preview"); } finally { setIsFetchingLink(false); }
     };
 
-    // 🌟 HANDLE IMAGE SELECTION
     const handleImageSelect = (e) => {
         const file = e.target.files[0];
         if (file) {
-            if (file.size > 5 * 1024 * 1024) { // 5MB limit
-                setPostError("Image is too large. Please select an image under 5MB.");
-                return;
-            }
-            setSelectedImage(file);
-            setImagePreviewUrl(URL.createObjectURL(file));
+            if (file.size > 5 * 1024 * 1024) { setPostError("Image too large. Limit 5MB."); return; }
+            setSelectedImage(file); setImagePreviewUrl(URL.createObjectURL(file));
         }
     };
 
-    // 🌟 EFFECT: REAL-TIME FIRESTORE LISTENER
     useEffect(() => {
         const q = query(collection(db, 'feed_posts'), orderBy('timestamp', 'desc'));
         const unsubscribe = onSnapshot(q, (snapshot) => {
             const fetchedPosts = snapshot.docs.map(doc => {
                 const data = doc.data();
                 let timeString = 'Just now';
-                if (data.timestamp?.toDate) {
-                    timeString = data.timestamp.toDate().toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
-                }
+                if (data.timestamp?.toDate) { timeString = data.timestamp.toDate().toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }); }
                 return { id: doc.id, ...data, timestamp: timeString, avatar: 'bg-indigo-100 text-indigo-700' };
             });
             setLivePosts(fetchedPosts);
@@ -169,102 +239,64 @@ const FeedsView = ({ user }) => {
         return () => unsubscribe();
     }, []);
 
-    // 🌟 DATA MERGING
     const baseDataset = isDemo ? DEMO_MOCK_POSTS : LIVE_MOCK_POSTS;
     const filteredDbPosts = livePosts.filter(p => p.isDemo === isDemo);
     const combinedPosts = [...filteredDbPosts, ...baseDataset];
-    
-    const displayPosts = activeFilter === 'ALL' 
-        ? combinedPosts 
-        : combinedPosts.filter(post => post.category === activeFilter);
+    const displayPosts = activeFilter === 'ALL' ? combinedPosts : combinedPosts.filter(post => post.category === activeFilter);
 
-    // 🌟 ACTION: POST TO DATABASE & GEMINI (WITH IMAGE UPLOAD)
     const handlePostSubmit = async () => {
-        if (!draftPost.trim() && !selectedImage) return; // Allow image-only posts
+        if (!draftPost.trim() && !selectedImage) return; 
         setIsPosting(true); setPostError(null);
-
         try {
             let uploadedImageUrl = null;
-
-            // 1. Upload Image to Firebase Storage (if selected)
             if (selectedImage) {
                 const imageRef = ref(storage, `feed_images/${Date.now()}_${selectedImage.name}`);
                 const uploadTask = await uploadBytesResumable(imageRef, selectedImage);
                 uploadedImageUrl = await getDownloadURL(uploadTask.ref);
             }
-
-            // 2. Send to Gemini Cloud Function
-            const functions = getFunctions(undefined, 'us-central1'); // Must match your deployment region
+            const functions = getFunctions(undefined, 'us-central1'); 
             const processFeedPost = httpsCallable(functions, 'processFeedPost');
-
             const response = await processFeedPost({
                 rawText: draftPost || "[Image Post]",
                 authorName: user?.name || (isDemo ? 'S.H.I.E.L.D. Agent' : 'Staff Member'),
                 authorRole: user?.title || user?.role || 'Clinical Staff',
                 isDemo: isDemo,
                 externalLink: linkPreview,
-                imageUrl: uploadedImageUrl // Pass the uploaded image URL!
+                imageUrl: uploadedImageUrl
             });
-
             if (response.data.success) {
-                // Clear the composer on success
-                setDraftPost('');
-                setLinkPreview(null);
-                setSelectedImage(null);
-                setImagePreviewUrl(null);
+                setDraftPost(''); setLinkPreview(null); setSelectedImage(null); setImagePreviewUrl(null);
                 if (fileInputRef.current) fileInputRef.current.value = '';
-            } else {
-                // Display Gemini's rejection reason (PDPA/Toxicity)
-                setPostError(response.data.feedback);
-            }
-        } catch (error) {
-            console.error("Post Submission Error:", error);
-            setPostError("Failed to connect to AURA or upload media. Please try again.");
-        } finally {
-            setIsPosting(false);
-        }
+            } else { setPostError(response.data.feedback); }
+        } catch (error) { setPostError("Failed to post. Check your connection."); } finally { setIsPosting(false); }
     };
 
-    // 🌟 ACTION: LIKE POST (Firestore atomic increment)
     const handleLike = async (postId) => {
-        if (likedPosts.has(postId)) return; // Prevent double-liking in current session
-
+        if (likedPosts.has(postId)) return;
         setLikedPosts(prev => new Set(prev).add(postId));
-
-        // Skip database write for hardcoded mock posts
         if (String(postId).startsWith('m') || String(postId).startsWith('live')) return;
-
-        try {
-            const postRef = doc(db, 'feed_posts', postId);
-            await updateDoc(postRef, {
-                likes: increment(1)
-            });
-        } catch (error) {
-            console.error("Error liking post:", error);
-            // Revert state on failure
-            setLikedPosts(prev => {
-                const newSet = new Set(prev);
-                newSet.delete(postId);
-                return newSet;
-            });
-        }
+        try { await updateDoc(doc(db, 'feed_posts', postId), { likes: increment(1) }); } 
+        catch (error) { setLikedPosts(prev => { const newSet = new Set(prev); newSet.delete(postId); return newSet; }); }
     };
 
-    // Helper for Tailwind Theme Generation
+    // 🌟 TOGGLE COMMENTS VISIBILITY
+    const toggleComments = (postId) => {
+        setOpenComments(prev => {
+            const newSet = new Set(prev);
+            if (newSet.has(postId)) newSet.delete(postId);
+            else newSet.add(postId);
+            return newSet;
+        });
+    };
+
     const getColorTheme = (categoryKey) => {
         const color = CATEGORIES[categoryKey]?.color || 'slate';
-        return { 
-            bg: `bg-${color}-50 dark:bg-${color}-900/20`, 
-            border: `border-${color}-200 dark:border-${color}-800/50`, 
-            text: `text-${color}-700 dark:text-${color}-400`, 
-            lightBg: `bg-${color}-100 dark:bg-${color}-800/40` 
-        };
+        return { bg: `bg-${color}-50 dark:bg-${color}-900/20`, border: `border-${color}-200 dark:border-${color}-800/50`, text: `text-${color}-700 dark:text-${color}-400`, lightBg: `bg-${color}-100 dark:bg-${color}-800/40` };
     };
 
     return (
         <div className="w-full max-w-[900px] mx-auto p-4 md:p-6 space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
-            
-            {/* 1. THE SMART COMPOSER */}
+            {/* THE SMART COMPOSER */}
             <div className="bg-white dark:bg-slate-800 rounded-3xl p-5 shadow-sm border border-slate-200 dark:border-slate-700 relative overflow-hidden transition-all duration-300">
                 <div className="flex gap-4">
                     <div className={`w-10 h-10 rounded-full flex items-center justify-center font-black text-sm shrink-0 ${isDemo ? 'bg-rose-100 text-rose-600' : 'bg-indigo-100 text-indigo-600'}`}>
@@ -278,243 +310,30 @@ const FeedsView = ({ user }) => {
                             placeholder={isDemo ? "Share combat data, team shoutouts, or S.H.I.E.L.D updates..." : "Share a clinical insight, team shoutout, or update..."}
                             className="w-full bg-slate-50 dark:bg-slate-900 rounded-2xl p-4 text-sm text-slate-700 dark:text-slate-200 outline-none resize-none border border-slate-100 dark:border-slate-700 focus:border-indigo-300 dark:focus:border-indigo-600 transition-colors h-24 disabled:opacity-60"
                         />
-
-                        {/* IMAGE PREVIEW UI */}
                         {imagePreviewUrl && (
                             <div className="relative mt-2 mb-2 w-fit rounded-xl overflow-hidden border border-slate-200 shadow-sm animate-in zoom-in-95">
-                                <button 
-                                    onClick={() => { setSelectedImage(null); setImagePreviewUrl(null); if (fileInputRef.current) fileInputRef.current.value = ''; }}
-                                    className="absolute top-1.5 right-1.5 p-1 bg-slate-900/70 text-white rounded-full hover:bg-slate-900 transition-colors z-10"
-                                >
-                                    <X size={14} />
-                                </button>
+                                <button onClick={() => { setSelectedImage(null); setImagePreviewUrl(null); if (fileInputRef.current) fileInputRef.current.value = ''; }} className="absolute top-1.5 right-1.5 p-1 bg-slate-900/70 text-white rounded-full hover:bg-slate-900 transition-colors z-10"><X size={14} /></button>
                                 <img src={imagePreviewUrl} alt="Upload preview" className="h-32 w-auto object-cover" />
                             </div>
                         )}
-
-                        {/* LINK PREVIEW UI */}
-                        {isFetchingLink && (
-                            <div className="flex items-center gap-2 text-[10px] font-bold text-slate-400 animate-pulse px-2">
-                                <LinkIcon size={12} /> Generating link preview...
-                            </div>
-                        )}
+                        {isFetchingLink && <div className="flex items-center gap-2 text-[10px] font-bold text-slate-400 animate-pulse px-2"><LinkIcon size={12} /> Generating preview...</div>}
                         {linkPreview && !isFetchingLink && (
-                            <div className="relative mt-2 mb-2 border border-slate-200 dark:border-slate-700 rounded-xl overflow-hidden bg-slate-50 dark:bg-slate-900/50 flex items-center gap-3 pr-3 group animate-in zoom-in-95 duration-300">
-                                <button 
-                                    onClick={() => setLinkPreview(null)}
-                                    className="absolute top-1.5 right-1.5 p-1 bg-slate-800/60 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity z-10 hover:bg-slate-800"
-                                >
-                                    <X size={12} />
-                                </button>
-                                {linkPreview.image_url ? (
-                                    <img src={linkPreview.image_url} alt="preview" className="w-16 h-16 object-cover border-r border-slate-200 dark:border-slate-700" />
-                                ) : (
-                                    <div className="w-16 h-16 bg-slate-200 dark:bg-slate-800 flex items-center justify-center border-r border-slate-200">
-                                        <LinkIcon size={20} className="text-slate-400" />
-                                    </div>
-                                )}
+                            <div className="relative mt-2 mb-2 border border-slate-200 dark:border-slate-700 rounded-xl overflow-hidden bg-slate-50 flex items-center gap-3 pr-3 group">
+                                <button onClick={() => setLinkPreview(null)} className="absolute top-1.5 right-1.5 p-1 bg-slate-800/60 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity z-10"><X size={12} /></button>
+                                {linkPreview.image_url ? <img src={linkPreview.image_url} alt="preview" className="w-16 h-16 object-cover border-r border-slate-200" /> : <div className="w-16 h-16 bg-slate-200 flex items-center justify-center border-r border-slate-200"><LinkIcon size={20} className="text-slate-400" /></div>}
                                 <div className="flex-1 min-w-0 py-2">
-                                    <p className="text-xs font-bold text-slate-800 dark:text-slate-200 truncate">{linkPreview.title}</p>
+                                    <p className="text-xs font-bold text-slate-800 truncate">{linkPreview.title}</p>
                                     <p className="text-[9px] font-medium text-slate-400 uppercase tracking-widest truncate mt-0.5">{linkPreview.domain}</p>
                                 </div>
                             </div>
                         )}
-
-                        {/* PDPA ERROR BANNER */}
-                        {postError && (
-                            <div className="bg-red-50 border border-red-200 text-red-600 p-3 rounded-xl flex items-start gap-2 text-xs font-semibold animate-in slide-in-from-top-2">
-                                <AlertTriangle size={16} className="shrink-0 mt-0.5" />
-                                <p>{postError}</p>
-                            </div>
-                        )}
-
+                        {postError && <div className="bg-red-50 border border-red-200 text-red-600 p-3 rounded-xl flex items-start gap-2 text-xs font-semibold animate-in slide-in-from-top-2"><AlertTriangle size={16} className="shrink-0 mt-0.5" /><p>{postError}</p></div>}
                         <div className="flex justify-between items-center">
                             <div className="flex items-center gap-4">
                                 <div className="flex items-center gap-1.5 text-[10px] font-bold text-slate-400 uppercase tracking-widest">
                                     <ShieldAlert size={14} className={isDemo ? "text-rose-500" : "text-emerald-500"} />
                                     <span className="hidden sm:inline">{isDemo ? "S.H.I.E.L.D. SECURE COMMS" : "PDPA Guard Active"}</span>
                                 </div>
-                                
-                                {/* HIDDEN FILE INPUT & WIRED IMAGE BUTTON */}
-                                <input 
-                                    type="file" 
-                                    accept="image/png, image/jpeg, image/jpg, image/webp" 
-                                    className="hidden" 
-                                    ref={fileInputRef} 
-                                    onChange={handleImageSelect} 
-                                />
-                                <button 
-                                    onClick={() => fileInputRef.current.click()}
-                                    disabled={isPosting}
-                                    className="p-1.5 text-slate-400 hover:text-indigo-500 transition-colors rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-50"
-                                >
-                                    <ImageIcon size={18} />
-                                </button>
-                                <button className="p-1.5 text-slate-400 hover:text-indigo-500 transition-colors rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-50">
-                                    <LinkIcon size={18} />
-                                </button>
-                            </div>
-                            
-                            <button 
-                                onClick={handlePostSubmit}
-                                disabled={(!draftPost.trim() && !selectedImage) || isPosting}
-                                className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed text-white px-5 py-2.5 rounded-xl text-xs font-black uppercase tracking-wider transition-all active:scale-95 shadow-md"
-                            >
-                                {isPosting ? <><Loader2 size={14} className="animate-spin" /> Analyzing...</> : <><Sparkles size={14} /> Post & Enhance</>}
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            {/* 2. THE BUG FILTERS */}
-            <div className="flex gap-3 overflow-x-auto scrollbar-hide py-2">
-                {Object.values(CATEGORIES).map(cat => (
-                    <button
-                        key={cat.id}
-                        onClick={() => setActiveFilter(cat.id)}
-                        className={`flex items-center gap-2 px-4 py-2.5 rounded-2xl border text-sm font-bold transition-all shrink-0 shadow-sm
-                            ${activeFilter === cat.id 
-                                ? `bg-${cat.color}-100 dark:bg-${cat.color}-900/40 border-${cat.color}-300 text-${cat.color}-700 dark:text-${cat.color}-300` 
-                                : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-500 hover:bg-slate-50 dark:hover:bg-slate-700'}`}
-                    >
-                        <span className="text-lg">{cat.icon}</span>
-                        <div className="flex flex-col items-start text-left">
-                            <span className="leading-none">{cat.label}</span>
-                            {cat.desc && <span className="text-[9px] font-medium opacity-70 mt-0.5">{cat.desc}</span>}
-                        </div>
-                    </button>
-                ))}
-            </div>
-
-            {/* 3. THE FEED STREAM */}
-            <div className="space-y-5">
-                {displayPosts.map((post, index) => {
-                    const theme = getColorTheme(post.category);
-                    const categoryConfig = CATEGORIES[post.category] || CATEGORIES.ALL;
-
-                    return (
-                        <div key={post.id || index} className="bg-white dark:bg-slate-800 rounded-3xl p-5 shadow-sm border border-slate-200 dark:border-slate-700 hover:shadow-md transition-shadow animate-in fade-in zoom-in-95 duration-300">
-                            
-                            {/* Card Header */}
-                            <div className="flex justify-between items-start mb-4">
-                                <div className="flex items-center gap-3">
-                                    <div className={`w-10 h-10 rounded-full flex items-center justify-center font-black text-sm ${post.avatar}`}>
-                                        {post.author.charAt(0)}
-                                    </div>
-                                    <div>
-                                        <h3 className="font-bold text-slate-800 dark:text-slate-100">{post.author}</h3>
-                                        <p className="text-[10px] font-bold text-slate-400 uppercase">{post.role} • {post.timestamp}</p>
-                                    </div>
-                                </div>
-                                <div className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-black ${theme.bg} ${theme.text} border ${theme.border}`}>
-                                    <span>{categoryConfig.icon}</span> <span className="hidden sm:inline">{categoryConfig.label}</span>
-                                </div>
-                            </div>
-
-                            {/* AI Enhancements */}
-                            {post.ai_enhancements && (
-                                <div className={`mb-4 p-3 rounded-xl ${theme.bg} border ${theme.border} flex flex-col gap-2`}>
-                                    <div className="flex items-center gap-1.5 text-[10px] font-black uppercase tracking-widest opacity-70">
-                                        <Sparkles size={12} /> AURA Extraction
-                                    </div>
-                                    
-                                    {post.ai_enhancements.urgency && post.ai_enhancements.urgency === 'HIGH' && (
-                                        <div className="text-xs font-black text-red-600 dark:text-red-400 uppercase flex items-center gap-1">
-                                            <ShieldAlert size={14} /> CRITICAL UPDATE
-                                        </div>
-                                    )}
-
-                                    {post.ai_enhancements.tldr && (
-                                        <p className={`text-sm font-bold ${theme.text}`}>
-                                            {post.ai_enhancements.tldr}
-                                        </p>
-                                    )}
-
-                                    {(post.ai_enhancements.event_date || post.ai_enhancements.location) && (
-                                        <div className="flex flex-col gap-1 mt-1 text-xs font-semibold text-slate-700 dark:text-slate-300">
-                                            {post.ai_enhancements.event_date && <div className="flex items-center gap-1.5"><Calendar size={14} className={theme.text} /> {post.ai_enhancements.event_date}</div>}
-                                            {post.ai_enhancements.location && <div className="flex items-center gap-1.5"><LinkIcon size={14} className={theme.text} /> {post.ai_enhancements.location}</div>}
-                                        </div>
-                                    )}
-
-                                    <div className="flex flex-wrap gap-2 mt-2">
-                                        {post.ai_enhancements.tags?.map(tag => (
-                                            <span key={tag} className={`text-[9px] font-black uppercase px-2 py-0.5 rounded-md ${theme.lightBg} ${theme.text}`}>
-                                                #{tag}
-                                            </span>
-                                        ))}
-                                    </div>
-                                </div>
-                            )}
-
-                            {/* Raw Text Body */}
-                            <p className="text-slate-600 dark:text-slate-300 text-sm leading-relaxed mb-4 whitespace-pre-wrap">
-                                {post.raw_text}
-                            </p>
-
-                            {/* RICH MEDIA ATTACHMENTS (Images) */}
-                            {post.image_url && !post.external_link?.image_url && (
-                                <div className="mb-4 rounded-2xl overflow-hidden border border-slate-200 dark:border-slate-700/80 bg-slate-100 dark:bg-slate-900 group">
-                                    <img 
-                                        src={post.image_url} 
-                                        alt="Post attachment" 
-                                        className="w-full h-auto max-h-[350px] object-cover group-hover:scale-[1.02] transition-transform duration-700"
-                                        loading="lazy"
-                                    />
-                                </div>
-                            )}
-
-                            {/* EXTERNAL LINK PREVIEWS (Scraped by Microlink) */}
-                            {post.external_link && (
-                                <a href={post.external_link.url} target="_blank" rel="noreferrer" className="flex items-stretch overflow-hidden mb-4 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/50 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors group">
-                                    {post.external_link.image_url ? (
-                                        <img src={post.external_link.image_url} alt="preview" className="w-24 h-full object-cover border-r border-slate-200 dark:border-slate-700" />
-                                    ) : (
-                                        <div className="w-16 flex items-center justify-center bg-indigo-50 dark:bg-indigo-900/30 border-r border-slate-200 dark:border-slate-700 text-indigo-400">
-                                            <ExternalLink size={20} />
-                                        </div>
-                                    )}
-                                    <div className="flex-1 min-w-0 p-3 flex flex-col justify-center">
-                                        <p className="text-sm font-bold text-slate-800 dark:text-slate-200 truncate">{post.external_link.title}</p>
-                                        <p className="text-[10px] font-medium text-slate-400 uppercase tracking-widest truncate mt-0.5">{post.external_link.domain}</p>
-                                    </div>
-                                </a>
-                            )}
-
-                            {/* INTERACTIONS (Likes & Comments) */}
-                            <div className="flex items-center gap-6 pt-4 border-t border-slate-100 dark:border-slate-700">
-                                <button 
-                                    onClick={() => handleLike(post.id)}
-                                    className={`flex items-center gap-2 text-xs font-bold transition-colors group ${likedPosts.has(post.id) ? 'text-indigo-600' : 'text-slate-500 hover:text-indigo-600'}`}
-                                >
-                                    <div className={`p-1.5 rounded-full transition-colors ${likedPosts.has(post.id) ? 'bg-indigo-100 dark:bg-indigo-900/50' : 'group-hover:bg-indigo-50 dark:group-hover:bg-indigo-900/30'}`}>
-                                        <ThumbsUp size={16} className={likedPosts.has(post.id) ? 'fill-indigo-600' : ''} />
-                                    </div>
-                                    {/* Add 1 to mock posts if liked, otherwise just show DB likes */}
-                                    {(post.likes || 0) + ((likedPosts.has(post.id) && (String(post.id).startsWith('m') || String(post.id).startsWith('live'))) ? 1 : 0)}
-                                </button>
-                                
-                                <button className="flex items-center gap-2 text-xs font-bold text-slate-500 hover:text-indigo-600 transition-colors group">
-                                    <div className="p-1.5 rounded-full group-hover:bg-indigo-50 dark:group-hover:bg-indigo-900/30 transition-colors">
-                                        <MessageSquare size={16} />
-                                    </div>
-                                    {post.comments || 0}
-                                </button>
-                                
-                                <button className="flex items-center gap-2 text-xs font-bold text-slate-500 hover:text-indigo-600 transition-colors group ml-auto">
-                                    <Share2 size={16} />
-                                </button>
-                            </div>
-
-                        </div>
-                    );
-                })}
-            </div>
-            
-            <div className="h-24" /> {/* Bottom Spacer */}
-        </div>
-    );
-};
-
-export default FeedsView;
+                                <input type="file" accept="image/png, image/jpeg, image/jpg, image/webp" className="hidden" ref={fileInputRef} onChange={handleImageSelect} />
+                                <button onClick={() => fileInputRef.current.click()} disabled={isPosting} className="p-1.5 text-slate-400 hover:text-indigo-500 transition-colors rounded-lg hover:bg-slate-100 disabled:opacity-50"><ImageIcon size={18} /></button>
+                                <button className="p-1.
