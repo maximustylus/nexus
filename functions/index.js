@@ -507,10 +507,11 @@ exports.scheduledPulseNudge = onSchedule({
 // =============================================================================
 
 exports.processFeedPost = onCall(async (request) => {
-    // 1. Extract data sent from the React frontend
-    const { rawText, authorName, authorRole, isDemo } = request.data;
+    // 1. Extract data sent from the React frontend 
+    const { rawText, authorName, authorRole, isDemo, externalLink, imageUrl } = request.data;
 
-    if (!rawText || rawText.trim() === '') {
+    // Allow posts that are just an image, even if text is empty
+    if ((!rawText || rawText.trim() === '') && !imageUrl) {
         throw new HttpsError('invalid-argument', 'Post content cannot be empty.');
     }
 
@@ -551,17 +552,16 @@ exports.processFeedPost = onCall(async (request) => {
     `;
 
     try {
-        // We use Gemini 1.5 Flash because it is lightning fast for categorization
         const model = genAI.getGenerativeModel({ 
             model: "gemini-1.5-flash",
             systemInstruction: systemInstruction 
         });
 
-        // 3. Send the raw text to Gemini
-        const response = await model.generateContent(rawText);
+        // 3. Send the raw text to Gemini (If it's just an image, we pass a generic string)
+        const textToAnalyze = rawText ? rawText : "[Image Post with no text]";
+        const response = await model.generateContent(textToAnalyze);
         const responseText = response.response.text();
         
-        // Strip markdown formatting if Gemini accidentally wraps the JSON in ```json ... ```
         const cleanJson = responseText.replace(/```json|```/g, '').trim();
         const analysis = JSON.parse(cleanJson);
 
@@ -579,11 +579,12 @@ exports.processFeedPost = onCall(async (request) => {
         const postDocument = {
             author: authorName || 'Anonymous Staff',
             role: authorRole || 'Staff',
-            timestamp: admin.firestore.FieldValue.serverTimestamp(),
-            raw_text: rawText,
+            timestamp: admin.firestore.FieldValue.serverTimestamp(), 
+            raw_text: rawText || "",
             category: analysis.category,
             ai_enhancements: analysis.ai_enhancements,
-            external_link: request.data.externalLink || null,
+            external_link: externalLink || null, 
+            image_url: imageUrl || null,         
             likes: 0,
             comments: 0,
             isDemo: !!isDemo
