@@ -25,6 +25,7 @@ const LIVE_MOCK_POSTS = [
             tldr: "Updated ACSM resistance training guidelines published. Key reading for exercise prescription protocols.", 
             tags: ['ACSM', 'RESISTANCE TRAINING', 'CLINICAL GUIDELINES'] 
         },
+        image_url: "https://cdn.fs.pathlms.com/mjxJF5l5R9yASZy09BFC/convert?cache=true&fit=scale&format=jpeg&h=192&quality=100&w=1056",
         external_link: { 
             title: "ACSM Position Stand on Resistance Training", 
             url: "https://pmc.ncbi.nlm.nih.gov/articles/PMC12965823/", 
@@ -45,19 +46,19 @@ const LIVE_MOCK_POSTS = [
             tldr: "NEXUS dashboard updated to track both emotional and physical social batteries. Reminder to check in.", 
             tags: ['WELLBEING', 'MENTAL HEALTH', 'TEAM CULTURE'] 
         },
+        image_url: "https://scontent.fsin16-1.fna.fbcdn.net/v/t39.30808-6/491984873_1432622474740958_7072550564777468896_n.jpg?_nc_cat=106&ccb=1-7&_nc_sid=7b2446&_nc_ohc=oSToMNVh2bMQ7kNvwHW3gB0&_nc_oc=Adn-wXZpqFpnoosYvx7nFZARJyn4tQZYnPAQyqo3LPxWV9eNbkFFEDX50eGXiYtpizY&_nc_zt=23&_nc_ht=scontent.fsin16-1.fna&_nc_gid=9-zsViGSoTRHOdmsv6U6sg&_nc_ss=8&oh=00_AfwGc05Ki4j8-cz6KOSHY2314sgveI-WxjZ9yqpE4kPeJA&oe=69BE2F2D",
         external_link: { 
             title: "Social Battery: Emotional & Physical Matrix", 
             url: "https://www.facebook.com/SocialButterflyCCS/posts/wheres-your-battery-at-today-are-you-thriving-or-just-surviving-this-visual-repr/1405645187438687/", 
             domain: "facebook.com" 
         },
-        image_url: "https://images.unsplash.com/photo-1499557408842-80695bf7124f?q=80&w=1200&auto=format&fit=crop", // Warm, abstract wellbeing aesthetic
         likes: 42, 
         comments: 8
     },
     {
         id: 3, 
         author: 'Linder', 
-        role: 'CEP', 
+        role: 'CEP Edu Lead', 
         avatar: 'bg-amber-100 text-amber-700', 
         timestamp: '5 hours ago', 
         category: 'BUSY_BEE',
@@ -77,7 +78,7 @@ const LIVE_MOCK_POSTS = [
     {
         id: 4, 
         author: 'A/Prof. Ashik', 
-        role: 'HOD/HOS', 
+        role: 'HOD / HOS', 
         avatar: 'bg-blue-100 text-blue-700', 
         timestamp: '1 day ago', 
         category: 'BLUE_BEETLE',
@@ -87,6 +88,8 @@ const LIVE_MOCK_POSTS = [
             tldr: "HOD encourages staff to utilize free Anthropic AI courses to improve prompt engineering skills.", 
             tags: ['AI TRAINING', 'ANTHROPIC', 'UPSKILLING'] 
         },
+        // 🌟 Ashik's LinkedIn Image
+        image_url: "https://media.licdn.com/dms/image/v2/D4D22AQHJt-AY4ezgmQ/feedshare-shrink_1280/B4DZlH8964JUAs-/0/1757848791179?e=1775088000&v=beta&t=lGHqjFMc5FjmVFUtshZvDJfZ81HrQKZW7rCFb68xP2o",
         external_link: { 
             title: "Anthropic Educational Courses", 
             url: "https://anthropic.skilljar.com/", 
