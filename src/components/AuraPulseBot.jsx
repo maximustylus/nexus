@@ -1067,12 +1067,15 @@ const handleKeyDown = useCallback((e) => {
                                                             <div className="text-[8px] font-black uppercase opacity-60 mb-1">Zone</div>
                                                             <div className="text-xs font-black">{cfg.icon} {cfg.label}</div>
                                                         </div>
-                                                        <div className="p-3 rounded-xl border bg-blue-50 text-blue-700 border-blue-100 text-center">
-                                                            <div className="text-[8px] font-black uppercase opacity-60 mb-1">Energy</div>
-                                                            <div className="text-xs font-black mb-1.5">{pendingLog.energy}%</div>
-                                                            <div className="w-full bg-blue-100 rounded-full h-1">
-                                                                <div className="bg-blue-500 h-1 rounded-full transition-all duration-700" style={{ width: `${pendingLog.energy}%` }} />
-                                                            </div>
+                                                          {/* 🌟 ENHANCED 5-TIER MODAL BATTERY 🌟 */}
+                                                          <div className="flex items-center justify-between w-full gap-1 p-1 border-2 border-blue-100 rounded-md relative bg-white">
+                                                              <div className="absolute -right-[6px] top-1/2 -translate-y-1/2 w-1 h-3 bg-blue-100 rounded-r-sm" />
+                                                              <div className={`flex-1 h-2.5 rounded-sm transition-all duration-500 ${pendingLog.energy > 0 ? 'bg-rose-500' : 'bg-slate-100'}`} />
+                                                              <div className={`flex-1 h-2.5 rounded-sm transition-all duration-500 ${pendingLog.energy > 20 ? 'bg-orange-500' : 'bg-slate-100'}`} />
+                                                              <div className={`flex-1 h-2.5 rounded-sm transition-all duration-500 ${pendingLog.energy > 40 ? 'bg-amber-400' : 'bg-slate-100'}`} />
+                                                              <div className={`flex-1 h-2.5 rounded-sm transition-all duration-500 ${pendingLog.energy > 60 ? 'bg-emerald-500' : 'bg-slate-100'}`} />
+                                                              <div className={`flex-1 h-2.5 rounded-sm transition-all duration-500 ${pendingLog.energy > 80 ? 'bg-blue-500' : 'bg-slate-100'}`} />
+                                                          </div>
                                                         </div>
                                                     </div>
                                                     {pendingLog.action && (
