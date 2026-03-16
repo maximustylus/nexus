@@ -575,32 +575,30 @@ exports.processFeedPost = onCall(async (request) => {
             };
         }
 
-        // 5. Build the final Database Object
-        const postDocument = {
-            author: authorName || 'Anonymous Staff',
-            role: authorRole || 'Staff',
-            timestamp: admin.firestore.FieldValue.serverTimestamp(), 
+        // 5. Build the Database Object
+        const postUpdateData = {
             raw_text: rawText || "",
             category: analysis.category,
             ai_enhancements: analysis.ai_enhancements,
-            external_link: externalLink || null, 
-            image_url: imageUrl || null,         
-            likes: 0,
-            comments: 0,
-            isDemo: !!isDemo
+            external_link: externalLink || null,
+            image_url: imageUrl || null
         };
 
-        // 6. Save to Firestore 'feed_posts' collection
-        const docRef = await admin.firestore().collection('feed_posts').add(postDocument);
-
-        return {
-            success: true,
-            postId: docRef.id,
-            category: analysis.category
-        };
-
-    } catch (error) {
-        console.error("[AURA] AI Feed Processing Error:", error);
-        throw new HttpsError('internal', 'AURA failed to process this post. Please try again.');
-    }
+        // 6. Save to Firestore (Handle Edit vs. New Post)
+        if (request.data.postId) {
+            // IT'S AN EDIT: Update the existing document (keeps likes/comments safe)
+            await admin.firestore().collection('feed_posts').doc(request.data.postId).update(postUpdateData);
+            return { success: true, postId: request.data.postId, category: analysis.category };
+        } else {
+            // IT'S A NEW POST: Add everything including author, timestamp, and 0 likes
+            postUpdateData.author = authorName || 'Anonymous Staff';
+            postUpdateData.role = authorRole || 'Staff';
+            postUpdateData.timestamp = admin.firestore.FieldValue.serverTimestamp();
+            postUpdateData.likes = 0;
+            postUpdateData.comments = 0;
+            postUpdateData.isDemo = !!isDemo;
+            
+            const docRef = await admin.firestore().collection('feed_posts').add(postUpdateData);
+            return { success: true, postId: docRef.id, category: analysis.category };
+        }
 });
