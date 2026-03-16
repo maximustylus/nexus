@@ -1,6 +1,11 @@
-import React, { useState } from 'react';
-import { Sparkles, MessageSquare, ThumbsUp, Share2, ShieldAlert, Calendar, Link as LinkIcon, ExternalLink, Image as ImageIcon } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Sparkles, MessageSquare, ThumbsUp, Share2, ShieldAlert, Calendar, Link as LinkIcon, ExternalLink, Image as ImageIcon, Loader2, AlertTriangle } from 'lucide-react';
 import { useNexus } from '../context/NexusContext';
+
+// 🌟 FIREBASE IMPORTS FOR BACKEND WIRING
+import { db } from '../firebase';
+import { collection, query, orderBy, onSnapshot } from 'firebase/firestore';
+import { getFunctions, httpsCallable } from 'firebase/functions';
 
 // --- CATEGORY CONFIGURATION ---
 const CATEGORIES = {
@@ -14,7 +19,7 @@ const CATEGORIES = {
 // --- REAL HOSPITAL DATA ---
 const LIVE_MOCK_POSTS = [
     {
-        id: 1, 
+        id: 'live1', 
         author: 'Alif', 
         role: 'Lead CEP', 
         avatar: 'bg-emerald-100 text-emerald-700', 
@@ -35,7 +40,7 @@ const LIVE_MOCK_POSTS = [
         comments: 3
     },
     {
-        id: 2, 
+        id: 'live2', 
         author: 'Nisa', 
         role: 'Admin', 
         avatar: 'bg-purple-100 text-purple-700', 
@@ -56,7 +61,7 @@ const LIVE_MOCK_POSTS = [
         comments: 8
     },
     {
-        id: 3, 
+        id: 'live3', 
         author: 'Linder', 
         role: 'CEP Edu Lead', 
         avatar: 'bg-amber-100 text-amber-700', 
@@ -76,7 +81,7 @@ const LIVE_MOCK_POSTS = [
         comments: 4
     },
     {
-        id: 4, 
+        id: 'live4', 
         author: 'A/Prof. Ashik', 
         role: 'HOD / HOS', 
         avatar: 'bg-blue-100 text-blue-700', 
@@ -88,7 +93,6 @@ const LIVE_MOCK_POSTS = [
             tldr: "HOD encourages staff to utilize free Anthropic AI courses to improve prompt engineering skills.", 
             tags: ['AI TRAINING', 'ANTHROPIC', 'UPSKILLING'] 
         },
-        // 🌟 Ashik's LinkedIn Image
         image_url: "https://media.licdn.com/dms/image/v2/D4D22AQHJt-AY4ezgmQ/feedshare-shrink_1280/B4DZlH8964JUAs-/0/1757848791179?e=1775088000&v=beta&t=lGHqjFMc5FjmVFUtshZvDJfZ81HrQKZW7rCFb68xP2o",
         external_link: { 
             title: "Anthropic Educational Courses", 
@@ -136,16 +140,82 @@ const FeedsView = ({ user }) => {
     const { isDemo } = useNexus();
     const [activeFilter, setActiveFilter] = useState('ALL');
     const [draftPost, setDraftPost] = useState('');
+    
+    // 🌟 STATE FOR LIVE BACKEND DATA
+    const [livePosts, setLivePosts] = useState([]);
+    const [isPosting, setIsPosting] = useState(false);
+    const [postError, setPostError] = useState(null);
 
-    const currentDataset = isDemo ? DEMO_MOCK_POSTS : LIVE_MOCK_POSTS;
+    // 🌟 REAL-TIME FIRESTORE LISTENER
+    useEffect(() => {
+        const q = query(collection(db, 'feed_posts'), orderBy('timestamp', 'desc'));
+        const unsubscribe = onSnapshot(q, (snapshot) => {
+            const fetchedPosts = snapshot.docs.map(doc => {
+                const data = doc.data();
+                
+                // Format timestamp
+                let timeString = 'Just now';
+                if (data.timestamp && typeof data.timestamp.toDate === 'function') {
+                    timeString = data.timestamp.toDate().toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+                }
 
-    const filteredPosts = activeFilter === 'ALL' 
-        ? currentDataset 
-        : currentDataset.filter(post => post.category === activeFilter);
+                return {
+                    id: doc.id,
+                    ...data,
+                    timestamp: timeString,
+                    avatar: 'bg-indigo-100 text-indigo-700' // Default generic avatar for new live posts
+                };
+            });
+            setLivePosts(fetchedPosts);
+        });
+
+        return () => unsubscribe();
+    }, []);
+
+    // 🌟 MERGE LIVE DATA WITH BASE MOCK DATA
+    const baseDataset = isDemo ? DEMO_MOCK_POSTS : LIVE_MOCK_POSTS;
+    const filteredDbPosts = livePosts.filter(p => p.isDemo === isDemo);
+    const combinedPosts = [...filteredDbPosts, ...baseDataset]; // Live posts appear at the top
+
+    const displayPosts = activeFilter === 'ALL' 
+        ? combinedPosts 
+        : combinedPosts.filter(post => post.category === activeFilter);
+
+    // 🌟 CLOUD FUNCTION TRIGGER (POST & ENHANCE)
+    const handlePostSubmit = async () => {
+        if (!draftPost.trim()) return;
+        
+        setIsPosting(true);
+        setPostError(null);
+
+        try {
+            const functions = getFunctions(undefined, 'us-central1'); // Must match your deployment region
+            const processFeedPost = httpsCallable(functions, 'processFeedPost');
+
+            const response = await processFeedPost({
+                rawText: draftPost,
+                authorName: user?.name || (isDemo ? 'S.H.I.E.L.D. Agent' : 'Staff Member'),
+                authorRole: user?.title || user?.role || 'Clinical Staff',
+                isDemo: isDemo
+            });
+
+            if (response.data.success) {
+                setDraftPost(''); // Clear the composer on success!
+            } else {
+                // Display Gemini's rejection reason (PDPA/Toxicity)
+                setPostError(response.data.feedback);
+            }
+        } catch (error) {
+            console.error("Post Submission Error:", error);
+            setPostError("Failed to connect to AURA. Please check your connection.");
+        } finally {
+            setIsPosting(false);
+        }
+    };
 
     // Helper to get color classes based on category
     const getColorTheme = (categoryKey) => {
-        const color = CATEGORIES[categoryKey].color;
+        const color = CATEGORIES[categoryKey]?.color || 'slate';
         return {
             bg: `bg-${color}-50 dark:bg-${color}-900/20`,
             border: `border-${color}-200 dark:border-${color}-800/50`,
@@ -158,7 +228,7 @@ const FeedsView = ({ user }) => {
         <div className="w-full max-w-[900px] mx-auto p-4 md:p-6 space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
             
             {/* 1. THE SMART COMPOSER */}
-            <div className="bg-white dark:bg-slate-800 rounded-3xl p-5 shadow-sm border border-slate-200 dark:border-slate-700 relative overflow-hidden">
+            <div className="bg-white dark:bg-slate-800 rounded-3xl p-5 shadow-sm border border-slate-200 dark:border-slate-700 relative overflow-hidden transition-all duration-300">
                 <div className="flex gap-4">
                     <div className={`w-10 h-10 rounded-full flex items-center justify-center font-black text-sm shrink-0 ${isDemo ? 'bg-rose-100 text-rose-600' : 'bg-indigo-100 text-indigo-600'}`}>
                         {user?.name ? user.name.charAt(0) : (isDemo ? 'S' : 'U')}
@@ -167,28 +237,43 @@ const FeedsView = ({ user }) => {
                         <textarea
                             value={draftPost}
                             onChange={(e) => setDraftPost(e.target.value)}
+                            disabled={isPosting}
                             placeholder={isDemo ? "Share combat data, team shoutouts, or S.H.I.E.L.D updates..." : "Share a clinical insight, team shoutout, or update..."}
-                            className="w-full bg-slate-50 dark:bg-slate-900 rounded-2xl p-4 text-sm text-slate-700 dark:text-slate-200 outline-none resize-none border border-slate-100 dark:border-slate-700 focus:border-indigo-300 dark:focus:border-indigo-600 transition-colors h-24"
+                            className="w-full bg-slate-50 dark:bg-slate-900 rounded-2xl p-4 text-sm text-slate-700 dark:text-slate-200 outline-none resize-none border border-slate-100 dark:border-slate-700 focus:border-indigo-300 dark:focus:border-indigo-600 transition-colors h-24 disabled:opacity-60"
                         />
+
+                        {/* 🌟 PDPA ERROR BANNER */}
+                        {postError && (
+                            <div className="bg-red-50 border border-red-200 text-red-600 p-3 rounded-xl flex items-start gap-2 text-xs font-semibold animate-in slide-in-from-top-2">
+                                <AlertTriangle size={16} className="shrink-0 mt-0.5" />
+                                <p>{postError}</p>
+                            </div>
+                        )}
+
                         <div className="flex justify-between items-center">
                             <div className="flex items-center gap-4">
                                 <div className="flex items-center gap-1.5 text-[10px] font-bold text-slate-400 uppercase tracking-widest">
                                     <ShieldAlert size={14} className={isDemo ? "text-rose-500" : "text-emerald-500"} />
                                     <span className="hidden sm:inline">{isDemo ? "S.H.I.E.L.D. SECURE COMMS" : "PDPA Guard Active"}</span>
                                 </div>
-                                <button className="p-1.5 text-slate-400 hover:text-indigo-500 transition-colors rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800">
+                                <button className="p-1.5 text-slate-400 hover:text-indigo-500 transition-colors rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-50">
                                     <ImageIcon size={18} />
                                 </button>
-                                <button className="p-1.5 text-slate-400 hover:text-indigo-500 transition-colors rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800">
+                                <button className="p-1.5 text-slate-400 hover:text-indigo-500 transition-colors rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-50">
                                     <LinkIcon size={18} />
                                 </button>
                             </div>
                             
                             <button 
-                                disabled={!draftPost.trim()}
+                                onClick={handlePostSubmit}
+                                disabled={!draftPost.trim() || isPosting}
                                 className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed text-white px-5 py-2.5 rounded-xl text-xs font-black uppercase tracking-wider transition-all active:scale-95 shadow-md"
                             >
-                                <Sparkles size={14} /> Post & Enhance
+                                {isPosting ? (
+                                    <><Loader2 size={14} className="animate-spin" /> Analyzing...</>
+                                ) : (
+                                    <><Sparkles size={14} /> Post & Enhance</>
+                                )}
                             </button>
                         </div>
                     </div>
@@ -217,12 +302,12 @@ const FeedsView = ({ user }) => {
 
             {/* 3. THE FEED STREAM */}
             <div className="space-y-5">
-                {filteredPosts.map(post => {
+                {displayPosts.map((post, index) => {
                     const theme = getColorTheme(post.category);
-                    const categoryConfig = CATEGORIES[post.category];
+                    const categoryConfig = CATEGORIES[post.category] || CATEGORIES.ALL;
 
                     return (
-                        <div key={post.id} className="bg-white dark:bg-slate-800 rounded-3xl p-5 shadow-sm border border-slate-200 dark:border-slate-700 hover:shadow-md transition-shadow">
+                        <div key={post.id || index} className="bg-white dark:bg-slate-800 rounded-3xl p-5 shadow-sm border border-slate-200 dark:border-slate-700 hover:shadow-md transition-shadow animate-in fade-in zoom-in-95 duration-300">
                             
                             {/* Card Header */}
                             <div className="flex justify-between items-start mb-4">
@@ -247,7 +332,7 @@ const FeedsView = ({ user }) => {
                                         <Sparkles size={12} /> AURA Extraction
                                     </div>
                                     
-                                    {post.ai_enhancements.urgency && (
+                                    {post.ai_enhancements.urgency && post.ai_enhancements.urgency === 'HIGH' && (
                                         <div className="text-xs font-black text-red-600 dark:text-red-400 uppercase flex items-center gap-1">
                                             <ShieldAlert size={14} /> CRITICAL UPDATE
                                         </div>
@@ -277,11 +362,11 @@ const FeedsView = ({ user }) => {
                             )}
 
                             {/* Raw Text Body */}
-                            <p className="text-slate-600 dark:text-slate-300 text-sm leading-relaxed mb-4">
+                            <p className="text-slate-600 dark:text-slate-300 text-sm leading-relaxed mb-4 whitespace-pre-wrap">
                                 {post.raw_text}
                             </p>
 
-                            {/* 🌟 NEW: RICH MEDIA ATTACHMENTS 🌟 */}
+                            {/* RICH MEDIA ATTACHMENTS */}
                             {post.image_url && (
                                 <div className="mb-4 rounded-2xl overflow-hidden border border-slate-200 dark:border-slate-700/80 bg-slate-100 dark:bg-slate-900 group">
                                     <img 
@@ -311,13 +396,13 @@ const FeedsView = ({ user }) => {
                                     <div className="p-1.5 rounded-full group-hover:bg-indigo-50 dark:group-hover:bg-indigo-900/30 transition-colors">
                                         <ThumbsUp size={16} />
                                     </div>
-                                    {post.likes}
+                                    {post.likes || 0}
                                 </button>
                                 <button className="flex items-center gap-2 text-xs font-bold text-slate-500 hover:text-indigo-600 transition-colors group">
                                     <div className="p-1.5 rounded-full group-hover:bg-indigo-50 dark:group-hover:bg-indigo-900/30 transition-colors">
                                         <MessageSquare size={16} />
                                     </div>
-                                    {post.comments}
+                                    {post.comments || 0}
                                 </button>
                                 <button className="flex items-center gap-2 text-xs font-bold text-slate-500 hover:text-indigo-600 transition-colors group ml-auto">
                                     <Share2 size={16} />
