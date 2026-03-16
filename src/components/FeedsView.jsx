@@ -1,14 +1,12 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Sparkles, MessageSquare, ThumbsUp, Share2, ShieldAlert, Calendar, Link as LinkIcon, ExternalLink, Image as ImageIcon, Loader2, AlertTriangle, X, Send } from 'lucide-react';
+import { Sparkles, MessageSquare, ThumbsUp, Share2, ShieldAlert, Calendar, Link as LinkIcon, ExternalLink, Image as ImageIcon, Loader2, AlertTriangle, X, Send, MoreHorizontal, Edit2, Trash2 } from 'lucide-react';
 import { useNexus } from '../context/NexusContext';
 
-// 🌟 FIREBASE IMPORTS 
 import { db, storage } from '../firebase';
-import { collection, query, orderBy, onSnapshot, doc, updateDoc, increment, addDoc, serverTimestamp } from 'firebase/firestore';
+import { collection, query, orderBy, onSnapshot, doc, updateDoc, increment, addDoc, serverTimestamp, deleteDoc } from 'firebase/firestore';
 import { getFunctions, httpsCallable } from 'firebase/functions';
 import { ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
 
-// --- CATEGORY CONFIGURATION ---
 const CATEGORIES = {
     ALL: { id: 'ALL', label: 'All Feeds', icon: '🌍', color: 'slate' },
     BOOKWORM: { id: 'BOOKWORM', label: 'Bookworm', icon: '🐛', color: 'emerald', desc: 'Clinical & Science' },
@@ -17,80 +15,16 @@ const CATEGORIES = {
     BUSY_BEE: { id: 'BUSY_BEE', label: 'Busy Bee', icon: '🐝', color: 'amber', desc: 'Growth & Upskilling' }
 };
 
-// --- REAL HOSPITAL DATA ---
-const LIVE_MOCK_POSTS = [
-    {
-        id: 'live1', author: 'Alif', role: 'Lead CEP', avatar: 'bg-emerald-100 text-emerald-700', timestamp: '1 hour ago', category: 'BOOKWORM',
-        raw_text: "The ACSM just released their updated position stand on resistance training. It is an excellent review on volume and intensity modulation. A must-read as we refine our exercise prescription protocols.",
-        ai_enhancements: { tldr: "Updated ACSM resistance training guidelines published. Key reading for exercise prescription protocols.", tags: ['ACSM', 'RESISTANCE TRAINING', 'CLINICAL GUIDELINES'] },
-        image_url: "https://cdn.fs.pathlms.com/mjxJF5l5R9yASZy09BFC/convert?cache=true&fit=scale&format=jpeg&h=192&quality=100&w=1056",
-        external_link: { title: "ACSM Position Stand on Resistance Training", url: "https://pmc.ncbi.nlm.nih.gov/articles/PMC12965823/", domain: "ncbi.nlm.nih.gov" },
-        likes: 14, comments: 3
-    },
-    {
-        id: 'live2', author: 'Nisa', role: 'Admin', avatar: 'bg-purple-100 text-purple-700', timestamp: '3 hours ago', category: 'SOCIAL_BUTTERFLY',
-        raw_text: "Where is your battery at today? Are you thriving or just surviving? We've updated our NEXUS dashboard to reflect both Physical and Emotional capacity based on this great visual framework. Remember to check in with yourselves and your colleagues!",
-        ai_enhancements: { tldr: "NEXUS dashboard updated to track both emotional and physical social batteries. Reminder to check in.", tags: ['WELLBEING', 'MENTAL HEALTH', 'TEAM CULTURE'] },
-        image_url: "https://scontent.fsin16-1.fna.fbcdn.net/v/t39.30808-6/491984873_1432622474740958_7072550564777468896_n.jpg?_nc_cat=106&ccb=1-7&_nc_sid=7b2446&_nc_ohc=oSToMNVh2bMQ7kNvwHW3gB0&_nc_oc=Adn-wXZpqFpnoosYvx7nFZARJyn4tQZYnPAQyqo3LPxWV9eNbkFFEDX50eGXiYtpizY&_nc_zt=23&_nc_ht=scontent.fsin16-1.fna&_nc_gid=9-zsViGSoTRHOdmsv6U6sg&_nc_ss=8&oh=00_AfwGc05Ki4j8-cz6KOSHY2314sgveI-WxjZ9yqpE4kPeJA&oe=69BE2F2D",
-        external_link: { title: "Social Battery: Emotional & Physical Matrix", url: "https://www.facebook.com/SocialButterflyCCS/posts/wheres-your-battery-at-today-are-you-thriving-or-just-surviving-this-visual-repr/1405645187438687/", domain: "facebook.com" },
-        likes: 42, comments: 8
-    },
-    {
-        id: 'live3', author: 'Linder', role: 'CEP Edu Lead', avatar: 'bg-amber-100 text-amber-700', timestamp: '5 hours ago', category: 'BUSY_BEE',
-        raw_text: "Highly recommend looking into the Active Health Lab's CALM (Combat Age-Related Loss of Muscle) program. It has fantastic insights on protein intake interventions specifically for our menopausal patients. Great structured approach we can learn from.",
-        ai_enhancements: { tldr: "Recommendation to review the CALM program for interventions on muscle loss and protein intake in menopausal patients.", tags: ['CALM', 'MENOPAUSE', 'NUTRITION'] },
-        external_link: { title: "Combat Age-Related Loss of Muscle (CALM)", url: "https://www.activesgcircle.gov.sg/activehealth/our-programmes?filter=just_getting_started&slide=combat-age-related-loss-of-muscle-calm-10-20", domain: "activesgcircle.gov.sg" },
-        likes: 21, comments: 4
-    },
-    {
-        id: 'live4', author: 'A/Prof. Ashik', role: 'HOD / HOS', avatar: 'bg-blue-100 text-blue-700', timestamp: '1 day ago', category: 'BLUE_BEETLE',
-        raw_text: "Anthropic just launched a series of free AI courses on Skilljar. Given our strong push towards integrating smart tools like AURA into our workflow, I highly encourage everyone to take a look and upskill on prompt engineering.",
-        ai_enhancements: { urgency: 'NORMAL', tldr: "HOD encourages staff to utilize free Anthropic AI courses to improve prompt engineering skills.", tags: ['AI TRAINING', 'ANTHROPIC', 'UPSKILLING'] },
-        image_url: "https://media.licdn.com/dms/image/v2/D4D22AQHJt-AY4ezgmQ/feedshare-shrink_1280/B4DZlH8964JUAs-/0/1757848791179?e=1775088000&v=beta&t=lGHqjFMc5FjmVFUtshZvDJfZ81HrQKZW7rCFb68xP2o",
-        external_link: { title: "Anthropic Educational Courses", url: "https://anthropic.skilljar.com/", domain: "anthropic.skilljar.com" },
-        likes: 38, comments: 5
-    }
-];
+// --- MOCK DATA ARRAYS (Keep them exactly the same as before, I'm abbreviating to save space but keep your full ones) ---
+const LIVE_MOCK_POSTS = [ /* ... your hospital posts ... */ ];
+const DEMO_MOCK_POSTS = [ /* ... your marvel posts ... */ ];
 
-// --- MARVEL DEMO DATA 🦸‍♂️ ---
-const DEMO_MOCK_POSTS = [
-    {
-        id: 'm1', author: 'Tony Stark', role: 'Head of Engineering', avatar: 'bg-red-100 text-red-700', timestamp: '1 hour ago', category: 'SOCIAL_BUTTERFLY',
-        raw_text: "Just docked the Disney Adventure at Marina Bay Cruise Centre, Singapore! 🇸🇬 The repulsor tech powering the Marvel landing zone is holding steady at 100%. Avengers, assemble at the upper deck for the VIP meet-and-greet at 1800 hrs.",
-        ai_enhancements: { tldr: "Avengers meet-and-greet on the Disney Adventure cruise ship in Singapore at 1800 hrs.", tags: ['SINGAPORE', 'DISNEY ADVENTURE', 'TEAM EVENT'] },
-        image_url: "https://cdn1.parksmedia.wdprapps.disney.com/resize/mwImage/1/1000/1000/75/vision-dam/digital/parks-platform/parks-global-assets/disney-cruise-line/ships/adventure/concept-art/Marvel-landing-ca-16x9.jpg?2025-09-30T00:24:43+00:00", 
-        external_link: { title: "Join the Disney Adventure", url: "https://disneycruise.disney.go.com/why-cruise-disney/join-the-adventure/", domain: "disneycruise.disney.go.com" },
-        likes: 3000, comments: 412
-    },
-    {
-        id: 'm2', author: 'Peter Parker', role: 'Intern (Web Dev)', avatar: 'bg-blue-100 text-blue-700', timestamp: '3 hours ago', category: 'BLUE_BEETLE',
-        raw_text: "Hey everyone! 'Spider-Man: Brand New Day' is officially out worldwide! Also, I've updated the web-shooter schematics on the shared drive to match the new high-tensile formula used in the film. Check it out!",
-        ai_enhancements: { urgency: 'NORMAL', tldr: "'Brand New Day' released. New high-tensile web-shooter schematics uploaded to the shared drive.", tags: ['BRAND NEW DAY', 'SCHEMATICS', 'GEAR UPDATE'] },
-        image_url: "https://media.gettyimages.com/id/2227870960/photo/celebrity-sightings-in-glasgow-august-3-2025.jpg?s=2048x2048&w=gi&k=20&c=k_reMlFPw5jnS4aNC6mQAA6OKgs_NJvINRGa8PB0WX8=", 
-        external_link: { title: "Watch the Official Trailer", url: "https://youtu.be/Vsn7sVxCq1M?si=ylFiUeGVTI2Cmw6j", domain: "youtube.com" },
-        likes: 890, comments: 55
-    },
-    {
-        id: 'm3', author: 'Bruce Banner', role: 'Head of Research', avatar: 'bg-emerald-100 text-emerald-700', timestamp: '5 hours ago', category: 'BOOKWORM',
-        raw_text: "Just reviewed the recent combat data on Chitauri armor plating. The tensile strength requires a minimum of 4000 Joules for penetration. I've uploaded the kinetic breakdown to the mainframe for anyone modifying their gear.",
-        ai_enhancements: { tldr: "Chitauri armor analysis complete: Requires 4000+ Joules for penetration. Data uploaded to mainframe.", tags: ['COMBAT DATA', 'VULNERABILITY ANALYSIS'] },
-        likes: 42, comments: 7
-    },
-    {
-        id: 'm4', author: 'Nick Fury', role: 'Director', avatar: 'bg-slate-800 text-white', timestamp: '1 day ago', category: 'BUSY_BEE',
-        raw_text: "S.H.I.E.L.D. is hosting a mandatory advanced tactical espionage seminar next month. All field agents must attend. Sessions start October 10th at 0800 hrs in the Triskelion Briefing Room Alpha.",
-        ai_enhancements: { event_date: 'Oct 10, 2026 - 0800 hrs', location: 'Triskelion Briefing Room Alpha', tags: ['MANDATORY', 'TRAINING', 'ESPIONAGE'] },
-        likes: 89, comments: 0
-    }
-];
-
-// 🌟 PHASE 1: THE COMMENT COMPONENT 🌟
+// 🌟 PHASE 1: THE COMMENT COMPONENT 
 const CommentSection = ({ postId, user, isMock }) => {
     const [comments, setComments] = useState([]);
     const [draft, setDraft] = useState('');
     const [isSubmitting, setIsSubmitting] = useState(false);
 
-    // Fetch live comments if it's a real database post
     useEffect(() => {
         if (isMock) return; 
         const q = query(collection(db, 'feed_posts', postId, 'comments'), orderBy('timestamp', 'asc'));
@@ -104,8 +38,6 @@ const CommentSection = ({ postId, user, isMock }) => {
     const handleSubmit = async (e) => {
         e.preventDefault();
         if (!draft.trim()) return;
-
-        // If it's a Marvel/Hospital mock post, just fake the comment instantly
         if (isMock) {
             setComments(prev => [...prev, { id: Date.now().toString(), author: user?.name || 'You', text: draft }]);
             setDraft('');
@@ -114,27 +46,19 @@ const CommentSection = ({ postId, user, isMock }) => {
 
         setIsSubmitting(true);
         try {
-            // 1. Save the comment to the subcollection
             await addDoc(collection(db, 'feed_posts', postId, 'comments'), {
                 author: user?.name || 'Staff Member',
                 text: draft,
                 timestamp: serverTimestamp()
             });
-            // 2. Tell the main post to +1 its comment counter
-            await updateDoc(doc(db, 'feed_posts', postId), {
-                comments: increment(1)
-            });
-            setDraft(''); // Clear input
-        } catch (error) {
-            console.error("Error posting comment:", error);
-        } finally {
-            setIsSubmitting(false);
-        }
+            await updateDoc(doc(db, 'feed_posts', postId), { comments: increment(1) });
+            setDraft(''); 
+        } catch (error) { console.error("Error posting comment:", error); } 
+        finally { setIsSubmitting(false); }
     };
 
     return (
         <div className="mt-4 pt-4 border-t border-slate-100 dark:border-slate-700 animate-in slide-in-from-top-2 fade-in duration-200">
-            {/* The Comment Thread */}
             <div className="space-y-3 max-h-48 overflow-y-auto pr-2 scrollbar-thin mb-3">
                 {comments.length === 0 ? (
                     <p className="text-xs text-slate-400 italic text-center py-2">No comments yet. Start the conversation!</p>
@@ -147,25 +71,12 @@ const CommentSection = ({ postId, user, isMock }) => {
                     ))
                 )}
             </div>
-
-            {/* The Input Box */}
             <form onSubmit={handleSubmit} className="flex gap-2 items-center">
                 <div className="w-8 h-8 rounded-full bg-indigo-100 text-indigo-700 flex items-center justify-center text-xs font-black shrink-0">
                     {user?.name ? user.name.charAt(0) : 'U'}
                 </div>
-                <input
-                    type="text"
-                    placeholder="Write a comment..."
-                    value={draft}
-                    onChange={(e) => setDraft(e.target.value)}
-                    disabled={isSubmitting}
-                    className="flex-1 bg-slate-100 dark:bg-slate-900 border-none text-sm rounded-full px-4 py-2 focus:ring-2 focus:ring-indigo-500 outline-none text-slate-700 dark:text-slate-200 disabled:opacity-60 transition-all"
-                />
-                <button 
-                    type="submit" 
-                    disabled={!draft.trim() || isSubmitting} 
-                    className="text-white bg-indigo-600 hover:bg-indigo-700 disabled:bg-slate-200 disabled:text-slate-400 p-2 rounded-full transition-colors"
-                >
+                <input type="text" placeholder="Write a comment..." value={draft} onChange={(e) => setDraft(e.target.value)} disabled={isSubmitting} className="flex-1 bg-slate-100 dark:bg-slate-900 border-none text-sm rounded-full px-4 py-2 focus:ring-2 focus:ring-indigo-500 outline-none text-slate-700 dark:text-slate-200 disabled:opacity-60 transition-all" />
+                <button type="submit" disabled={!draft.trim() || isSubmitting} className="text-white bg-indigo-600 hover:bg-indigo-700 disabled:bg-slate-200 disabled:text-slate-400 p-2 rounded-full transition-colors">
                     {isSubmitting ? <Loader2 size={16} className="animate-spin" /> : <Send size={16} />}
                 </button>
             </form>
@@ -184,9 +95,11 @@ const FeedsView = ({ user }) => {
     const [isPosting, setIsPosting] = useState(false);
     const [postError, setPostError] = useState(null);
     const [likedPosts, setLikedPosts] = useState(new Set());
-    
-    // 🌟 STATE: WHICH COMMENTS ARE OPEN?
     const [openComments, setOpenComments] = useState(new Set());
+
+    // 🌟 STATE: EDITING & DELETING
+    const [editingPostId, setEditingPostId] = useState(null);
+    const [activeMenuId, setActiveMenuId] = useState(null); // Which 3-dot menu is open
 
     // MEDIA STATE
     const [linkPreview, setLinkPreview] = useState(null);
@@ -244,6 +157,7 @@ const FeedsView = ({ user }) => {
     const combinedPosts = [...filteredDbPosts, ...baseDataset];
     const displayPosts = activeFilter === 'ALL' ? combinedPosts : combinedPosts.filter(post => post.category === activeFilter);
 
+    // 🌟 ACTION: POST OR UPDATE (WITH GEMINI)
     const handlePostSubmit = async () => {
         if (!draftPost.trim() && !selectedImage) return; 
         setIsPosting(true); setPostError(null);
@@ -262,13 +176,42 @@ const FeedsView = ({ user }) => {
                 authorRole: user?.title || user?.role || 'Clinical Staff',
                 isDemo: isDemo,
                 externalLink: linkPreview,
-                imageUrl: uploadedImageUrl
+                imageUrl: uploadedImageUrl || (editingPostId ? combinedPosts.find(p=>p.id===editingPostId)?.image_url : null), // Keep old image if editing
+                postId: editingPostId // 🌟 Passing the ID triggers an UPDATE instead of a NEW post
             });
+
             if (response.data.success) {
-                setDraftPost(''); setLinkPreview(null); setSelectedImage(null); setImagePreviewUrl(null);
-                if (fileInputRef.current) fileInputRef.current.value = '';
+                cancelEditSetup(); // Clear everything
             } else { setPostError(response.data.feedback); }
-        } catch (error) { setPostError("Failed to post. Check your connection."); } finally { setIsPosting(false); }
+        } catch (error) { setPostError("Failed to connect to AURA. Check your connection."); } finally { setIsPosting(false); }
+    };
+
+    // 🌟 ACTION: DELETE POST
+    const handleDeletePost = async (postId) => {
+        if (window.confirm("Are you sure you want to delete this post? This cannot be undone.")) {
+            setActiveMenuId(null);
+            try { await deleteDoc(doc(db, 'feed_posts', postId)); } 
+            catch (error) { console.error("Error deleting post:", error); }
+        }
+    };
+
+    // 🌟 ACTION: SETUP EDIT UI
+    const startEditPost = (post) => {
+        setActiveMenuId(null);
+        setEditingPostId(post.id);
+        setDraftPost(post.raw_text || '');
+        setLinkPreview(post.external_link || null);
+        setImagePreviewUrl(post.image_url || null);
+        window.scrollTo({ top: 0, behavior: 'smooth' }); // Scroll user up to the composer!
+    };
+
+    const cancelEditSetup = () => {
+        setEditingPostId(null);
+        setDraftPost('');
+        setLinkPreview(null);
+        setSelectedImage(null);
+        setImagePreviewUrl(null);
+        if (fileInputRef.current) fileInputRef.current.value = '';
     };
 
     const handleLike = async (postId) => {
@@ -279,14 +222,8 @@ const FeedsView = ({ user }) => {
         catch (error) { setLikedPosts(prev => { const newSet = new Set(prev); newSet.delete(postId); return newSet; }); }
     };
 
-    // 🌟 TOGGLE COMMENTS VISIBILITY
     const toggleComments = (postId) => {
-        setOpenComments(prev => {
-            const newSet = new Set(prev);
-            if (newSet.has(postId)) newSet.delete(postId);
-            else newSet.add(postId);
-            return newSet;
-        });
+        setOpenComments(prev => { const newSet = new Set(prev); if (newSet.has(postId)) newSet.delete(postId); else newSet.add(postId); return newSet; });
     };
 
     const getColorTheme = (categoryKey) => {
@@ -297,19 +234,20 @@ const FeedsView = ({ user }) => {
     return (
         <div className="w-full max-w-[900px] mx-auto p-4 md:p-6 space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
             {/* THE SMART COMPOSER */}
-            <div className="bg-white dark:bg-slate-800 rounded-3xl p-5 shadow-sm border border-slate-200 dark:border-slate-700 relative overflow-hidden transition-all duration-300">
+            <div className={`bg-white dark:bg-slate-800 rounded-3xl p-5 shadow-sm border relative overflow-hidden transition-all duration-300 ${editingPostId ? 'border-amber-400 ring-4 ring-amber-400/10' : 'border-slate-200 dark:border-slate-700'}`}>
+                {editingPostId && (
+                    <div className="flex justify-between items-center mb-3 pb-3 border-b border-slate-100 dark:border-slate-700">
+                        <span className="text-xs font-bold text-amber-600 uppercase tracking-wider flex items-center gap-1.5"><Edit2 size={14}/> Editing Post</span>
+                        <button onClick={cancelEditSetup} className="text-xs font-bold text-slate-400 hover:text-slate-600">Cancel</button>
+                    </div>
+                )}
                 <div className="flex gap-4">
                     <div className={`w-10 h-10 rounded-full flex items-center justify-center font-black text-sm shrink-0 ${isDemo ? 'bg-rose-100 text-rose-600' : 'bg-indigo-100 text-indigo-600'}`}>
                         {user?.name ? user.name.charAt(0) : (isDemo ? 'S' : 'U')}
                     </div>
                     <div className="flex-1 space-y-3">
-                        <textarea
-                            value={draftPost}
-                            onChange={(e) => setDraftPost(e.target.value)}
-                            disabled={isPosting}
-                            placeholder={isDemo ? "Share combat data, team shoutouts, or S.H.I.E.L.D updates..." : "Share a clinical insight, team shoutout, or update..."}
-                            className="w-full bg-slate-50 dark:bg-slate-900 rounded-2xl p-4 text-sm text-slate-700 dark:text-slate-200 outline-none resize-none border border-slate-100 dark:border-slate-700 focus:border-indigo-300 dark:focus:border-indigo-600 transition-colors h-24 disabled:opacity-60"
-                        />
+                        <textarea value={draftPost} onChange={(e) => setDraftPost(e.target.value)} disabled={isPosting} placeholder={isDemo ? "Share combat data, team shoutouts, or S.H.I.E.L.D updates..." : "Share a clinical insight, team shoutout, or update..."} className="w-full bg-slate-50 dark:bg-slate-900 rounded-2xl p-4 text-sm text-slate-700 dark:text-slate-200 outline-none resize-none border border-slate-100 dark:border-slate-700 focus:border-indigo-300 dark:focus:border-indigo-600 transition-colors h-24 disabled:opacity-60" />
+                        
                         {imagePreviewUrl && (
                             <div className="relative mt-2 mb-2 w-fit rounded-xl overflow-hidden border border-slate-200 shadow-sm animate-in zoom-in-95">
                                 <button onClick={() => { setSelectedImage(null); setImagePreviewUrl(null); if (fileInputRef.current) fileInputRef.current.value = ''; }} className="absolute top-1.5 right-1.5 p-1 bg-slate-900/70 text-white rounded-full hover:bg-slate-900 transition-colors z-10"><X size={14} /></button>
@@ -328,6 +266,7 @@ const FeedsView = ({ user }) => {
                             </div>
                         )}
                         {postError && <div className="bg-red-50 border border-red-200 text-red-600 p-3 rounded-xl flex items-start gap-2 text-xs font-semibold animate-in slide-in-from-top-2"><AlertTriangle size={16} className="shrink-0 mt-0.5" /><p>{postError}</p></div>}
+                        
                         <div className="flex justify-between items-center">
                             <div className="flex items-center gap-4">
                                 <div className="flex items-center gap-1.5 text-[10px] font-bold text-slate-400 uppercase tracking-widest">
@@ -336,4 +275,135 @@ const FeedsView = ({ user }) => {
                                 </div>
                                 <input type="file" accept="image/png, image/jpeg, image/jpg, image/webp" className="hidden" ref={fileInputRef} onChange={handleImageSelect} />
                                 <button onClick={() => fileInputRef.current.click()} disabled={isPosting} className="p-1.5 text-slate-400 hover:text-indigo-500 transition-colors rounded-lg hover:bg-slate-100 disabled:opacity-50"><ImageIcon size={18} /></button>
-                                <button className="p-1.
+                            </div>
+                            <button onClick={handlePostSubmit} disabled={(!draftPost.trim() && !selectedImage && !imagePreviewUrl) || isPosting} className={`flex items-center gap-2 text-white px-5 py-2.5 rounded-xl text-xs font-black uppercase tracking-wider transition-all shadow-md disabled:opacity-50 disabled:cursor-not-allowed ${editingPostId ? 'bg-amber-500 hover:bg-amber-600' : 'bg-indigo-600 hover:bg-indigo-700'}`}>
+                                {isPosting ? <><Loader2 size={14} className="animate-spin" /> Analyzing...</> : <><Sparkles size={14} /> {editingPostId ? 'Update Post' : 'Post & Enhance'}</>}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            {/* THE BUG FILTERS */}
+            <div className="flex gap-3 overflow-x-auto scrollbar-hide py-2">
+                {Object.values(CATEGORIES).map(cat => (
+                    <button key={cat.id} onClick={() => setActiveFilter(cat.id)} className={`flex items-center gap-2 px-4 py-2.5 rounded-2xl border text-sm font-bold transition-all shrink-0 shadow-sm ${activeFilter === cat.id ? `bg-${cat.color}-100 dark:bg-${cat.color}-900/40 border-${cat.color}-300 text-${cat.color}-700 dark:text-${cat.color}-300` : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-500 hover:bg-slate-50 dark:hover:bg-slate-700'}`}>
+                        <span className="text-lg">{cat.icon}</span>
+                        <div className="flex flex-col items-start text-left">
+                            <span className="leading-none">{cat.label}</span>
+                            {cat.desc && <span className="text-[9px] font-medium opacity-70 mt-0.5">{cat.desc}</span>}
+                        </div>
+                    </button>
+                ))}
+            </div>
+
+            {/* THE FEED STREAM */}
+            <div className="space-y-5">
+                {displayPosts.map((post, index) => {
+                    const theme = getColorTheme(post.category);
+                    const categoryConfig = CATEGORIES[post.category] || CATEGORIES.ALL;
+                    const isMock = String(post.id).startsWith('m') || String(post.id).startsWith('live');
+                    
+                    // Allow the creator (or any generic user if no login exists yet) to edit their post
+                    const isAuthor = user?.name ? user.name === post.author : post.author === 'Staff Member';
+
+                    return (
+                        <div key={post.id || index} className="bg-white dark:bg-slate-800 rounded-3xl p-5 shadow-sm border border-slate-200 dark:border-slate-700 hover:shadow-md transition-shadow animate-in fade-in zoom-in-95 duration-300">
+                            
+                            {/* Card Header */}
+                            <div className="flex justify-between items-start mb-4 relative">
+                                <div className="flex items-center gap-3">
+                                    <div className={`w-10 h-10 rounded-full flex items-center justify-center font-black text-sm ${post.avatar}`}>{post.author.charAt(0)}</div>
+                                    <div><h3 className="font-bold text-slate-800 dark:text-slate-100">{post.author}</h3><p className="text-[10px] font-bold text-slate-400 uppercase">{post.role} • {post.timestamp}</p></div>
+                                </div>
+                                <div className="flex items-center gap-2">
+                                    <div className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-black ${theme.bg} ${theme.text} border ${theme.border}`}>
+                                        <span>{categoryConfig.icon}</span> <span className="hidden sm:inline">{categoryConfig.label}</span>
+                                    </div>
+
+                                    {/* 🌟 EDIT/DELETE MENU */}
+                                    {isAuthor && !isMock && (
+                                        <div className="relative">
+                                            <button onClick={() => setActiveMenuId(activeMenuId === post.id ? null : post.id)} className="p-1.5 text-slate-400 hover:text-slate-800 hover:bg-slate-100 rounded-full transition-colors">
+                                                <MoreHorizontal size={18} />
+                                            </button>
+                                            
+                                            {activeMenuId === post.id && (
+                                                <div className="absolute right-0 mt-2 w-36 bg-white border border-slate-200 rounded-xl shadow-lg overflow-hidden z-20 animate-in zoom-in-95 duration-100">
+                                                    <button onClick={() => startEditPost(post)} className="w-full px-4 py-2.5 text-xs font-bold text-left text-slate-700 hover:bg-slate-50 flex items-center gap-2"><Edit2 size={14}/> Edit Post</button>
+                                                    <div className="h-px w-full bg-slate-100"></div>
+                                                    <button onClick={() => handleDeletePost(post.id)} className="w-full px-4 py-2.5 text-xs font-bold text-left text-red-600 hover:bg-red-50 flex items-center gap-2"><Trash2 size={14}/> Delete</button>
+                                                </div>
+                                            )}
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+
+                            {/* AI Enhancements */}
+                            {post.ai_enhancements && (
+                                <div className={`mb-4 p-3 rounded-xl ${theme.bg} border ${theme.border} flex flex-col gap-2`}>
+                                    <div className="flex items-center gap-1.5 text-[10px] font-black uppercase tracking-widest opacity-70"><Sparkles size={12} /> AURA Extraction</div>
+                                    {post.ai_enhancements.urgency && post.ai_enhancements.urgency === 'HIGH' && (<div className="text-xs font-black text-red-600 dark:text-red-400 uppercase flex items-center gap-1"><ShieldAlert size={14} /> CRITICAL UPDATE</div>)}
+                                    {post.ai_enhancements.tldr && (<p className={`text-sm font-bold ${theme.text}`}>{post.ai_enhancements.tldr}</p>)}
+                                    <div className="flex flex-wrap gap-2 mt-2">
+                                        {post.ai_enhancements.tags?.map(tag => (<span key={tag} className={`text-[9px] font-black uppercase px-2 py-0.5 rounded-md ${theme.lightBg} ${theme.text}`}>#{tag}</span>))}
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* Raw Text Body */}
+                            <p className="text-slate-600 dark:text-slate-300 text-sm leading-relaxed mb-4 whitespace-pre-wrap">{post.raw_text}</p>
+
+                            {/* Attachments */}
+                            {post.image_url && !post.external_link?.image_url && (
+                                <div className="mb-4 rounded-2xl overflow-hidden border border-slate-200 dark:border-slate-700/80 bg-slate-100 dark:bg-slate-900 group">
+                                    <img src={post.image_url} alt="Post attachment" className="w-full h-auto max-h-[350px] object-cover group-hover:scale-[1.02] transition-transform duration-700" loading="lazy" />
+                                </div>
+                            )}
+                            {post.external_link && (
+                                <a href={post.external_link.url} target="_blank" rel="noreferrer" className="flex items-stretch overflow-hidden mb-4 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/50 hover:bg-slate-100 transition-colors group">
+                                    {post.external_link.image_url ? (<img src={post.external_link.image_url} alt="preview" className="w-24 h-full object-cover border-r border-slate-200 dark:border-slate-700" />) : (<div className="w-16 flex items-center justify-center bg-indigo-50 dark:bg-indigo-900/30 border-r border-slate-200 text-indigo-400"><ExternalLink size={20} /></div>)}
+                                    <div className="flex-1 min-w-0 p-3 flex flex-col justify-center">
+                                        <p className="text-sm font-bold text-slate-800 dark:text-slate-200 truncate">{post.external_link.title}</p>
+                                        <p className="text-[10px] font-medium text-slate-400 uppercase tracking-widest truncate mt-0.5">{post.external_link.domain}</p>
+                                    </div>
+                                </a>
+                            )}
+
+                            {/* Interactions */}
+                            <div className="flex items-center gap-6 pt-4 border-t border-slate-100 dark:border-slate-700">
+                                <button onClick={() => handleLike(post.id)} className={`flex items-center gap-2 text-xs font-bold transition-colors group ${likedPosts.has(post.id) ? 'text-indigo-600' : 'text-slate-500 hover:text-indigo-600'}`}>
+                                    <div className={`p-1.5 rounded-full transition-colors ${likedPosts.has(post.id) ? 'bg-indigo-100 dark:bg-indigo-900/50' : 'group-hover:bg-indigo-50 dark:group-hover:bg-indigo-900/30'}`}>
+                                        <ThumbsUp size={16} className={likedPosts.has(post.id) ? 'fill-indigo-600' : ''} />
+                                    </div>
+                                    {(post.likes || 0) + ((likedPosts.has(post.id) && isMock) ? 1 : 0)}
+                                </button>
+                                
+                                <button onClick={() => toggleComments(post.id)} className={`flex items-center gap-2 text-xs font-bold transition-colors group ${openComments.has(post.id) ? 'text-indigo-600' : 'text-slate-500 hover:text-indigo-600'}`}>
+                                    <div className={`p-1.5 rounded-full transition-colors ${openComments.has(post.id) ? 'bg-indigo-100 dark:bg-indigo-900/50' : 'group-hover:bg-indigo-50 dark:group-hover:bg-indigo-900/30'}`}>
+                                        <MessageSquare size={16} />
+                                    </div>
+                                    {post.comments || 0}
+                                </button>
+                                
+                                <button className="flex items-center gap-2 text-xs font-bold text-slate-500 hover:text-indigo-600 transition-colors group ml-auto">
+                                    <Share2 size={16} />
+                                </button>
+                            </div>
+
+                            {openComments.has(post.id) && (
+                                <CommentSection postId={post.id} user={user} isMock={isMock} />
+                            )}
+
+                        </div>
+                    );
+                })}
+            </div>
+            
+            <div className="h-24" /> {/* Bottom Spacer */}
+        </div>
+    );
+};
+
+export default FeedsView;
