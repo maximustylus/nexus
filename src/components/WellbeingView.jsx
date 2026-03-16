@@ -151,12 +151,25 @@ const WellbeingView = ({ user }) => {
         setSelectedStaff(null); 
     };
 
-    const getStatusRecommendation = (energy, focus) => {
-        if (energy <= 3) return "Rest and recovery highly recommended";
-        if (energy <= 5 || focus <= 4) return "Light tasks recommended";
-        if (focus <= 3) return "Switch to low-cognitive tasks";
-        if (energy >= 8 && focus >= 8) return "Prime for deep work or complex cases";
-        return "Stable operating capacity";
+const getStatusRecommendation = (energy, focus) => {
+        // Parse strings to integers just to be safe
+        const e = parseInt(energy);
+        const f = parseInt(focus);
+
+        // TIER 5: BURNOUT (Pink)
+        if (e <= 1 || f <= 1) return "Burnout: Complete exhaustion. Prioritize immediate recovery.";
+        
+        // TIER 4: DEPLETED (Orange)
+        if (e <= 3 || f <= 3) return "Depleted: Fatigue present. Switch to low-cognitive tasks.";
+        
+        // TIER 3: OVERWORKED (Yellow)
+        if (e <= 5 || f <= 5) return "Overworked: Low energy or tension. Light tasks recommended.";
+        
+        // TIER 2: FUNCTIONING (Green)
+        if (e <= 7 || f <= 7) return "Functioning: Consistent capacity. Stable operating conditions.";
+        
+        // TIER 1: FOCUSED (Blue)
+        return "Focused: Thriving & engaged. Prime for deep work or complex cases.";
     };
 
     const getBatteryIcon = (level) => {
