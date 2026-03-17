@@ -601,96 +601,150 @@ function NexusApp() {
         </div>
       )}
 
-        {/* 🌟 NEW TOP NAVIGATION BAR 🌟 */}
-        <header className="sticky top-0 z-50 bg-white/80 dark:bg-slate-900/80 backdrop-blur-md border-b border-slate-200 dark:border-slate-800 px-4 py-3 flex items-center justify-between shadow-sm rounded-b-xl mb-4 md:mb-0 md:rounded-none">
-            
-            {/* 1. FAR LEFT: DYNAMIC LOGO */}
-            <div 
-                className="flex items-center gap-2 cursor-pointer transition-transform active:scale-95" 
-                onClick={() => { setIsAdminOpen(false); setCurrentView('dashboard'); }}
+      {/* HEADER BAR */}
+      <div className="md:col-span-2 flex items-center justify-between mb-6 bg-white dark:bg-slate-800 p-4 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 w-full overflow-hidden">
+
+        {/* BRANDING (Left) */}
+        <div className="flex items-center gap-3 md:gap-4 shrink-0 cursor-pointer" onClick={() => setCurrentView('dashboard')}>
+          {isDemo ? (
+            <>
+              {/* DEMO MODE LOGO */}
+              <img 
+                  src="/nexus.png" 
+                  alt="NEXUS" 
+                  className="h-8 w-auto object-contain drop-shadow-sm" 
+                  onError={(e) => { e.target.style.display = 'none'; }} 
+              />
+              <span className="font-black text-xl tracking-tight text-slate-800 dark:text-white hidden sm:block">
+                  NEXUS
+              </span>
+            </>
+          ) : (
+            <>
+              {/* LIVE MODE LOGO */}
+              <div className="h-8 w-8 bg-emerald-100 rounded-lg flex items-center justify-center overflow-hidden shrink-0">
+                  <img 
+                      src="/logo.png" 
+                      alt="Department" 
+                      className="h-full w-full object-contain" 
+                      onError={(e) => { e.target.style.display = 'none'; }} 
+                  />
+              </div>
+              <span className="font-black text-lg tracking-tight text-slate-800 dark:text-white hidden sm:block">
+                  Clinical Dept
+              </span>
+            </>
+          )}
+        </div>
+
+        {/* CENTER NAVIGATION (Desktop only) */}
+        <div className="hidden xl:flex bg-slate-100 dark:bg-slate-900/50 p-1 rounded-lg shrink-0">
+           {['dashboard', 'feeds', 'pulse', 'roster', 'guide'].map(view => (
+             <button 
+               key={view}
+               onClick={() => { setIsAdminOpen(false); setCurrentView(view); }}
+               className={`px-4 py-2 rounded-md text-sm font-bold capitalize transition-all ${
+                 currentView === view && !isAdminOpen 
+                   ? 'bg-white dark:bg-slate-800 text-indigo-600 dark:text-indigo-400 shadow-sm' 
+                   : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'
+               }`}
+             >
+               {view}
+             </button>
+           ))}
+        </div>
+
+        {/* ACTION CLUSTER (Right Side - Reordered) */}
+        <div className="flex items-center justify-end gap-2 md:gap-3 shrink-0">
+
+          {/* 1. LIVE/DEMO TOGGLE */}
+          <div className="flex items-center gap-2 border-r border-slate-200 dark:border-slate-700 pr-2 mr-1">
+            <span className={`text-[10px] font-black uppercase tracking-tight hidden sm:block ${isDemo ? 'text-emerald-600' : 'text-slate-400'}`}>
+               {isDemo ? 'Demo' : 'Live'}
+            </span>
+            <button 
+              onClick={toggleDemo} 
+              className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${isDemo ? 'bg-emerald-500' : 'bg-slate-300 dark:bg-slate-600'}`}
             >
-                {isDemo ? (
-                    <>
-                        <div className="bg-indigo-600 text-white p-1.5 rounded-lg shadow-sm flex items-center justify-center">
-                            <Hexagon size={20} className="fill-current" />
-                        </div>
-                        <span className="font-black text-xl tracking-tight text-slate-800 dark:text-white hidden sm:block">
-                            NEXUS
-                        </span>
-                    </>
-                ) : (
-                    <>
-                        <div className="h-8 w-8 bg-emerald-100 rounded-lg flex items-center justify-center overflow-hidden">
-                            <img 
-                                src="/logo.png" 
-                                alt="Department" 
-                                className="h-full w-full object-contain" 
-                                onError={(e) => { e.target.style.display = 'none'; }} 
-                            />
-                        </div>
-                        <span className="font-black text-lg tracking-tight text-slate-800 dark:text-white hidden sm:block">
-                            Clinical Dept
-                        </span>
-                    </>
-                )}
-            </div>
+              <span className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white transition-transform ${isDemo ? 'translate-x-5' : 'translate-x-1'}`} />
+            </button>
+          </div>
+          
+          {/* 2. ADMIN BUTTON */}
+          {(user?.role === 'admin' || isDemo) && (
+            <button 
+              onClick={() => { setIsAdminOpen(!isAdminOpen); setCurrentView('dashboard'); }} 
+              className={`p-2 rounded-full transition-all active:scale-95 sm:hover:bg-slate-100 dark:sm:hover:bg-slate-700 ${isAdminOpen ? 'bg-indigo-50 text-indigo-600 dark:bg-indigo-900/50 dark:text-indigo-400' : 'text-slate-400'}`}
+              title="Admin Logs"
+            >
+              <ShieldAlert size={18} />
+            </button>
+          )}
 
-            {/* RIGHT SIDE: CONTROLS */}
-            <div className="flex items-center gap-1 md:gap-3">
-                
-                {/* 2. Live/Demo Toggle */}
-                <button
-                    onClick={toggleDemo}
-                    className={`hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest transition-colors border mr-1 ${
-                        isDemo 
-                        ? 'bg-rose-50 text-rose-600 border-rose-200 dark:bg-rose-900/30 dark:border-rose-800 hover:bg-rose-100' 
-                        : 'bg-emerald-50 text-emerald-600 border-emerald-200 dark:bg-emerald-900/30 dark:border-emerald-800 hover:bg-emerald-100'
-                    }`}
-                >
-                    <ShieldAlert size={14} />
-                    {isDemo ? 'Demo Mode' : 'Live Mode'}
-                </button>
+          {/* 3. THEME TOGGLE (SUN/MOON) */}
+          <button onClick={toggleTheme} className="p-2 rounded-full transition-all text-slate-600 dark:text-slate-300 active:scale-95 active:bg-slate-200 dark:active:bg-slate-700 sm:hover:bg-slate-100 dark:sm:hover:bg-slate-700 border border-transparent sm:hover:border-slate-200">
+            {isDark ? <Sun size={18} /> : <Moon size={18} />}
+          </button>
 
-                {/* 3. Admin Logs */}
-                <button 
-                    onClick={() => setIsAdminOpen(!isAdminOpen)} 
-                    className={`p-2 rounded-full transition-colors relative ${isAdminOpen ? 'bg-indigo-100 text-indigo-600 dark:bg-indigo-900/50 dark:text-indigo-400' : 'text-slate-400 hover:text-indigo-600 hover:bg-slate-100 dark:hover:bg-slate-800'}`}
-                    title="Admin Logs"
-                >
-                    <ShieldAlert size={20} />
-                </button>
+          {/* 4. NOTIFICATION BELL */}
+          <div className="relative">
+              <button 
+                  onClick={toggleBell}
+                  className={`p-2 rounded-full transition-all border sm:hover:border-slate-200 active:scale-95 ${isBellOpen ? 'bg-slate-100 dark:bg-slate-700 text-indigo-600 dark:text-indigo-400 border-slate-200 dark:border-slate-600' : 'bg-transparent text-slate-600 dark:text-slate-300 border-transparent hover:bg-slate-50 dark:hover:bg-slate-800'}`}
+              >
+                  <Bell size={18} />
+                  {unreadCount > 0 && !isDemo && (
+                      <>
+                      <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-red-500 rounded-full animate-pulse ring-2 ring-white dark:ring-slate-800"></span>
+                      <span className="absolute top-1.5 right-1.5 w-2.5 h-2.5 bg-red-500 rounded-full animate-pulse ring-2 ring-white dark:ring-slate-800"></span>
+                      </>
+                  )}
+              </button>
 
-                {/* 4. Notifications (Bell) */}
-                <button onClick={toggleBell} className="p-2 text-slate-400 hover:text-indigo-600 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-full transition-colors relative">
-                    <Bell size={20} />
-                    {unreadCount > 0 && (
-                      <span className="absolute top-1.5 right-2 w-2 h-2 bg-red-500 rounded-full border-2 border-white dark:border-slate-900"></span>
-                    )}
-                </button>
+              {/* BELL DROPDOWN */}
+              {isBellOpen && !isDemo && (
+                  <div className="absolute right-0 mt-3 w-80 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl shadow-2xl z-50 overflow-hidden animate-in zoom-in-95 duration-200">
+                      <div className="px-4 py-3 border-b border-slate-100 dark:border-slate-700 flex justify-between items-center bg-slate-50 dark:bg-slate-900/50">
+                          <h3 className="text-xs font-black text-slate-700 dark:text-slate-200 uppercase tracking-widest">Notifications</h3>
+                          <h3 className="text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest">Inbox</h3>
+                      </div>
+                      <div className="max-h-80 overflow-y-auto scrollbar-hide">
+                          {notifications.length === 0 ? (
+                              <div className="p-8 text-center text-xs text-slate-400 font-medium">No new activity</div>
+                          ) : (
+                              notifications.map((n) => (
+                                  <div key={n.id} onClick={() => { setIsBellOpen(false); setCurrentView('feeds'); }} className={`p-4 border-b border-slate-50 dark:border-slate-700/50 hover:bg-slate-50 dark:hover:bg-slate-700/30 cursor-pointer transition-colors ${!n.read ? 'bg-indigo-50/30 dark:bg-indigo-900/10' : ''}`}>
+                                      <p className="text-sm text-slate-700 dark:text-slate-200">
+                                          <span className="font-bold">{n.sender}</span> {n.type === 'LIKE' ? 'liked your post' : 'commented on your post'}
+                                      </p>
+                                      {n.preview && <p className="text-[11px] text-slate-400 mt-1 italic truncate">"{n.preview}"</p>}
+                                  </div>
+                              ))
+                          )}
+                      </div>
+                  </div>
+              )}
+          </div>
 
-                {/* 5. Sun/Moon (Dark Mode Toggle) */}
-                <button 
-                    onClick={toggleTheme} 
-                    className="p-2 text-slate-400 hover:text-indigo-600 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-full transition-colors"
-                    title="Toggle Theme"
-                >
-                    {isDark ? <Sun size={20} /> : <Moon size={20} />} 
-                </button>
+          {/* 5. PROFILE AVATAR */}
+          <button 
+            onClick={() => { setIsAdminOpen(false); setCurrentView('profile'); }}
+            className={`relative w-10 h-10 ml-1 rounded-full overflow-hidden border-2 transition-all active:scale-95 flex items-center justify-center bg-indigo-100 text-indigo-600 font-black shrink-0 ${currentView === 'profile' ? 'border-indigo-500 ring-4 ring-indigo-500/10 shadow-md' : 'border-white dark:border-slate-700 hover:border-slate-300 shadow-sm'}`}
+          >
+            {user?.photoURL ? (
+                <img src={user.photoURL} alt="Profile" className="w-full h-full object-cover" />
+            ) : (
+                <span className="text-base uppercase">{user?.name ? user.name.charAt(0) : <User size={20}/>}</span>
+            )}
+          </button>
 
-                {/* 6. Profile Picture */}
-                <button 
-                    onClick={() => { setIsAdminOpen(false); setCurrentView('profile'); }} 
-                    className={`w-9 h-9 md:w-10 md:h-10 rounded-full overflow-hidden border-2 bg-indigo-100 flex items-center justify-center font-black text-indigo-700 ml-1 hover:ring-2 hover:ring-indigo-500 transition-all shrink-0 ${currentView === 'profile' && !isAdminOpen ? 'border-indigo-500 ring-2 ring-indigo-500/50' : 'border-slate-200 dark:border-slate-700'}`}
-                >
-                    {user?.photoURL ? (
-                        <img src={user.photoURL} alt="Profile" className="w-full h-full object-cover" />
-                    ) : (
-                        <span className="uppercase">{user?.name ? user.name.charAt(0) : 'U'}</span>
-                    )}
-                </button>
+          {/* LOGOUT */}
+          <button onClick={handleLogout} className="p-2.5 hidden sm:flex text-slate-400 hover:text-red-500 transition-colors bg-slate-50 dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 ml-1">
+              <LogOut size={18} />
+          </button>
 
-            </div>
-        </header>
+        </div>
+      </div>
       
         {/* MAIN CONTENT AREA */}
         {(isAdminOpen && (user?.role === 'admin' || isDemo)) ? (
