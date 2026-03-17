@@ -254,6 +254,25 @@ const ProfileView = ({ user }) => {
                     )}
                 </div>
 
+                        <div className="bg-white dark:bg-slate-800 rounded-3xl p-6 shadow-sm border border-slate-200 dark:border-slate-700 space-y-4">
+                            <div className="flex items-center gap-2 mb-2">
+                                <div className="p-2 bg-indigo-100 text-indigo-600 rounded-lg"><Bell size={18} /></div>
+                                <h2 className="font-bold text-slate-800 dark:text-white">Preferences</h2>
+                            </div>
+                            <div className="flex items-center justify-between p-3 bg-slate-50 dark:bg-slate-900 rounded-xl">
+                                <div>
+                                    <p className="text-sm font-bold text-slate-700 dark:text-slate-200">Push Notifications</p>
+                                    <p className="text-[10px] text-slate-500">Enable daily pulse nudges and post alerts</p>
+                                </div>
+                                <button 
+                                    onClick={() => {/* We will wire this to Firestore toggles later */}}
+                                    className="w-10 h-5 bg-indigo-600 rounded-full relative flex items-center px-1"
+                                >
+                                    <div className="w-3 h-3 bg-white rounded-full ml-auto" />
+                                </button>
+                            </div>
+                        </div>
+                
                 {/* Danger Zone / System */}
                 <div className="bg-white dark:bg-slate-800 rounded-3xl p-6 shadow-sm border border-slate-200 dark:border-slate-700 flex flex-col justify-between space-y-4">
                     <div>
