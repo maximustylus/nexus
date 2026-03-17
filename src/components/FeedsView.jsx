@@ -87,7 +87,6 @@ const FeedsView = ({ user }) => {
     const [likedPosts, setLikedPosts] = useState(new Set());
     const [openComments, setOpenComments] = useState(new Set());
     const [selectedPost, setSelectedPost] = useState(null);
-
     const [selectedImage, setSelectedImage] = useState(null);
     const [imagePreviewUrl, setImagePreviewUrl] = useState(null);
     const fileInputRef = useRef(null);
@@ -114,6 +113,22 @@ const FeedsView = ({ user }) => {
             if (linkedPost) { setSelectedPost(linkedPost); window.history.replaceState({}, document.title, window.location.pathname + "?view=feeds"); }
         }
     }, [displayPosts]);
+
+    // 🌟 Restored Edit/Delete logic for the Lightbox
+    const startEditPost = (post) => {
+        setEditingPostId(post.id);
+        setDraftPost(post.raw_text || '');
+        setLinkPreview(post.external_link || null);
+        setImagePreviewUrl(post.image_url || null);
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+    };
+
+    const handleDeletePost = async (postId) => {
+        if (window.confirm("Are you sure you want to delete this post? This cannot be undone.")) {
+            try { await deleteDoc(doc(db, 'feed_posts', postId)); } 
+            catch (error) { console.error("Error deleting post:", error); }
+        }
+    };
 
     const handlePostSubmit = async () => {
         if (!draftPost.trim() && !selectedImage) return; 
