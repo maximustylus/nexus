@@ -583,8 +583,7 @@ function NexusApp() {
       )}
 
 {/* HEADER BAR */}
-      <div className="md:col-span-2 flex items-center justify-between mb-6 bg-white dark:bg-slate-800 p-4 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 w-full overflow-hidden">
-        
+<div className="md:col-span-2 flex items-center justify-between mb-6 bg-white dark:bg-slate-800 p-4 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 w-full relative z-40">        
         {/* BRANDING (Left) */}
         <div className="flex items-center gap-3 md:gap-4 shrink-0">            
           <div className="relative">
