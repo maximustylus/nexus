@@ -15,11 +15,74 @@ const CATEGORIES = {
     BUSY_BEE: { id: 'BUSY_BEE', label: 'Busy Bee', icon: '🐝', color: 'amber', desc: 'Growth & Upskilling' }
 };
 
-// --- MOCK DATA ARRAYS (Keep them exactly the same as before, I'm abbreviating to save space but keep your full ones) ---
-const LIVE_MOCK_POSTS = [ /* ... your hospital posts ... */ ];
-const DEMO_MOCK_POSTS = [ /* ... your marvel posts ... */ ];
+// --- REAL HOSPITAL DATA ---
+const LIVE_MOCK_POSTS = [
+    {
+        id: 'live1', author: 'Alif', role: 'Lead CEP', avatar: 'bg-emerald-100 text-emerald-700', timestamp: '1 hour ago', category: 'BOOKWORM',
+        raw_text: "The ACSM just released their updated position stand on resistance training. It is an excellent review on volume and intensity modulation. A must-read as we refine our exercise prescription protocols.",
+        ai_enhancements: { tldr: "Updated ACSM resistance training guidelines published. Key reading for exercise prescription protocols.", tags: ['ACSM', 'RESISTANCE TRAINING', 'CLINICAL GUIDELINES'] },
+        image_url: "https://cdn.fs.pathlms.com/mjxJF5l5R9yASZy09BFC/convert?cache=true&fit=scale&format=jpeg&h=192&quality=100&w=1056",
+        external_link: { title: "ACSM Position Stand on Resistance Training", url: "https://pmc.ncbi.nlm.nih.gov/articles/PMC12965823/", domain: "ncbi.nlm.nih.gov" },
+        likes: 14, comments: 3
+    },
+    {
+        id: 'live2', author: 'Nisa', role: 'Admin', avatar: 'bg-purple-100 text-purple-700', timestamp: '3 hours ago', category: 'SOCIAL_BUTTERFLY',
+        raw_text: "Where is your battery at today? Are you thriving or just surviving? We've updated our NEXUS dashboard to reflect both Physical and Emotional capacity based on this great visual framework. Remember to check in with yourselves and your colleagues!",
+        ai_enhancements: { tldr: "NEXUS dashboard updated to track both emotional and physical social batteries. Reminder to check in.", tags: ['WELLBEING', 'MENTAL HEALTH', 'TEAM CULTURE'] },
+        image_url: "https://scontent.fsin16-1.fna.fbcdn.net/v/t39.30808-6/491984873_1432622474740958_7072550564777468896_n.jpg?_nc_cat=106&ccb=1-7&_nc_sid=7b2446&_nc_ohc=oSToMNVh2bMQ7kNvwHW3gB0&_nc_oc=Adn-wXZpqFpnoosYvx7nFZARJyn4tQZYnPAQyqo3LPxWV9eNbkFFEDX50eGXiYtpizY&_nc_zt=23&_nc_ht=scontent.fsin16-1.fna&_nc_gid=9-zsViGSoTRHOdmsv6U6sg&_nc_ss=8&oh=00_AfwGc05Ki4j8-cz6KOSHY2314sgveI-WxjZ9yqpE4kPeJA&oe=69BE2F2D",
+        external_link: { title: "Social Battery: Emotional & Physical Matrix", url: "https://www.facebook.com/SocialButterflyCCS/posts/wheres-your-battery-at-today-are-you-thriving-or-just-surviving-this-visual-repr/1405645187438687/", domain: "facebook.com" },
+        likes: 42, comments: 8
+    },
+    {
+        id: 'live3', author: 'Linder', role: 'CEP Edu Lead', avatar: 'bg-amber-100 text-amber-700', timestamp: '5 hours ago', category: 'BUSY_BEE',
+        raw_text: "Highly recommend looking into the Active Health Lab's CALM (Combat Age-Related Loss of Muscle) program. It has fantastic insights on protein intake interventions specifically for our menopausal patients. Great structured approach we can learn from.",
+        ai_enhancements: { tldr: "Recommendation to review the CALM program for interventions on muscle loss and protein intake in menopausal patients.", tags: ['CALM', 'MENOPAUSE', 'NUTRITION'] },
+        external_link: { title: "Combat Age-Related Loss of Muscle (CALM)", url: "https://www.activesgcircle.gov.sg/activehealth/our-programmes?filter=just_getting_started&slide=combat-age-related-loss-of-muscle-calm-10-20", domain: "activesgcircle.gov.sg" },
+        likes: 21, comments: 4
+    },
+    {
+        id: 'live4', author: 'A/Prof. Ashik', role: 'HOD / HOS', avatar: 'bg-blue-100 text-blue-700', timestamp: '1 day ago', category: 'BLUE_BEETLE',
+        raw_text: "Anthropic just launched a series of free AI courses on Skilljar. Given our strong push towards integrating smart tools like AURA into our workflow, I highly encourage everyone to take a look and upskill on prompt engineering.",
+        ai_enhancements: { urgency: 'NORMAL', tldr: "HOD encourages staff to utilize free Anthropic AI courses to improve prompt engineering skills.", tags: ['AI TRAINING', 'ANTHROPIC', 'UPSKILLING'] },
+        image_url: "https://media.licdn.com/dms/image/v2/D4D22AQHJt-AY4ezgmQ/feedshare-shrink_1280/B4DZlH8964JUAs-/0/1757848791179?e=1775088000&v=beta&t=lGHqjFMc5FjmVFUtshZvDJfZ81HrQKZW7rCFb68xP2o",
+        external_link: { title: "Anthropic Educational Courses", url: "https://anthropic.skilljar.com/", domain: "anthropic.skilljar.com" },
+        likes: 38, comments: 5
+    }
+];
 
-// 🌟 PHASE 1: THE COMMENT COMPONENT 
+// --- MARVEL DEMO DATA 🦸‍♂️ ---
+const DEMO_MOCK_POSTS = [
+    {
+        id: 'm1', author: 'Tony Stark', role: 'Head of Engineering', avatar: 'bg-red-100 text-red-700', timestamp: '1 hour ago', category: 'SOCIAL_BUTTERFLY',
+        raw_text: "Just docked the Disney Adventure at Marina Bay Cruise Centre, Singapore! 🇸🇬 The repulsor tech powering the Marvel landing zone is holding steady at 100%. Avengers, assemble at the upper deck for the VIP meet-and-greet at 1800 hrs.",
+        ai_enhancements: { tldr: "Avengers meet-and-greet on the Disney Adventure cruise ship in Singapore at 1800 hrs.", tags: ['SINGAPORE', 'DISNEY ADVENTURE', 'TEAM EVENT'] },
+        image_url: "https://cdn1.parksmedia.wdprapps.disney.com/resize/mwImage/1/1000/1000/75/vision-dam/digital/parks-platform/parks-global-assets/disney-cruise-line/ships/adventure/concept-art/Marvel-landing-ca-16x9.jpg?2025-09-30T00:24:43+00:00", 
+        external_link: { title: "Join the Disney Adventure", url: "https://disneycruise.disney.go.com/why-cruise-disney/join-the-adventure/", domain: "disneycruise.disney.go.com" },
+        likes: 3000, comments: 412
+    },
+    {
+        id: 'm2', author: 'Peter Parker', role: 'Intern (Web Dev)', avatar: 'bg-blue-100 text-blue-700', timestamp: '3 hours ago', category: 'BLUE_BEETLE',
+        raw_text: "Hey everyone! 'Spider-Man: Brand New Day' is officially out worldwide! Also, I've updated the web-shooter schematics on the shared drive to match the new high-tensile formula used in the film. Check it out!",
+        ai_enhancements: { urgency: 'NORMAL', tldr: "'Brand New Day' released. New high-tensile web-shooter schematics uploaded to the shared drive.", tags: ['BRAND NEW DAY', 'SCHEMATICS', 'GEAR UPDATE'] },
+        image_url: "https://media.gettyimages.com/id/2227870960/photo/celebrity-sightings-in-glasgow-august-3-2025.jpg?s=2048x2048&w=gi&k=20&c=k_reMlFPw5jnS4aNC6mQAA6OKgs_NJvINRGa8PB0WX8=", 
+        external_link: { title: "Watch the Official Trailer", url: "https://youtu.be/Vsn7sVxCq1M?si=ylFiUeGVTI2Cmw6j", domain: "youtube.com" },
+        likes: 890, comments: 55
+    },
+    {
+        id: 'm3', author: 'Bruce Banner', role: 'Head of Research', avatar: 'bg-emerald-100 text-emerald-700', timestamp: '5 hours ago', category: 'BOOKWORM',
+        raw_text: "Just reviewed the recent combat data on Chitauri armor plating. The tensile strength requires a minimum of 4000 Joules for penetration. I've uploaded the kinetic breakdown to the mainframe for anyone modifying their gear.",
+        ai_enhancements: { tldr: "Chitauri armor analysis complete: Requires 4000+ Joules for penetration. Data uploaded to mainframe.", tags: ['COMBAT DATA', 'VULNERABILITY ANALYSIS'] },
+        likes: 42, comments: 7
+    },
+    {
+        id: 'm4', author: 'Nick Fury', role: 'Director', avatar: 'bg-slate-800 text-white', timestamp: '1 day ago', category: 'BUSY_BEE',
+        raw_text: "S.H.I.E.L.D. is hosting a mandatory advanced tactical espionage seminar next month. All field agents must attend. Sessions start October 10th at 0800 hrs in the Triskelion Briefing Room Alpha.",
+        ai_enhancements: { event_date: 'Oct 10, 2026 - 0800 hrs', location: 'Triskelion Briefing Room Alpha', tags: ['MANDATORY', 'TRAINING', 'ESPIONAGE'] },
+        likes: 89, comments: 0
+    }
+];
+
+// 🌟 PHASE 1 & 2: THE COMMENT COMPONENT WITH NOTIFICATIONS
 const CommentSection = ({ postId, user, isMock, postAuthor }) => {
     const [comments, setComments] = useState([]);
     const [draft, setDraft] = useState('');
@@ -35,9 +98,10 @@ const CommentSection = ({ postId, user, isMock, postAuthor }) => {
         return () => unsubscribe();
     }, [postId, isMock]);
 
-const handleSubmit = async (e) => {
+    const handleSubmit = async (e) => {
         e.preventDefault();
         if (!draft.trim()) return;
+        
         if (isMock) {
             setComments(prev => [...prev, { id: Date.now().toString(), author: user?.name || 'You', text: draft }]);
             setDraft('');
@@ -46,25 +110,24 @@ const handleSubmit = async (e) => {
 
         setIsSubmitting(true);
         try {
-            // 1. Save the comment
+            // Save Comment
             await addDoc(collection(db, 'feed_posts', postId, 'comments'), {
                 author: user?.name || 'Staff Member',
                 text: draft,
                 timestamp: serverTimestamp()
             });
-            
-            // 2. Increment comment count
+            // Update counter
             await updateDoc(doc(db, 'feed_posts', postId), { comments: increment(1) });
             
-            // 3. 🌟 NEW: SILENTLY NOTIFY THE AUTHOR (If it's not their own post)
+            // 🌟 PHASE 2: SILENTLY NOTIFY THE AUTHOR
             const commenterName = user?.name || 'Staff Member';
             if (postAuthor !== commenterName) {
                 await addDoc(collection(db, 'notifications'), {
-                    recipient: postAuthor,          // Who gets the alert
-                    sender: commenterName,          // Who did the action
+                    recipient: postAuthor,
+                    sender: commenterName,
                     type: 'COMMENT',
                     postId: postId,
-                    preview: draft.substring(0, 40) + '...', // A tiny snippet of what they said
+                    preview: draft.substring(0, 40) + '...', // Snippet of the comment
                     read: false,
                     timestamp: serverTimestamp()
                 });
@@ -74,7 +137,7 @@ const handleSubmit = async (e) => {
         } catch (error) { console.error("Error posting comment:", error); } 
         finally { setIsSubmitting(false); }
     };
-    
+
     return (
         <div className="mt-4 pt-4 border-t border-slate-100 dark:border-slate-700 animate-in slide-in-from-top-2 fade-in duration-200">
             <div className="space-y-3 max-h-48 overflow-y-auto pr-2 scrollbar-thin mb-3">
@@ -115,9 +178,9 @@ const FeedsView = ({ user }) => {
     const [likedPosts, setLikedPosts] = useState(new Set());
     const [openComments, setOpenComments] = useState(new Set());
 
-    // 🌟 STATE: EDITING & DELETING
+    // EDIT/DELETE STATE
     const [editingPostId, setEditingPostId] = useState(null);
-    const [activeMenuId, setActiveMenuId] = useState(null); // Which 3-dot menu is open
+    const [activeMenuId, setActiveMenuId] = useState(null);
 
     // MEDIA STATE
     const [linkPreview, setLinkPreview] = useState(null);
@@ -172,10 +235,11 @@ const FeedsView = ({ user }) => {
 
     const baseDataset = isDemo ? DEMO_MOCK_POSTS : LIVE_MOCK_POSTS;
     const filteredDbPosts = livePosts.filter(p => p.isDemo === isDemo);
+    
+    // 🌟 Ensure combined arrays correctly put new live posts first
     const combinedPosts = [...filteredDbPosts, ...baseDataset];
     const displayPosts = activeFilter === 'ALL' ? combinedPosts : combinedPosts.filter(post => post.category === activeFilter);
 
-    // 🌟 ACTION: POST OR UPDATE (WITH GEMINI)
     const handlePostSubmit = async () => {
         if (!draftPost.trim() && !selectedImage) return; 
         setIsPosting(true); setPostError(null);
@@ -194,17 +258,16 @@ const FeedsView = ({ user }) => {
                 authorRole: user?.title || user?.role || 'Clinical Staff',
                 isDemo: isDemo,
                 externalLink: linkPreview,
-                imageUrl: uploadedImageUrl || (editingPostId ? combinedPosts.find(p=>p.id===editingPostId)?.image_url : null), // Keep old image if editing
-                postId: editingPostId // 🌟 Passing the ID triggers an UPDATE instead of a NEW post
+                imageUrl: uploadedImageUrl || (editingPostId ? combinedPosts.find(p=>p.id===editingPostId)?.image_url : null),
+                postId: editingPostId
             });
 
             if (response.data.success) {
-                cancelEditSetup(); // Clear everything
+                cancelEditSetup();
             } else { setPostError(response.data.feedback); }
         } catch (error) { setPostError("Failed to connect to AURA. Check your connection."); } finally { setIsPosting(false); }
     };
 
-    // 🌟 ACTION: DELETE POST
     const handleDeletePost = async (postId) => {
         if (window.confirm("Are you sure you want to delete this post? This cannot be undone.")) {
             setActiveMenuId(null);
@@ -213,7 +276,6 @@ const FeedsView = ({ user }) => {
         }
     };
 
-    // 🌟 ACTION: SETUP EDIT UI
     const startEditPost = (post) => {
         setActiveMenuId(null);
         setEditingPostId(post.id);
@@ -224,24 +286,20 @@ const FeedsView = ({ user }) => {
     };
 
     const cancelEditSetup = () => {
-        setEditingPostId(null);
-        setDraftPost('');
-        setLinkPreview(null);
-        setSelectedImage(null);
-        setImagePreviewUrl(null);
+        setEditingPostId(null); setDraftPost(''); setLinkPreview(null); setSelectedImage(null); setImagePreviewUrl(null);
         if (fileInputRef.current) fileInputRef.current.value = '';
     };
 
-const handleLike = async (postId) => {
+    // 🌟 PHASE 2: LIKE WITH NOTIFICATIONS
+    const handleLike = async (postId) => {
         if (likedPosts.has(postId)) return;
         setLikedPosts(prev => new Set(prev).add(postId));
         if (String(postId).startsWith('m') || String(postId).startsWith('live')) return;
         
         try { 
-            // 1. Increment the Like Counter
             await updateDoc(doc(db, 'feed_posts', postId), { likes: increment(1) }); 
-
-            // 2. SILENTLY NOTIFY THE AUTHOR
+            
+            // 🌟 Notify the author
             const post = combinedPosts.find(p => p.id === postId);
             const likerName = user?.name || 'Staff Member';
 
@@ -255,11 +313,8 @@ const handleLike = async (postId) => {
                     timestamp: serverTimestamp()
                 });
             }
-
-        } catch (error) { 
-            // Revert on failure
-            setLikedPosts(prev => { const newSet = new Set(prev); newSet.delete(postId); return newSet; }); 
-        }
+        } 
+        catch (error) { setLikedPosts(prev => { const newSet = new Set(prev); newSet.delete(postId); return newSet; }); }
     };
 
     const toggleComments = (postId) => {
@@ -344,7 +399,7 @@ const handleLike = async (postId) => {
                     const categoryConfig = CATEGORIES[post.category] || CATEGORIES.ALL;
                     const isMock = String(post.id).startsWith('m') || String(post.id).startsWith('live');
                     
-                    // Allow the creator (or any generic user if no login exists yet) to edit their post
+                    // Allow the creator to edit/delete
                     const isAuthor = user?.name ? user.name === post.author : post.author === 'Staff Member';
 
                     return (
@@ -432,12 +487,13 @@ const handleLike = async (postId) => {
                                 </button>
                             </div>
 
-                                {openComments.has(post.id) && (
+                            {/* RENDER THE COMMENT SECTION */}
+                            {openComments.has(post.id) && (
                                 <CommentSection 
                                     postId={post.id} 
                                     user={user} 
                                     isMock={isMock} 
-                                    postAuthor={post.author}
+                                    postAuthor={post.author} // 🌟 PASSED AUTHOR FOR NOTIFICATIONS
                                 />
                             )}
 
