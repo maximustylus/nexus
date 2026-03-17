@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Sparkles, MessageSquare, ThumbsUp, Share2, ShieldAlert, Link as LinkIcon, ExternalLink, Image as ImageIcon, Loader2, AlertTriangle, X, Send, MoreHorizontal, Edit2, Trash2, Bell } from 'lucide-react';
+import { Sparkles, MessageSquare, ThumbsUp, Share2, ShieldAlert, Link as LinkIcon, ExternalLink, Image as ImageIcon, Loader2, AlertTriangle, X, Send, MoreHorizontal, Edit2, Trash2 } from 'lucide-react';
 import { useNexus } from '../context/NexusContext';
 import { db, storage } from '../firebase';
 import { collection, query, orderBy, onSnapshot, doc, updateDoc, increment, addDoc, serverTimestamp, deleteDoc } from 'firebase/firestore';
@@ -298,7 +298,7 @@ const FeedsView = ({ user }) => {
                                         {post.authorPhotoUrl || post.author_photo_url ? (
                                             <img src={post.authorPhotoUrl || post.author_photo_url} alt="" className="w-full h-full object-cover" />
                                         ) : (
-                                            <div className="w-full h-full flex items-center justify-center font-bold">{post.author.charAt(0)}</div>
+                                            <div className="w-full h-full flex items-center justify-center font-bold text-slate-500">{post.author.charAt(0)}</div>
                                         )}
                                     </div>
                                     <div>
@@ -308,8 +308,9 @@ const FeedsView = ({ user }) => {
                                         </p>
                                     </div>
                                 </div>
-                                <div className={`px-3 py-1 rounded-full text-[10px] font-black uppercase ${theme.bg} ${theme.text} border ${theme.border}`}>
-                                    {CATEGORIES[post.category]?.label}
+                                {/* 🌟 CLEAN ICON BADGE HERE */}
+                                <div className={`w-8 h-8 rounded-full flex items-center justify-center text-base ${theme.bg} ${theme.text} border ${theme.border}`} title={CATEGORIES[post.category]?.label}>
+                                    {CATEGORIES[post.category]?.icon}
                                 </div>
                             </div>
 
@@ -350,6 +351,7 @@ const FeedsView = ({ user }) => {
                 })}
             </div>
 
+            {/* 🌟 PASSING COMMENTCOMPONENT TO LIGHTBOX HERE */}
             {selectedPost && (
                 <PostLightbox 
                     post={selectedPost} 
@@ -359,6 +361,8 @@ const FeedsView = ({ user }) => {
                     likedPosts={likedPosts}
                     CATEGORIES={CATEGORIES}
                     getColorTheme={getColorTheme}
+                    CommentComponent={CommentSection}
+                    isMock={String(selectedPost.id).startsWith('m') || String(selectedPost.id).startsWith('live')}
                 />
             )}
             <div className="h-24" />
