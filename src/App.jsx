@@ -601,78 +601,22 @@ function NexusApp() {
         </div>
       )}
 
-{/* HEADER BAR */}
-<div className="md:col-span-2 flex items-center justify-between mb-6 bg-white dark:bg-slate-800 p-4 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 w-full relative z-40">        
-        {/* BRANDING (Left) */}
-        <div className="flex items-center gap-3 md:gap-4 shrink-0">            
-          <div className="relative">
-            {isDemo ? (
-              <img src="/nexus.png" alt="NEXUS Logo" className="h-8 md:h-12 w-auto object-contain animate-in zoom-in duration-500" />
-            ) : (
-              <img src="/logo.png" alt="SSMC Logo" className="h-8 md:h-12 w-auto object-contain animate-in fade-in duration-500" />
-            )}
-          </div>
-          
-          <div className="hidden sm:block">
-            <h1 className="text-lg md:text-2xl font-black text-slate-800 dark:text-white tracking-tight leading-none">
-              {isDemo ? 'NEXUS DEMO' : 'NEXUS'}
-            </h1>
-            <p className="text-[10px] md:text-xs font-bold text-slate-400 uppercase tracking-widest mt-1">
-                {isDemo ? 'Simulation Environment' : 'Smart Dashboard v1.4'}
-            </p>
-          </div>
-        </div>
-
-        {/* CENTER NAVIGATION (Desktop only) */}
-        <div className="hidden xl:flex bg-slate-100 dark:bg-slate-900/50 p-1 rounded-lg shrink-0">
-           {['dashboard', 'feeds', 'pulse', 'roster', 'guide'].map(view => (
-             <button 
-               key={view} 
-               onClick={() => setCurrentView(view)} 
-               className={`flex items-center gap-2 px-4 py-2 rounded-md text-xs font-bold transition-all capitalize ${currentView === view ? 'bg-white dark:bg-slate-700 shadow text-blue-600 dark:text-white' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'}`}
-             >
-               {view === 'dashboard' && <LayoutDashboard size={14} />}
-               {view === 'feeds' && <MessageCircle size={14} />}
-               {view === 'pulse' && <Activity size={14} />}
-               {view === 'roster' && <Calendar size={14} />}
-               {view === 'guide' && <BookOpen size={14} />} 
-               {view}
-             </button>
-           ))}
-        </div>
-          
-        {/* ACTION CLUSTER (Right Side - Reordered) */}
+        {/* ACTION CLUSTER (Right Side - Reordered & LogOut Removed) */}
         <div className="flex items-center justify-end gap-2 md:gap-4 shrink-0">
           
-          {/* THEME TOGGLE */}
-          <button onClick={toggleTheme} className="p-2 rounded-full transition-all text-slate-600 dark:text-slate-300 active:scale-95 active:bg-slate-200 dark:active:bg-slate-700 sm:hover:bg-slate-100 dark:sm:hover:bg-slate-700">
-            {isDark ? <Sun size={18} /> : <Moon size={18} />}
+          {/* 1. PROFILE AVATAR (Moved to the far left of the cluster) */}
+          <button 
+            onClick={() => { setIsAdminOpen(false); setCurrentView('profile'); }}
+            className={`relative w-10 h-10 rounded-full overflow-hidden border-2 transition-all active:scale-95 flex items-center justify-center bg-indigo-100 text-indigo-600 font-black shrink-0 ${currentView === 'profile' ? 'border-indigo-500 ring-4 ring-indigo-500/10 shadow-md' : 'border-white dark:border-slate-700 hover:border-slate-300 shadow-sm'}`}
+          >
+            {user?.photoURL ? (
+                <img src={user.photoURL} alt="Profile" className="w-full h-full object-cover" />
+            ) : (
+                <span className="text-base uppercase">{user?.name ? user.name.charAt(0) : <User size={20}/>}</span>
+            )}
           </button>
-          
-          {/* LIVE/DEMO TOGGLE (Moved here & separator removed) */}
-          <div className="flex items-center gap-2">
-            <span className={`text-[10px] font-black uppercase tracking-tight ${isDemo ? 'text-emerald-600' : 'text-slate-400'}`}>
-               {isDemo ? 'Demo' : 'Live'}
-            </span>
-            <button 
-              onClick={toggleDemo} 
-              className={`w-8 h-4 rounded-full flex items-center p-0.5 transition-colors duration-300 ${isDemo ? 'bg-emerald-500' : 'bg-slate-300'}`}
-            >
-              <div className={`bg-white w-3 h-3 rounded-full shadow-md transform transition-transform duration-300 ${isDemo ? 'translate-x-4' : 'translate-x-0'}`} />
-            </button>
-          </div>
 
-          {/* ADMIN BUTTON */}
-          {(user?.role === 'admin' || isDemo) && (
-            <button 
-              onClick={() => { setIsAdminOpen(!isAdminOpen); setCurrentView('dashboard'); }} 
-              className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-all shadow-sm ${isAdminOpen ? 'bg-blue-600 text-white' : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200'}`}
-            >
-              {isAdminOpen ? 'Close' : 'Admin'}
-            </button>
-          )}
-
-          {/* NOTIFICATION BELL */}
+          {/* 2. NOTIFICATION BELL */}
           <div className="relative">
               <button 
                   onClick={toggleBell}
@@ -708,24 +652,34 @@ function NexusApp() {
               )}
           </div>
 
-          {/* PROFILE AVATAR */}
-          <button 
-            onClick={() => { setIsAdminOpen(false); setCurrentView('profile'); }}
-            className={`relative w-10 h-10 rounded-full overflow-hidden border-2 transition-all active:scale-95 flex items-center justify-center bg-indigo-100 text-indigo-600 font-black ${currentView === 'profile' ? 'border-indigo-500 ring-4 ring-indigo-500/10 shadow-md' : 'border-white dark:border-slate-700 hover:border-slate-300 shadow-sm'}`}
-          >
-            {user?.photoURL ? (
-                <img src={user.photoURL} alt="Profile" className="w-full h-full object-cover" />
-            ) : (
-                <span className="text-base uppercase">{user?.name ? user.name.charAt(0) : <User size={20}/>}</span>
-            )}
+          {/* 3. THEME TOGGLE */}
+          <button onClick={toggleTheme} className="p-2 rounded-full transition-all text-slate-600 dark:text-slate-300 active:scale-95 active:bg-slate-200 dark:active:bg-slate-700 sm:hover:bg-slate-100 dark:sm:hover:bg-slate-700">
+            {isDark ? <Sun size={18} /> : <Moon size={18} />}
           </button>
 
-          {/* LOGOUT */}
-          <button onClick={handleLogout} className="p-2.5 text-slate-400 hover:text-red-500 transition-colors bg-slate-50 dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700">
-              <LogOut size={18} />
-          </button>
+          {/* 4. ADMIN BUTTON (Hidden if not admin) */}
+          {(user?.role === 'admin' || isDemo) && (
+            <button 
+              onClick={() => { setIsAdminOpen(!isAdminOpen); setCurrentView('dashboard'); }} 
+              className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-all shadow-sm ${isAdminOpen ? 'bg-blue-600 text-white' : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200'}`}
+            >
+              {isAdminOpen ? 'Close' : 'Admin'}
+            </button>
+          )}
+
+          {/* 5. LIVE/DEMO TOGGLE (Far right) */}
+          <div className="flex items-center gap-2">
+            <span className={`text-[10px] font-black uppercase tracking-tight ${isDemo ? 'text-emerald-600' : 'text-slate-400'}`}>
+               {isDemo ? 'Demo' : 'Live'}
+            </span>
+            <button 
+              onClick={toggleDemo} 
+              className={`w-8 h-4 rounded-full flex items-center p-0.5 transition-colors duration-300 ${isDemo ? 'bg-emerald-500' : 'bg-slate-300'}`}
+            >
+              <div className={`bg-white w-3 h-3 rounded-full shadow-md transform transition-transform duration-300 ${isDemo ? 'translate-x-4' : 'translate-x-0'}`} />
+            </button>
+          </div>
         </div>
-      </div>
       
     {/* MAIN CONTENT AREA */}
       {(isAdminOpen && (user?.role === 'admin' || isDemo)) ? (
