@@ -14,7 +14,7 @@ const PostLightbox = ({ post, user, onClose, onLike, likedPosts, CATEGORIES, get
 
             <div className="relative bg-white dark:bg-slate-800 w-full max-w-6xl max-h-[90vh] rounded-3xl shadow-2xl overflow-hidden flex flex-col md:flex-row animate-in zoom-in-95 duration-300">
                 
-                <button onClick={onClose} className="absolute top-4 right-4 z-10 p-2 bg-slate-100 dark:bg-slate-700 rounded-full text-slate-500 hover:text-slate-800 dark:hover:text-white transition-colors">
+                <button onClick={onClose} className="absolute top-4 right-4 z-10 p-2 bg-slate-100 dark:bg-slate-700 rounded-full text-slate-500 hover:text-slate-800 transition-colors">
                     <X size={20} />
                 </button>
 
@@ -22,13 +22,12 @@ const PostLightbox = ({ post, user, onClose, onLike, likedPosts, CATEGORIES, get
                 <div className="flex-1 overflow-y-auto bg-slate-50 dark:bg-slate-900/50 p-6 md:p-10 scrollbar-hide">
                     <div className="max-w-2xl mx-auto space-y-6">
                         
-                        {/* Author Header */}
                         <div className="flex items-center gap-4">
-                            <div className="w-12 h-12 rounded-full flex items-center justify-center font-black text-lg overflow-hidden bg-slate-100 border border-slate-200 dark:border-slate-700">
+                            <div className="w-12 h-12 rounded-full flex items-center justify-center font-black text-lg overflow-hidden bg-indigo-100 text-indigo-700 border border-slate-200 dark:border-slate-700">
                                  {post.authorPhotoUrl || post.author_photo_url ? (
                                     <img src={post.authorPhotoUrl || post.author_photo_url} alt="" className="w-full h-full object-cover" />
                                 ) : (
-                                    <div className="w-full h-full flex items-center justify-center bg-indigo-100 text-indigo-700">{post.author?.charAt(0)}</div>
+                                    <span>{post.author?.charAt(0)}</span>
                                 )}
                             </div>
                             <div>
@@ -40,7 +39,6 @@ const PostLightbox = ({ post, user, onClose, onLike, likedPosts, CATEGORIES, get
                             </div>
                         </div>
 
-                        {/* AURA Summary */}
                         {post.ai_enhancements && (
                             <div className={`p-4 rounded-2xl ${theme.bg} border ${theme.border} space-y-2`}>
                                 <div className="flex items-center gap-1.5 text-[10px] font-black uppercase tracking-widest opacity-70"><Sparkles size={12} /> AURA Summary</div>
@@ -50,41 +48,27 @@ const PostLightbox = ({ post, user, onClose, onLike, likedPosts, CATEGORIES, get
 
                         <p className="text-lg text-slate-700 dark:text-slate-200 leading-relaxed whitespace-pre-wrap">{post.raw_text}</p>
 
-                        {/* Image */}
                         {post.image_url && (
-                            <div className="rounded-3xl overflow-hidden border border-slate-200 dark:border-slate-700 shadow-lg">
+                            <div className="rounded-3xl overflow-hidden border border-slate-200 shadow-lg">
                                 <img src={post.image_url} alt="Post" className="w-full h-auto object-contain max-h-[500px]" />
                             </div>
-                        )}
-
-                        {/* Link Preview */}
-                         {post.external_link && (
-                            <a href={post.external_link.url} target="_blank" rel="noreferrer" className="flex items-stretch overflow-hidden mb-4 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 hover:shadow-md transition-colors group">
-                                {post.external_link.image_url && <img src={post.external_link.image_url} alt="preview" className="w-24 h-full object-cover border-r border-slate-200 dark:border-slate-700" />}
-                                <div className="flex-1 min-w-0 p-3 flex flex-col justify-center">
-                                    <p className="text-sm font-bold text-slate-800 dark:text-slate-200 truncate">{post.external_link.title}</p>
-                                    <p className="text-[10px] font-medium text-slate-400 uppercase tracking-widest truncate mt-0.5">{post.external_link.domain}</p>
-                                </div>
-                            </a>
                         )}
                     </div>
                 </div>
 
                 {/* RIGHT: LIVE DISCUSSION */}
                 <div className="w-full md:w-[400px] border-l border-slate-100 dark:border-slate-700 flex flex-col bg-white dark:bg-slate-800">
-                    <div className="p-6 border-b border-slate-100 dark:border-slate-700 flex items-center justify-between">
-                        <h3 className="font-black text-slate-800 dark:text-white uppercase tracking-wider text-xs">Discussion</h3>
+                    <div className="p-6 border-b border-slate-100 flex items-center justify-between">
+                        <h3 className="font-black text-slate-800 uppercase tracking-wider text-xs">Discussion</h3>
                         <button onClick={() => onLike(post.id)} className={`flex items-center gap-1.5 text-sm font-bold ${likedPosts.has(post.id) ? 'text-indigo-600' : 'text-slate-400 hover:text-indigo-600'}`}>
                             <ThumbsUp size={16} className={likedPosts.has(post.id) ? 'fill-indigo-600' : ''} /> {post.likes || 0}
                         </button>
                     </div>
                     <div className="flex-1 overflow-y-auto p-4 bg-slate-50 dark:bg-slate-900/30">
-                        
-                        {/* 🌟 INJECTING THE LIVE COMMENTS HERE */}
+                        {/* 🌟 REAL COMMENTS INJECTED HERE */}
                         {CommentComponent && (
                             <CommentComponent postId={post.id} user={user} isMock={isMock} postAuthor={post.author} />
                         )}
-                        
                     </div>
                 </div>
             </div>
