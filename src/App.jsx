@@ -582,10 +582,10 @@ function NexusApp() {
         </div>
       )}
 
-      {/* HEADER BAR */}
+{/* HEADER BAR */}
       <div className="md:col-span-2 flex items-center justify-between mb-6 bg-white dark:bg-slate-800 p-4 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 w-full overflow-hidden">
         
-        {/* BRANDING */}
+        {/* BRANDING (Left) */}
         <div className="flex items-center gap-3 md:gap-4 shrink-0">            
           <div className="relative">
             {isDemo ? (
@@ -605,7 +605,7 @@ function NexusApp() {
           </div>
         </div>
 
-        {/* CENTER NAVIGATION */}
+        {/* CENTER NAVIGATION (Desktop only) */}
         <div className="hidden xl:flex bg-slate-100 dark:bg-slate-900/50 p-1 rounded-lg shrink-0">
            {['dashboard', 'feeds', 'pulse', 'roster', 'guide'].map(view => (
              <button 
@@ -623,11 +623,17 @@ function NexusApp() {
            ))}
         </div>
           
-        {/* ACTION BUTTONS & AVATAR */}
-        <div className="flex items-center justify-end gap-2 md:gap-3 shrink-0">
+        {/* ACTION CLUSTER (Right Side - Reordered) */}
+        <div className="flex items-center justify-end gap-2 md:gap-4 shrink-0">
           
-          <div className="flex items-center gap-2 border-r border-slate-200 dark:border-slate-700 pr-2 mr-1">
-            <span className={`text-[10px] font-bold uppercase ${isDemo ? 'text-emerald-600' : 'text-slate-400'}`}>
+          {/* THEME TOGGLE */}
+          <button onClick={toggleTheme} className="p-2 rounded-full transition-all text-slate-600 dark:text-slate-300 active:scale-95 active:bg-slate-200 dark:active:bg-slate-700 sm:hover:bg-slate-100 dark:sm:hover:bg-slate-700">
+            {isDark ? <Sun size={18} /> : <Moon size={18} />}
+          </button>
+          
+          {/* LIVE/DEMO TOGGLE (Moved here & separator removed) */}
+          <div className="flex items-center gap-2">
+            <span className={`text-[10px] font-black uppercase tracking-tight ${isDemo ? 'text-emerald-600' : 'text-slate-400'}`}>
                {isDemo ? 'Demo' : 'Live'}
             </span>
             <button 
@@ -638,10 +644,7 @@ function NexusApp() {
             </button>
           </div>
 
-          <button onClick={toggleTheme} className="p-2 rounded-full transition-all text-slate-600 dark:text-slate-300 active:scale-95 active:bg-slate-200 dark:active:bg-slate-700 sm:hover:bg-slate-100 dark:sm:hover:bg-slate-700 border border-transparent sm:hover:border-slate-200">
-            {isDark ? <Sun size={18} /> : <Moon size={18} />}
-          </button>
-          
+          {/* ADMIN BUTTON */}
           {(user?.role === 'admin' || isDemo) && (
             <button 
               onClick={() => { setIsAdminOpen(!isAdminOpen); setCurrentView('dashboard'); }} 
@@ -651,7 +654,7 @@ function NexusApp() {
             </button>
           )}
 
-          {/* 🌟 NEW: THE NOTIFICATION BELL */}
+          {/* NOTIFICATION BELL */}
           <div className="relative">
               <button 
                   onClick={toggleBell}
@@ -659,26 +662,26 @@ function NexusApp() {
               >
                   <Bell size={18} />
                   {unreadCount > 0 && !isDemo && (
-                      <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-red-500 rounded-full animate-pulse ring-2 ring-white dark:ring-slate-800"></span>
+                      <span className="absolute top-1.5 right-1.5 w-2.5 h-2.5 bg-red-500 rounded-full animate-pulse ring-2 ring-white dark:ring-slate-800"></span>
                   )}
               </button>
 
-              {/* BELL DROPDOWN */}
+              {/* DROPDOWN */}
               {isBellOpen && !isDemo && (
-                  <div className="absolute right-0 mt-2 w-72 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl shadow-xl z-50 overflow-hidden animate-in zoom-in-95 duration-200">
+                  <div className="absolute right-0 mt-3 w-80 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl shadow-2xl z-50 overflow-hidden animate-in zoom-in-95 duration-200">
                       <div className="px-4 py-3 border-b border-slate-100 dark:border-slate-700 flex justify-between items-center bg-slate-50 dark:bg-slate-900/50">
-                          <h3 className="text-xs font-black text-slate-700 dark:text-slate-200 uppercase tracking-widest">Notifications</h3>
+                          <h3 className="text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest">Inbox</h3>
                       </div>
-                      <div className="max-h-80 overflow-y-auto scrollbar-thin">
+                      <div className="max-h-80 overflow-y-auto scrollbar-hide">
                           {notifications.length === 0 ? (
-                              <p className="p-6 text-center text-xs text-slate-400 font-medium">You're all caught up!</p>
+                              <div className="p-8 text-center text-xs text-slate-400 font-medium">No new activity</div>
                           ) : (
                               notifications.map((n) => (
-                                  <div key={n.id} onClick={() => { setIsBellOpen(false); setCurrentView('feeds'); }} className={`p-4 border-b border-slate-100 dark:border-slate-700/50 hover:bg-slate-50 dark:hover:bg-slate-700/50 cursor-pointer transition-colors ${!n.read ? 'bg-indigo-50/50 dark:bg-indigo-900/10' : ''}`}>
+                                  <div key={n.id} onClick={() => { setIsBellOpen(false); setCurrentView('feeds'); }} className={`p-4 border-b border-slate-50 dark:border-slate-700/50 hover:bg-slate-50 dark:hover:bg-slate-700/30 cursor-pointer transition-colors ${!n.read ? 'bg-indigo-50/30 dark:bg-indigo-900/10' : ''}`}>
                                       <p className="text-sm text-slate-700 dark:text-slate-200">
-                                          <span className="font-bold">{n.sender}</span> {n.type === 'LIKE' ? 'liked your post.' : 'commented on your post.'}
+                                          <span className="font-bold">{n.sender}</span> {n.type === 'LIKE' ? 'liked your post' : 'commented on your post'}
                                       </p>
-                                      {n.preview && <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 italic truncate">"{n.preview}"</p>}
+                                      {n.preview && <p className="text-[11px] text-slate-400 mt-1 italic truncate">"{n.preview}"</p>}
                                   </div>
                               ))
                           )}
@@ -687,19 +690,20 @@ function NexusApp() {
               )}
           </div>
 
-          {/* 🌟 NEW: THE USER PROFILE AVATAR */}
+          {/* PROFILE AVATAR */}
           <button 
             onClick={() => { setIsAdminOpen(false); setCurrentView('profile'); }}
-            className={`relative w-9 h-9 rounded-full overflow-hidden border-2 transition-all active:scale-95 flex items-center justify-center bg-indigo-100 text-indigo-600 font-bold ${currentView === 'profile' ? 'border-indigo-500 ring-2 ring-indigo-500/20 shadow-md' : 'border-slate-200 dark:border-slate-700 hover:border-slate-300 shadow-sm'}`}
+            className={`relative w-10 h-10 rounded-full overflow-hidden border-2 transition-all active:scale-95 flex items-center justify-center bg-indigo-100 text-indigo-600 font-black ${currentView === 'profile' ? 'border-indigo-500 ring-4 ring-indigo-500/10 shadow-md' : 'border-white dark:border-slate-700 hover:border-slate-300 shadow-sm'}`}
           >
             {user?.photoURL ? (
                 <img src={user.photoURL} alt="Profile" className="w-full h-full object-cover" />
             ) : (
-                <span className="text-sm">{user?.name ? user.name.charAt(0) : <User size={16}/>}</span>
+                <span className="text-base uppercase">{user?.name ? user.name.charAt(0) : <User size={20}/>}</span>
             )}
           </button>
 
-          <button onClick={handleLogout} className="p-2 ml-1 text-slate-400 hover:text-red-500 transition-colors bg-slate-50 dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700">
+          {/* LOGOUT */}
+          <button onClick={handleLogout} className="p-2.5 text-slate-400 hover:text-red-500 transition-colors bg-slate-50 dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700">
               <LogOut size={18} />
           </button>
         </div>
