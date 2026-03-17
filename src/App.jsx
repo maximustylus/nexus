@@ -7,12 +7,12 @@ import AppGuide from './components/AppGuide';
 import { getMessaging, onMessage } from "firebase/messaging";
 import { createPortal } from 'react-dom';
 import { db, auth } from './firebase';
-import { collection, onSnapshot, doc } from 'firebase/firestore';
+import { collection, onSnapshot, doc, query, where, orderBy, updateDoc } from 'firebase/firestore'; // 🌟 Added Notification imports
 import { signOut } from 'firebase/auth';
 import { BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, 
   Tooltip, ResponsiveContainer, Cell, PieChart, Pie, Legend, ReferenceLine } from 'recharts';
 import { Sun, Moon, LogOut, LayoutDashboard, Calendar, Activity, 
-  Filter, ShieldAlert, BookOpen, MessageCircle, Gift, History } from 'lucide-react';
+  Filter, ShieldAlert, BookOpen, MessageCircle, Gift, History, Bell, User } from 'lucide-react'; // 🌟 Added Bell and User icons
 
 // --- CONTEXT & DATA STRATEGY ---
 import { NexusProvider, useNexus } from './context/NexusContext';
@@ -27,6 +27,7 @@ import RosterView from './components/RosterView';
 import WellbeingView from './components/WellbeingView';
 import AuraPulseBot from './components/AuraPulseBot';
 import WelcomeScreen from './components/WelcomeScreen';
+import ProfileView from './components/ProfileView'; // 🌟 NEW: Import Profile Component
 
 // --- UTILITIES ---
 import { STAFF_LIST, STAFF_IDS, MONTHS, checkAccess, TEAM_DIRECTORY } from './utils';
@@ -78,6 +79,11 @@ function NexusApp() {
   const [dataYear, setDataYear] = useState('2026');
   const [isAdminOpen, setIsAdminOpen] = useState(false);
   const [isAuraOpen, setIsAuraOpen] = useState(false);
+  const [isGuideOpen, setIsGuideOpen] = useState(false);
+  
+  // 🌟 NOTIFICATION STATE
+  const [notifications, setNotifications] = useState([]);
+  const [isBellOpen, setIsBellOpen] = useState(false);
 
   const [isDark, setIsDark] = useState(() => {
     if (typeof window !== 'undefined') {
@@ -108,8 +114,6 @@ function NexusApp() {
   }, []);
   
   const toggleTheme = () => setIsDark(!isDark); 
-
-  const [isGuideOpen, setIsGuideOpen] = useState(false);
   const previousView = useRef('dashboard');
 
   useEffect(() => {
@@ -139,7 +143,8 @@ function NexusApp() {
     const unsubscribe = auth.onAuthStateChanged((u) => {
       if (u) {
         const profile = checkAccess(u.email);
-        if (profile) setUser(profile);
+        // We inject the user's Auth UID so we can save their profile picture later
+        if (profile) setUser({ ...profile, uid: u.uid }); 
         else { setUser(null); signOut(auth); }
       } else {
         setUser(null);
@@ -149,6 +154,36 @@ function NexusApp() {
     return () => unsubscribe();
   }, []);
   
+  // 🌟 FETCH REAL-TIME PROFILE & NOTIFICATIONS
+  useEffect(() => {
+      let unsubUser, unsubNotifications;
+
+      if (user?.uid && !isDemo) {
+          // Listen for profile picture updates
+          unsubUser = onSnapshot(doc(db, 'users', user.uid), (docSnap) => {
+              if (docSnap.exists() && docSnap.data().photoURL) {
+                  setUser(prev => ({ ...prev, photoURL: docSnap.data().photoURL }));
+              }
+          });
+
+          // Listen for notifications specifically for this user
+          const q = query(
+              collection(db, 'notifications'), 
+              where('recipient', '==', user.name),
+              orderBy('timestamp', 'desc')
+          );
+          unsubNotifications = onSnapshot(q, (snapshot) => {
+              const fetched = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+              setNotifications(fetched);
+          });
+      }
+
+      return () => {
+          if (unsubUser) unsubUser();
+          if (unsubNotifications) unsubNotifications();
+      };
+  }, [user?.uid, user?.name, isDemo]);
+
   // --- DATA FETCHING ---
   useEffect(() => {
     let unsubStaff, unsubAttendance;
@@ -161,7 +196,6 @@ function NexusApp() {
       console.log("🧪 [NEXUS] Loading Marvel Universe...");
     } else {
       const targetCollection = dataYear === '2026' ? 'cep_team' : `archive_${dataYear}`;
-      console.log(`📡 [NEXUS] Fetching from: ${targetCollection}`);
 
       try {
         unsubStaff = onSnapshot(collection(db, targetCollection), (snapshot) => {        
@@ -222,6 +256,24 @@ function NexusApp() {
   // --- HELPERS & TRANSFORMERS ---
   const activeTeamData = isDemo ? MOCK_TEAM_DATA : teamData;
   const activeStaffLoads = isDemo ? MOCK_STAFF_LOADS : staffLoads;
+  
+  // 🌟 Calculate Unread Notifications
+  const unreadCount = notifications.filter(n => !n.read).length;
+
+  const markNotificationsAsRead = async () => {
+      if (isDemo || unreadCount === 0) return;
+      const unreadAlerts = notifications.filter(n => !n.read);
+      for (const alert of unreadAlerts) {
+          try { await updateDoc(doc(db, 'notifications', alert.id), { read: true }); }
+          catch (error) { console.error("Failed to mark read:", error); }
+      }
+  };
+
+  const toggleBell = () => {
+      const newState = !isBellOpen;
+      setIsBellOpen(newState);
+      if (newState) markNotificationsAsRead();
+  };
 
   const getFilteredData = () => {
     return activeTeamData.map(staff => ({
@@ -323,7 +375,6 @@ function NexusApp() {
   // --- SUB-COMPONENT: DASHBOARD VIEW ---
   const renderDashboardView = () => (
     <>
-      {/* 🌟 NEW: The Unified Dashboard/Archive Header */}
       <div className="md:col-span-2 flex flex-col md:flex-row md:justify-between md:items-center bg-white dark:bg-slate-800 p-5 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 mb-6 gap-4">
          <div className="flex items-center gap-3">
             <div className={`p-2 rounded-xl ${dataYear === '2026' ? 'bg-indigo-100 text-indigo-600 dark:bg-indigo-900/30 dark:text-indigo-400' : 'bg-amber-100 text-amber-600 dark:bg-amber-900/30 dark:text-amber-400'}`}>
@@ -504,45 +555,11 @@ function NexusApp() {
     </>
   );
 
-  // --- SUB-COMPONENT: FEEDS PLACEHOLDER ---
-  const renderFeedsPlaceholder = () => (
-    <>
-      <style>
-      {`
-        @keyframes shake {
-          0%, 100% { transform: rotate(0deg); }
-          25% { transform: rotate(-8deg); }
-          50% { transform: rotate(8deg); }
-          75% { transform: rotate(-8deg); }
-        }
-        .animate-shake {
-          animation: shake 0.6s ease-in-out infinite;
-        }
-      `}
-      </style>
-      <div className="md:col-span-2 flex flex-col items-center justify-center py-24 md:py-32 px-4 text-center animate-in fade-in zoom-in duration-500">
-        <div className="relative mb-8">
-          <div className="absolute inset-0 bg-indigo-500 blur-3xl opacity-20 rounded-full w-32 h-32 animate-pulse" />
-          <Gift size={80} className="text-indigo-500 relative z-10 animate-shake origin-bottom drop-shadow-2xl" />
-        </div>
-        <h2 className="text-3xl font-black text-slate-800 dark:text-white tracking-tight mb-4">
-          The Digital Watercooler is <span className="text-indigo-600 dark:text-indigo-400">Coming Soon</span>
-        </h2>
-        <p className="text-slate-500 dark:text-slate-400 max-w-md mx-auto font-medium leading-relaxed">
-          We are building a new secure space for the team to share wins, updates, and insights. Get ready for the Feeds tab in v1.5!
-        </p>
-        <div className="mt-8 px-4 py-2 bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 rounded-full text-xs font-bold uppercase tracking-widest border border-indigo-100 dark:border-indigo-800/50 shadow-sm">
-          ETA: Next Major Update
-        </div>
-      </div>
-    </>
-  );
-
   return (
       <ResponsiveLayout 
         activeTab={currentView} 
         onNavigate={setCurrentView}
-floatingWidgets={
+        floatingWidgets={
           <>
             <AppGuide isOpen={isGuideOpen} onClose={() => setIsGuideOpen(false)} />
             <FeedbackWidget user={user} />
@@ -588,7 +605,7 @@ floatingWidgets={
           </div>
         </div>
 
-        {/* 🌟 CENTER NAVIGATION (Archive Replaced by Feeds) */}
+        {/* CENTER NAVIGATION */}
         <div className="hidden xl:flex bg-slate-100 dark:bg-slate-900/50 p-1 rounded-lg shrink-0">
            {['dashboard', 'feeds', 'pulse', 'roster', 'guide'].map(view => (
              <button 
@@ -606,8 +623,9 @@ floatingWidgets={
            ))}
         </div>
           
-        {/* ACTION BUTTONS */}
+        {/* ACTION BUTTONS & AVATAR */}
         <div className="flex items-center justify-end gap-2 md:gap-3 shrink-0">
+          
           <div className="flex items-center gap-2 border-r border-slate-200 dark:border-slate-700 pr-2 mr-1">
             <span className={`text-[10px] font-bold uppercase ${isDemo ? 'text-emerald-600' : 'text-slate-400'}`}>
                {isDemo ? 'Demo' : 'Live'}
@@ -626,14 +644,62 @@ floatingWidgets={
           
           {(user?.role === 'admin' || isDemo) && (
             <button 
-              onClick={() => setIsAdminOpen(!isAdminOpen)} 
+              onClick={() => { setIsAdminOpen(!isAdminOpen); setCurrentView('dashboard'); }} 
               className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-all shadow-sm ${isAdminOpen ? 'bg-blue-600 text-white' : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200'}`}
             >
               {isAdminOpen ? 'Close' : 'Admin'}
             </button>
           )}
 
-          <button onClick={handleLogout} className="p-2 text-slate-400 hover:text-red-500 transition-colors bg-slate-50 dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700">
+          {/* 🌟 NEW: THE NOTIFICATION BELL */}
+          <div className="relative">
+              <button 
+                  onClick={toggleBell}
+                  className={`p-2 rounded-full transition-all border sm:hover:border-slate-200 active:scale-95 ${isBellOpen ? 'bg-slate-100 dark:bg-slate-700 text-indigo-600 dark:text-indigo-400 border-slate-200 dark:border-slate-600' : 'bg-transparent text-slate-600 dark:text-slate-300 border-transparent hover:bg-slate-50 dark:hover:bg-slate-800'}`}
+              >
+                  <Bell size={18} />
+                  {unreadCount > 0 && !isDemo && (
+                      <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-red-500 rounded-full animate-pulse ring-2 ring-white dark:ring-slate-800"></span>
+                  )}
+              </button>
+
+              {/* BELL DROPDOWN */}
+              {isBellOpen && !isDemo && (
+                  <div className="absolute right-0 mt-2 w-72 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl shadow-xl z-50 overflow-hidden animate-in zoom-in-95 duration-200">
+                      <div className="px-4 py-3 border-b border-slate-100 dark:border-slate-700 flex justify-between items-center bg-slate-50 dark:bg-slate-900/50">
+                          <h3 className="text-xs font-black text-slate-700 dark:text-slate-200 uppercase tracking-widest">Notifications</h3>
+                      </div>
+                      <div className="max-h-80 overflow-y-auto scrollbar-thin">
+                          {notifications.length === 0 ? (
+                              <p className="p-6 text-center text-xs text-slate-400 font-medium">You're all caught up!</p>
+                          ) : (
+                              notifications.map((n) => (
+                                  <div key={n.id} onClick={() => { setIsBellOpen(false); setCurrentView('feeds'); }} className={`p-4 border-b border-slate-100 dark:border-slate-700/50 hover:bg-slate-50 dark:hover:bg-slate-700/50 cursor-pointer transition-colors ${!n.read ? 'bg-indigo-50/50 dark:bg-indigo-900/10' : ''}`}>
+                                      <p className="text-sm text-slate-700 dark:text-slate-200">
+                                          <span className="font-bold">{n.sender}</span> {n.type === 'LIKE' ? 'liked your post.' : 'commented on your post.'}
+                                      </p>
+                                      {n.preview && <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 italic truncate">"{n.preview}"</p>}
+                                  </div>
+                              ))
+                          )}
+                      </div>
+                  </div>
+              )}
+          </div>
+
+          {/* 🌟 NEW: THE USER PROFILE AVATAR */}
+          <button 
+            onClick={() => { setIsAdminOpen(false); setCurrentView('profile'); }}
+            className={`relative w-9 h-9 rounded-full overflow-hidden border-2 transition-all active:scale-95 flex items-center justify-center bg-indigo-100 text-indigo-600 font-bold ${currentView === 'profile' ? 'border-indigo-500 ring-2 ring-indigo-500/20 shadow-md' : 'border-slate-200 dark:border-slate-700 hover:border-slate-300 shadow-sm'}`}
+          >
+            {user?.photoURL ? (
+                <img src={user.photoURL} alt="Profile" className="w-full h-full object-cover" />
+            ) : (
+                <span className="text-sm">{user?.name ? user.name.charAt(0) : <User size={16}/>}</span>
+            )}
+          </button>
+
+          <button onClick={handleLogout} className="p-2 ml-1 text-slate-400 hover:text-red-500 transition-colors bg-slate-50 dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700">
               <LogOut size={18} />
           </button>
         </div>
@@ -650,6 +716,7 @@ floatingWidgets={
           {currentView === 'feeds' && <FeedsView user={user} />}
           {currentView === 'roster' && <RosterView user={user} />}
           {currentView === 'pulse' && <WellbeingView user={user} />}
+          {currentView === 'profile' && <ProfileView user={user} />} {/* 🌟 RENDER PROFILE VIEW */}
           <div className="h-32 md:h-24 w-full shrink-0" />
         </div>
       )}
