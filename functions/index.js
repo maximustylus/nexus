@@ -506,9 +506,11 @@ exports.scheduledPulseNudge = onSchedule({
 // FUNCTION 4: FEEDS, SMART WATERCOOLER & PDPA GUARD
 // =============================================================================
 
+// --- FEEDS: SMART WATERCOOLER & PDPA GUARD ---
+
 exports.processFeedPost = onCall(async (request) => {
-    // 1. Extract data sent from the React frontend 
-    const { rawText, authorName, authorRole, isDemo, externalLink, imageUrl } = request.data;
+    // 1. Extract data sent from the React frontend
+    const { rawText, authorName, authorRole, isDemo, externalLink, imageUrl, postId } = request.data;
 
     // Allow posts that are just an image, even if text is empty
     if ((!rawText || rawText.trim() === '') && !imageUrl) {
@@ -557,7 +559,7 @@ exports.processFeedPost = onCall(async (request) => {
             systemInstruction: systemInstruction 
         });
 
-        // 3. Send the raw text to Gemini (If it's just an image, we pass a generic string)
+        // 3. Send the raw text to Gemini
         const textToAnalyze = rawText ? rawText : "[Image Post with no text]";
         const response = await model.generateContent(textToAnalyze);
         const responseText = response.response.text();
@@ -575,20 +577,20 @@ exports.processFeedPost = onCall(async (request) => {
             };
         }
 
-        // 5. Build the Database Object
+        // 5. Build the Base Database Object
         const postUpdateData = {
             raw_text: rawText || "",
             category: analysis.category,
             ai_enhancements: analysis.ai_enhancements,
-            external_link: externalLink || null,
+            external_link: externalLink || null, 
             image_url: imageUrl || null
         };
 
         // 6. Save to Firestore (Handle Edit vs. New Post)
-        if (request.data.postId) {
-            // IT'S AN EDIT: Update the existing document (keeps likes/comments safe)
-            await admin.firestore().collection('feed_posts').doc(request.data.postId).update(postUpdateData);
-            return { success: true, postId: request.data.postId, category: analysis.category };
+        if (postId) {
+            // IT'S AN EDIT: Update the existing document
+            await admin.firestore().collection('feed_posts').doc(postId).update(postUpdateData);
+            return { success: true, postId: postId, category: analysis.category };
         } else {
             // IT'S A NEW POST: Add everything including author, timestamp, and 0 likes
             postUpdateData.author = authorName || 'Anonymous Staff';
@@ -601,4 +603,9 @@ exports.processFeedPost = onCall(async (request) => {
             const docRef = await admin.firestore().collection('feed_posts').add(postUpdateData);
             return { success: true, postId: docRef.id, category: analysis.category };
         }
+
+    } catch (error) { // 🌟 THIS IS THE CATCH BLOCK THAT WENT MISSING!
+        console.error("[AURA] AI Feed Processing Error:", error);
+        throw new HttpsError('internal', 'AURA failed to process this post. Please try again.');
+    }
 });
