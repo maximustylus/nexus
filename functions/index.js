@@ -506,7 +506,6 @@ exports.scheduledPulseNudge = onSchedule({
 // FUNCTION 4: FEEDS, SMART WATERCOOLER & PDPA GUARD
 // =============================================================================
 
-// 🌟 FIX 1: We added { secrets: ["GEMINI_API_KEY"] } so this function can access Gemini!
 exports.processFeedPost = onCall({ secrets: ["GEMINI_API_KEY"] }, async (request) => {
     
     // 1. Extract data sent from the React frontend
@@ -517,8 +516,8 @@ exports.processFeedPost = onCall({ secrets: ["GEMINI_API_KEY"] }, async (request
         throw new HttpsError('invalid-argument', 'Post content cannot be empty.');
     }
 
-    // 2. The Strict System Prompt for Gemini
-    const systemInstruction = `
+    // 2. The Strict Prompt for Gemini
+    const systemRules = `
     You are the NEXUS Feed Curator and PDPA Compliance Officer for a Singapore hospital.
     Analyze the user's raw post. You MUST output a strictly valid JSON object (no markdown, no backticks).
 
@@ -554,18 +553,19 @@ exports.processFeedPost = onCall({ secrets: ["GEMINI_API_KEY"] }, async (request
     `;
 
     try {
-        // 🌟 FIX 2: Initialize Gemini right here inside the function!
         const { GoogleGenerativeAI } = require("@google/generative-ai");
         const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 
-        const model = genAI.getGenerativeModel({ 
-            model: "gemini-1.5-flash",
-            systemInstruction: systemInstruction 
-        });
+        // 🌟 FIX 1: Use the universally accepted "gemini-pro" model
+        const model = genAI.getGenerativeModel({ model: "gemini-pro" });
 
         // 3. Send the raw text to Gemini
-        const textToAnalyze = rawText ? rawText : "[Image Post with no text]";
-        const response = await model.generateContent(textToAnalyze);
+        const userContent = rawText ? rawText : "[Image Post with no text]";
+        
+        // 🌟 FIX 2: Inject the rules directly into the prompt to bypass SDK version issues
+        const fullPrompt = `${systemRules}\n\nUSER POST TO ANALYZE:\n${userContent}`;
+        
+        const response = await model.generateContent(fullPrompt);
         const responseText = response.response.text();
         
         const cleanJson = responseText.replace(/```json|```/g, '').trim();
