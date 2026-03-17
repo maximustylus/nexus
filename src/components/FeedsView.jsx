@@ -62,12 +62,21 @@ const CommentSection = ({ postId, user, isMock, postAuthor }) => {
     return (
         <div className="mt-4 pt-4 border-t border-slate-100 dark:border-slate-700 animate-in slide-in-from-top-2 fade-in duration-200">
             <div className="space-y-3 max-h-48 overflow-y-auto pr-2 scrollbar-hide mb-3">
-                {comments.map(c => (
-                    <div key={c.id} className="bg-slate-50 dark:bg-slate-800/50 p-3 rounded-2xl w-fit min-w-[60%]">
-                        <p className="text-[11px] font-bold text-slate-800 dark:text-slate-200">{c.author}</p>
-                        <p className="text-sm text-slate-600 dark:text-slate-300 mt-0.5">{c.text}</p>
-                    </div>
-                ))}
+                {comments.map(c => {
+                    // 🌟 SMART AVATAR FOR COMMENTS
+                    const commentAvatar = (c.author === user?.name && user?.photoURL) ? user.photoURL : null;
+                    return (
+                        <div key={c.id} className="flex gap-2">
+                            <div className="w-6 h-6 rounded-full overflow-hidden bg-indigo-100 text-indigo-700 flex items-center justify-center text-[10px] font-black shrink-0">
+                                {commentAvatar ? <img src={commentAvatar} alt="" className="w-full h-full object-cover" /> : c.author.charAt(0)}
+                            </div>
+                            <div className="bg-slate-50 dark:bg-slate-800/50 p-3 rounded-2xl w-fit min-w-[60%]">
+                                <p className="text-[11px] font-bold text-slate-800 dark:text-slate-200">{c.author}</p>
+                                <p className="text-sm text-slate-600 dark:text-slate-300 mt-0.5">{c.text}</p>
+                            </div>
+                        </div>
+                    );
+                })}
             </div>
             <form onSubmit={handleSubmit} className="flex gap-2 items-center">
                 <input type="text" placeholder="Write a comment..." value={draft} onChange={(e) => setDraft(e.target.value)} disabled={isSubmitting} className="flex-1 bg-slate-100 dark:bg-slate-900 border-none text-sm rounded-full px-4 py-2 outline-none text-slate-700 dark:text-slate-200" />
@@ -87,6 +96,11 @@ const FeedsView = ({ user }) => {
     const [likedPosts, setLikedPosts] = useState(new Set());
     const [openComments, setOpenComments] = useState(new Set());
     const [selectedPost, setSelectedPost] = useState(null);
+
+    const [editingPostId, setEditingPostId] = useState(null);
+    const [activeMenuId, setActiveMenuId] = useState(null);
+
+    const [linkPreview, setLinkPreview] = useState(null);
     const [selectedImage, setSelectedImage] = useState(null);
     const [imagePreviewUrl, setImagePreviewUrl] = useState(null);
     const fileInputRef = useRef(null);
@@ -114,22 +128,6 @@ const FeedsView = ({ user }) => {
         }
     }, [displayPosts]);
 
-    // 🌟 Restored Edit/Delete logic for the Lightbox
-    const startEditPost = (post) => {
-        setEditingPostId(post.id);
-        setDraftPost(post.raw_text || '');
-        setLinkPreview(post.external_link || null);
-        setImagePreviewUrl(post.image_url || null);
-        window.scrollTo({ top: 0, behavior: 'smooth' });
-    };
-
-    const handleDeletePost = async (postId) => {
-        if (window.confirm("Are you sure you want to delete this post? This cannot be undone.")) {
-            try { await deleteDoc(doc(db, 'feed_posts', postId)); } 
-            catch (error) { console.error("Error deleting post:", error); }
-        }
-    };
-
     const handlePostSubmit = async () => {
         if (!draftPost.trim() && !selectedImage) return; 
         setIsPosting(true); setPostError(null);
@@ -141,9 +139,30 @@ const FeedsView = ({ user }) => {
             }
             const cleanRole = (user?.title || user?.role || 'Clinical Staff').replace(/\s*\(.*?\)/g, '').trim();
             const processFeedPost = httpsCallable(getFunctions(undefined, 'us-central1'), 'processFeedPost');
-            await processFeedPost({ rawText: draftPost || "", authorName: user?.name || 'Staff Member', authorRole: cleanRole, authorPhotoUrl: user?.photoURL || null, isDemo: !!isDemo, imageUrl: uploadedImageUrl });
-            setDraftPost(''); setSelectedImage(null); setImagePreviewUrl(null); if (fileInputRef.current) fileInputRef.current.value = '';
+            await processFeedPost({ rawText: draftPost || "", authorName: user?.name || 'Staff Member', authorRole: cleanRole, authorPhotoUrl: user?.photoURL || null, isDemo: !!isDemo, imageUrl: uploadedImageUrl, postId: editingPostId });
+            cancelEditSetup();
         } catch (error) { setPostError("AURA processing failed."); } finally { setIsPosting(false); }
+    };
+
+    const cancelEditSetup = () => {
+        setEditingPostId(null); setDraftPost(''); setLinkPreview(null); setSelectedImage(null); setImagePreviewUrl(null);
+    };
+
+    const startEditPost = (post) => {
+        setActiveMenuId(null);
+        setEditingPostId(post.id);
+        setDraftPost(post.raw_text || '');
+        setLinkPreview(post.external_link || null);
+        setImagePreviewUrl(post.image_url || null);
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+    };
+
+    const handleDeletePost = async (postId) => {
+        setActiveMenuId(null);
+        if (window.confirm("Are you sure you want to delete this post? This cannot be undone.")) {
+            try { await deleteDoc(doc(db, 'feed_posts', postId)); } 
+            catch (error) { console.error("Error deleting post:", error); }
+        }
     };
 
     const handleShare = async (post) => {
@@ -165,7 +184,13 @@ const FeedsView = ({ user }) => {
     return (
         <div className="w-full max-w-[900px] mx-auto p-4 md:p-6 space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
             {/* COMPOSER */}
-            <div className="bg-white dark:bg-slate-800 rounded-3xl p-5 shadow-sm border border-slate-200 dark:border-slate-700">
+            <div className={`bg-white dark:bg-slate-800 rounded-3xl p-5 shadow-sm border relative overflow-hidden transition-all duration-300 ${editingPostId ? 'border-amber-400 ring-4 ring-amber-400/10' : 'border-slate-200 dark:border-slate-700'}`}>
+                {editingPostId && (
+                    <div className="flex justify-between items-center mb-3 pb-3 border-b border-slate-100 dark:border-slate-700">
+                        <span className="text-xs font-bold text-amber-600 uppercase tracking-wider flex items-center gap-1.5"><Edit2 size={14}/> Editing Post</span>
+                        <button onClick={cancelEditSetup} className="text-xs font-bold text-slate-400 hover:text-slate-600">Cancel</button>
+                    </div>
+                )}
                 <div className="flex gap-4">
                     <div className="w-10 h-10 rounded-full overflow-hidden shrink-0 border border-slate-200 dark:border-slate-700 bg-indigo-100 flex items-center justify-center font-black text-indigo-600 uppercase">
                         {user?.photoURL ? <img src={user.photoURL} alt="" className="w-full h-full object-cover" /> : <span>{user?.name ? user.name.charAt(0) : 'U'}</span>}
@@ -188,7 +213,7 @@ const FeedsView = ({ user }) => {
                                 <input type="file" ref={fileInputRef} className="hidden" onChange={(e) => { const f = e.target.files[0]; if(f){ setSelectedImage(f); setImagePreviewUrl(URL.createObjectURL(f)); }}} />
                             </div>
                             <button onClick={handlePostSubmit} disabled={isPosting} className="bg-indigo-600 hover:bg-indigo-700 text-white px-5 py-2.5 rounded-xl text-xs font-black uppercase transition-all shadow-md flex items-center gap-2">
-                                {isPosting ? <Loader2 className="animate-spin" size={14} /> : <><Sparkles size={14} /> Post & Enhance</>}
+                                {isPosting ? <Loader2 className="animate-spin" size={14} /> : <><Sparkles size={14} /> {editingPostId ? 'Update Post' : 'Post & Enhance'}</>}
                             </button>
                         </div>
                     </div>
@@ -209,14 +234,18 @@ const FeedsView = ({ user }) => {
                 {displayPosts.map((post) => {
                     const theme = getColorTheme(post.category);
                     const isMock = String(post.id).startsWith('m') || String(post.id).startsWith('live');
+                    const isAuthor = user?.name ? user.name === post.author : post.author === 'Staff Member';
                     
+                    // 🌟 SMART AVATAR FOR FEED
+                    const avatarUrl = (isAuthor && user?.photoURL) ? user.photoURL : (post.authorPhotoUrl || post.author_photo_url);
+
                     return (
                         <div key={post.id} className="bg-white dark:bg-slate-800 rounded-3xl p-5 shadow-sm border border-slate-200 dark:border-slate-700">
                             <div className="flex justify-between items-start mb-4">
                                 <div className="flex items-center gap-3">
-                                    <div className="w-10 h-10 rounded-full overflow-hidden shrink-0 border border-slate-200 dark:border-slate-700 bg-indigo-100 flex items-center justify-center font-black text-indigo-700">
-                                        {post.authorPhotoUrl || post.author_photo_url ? (
-                                            <img src={post.authorPhotoUrl || post.author_photo_url} alt="" className="w-full h-full object-cover" />
+                                    <div className={`w-10 h-10 rounded-full overflow-hidden shrink-0 border border-slate-200 dark:border-slate-700 ${avatarUrl ? '' : 'bg-indigo-100 flex items-center justify-center font-black text-indigo-700'}`}>
+                                        {avatarUrl ? (
+                                            <img src={avatarUrl} alt="" className="w-full h-full object-cover" />
                                         ) : (
                                             <span>{post.author?.charAt(0)}</span>
                                         )}
@@ -228,8 +257,25 @@ const FeedsView = ({ user }) => {
                                         </p>
                                     </div>
                                 </div>
-                                <div className={`w-8 h-8 rounded-full flex items-center justify-center text-base ${theme.bg} ${theme.text} border ${theme.border}`} title={CATEGORIES[post.category]?.label}>
-                                    {CATEGORIES[post.category]?.icon}
+                                <div className="flex items-center gap-2">
+                                    <div className={`w-8 h-8 rounded-full flex items-center justify-center text-base ${theme.bg} ${theme.text} border ${theme.border}`} title={CATEGORIES[post.category]?.label}>
+                                        {CATEGORIES[post.category]?.icon}
+                                    </div>
+                                    
+                                    {isAuthor && !isMock && (
+                                        <div className="relative">
+                                            <button onClick={() => setActiveMenuId(activeMenuId === post.id ? null : post.id)} className="p-1.5 text-slate-400 hover:text-slate-800 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-700 rounded-full transition-colors">
+                                                <MoreHorizontal size={18} />
+                                            </button>
+                                            {activeMenuId === post.id && (
+                                                <div className="absolute right-0 mt-2 w-36 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl shadow-lg overflow-hidden z-20 animate-in zoom-in-95 duration-100">
+                                                    <button onClick={() => startEditPost(post)} className="w-full px-4 py-2.5 text-xs font-bold text-left text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700 flex items-center gap-2"><Edit2 size={14}/> Edit Post</button>
+                                                    <div className="h-px w-full bg-slate-100 dark:bg-slate-700"></div>
+                                                    <button onClick={() => handleDeletePost(post.id)} className="w-full px-4 py-2.5 text-xs font-bold text-left text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 flex items-center gap-2"><Trash2 size={14}/> Delete</button>
+                                                </div>
+                                            )}
+                                        </div>
+                                    )}
                                 </div>
                             </div>
 
@@ -241,6 +287,16 @@ const FeedsView = ({ user }) => {
                                     </div>
                                 )}
                             </div>
+
+                            {post.external_link && (
+                                <a href={post.external_link.url} target="_blank" rel="noreferrer" className="flex items-stretch overflow-hidden mb-4 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/50 hover:bg-slate-100 transition-colors group">
+                                    {post.external_link.image_url && <img src={post.external_link.image_url} alt="preview" className="w-24 h-full object-cover border-r border-slate-200 dark:border-slate-700" />}
+                                    <div className="flex-1 min-w-0 p-3 flex flex-col justify-center">
+                                        <p className="text-sm font-bold text-slate-800 dark:text-slate-200 truncate">{post.external_link.title}</p>
+                                        <p className="text-[10px] font-medium text-slate-400 uppercase tracking-widest truncate mt-0.5">{post.external_link.domain}</p>
+                                    </div>
+                                </a>
+                            )}
 
                             <div className="flex items-center gap-6 pt-4 border-t border-slate-100 dark:border-slate-700">
                                 <button onClick={() => handleLike(post.id)} className={`flex items-center gap-2 text-xs font-bold ${likedPosts.has(post.id) ? 'text-indigo-600' : 'text-slate-500 hover:text-indigo-600'}`}>
@@ -271,8 +327,8 @@ const FeedsView = ({ user }) => {
                     getColorTheme={getColorTheme}
                     CommentComponent={CommentSection}
                     isMock={String(selectedPost.id).startsWith('m') || String(selectedPost.id).startsWith('live')}
-                    onEdit={startEditPost}        /* 🌟 PASSED DOWN */
-                    onDelete={handleDeletePost}   /* 🌟 PASSED DOWN */
+                    onEdit={startEditPost}
+                    onDelete={handleDeletePost}
                 />
             )}
             <div className="h-24" />
