@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Sparkles, MessageSquare, ThumbsUp, Share2, ShieldAlert, Calendar, Link as LinkIcon, ExternalLink, Image as ImageIcon, Loader2, AlertTriangle, X, Send, MoreHorizontal, Edit2, Trash2 } from 'lucide-react';
 import { useNexus } from '../context/NexusContext';
-
 import { db, storage } from '../firebase';
 import { collection, query, orderBy, onSnapshot, doc, updateDoc, increment, addDoc, serverTimestamp, deleteDoc } from 'firebase/firestore';
 import { getFunctions, httpsCallable } from 'firebase/functions';
@@ -15,7 +14,7 @@ const CATEGORIES = {
     BUSY_BEE: { id: 'BUSY_BEE', label: 'Busy Bee', icon: '🐝', color: 'amber', desc: 'Growth & Upskilling' }
 };
 
-// --- REAL HOSPITAL DATA ---
+// --- MOCK DATA ---
 const LIVE_MOCK_POSTS = [
     {
         id: 'live1', author: 'Alif', role: 'Lead CEP', avatar: 'bg-emerald-100 text-emerald-700', timestamp: '1 hour ago', category: 'BOOKWORM',
@@ -32,25 +31,9 @@ const LIVE_MOCK_POSTS = [
         image_url: "https://scontent.fsin16-1.fna.fbcdn.net/v/t39.30808-6/491984873_1432622474740958_7072550564777468896_n.jpg?_nc_cat=106&ccb=1-7&_nc_sid=7b2446&_nc_ohc=oSToMNVh2bMQ7kNvwHW3gB0&_nc_oc=Adn-wXZpqFpnoosYvx7nFZARJyn4tQZYnPAQyqo3LPxWV9eNbkFFEDX50eGXiYtpizY&_nc_zt=23&_nc_ht=scontent.fsin16-1.fna&_nc_gid=9-zsViGSoTRHOdmsv6U6sg&_nc_ss=8&oh=00_AfwGc05Ki4j8-cz6KOSHY2314sgveI-WxjZ9yqpE4kPeJA&oe=69BE2F2D",
         external_link: { title: "Social Battery: Emotional & Physical Matrix", url: "https://www.facebook.com/SocialButterflyCCS/posts/wheres-your-battery-at-today-are-you-thriving-or-just-surviving-this-visual-repr/1405645187438687/", domain: "facebook.com" },
         likes: 42, comments: 8
-    },
-    {
-        id: 'live3', author: 'Linder', role: 'CEP Edu Lead', avatar: 'bg-amber-100 text-amber-700', timestamp: '5 hours ago', category: 'BUSY_BEE',
-        raw_text: "Highly recommend looking into the Active Health Lab's CALM (Combat Age-Related Loss of Muscle) program. It has fantastic insights on protein intake interventions specifically for our menopausal patients. Great structured approach we can learn from.",
-        ai_enhancements: { tldr: "Recommendation to review the CALM program for interventions on muscle loss and protein intake in menopausal patients.", tags: ['CALM', 'MENOPAUSE', 'NUTRITION'] },
-        external_link: { title: "Combat Age-Related Loss of Muscle (CALM)", url: "https://www.activesgcircle.gov.sg/activehealth/our-programmes?filter=just_getting_started&slide=combat-age-related-loss-of-muscle-calm-10-20", domain: "activesgcircle.gov.sg" },
-        likes: 21, comments: 4
-    },
-    {
-        id: 'live4', author: 'A/Prof. Ashik', role: 'HOD / HOS', avatar: 'bg-blue-100 text-blue-700', timestamp: '1 day ago', category: 'BLUE_BEETLE',
-        raw_text: "Anthropic just launched a series of free AI courses on Skilljar. Given our strong push towards integrating smart tools like AURA into our workflow, I highly encourage everyone to take a look and upskill on prompt engineering.",
-        ai_enhancements: { urgency: 'NORMAL', tldr: "HOD encourages staff to utilize free Anthropic AI courses to improve prompt engineering skills.", tags: ['AI TRAINING', 'ANTHROPIC', 'UPSKILLING'] },
-        image_url: "https://media.licdn.com/dms/image/v2/D4D22AQHJt-AY4ezgmQ/feedshare-shrink_1280/B4DZlH8964JUAs-/0/1757848791179?e=1775088000&v=beta&t=lGHqjFMc5FjmVFUtshZvDJfZ81HrQKZW7rCFb68xP2o",
-        external_link: { title: "Anthropic Educational Courses", url: "https://anthropic.skilljar.com/", domain: "anthropic.skilljar.com" },
-        likes: 38, comments: 5
     }
 ];
 
-// --- MARVEL DEMO DATA 🦸‍♂️ ---
 const DEMO_MOCK_POSTS = [
     {
         id: 'm1', author: 'Tony Stark', role: 'Head of Engineering', avatar: 'bg-red-100 text-red-700', timestamp: '1 hour ago', category: 'SOCIAL_BUTTERFLY',
@@ -59,30 +42,9 @@ const DEMO_MOCK_POSTS = [
         image_url: "https://cdn1.parksmedia.wdprapps.disney.com/resize/mwImage/1/1000/1000/75/vision-dam/digital/parks-platform/parks-global-assets/disney-cruise-line/ships/adventure/concept-art/Marvel-landing-ca-16x9.jpg?2025-09-30T00:24:43+00:00", 
         external_link: { title: "Join the Disney Adventure", url: "https://disneycruise.disney.go.com/why-cruise-disney/join-the-adventure/", domain: "disneycruise.disney.go.com" },
         likes: 3000, comments: 412
-    },
-    {
-        id: 'm2', author: 'Peter Parker', role: 'Intern (Web Dev)', avatar: 'bg-blue-100 text-blue-700', timestamp: '3 hours ago', category: 'BLUE_BEETLE',
-        raw_text: "Hey everyone! 'Spider-Man: Brand New Day' is officially out worldwide! Also, I've updated the web-shooter schematics on the shared drive to match the new high-tensile formula used in the film. Check it out!",
-        ai_enhancements: { urgency: 'NORMAL', tldr: "'Brand New Day' released. New high-tensile web-shooter schematics uploaded to the shared drive.", tags: ['BRAND NEW DAY', 'SCHEMATICS', 'GEAR UPDATE'] },
-        image_url: "https://media.gettyimages.com/id/2227870960/photo/celebrity-sightings-in-glasgow-august-3-2025.jpg?s=2048x2048&w=gi&k=20&c=k_reMlFPw5jnS4aNC6mQAA6OKgs_NJvINRGa8PB0WX8=", 
-        external_link: { title: "Watch the Official Trailer", url: "https://youtu.be/Vsn7sVxCq1M?si=ylFiUeGVTI2Cmw6j", domain: "youtube.com" },
-        likes: 890, comments: 55
-    },
-    {
-        id: 'm3', author: 'Bruce Banner', role: 'Head of Research', avatar: 'bg-emerald-100 text-emerald-700', timestamp: '5 hours ago', category: 'BOOKWORM',
-        raw_text: "Just reviewed the recent combat data on Chitauri armor plating. The tensile strength requires a minimum of 4000 Joules for penetration. I've uploaded the kinetic breakdown to the mainframe for anyone modifying their gear.",
-        ai_enhancements: { tldr: "Chitauri armor analysis complete: Requires 4000+ Joules for penetration. Data uploaded to mainframe.", tags: ['COMBAT DATA', 'VULNERABILITY ANALYSIS'] },
-        likes: 42, comments: 7
-    },
-    {
-        id: 'm4', author: 'Nick Fury', role: 'Director', avatar: 'bg-slate-800 text-white', timestamp: '1 day ago', category: 'BUSY_BEE',
-        raw_text: "S.H.I.E.L.D. is hosting a mandatory advanced tactical espionage seminar next month. All field agents must attend. Sessions start October 10th at 0800 hrs in the Triskelion Briefing Room Alpha.",
-        ai_enhancements: { event_date: 'Oct 10, 2026 - 0800 hrs', location: 'Triskelion Briefing Room Alpha', tags: ['MANDATORY', 'TRAINING', 'ESPIONAGE'] },
-        likes: 89, comments: 0
     }
 ];
 
-// 🌟 PHASE 1 & 2: THE COMMENT COMPONENT WITH NOTIFICATIONS
 const CommentSection = ({ postId, user, isMock, postAuthor }) => {
     const [comments, setComments] = useState([]);
     const [draft, setDraft] = useState('');
@@ -110,16 +72,13 @@ const CommentSection = ({ postId, user, isMock, postAuthor }) => {
 
         setIsSubmitting(true);
         try {
-            // Save Comment
             await addDoc(collection(db, 'feed_posts', postId, 'comments'), {
                 author: user?.name || 'Staff Member',
                 text: draft,
                 timestamp: serverTimestamp()
             });
-            // Update counter
             await updateDoc(doc(db, 'feed_posts', postId), { comments: increment(1) });
             
-            // 🌟 PHASE 2: SILENTLY NOTIFY THE AUTHOR
             const commenterName = user?.name || 'Staff Member';
             if (postAuthor !== commenterName) {
                 await addDoc(collection(db, 'notifications'), {
@@ -127,12 +86,11 @@ const CommentSection = ({ postId, user, isMock, postAuthor }) => {
                     sender: commenterName,
                     type: 'COMMENT',
                     postId: postId,
-                    preview: draft.substring(0, 40) + '...', // Snippet of the comment
+                    preview: draft.substring(0, 40) + '...',
                     read: false,
                     timestamp: serverTimestamp()
                 });
             }
-
             setDraft(''); 
         } catch (error) { console.error("Error posting comment:", error); } 
         finally { setIsSubmitting(false); }
@@ -165,24 +123,20 @@ const CommentSection = ({ postId, user, isMock, postAuthor }) => {
     );
 };
 
-// --- MAIN FEED COMPONENT ---
 const FeedsView = ({ user }) => {
     const { isDemo } = useNexus();
     const [activeFilter, setActiveFilter] = useState('ALL');
     const [draftPost, setDraftPost] = useState('');
     
-    // LIVE STATE
     const [livePosts, setLivePosts] = useState([]);
     const [isPosting, setIsPosting] = useState(false);
     const [postError, setPostError] = useState(null);
     const [likedPosts, setLikedPosts] = useState(new Set());
     const [openComments, setOpenComments] = useState(new Set());
 
-    // EDIT/DELETE STATE
     const [editingPostId, setEditingPostId] = useState(null);
     const [activeMenuId, setActiveMenuId] = useState(null);
 
-    // MEDIA STATE
     const [linkPreview, setLinkPreview] = useState(null);
     const [isFetchingLink, setIsFetchingLink] = useState(false);
     const [selectedImage, setSelectedImage] = useState(null);
@@ -194,9 +148,7 @@ const FeedsView = ({ user }) => {
         const matches = draftPost.match(urlRegex);
         if (matches && matches.length > 0) {
             const detectedUrl = matches[0];
-            if (!linkPreview || linkPreview.url !== detectedUrl) {
-                fetchLinkPreview(detectedUrl);
-            }
+            if (!linkPreview || linkPreview.url !== detectedUrl) fetchLinkPreview(detectedUrl);
         }
     }, [draftPost]);
 
@@ -235,13 +187,11 @@ const FeedsView = ({ user }) => {
 
     const baseDataset = isDemo ? DEMO_MOCK_POSTS : LIVE_MOCK_POSTS;
     const filteredDbPosts = livePosts.filter(p => p.isDemo === isDemo);
-    
-    // 🌟 Ensure combined arrays correctly put new live posts first
     const combinedPosts = [...filteredDbPosts, ...baseDataset];
     const displayPosts = activeFilter === 'ALL' ? combinedPosts : combinedPosts.filter(post => post.category === activeFilter);
 
     const handlePostSubmit = async () => {
-        if (!draftPost.trim() && !selectedImage) return; 
+        if (!draftPost.trim() && !selectedImage && !imagePreviewUrl) return; 
         setIsPosting(true); setPostError(null);
         try {
             let uploadedImageUrl = null;
@@ -250,12 +200,17 @@ const FeedsView = ({ user }) => {
                 const uploadTask = await uploadBytesResumable(imageRef, selectedImage);
                 uploadedImageUrl = await getDownloadURL(uploadTask.ref);
             }
+
+            // 🌟 PRIVACY FIX: Auto-scrub job grades inside parentheses from the user's role
+            const rawRole = user?.title || user?.role || 'Clinical Staff';
+            const cleanRole = rawRole.replace(/\s*\(.*?\)/g, '').trim();
+
             const functions = getFunctions(undefined, 'us-central1'); 
             const processFeedPost = httpsCallable(functions, 'processFeedPost');
             const response = await processFeedPost({
                 rawText: draftPost || "[Image Post]",
                 authorName: user?.name || (isDemo ? 'S.H.I.E.L.D. Agent' : 'Staff Member'),
-                authorRole: user?.title || user?.role || 'Clinical Staff',
+                authorRole: cleanRole, // Cleaned title sent to DB
                 isDemo: isDemo,
                 externalLink: linkPreview,
                 imageUrl: uploadedImageUrl || (editingPostId ? combinedPosts.find(p=>p.id===editingPostId)?.image_url : null),
@@ -277,11 +232,8 @@ const FeedsView = ({ user }) => {
     };
 
     const startEditPost = (post) => {
-        setActiveMenuId(null);
-        setEditingPostId(post.id);
-        setDraftPost(post.raw_text || '');
-        setLinkPreview(post.external_link || null);
-        setImagePreviewUrl(post.image_url || null);
+        setActiveMenuId(null); setEditingPostId(post.id); setDraftPost(post.raw_text || '');
+        setLinkPreview(post.external_link || null); setImagePreviewUrl(post.image_url || null);
         window.scrollTo({ top: 0, behavior: 'smooth' });
     };
 
@@ -290,7 +242,6 @@ const FeedsView = ({ user }) => {
         if (fileInputRef.current) fileInputRef.current.value = '';
     };
 
-    // 🌟 PHASE 2: LIKE WITH NOTIFICATIONS
     const handleLike = async (postId) => {
         if (likedPosts.has(postId)) return;
         setLikedPosts(prev => new Set(prev).add(postId));
@@ -298,8 +249,6 @@ const FeedsView = ({ user }) => {
         
         try { 
             await updateDoc(doc(db, 'feed_posts', postId), { likes: increment(1) }); 
-            
-            // 🌟 Notify the author
             const post = combinedPosts.find(p => p.id === postId);
             const likerName = user?.name || 'Staff Member';
 
@@ -321,6 +270,18 @@ const FeedsView = ({ user }) => {
         setOpenComments(prev => { const newSet = new Set(prev); if (newSet.has(postId)) newSet.delete(postId); else newSet.add(postId); return newSet; });
     };
 
+    // 🌟 SHARE FIX: Native Mobile Sharing or Clipboard Fallback
+    const handleShare = async (post) => {
+        const shareText = `Check out this update from ${post.author} on NEXUS:\n\n${post.raw_text || '[Image Attachment]'}`;
+        if (navigator.share) {
+            try { await navigator.share({ title: 'NEXUS Update', text: shareText }); } 
+            catch (error) { console.log('Share canceled'); }
+        } else {
+            navigator.clipboard.writeText(shareText);
+            alert("Post text copied to clipboard!");
+        }
+    };
+
     const getColorTheme = (categoryKey) => {
         const color = CATEGORIES[categoryKey]?.color || 'slate';
         return { bg: `bg-${color}-50 dark:bg-${color}-900/20`, border: `border-${color}-200 dark:border-${color}-800/50`, text: `text-${color}-700 dark:text-${color}-400`, lightBg: `bg-${color}-100 dark:bg-${color}-800/40` };
@@ -328,7 +289,7 @@ const FeedsView = ({ user }) => {
 
     return (
         <div className="w-full max-w-[900px] mx-auto p-4 md:p-6 space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
-            {/* THE SMART COMPOSER */}
+            {/* COMPOSER */}
             <div className={`bg-white dark:bg-slate-800 rounded-3xl p-5 shadow-sm border relative overflow-hidden transition-all duration-300 ${editingPostId ? 'border-amber-400 ring-4 ring-amber-400/10' : 'border-slate-200 dark:border-slate-700'}`}>
                 {editingPostId && (
                     <div className="flex justify-between items-center mb-3 pb-3 border-b border-slate-100 dark:border-slate-700">
@@ -379,7 +340,7 @@ const FeedsView = ({ user }) => {
                 </div>
             </div>
 
-            {/* THE BUG FILTERS */}
+            {/* FILTERS */}
             <div className="flex gap-3 overflow-x-auto scrollbar-hide py-2">
                 {Object.values(CATEGORIES).map(cat => (
                     <button key={cat.id} onClick={() => setActiveFilter(cat.id)} className={`flex items-center gap-2 px-4 py-2.5 rounded-2xl border text-sm font-bold transition-all shrink-0 shadow-sm ${activeFilter === cat.id ? `bg-${cat.color}-100 dark:bg-${cat.color}-900/40 border-${cat.color}-300 text-${cat.color}-700 dark:text-${cat.color}-300` : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-500 hover:bg-slate-50 dark:hover:bg-slate-700'}`}>
@@ -392,20 +353,17 @@ const FeedsView = ({ user }) => {
                 ))}
             </div>
 
-            {/* THE FEED STREAM */}
+            {/* FEED STREAM */}
             <div className="space-y-5">
                 {displayPosts.map((post, index) => {
                     const theme = getColorTheme(post.category);
                     const categoryConfig = CATEGORIES[post.category] || CATEGORIES.ALL;
                     const isMock = String(post.id).startsWith('m') || String(post.id).startsWith('live');
-                    
-                    // Allow the creator to edit/delete
                     const isAuthor = user?.name ? user.name === post.author : post.author === 'Staff Member';
 
                     return (
                         <div key={post.id || index} className="bg-white dark:bg-slate-800 rounded-3xl p-5 shadow-sm border border-slate-200 dark:border-slate-700 hover:shadow-md transition-shadow animate-in fade-in zoom-in-95 duration-300">
                             
-                            {/* Card Header */}
                             <div className="flex justify-between items-start mb-4 relative">
                                 <div className="flex items-center gap-3">
                                     <div className={`w-10 h-10 rounded-full flex items-center justify-center font-black text-sm ${post.avatar}`}>{post.author.charAt(0)}</div>
@@ -415,14 +373,11 @@ const FeedsView = ({ user }) => {
                                     <div className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-black ${theme.bg} ${theme.text} border ${theme.border}`}>
                                         <span>{categoryConfig.icon}</span> <span className="hidden sm:inline">{categoryConfig.label}</span>
                                     </div>
-
-                                    {/* 🌟 EDIT/DELETE MENU */}
                                     {isAuthor && !isMock && (
                                         <div className="relative">
                                             <button onClick={() => setActiveMenuId(activeMenuId === post.id ? null : post.id)} className="p-1.5 text-slate-400 hover:text-slate-800 hover:bg-slate-100 rounded-full transition-colors">
                                                 <MoreHorizontal size={18} />
                                             </button>
-                                            
                                             {activeMenuId === post.id && (
                                                 <div className="absolute right-0 mt-2 w-36 bg-white border border-slate-200 rounded-xl shadow-lg overflow-hidden z-20 animate-in zoom-in-95 duration-100">
                                                     <button onClick={() => startEditPost(post)} className="w-full px-4 py-2.5 text-xs font-bold text-left text-slate-700 hover:bg-slate-50 flex items-center gap-2"><Edit2 size={14}/> Edit Post</button>
@@ -435,7 +390,6 @@ const FeedsView = ({ user }) => {
                                 </div>
                             </div>
 
-                            {/* AI Enhancements */}
                             {post.ai_enhancements && (
                                 <div className={`mb-4 p-3 rounded-xl ${theme.bg} border ${theme.border} flex flex-col gap-2`}>
                                     <div className="flex items-center gap-1.5 text-[10px] font-black uppercase tracking-widest opacity-70"><Sparkles size={12} /> AURA Extraction</div>
@@ -447,10 +401,8 @@ const FeedsView = ({ user }) => {
                                 </div>
                             )}
 
-                            {/* Raw Text Body */}
                             <p className="text-slate-600 dark:text-slate-300 text-sm leading-relaxed mb-4 whitespace-pre-wrap">{post.raw_text}</p>
 
-                            {/* Attachments */}
                             {post.image_url && !post.external_link?.image_url && (
                                 <div className="mb-4 rounded-2xl overflow-hidden border border-slate-200 dark:border-slate-700/80 bg-slate-100 dark:bg-slate-900 group">
                                     <img src={post.image_url} alt="Post attachment" className="w-full h-auto max-h-[350px] object-cover group-hover:scale-[1.02] transition-transform duration-700" loading="lazy" />
@@ -466,7 +418,6 @@ const FeedsView = ({ user }) => {
                                 </a>
                             )}
 
-                            {/* Interactions */}
                             <div className="flex items-center gap-6 pt-4 border-t border-slate-100 dark:border-slate-700">
                                 <button onClick={() => handleLike(post.id)} className={`flex items-center gap-2 text-xs font-bold transition-colors group ${likedPosts.has(post.id) ? 'text-indigo-600' : 'text-slate-500 hover:text-indigo-600'}`}>
                                     <div className={`p-1.5 rounded-full transition-colors ${likedPosts.has(post.id) ? 'bg-indigo-100 dark:bg-indigo-900/50' : 'group-hover:bg-indigo-50 dark:group-hover:bg-indigo-900/30'}`}>
@@ -482,27 +433,20 @@ const FeedsView = ({ user }) => {
                                     {post.comments || 0}
                                 </button>
                                 
-                                <button className="flex items-center gap-2 text-xs font-bold text-slate-500 hover:text-indigo-600 transition-colors group ml-auto">
+                                {/* 🌟 WIRED UP SHARE BUTTON */}
+                                <button onClick={() => handleShare(post)} className="flex items-center gap-2 text-xs font-bold text-slate-500 hover:text-indigo-600 transition-colors group ml-auto">
                                     <Share2 size={16} />
                                 </button>
                             </div>
 
-                            {/* RENDER THE COMMENT SECTION */}
                             {openComments.has(post.id) && (
-                                <CommentSection 
-                                    postId={post.id} 
-                                    user={user} 
-                                    isMock={isMock} 
-                                    postAuthor={post.author} // 🌟 PASSED AUTHOR FOR NOTIFICATIONS
-                                />
+                                <CommentSection postId={post.id} user={user} isMock={isMock} postAuthor={post.author} />
                             )}
-
                         </div>
                     );
                 })}
             </div>
-            
-            <div className="h-24" /> {/* Bottom Spacer */}
+            <div className="h-24" />
         </div>
     );
 };
