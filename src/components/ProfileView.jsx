@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { Camera, Save, Lock, LogOut, Shield, User, Loader2, AlertTriangle, CheckCircle2, Bell } from 'lucide-react';
 import { auth, db, storage } from '../firebase';
 import { doc, updateDoc } from 'firebase/firestore';
@@ -17,6 +17,16 @@ const ProfileView = ({ user }) => {
     const [isSaving, setIsSaving] = useState(false);
     const [profileMessage, setProfileMessage] = useState(null);
 
+    // 🌟 KEEP IN SYNC: Updates the local form if the database changes
+    useEffect(() => {
+        setFormData({
+            name: user?.name || '',
+            role: user?.title || user?.role || '',
+            department: user?.department || '',
+            bio: user?.bio || ''
+        });
+    }, [user?.name, user?.title, user?.role, user?.department, user?.bio]);
+
     // 2. AVATAR UPLOAD STATE
     const [isUploading, setIsUploading] = useState(false);
     const fileInputRef = useRef(null);
@@ -26,8 +36,8 @@ const ProfileView = ({ user }) => {
     const [isUpdatingPassword, setIsUpdatingPassword] = useState(false);
     const [passwordMessage, setPasswordMessage] = useState(null);
 
-    // 4. PREFERENCES STATE (🌟 Added for functional toggle)
-    const [pushEnabled, setPushEnabled] = useState(true);
+    // 4. PREFERENCES STATE (🌟 Now wired to database)
+    const [pushEnabled, setPushEnabled] = useState(user?.notificationsEnabled ?? true);
 
     // --- HANDLERS ---
 
@@ -68,6 +78,7 @@ const ProfileView = ({ user }) => {
         if (!user?.uid) return;
         setIsSaving(true);
         try {
+            // Privacy filter: Removes (JG14) etc.
             const cleanRole = formData.role.replace(/\s*\(.*?\)/g, '').trim();
 
             await updateDoc(doc(db, 'users', user.uid), {
@@ -78,6 +89,7 @@ const ProfileView = ({ user }) => {
                 bio: formData.bio
             });
             
+            // Update local state instantly
             setFormData(prev => ({ ...prev, role: cleanRole }));
             setIsEditing(false);
             setProfileMessage({ type: 'success', text: 'Profile updated successfully!' });
@@ -115,6 +127,22 @@ const ProfileView = ({ user }) => {
         }
     };
 
+    // 🌟 NEW: Live Notification Database Toggle
+    const handleToggleNotifications = async () => {
+        if (!user?.uid) return;
+        const newState = !pushEnabled;
+        setPushEnabled(newState); // Instant UI flip
+        
+        try {
+            await updateDoc(doc(db, 'users', user.uid), {
+                notificationsEnabled: newState
+            });
+        } catch (error) {
+            console.error("Failed to save notification preference:", error);
+            setPushEnabled(!newState); // Revert if failed
+        }
+    };
+
     const handleSignOut = () => {
         if (window.confirm("Are you sure you want to sign out?")) {
             auth.signOut();
@@ -139,7 +167,7 @@ const ProfileView = ({ user }) => {
                                 ) : user?.photoURL ? (
                                     <img src={user.photoURL} alt="Profile" className="w-full h-full object-cover" />
                                 ) : (
-                                    user?.name?.charAt(0) || <User size={40} />
+                                    <span className="uppercase">{formData.name?.charAt(0) || <User size={40} />}</span>
                                 )}
                             </div>
                             <input type="file" ref={fileInputRef} onChange={handleAvatarChange} accept="image/png, image/jpeg, image/webp" className="hidden" />
@@ -159,26 +187,39 @@ const ProfileView = ({ user }) => {
 
                     {!isEditing ? (
                         <div>
-                            <h1 className="text-2xl font-black text-slate-800 dark:text-white">{user?.name || 'Staff Member'}</h1>
-                            <p className="text-sm font-bold text-slate-500 dark:text-slate-400 mt-1 uppercase tracking-wider">{user?.title || user?.role || 'Clinical Staff'} • {user?.department || 'General Ward'}</p>
-                            {user?.bio && <p className="mt-4 text-sm text-slate-600 dark:text-slate-300 leading-relaxed">{user.bio}</p>}
+                            <h1 className="text-2xl font-black text-slate-800 dark:text-white">{formData.name || 'Staff Member'}</h1>
+                            <p className="text-sm font-bold text-slate-500 dark:text-slate-400 mt-1 uppercase tracking-wider">
+                                {formData.role || 'Clinical Staff'} • {formData.department || 'General Ward'}
+                            </p>
+                            {formData.bio && <p className="mt-4 text-sm text-slate-600 dark:text-slate-300 leading-relaxed whitespace-pre-wrap">{formData.bio}</p>}
                         </div>
                     ) : (
                         <div className="space-y-4 mt-4 animate-in fade-in duration-300">
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                 <div className="space-y-1.5">
                                     <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Display Name</label>
-                                    <input type="text" value={formData.name} onChange={(e) => setFormData({...formData, name: e.target.value})} className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-2.5 text-sm focus:ring-2 focus:ring-indigo-500 outline-none" />
+                                    <input type="text" value={formData.name} onChange={(e) => setFormData({...formData, name: e.target.value})} className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-2.5 text-sm focus:ring-2 focus:ring-indigo-500 outline-none text-slate-800 dark:text-slate-200" />
                                 </div>
                                 <div className="space-y-1.5">
                                     <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Department / Ward</label>
-                                    <input type="text" value={formData.department} onChange={(e) => setFormData({...formData, department: e.target.value})} placeholder="e.g., Ward 44" className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-2.5 text-sm focus:ring-2 focus:ring-indigo-500 outline-none" />
+                                    <input type="text" value={formData.department} onChange={(e) => setFormData({...formData, department: e.target.value})} placeholder="e.g., Ward 44" className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-2.5 text-sm focus:ring-2 focus:ring-indigo-500 outline-none text-slate-800 dark:text-slate-200" />
                                 </div>
                             </div>
                             <div className="space-y-1.5">
                                 <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Job Title / Role</label>
-                                <input type="text" value={formData.role} onChange={(e) => setFormData({...formData, role: e.target.value})} className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-2.5 text-sm focus:ring-2 focus:ring-indigo-500 outline-none" />
+                                <input type="text" value={formData.role} onChange={(e) => setFormData({...formData, role: e.target.value})} className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-2.5 text-sm focus:ring-2 focus:ring-indigo-500 outline-none text-slate-800 dark:text-slate-200" />
                             </div>
+                            <div className="space-y-1.5">
+                                <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Bio / Status</label>
+                                <textarea value={formData.bio} onChange={(e) => setFormData({...formData, bio: e.target.value})} placeholder="Working on the new wellness initiative..." className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-2.5 text-sm focus:ring-2 focus:ring-indigo-500 outline-none resize-none h-20 text-slate-800 dark:text-slate-200" />
+                            </div>
+                        </div>
+                    )}
+
+                    {profileMessage && (
+                        <div className={`mt-4 p-3 rounded-xl flex items-center gap-2 text-sm font-bold ${profileMessage.type === 'success' ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-red-50 text-red-700 border border-red-200'}`}>
+                            {profileMessage.type === 'success' ? <CheckCircle2 size={16} /> : <AlertTriangle size={16} />}
+                            {profileMessage.text}
                         </div>
                     )}
                 </div>
@@ -186,6 +227,8 @@ const ProfileView = ({ user }) => {
 
             {/* --- SECURITY & PREFERENCES --- */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                
+                {/* Account Security */}
                 <div className="bg-white dark:bg-slate-800 rounded-3xl p-6 shadow-sm border border-slate-200 dark:border-slate-700 space-y-4">
                     <div className="flex items-center gap-2 mb-2">
                         <div className="p-2 bg-amber-100 text-amber-600 rounded-lg"><Shield size={18} /></div>
@@ -193,24 +236,32 @@ const ProfileView = ({ user }) => {
                     </div>
                     <form onSubmit={handlePasswordUpdate} className="space-y-3">
                         <input type="password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} placeholder="New Password" className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-2.5 text-sm outline-none" />
-                        <button type="submit" disabled={isUpdatingPassword || !newPassword} className="w-full bg-slate-800 text-white rounded-xl px-4 py-2.5 text-sm font-bold flex justify-center items-center gap-2">
+                        <button type="submit" disabled={isUpdatingPassword || !newPassword} className="w-full bg-slate-800 hover:bg-slate-900 text-white rounded-xl px-4 py-2.5 text-sm font-bold flex justify-center items-center gap-2 transition-colors">
                             {isUpdatingPassword ? <Loader2 size={16} className="animate-spin" /> : <><Lock size={14}/> Update Password</>}
                         </button>
                     </form>
+                    
+                    {passwordMessage && (
+                        <div className={`p-3 rounded-xl flex items-start gap-2 text-xs font-bold ${passwordMessage.type === 'success' ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-700'}`}>
+                            {passwordMessage.type === 'success' ? <CheckCircle2 size={14} className="shrink-0 mt-0.5" /> : <AlertTriangle size={14} className="shrink-0 mt-0.5" />}
+                            <p>{passwordMessage.text}</p>
+                        </div>
+                    )}
                 </div>
 
+                {/* Preferences (🌟 NOW WIRED) */}
                 <div className="bg-white dark:bg-slate-800 rounded-3xl p-6 shadow-sm border border-slate-200 dark:border-slate-700 space-y-4">
                     <div className="flex items-center gap-2 mb-2">
                         <div className="p-2 bg-indigo-100 text-indigo-600 rounded-lg"><Bell size={18} /></div>
                         <h2 className="font-bold text-slate-800 dark:text-white">Preferences</h2>
                     </div>
-                    <div className="flex items-center justify-between p-3 bg-slate-50 dark:bg-slate-900 rounded-xl">
+                    <div className="flex items-center justify-between p-3 bg-slate-50 dark:bg-slate-900 rounded-xl border border-slate-100 dark:border-slate-700/50">
                         <div>
-                            <p className="text-sm font-bold text-slate-700 dark:text-slate-200">Notifications</p>
-                            <p className="text-[10px] text-slate-500">Enable post alerts</p>
+                            <p className="text-sm font-bold text-slate-700 dark:text-slate-200">Push Notifications</p>
+                            <p className="text-[10px] text-slate-500">Enable new post & comment alerts</p>
                         </div>
                         <button 
-                            onClick={() => setPushEnabled(!pushEnabled)}
+                            onClick={handleToggleNotifications}
                             className={`w-10 h-5 rounded-full relative flex items-center px-1 transition-colors duration-200 ${pushEnabled ? 'bg-indigo-600' : 'bg-slate-300 dark:bg-slate-600'}`}
                         >
                             <div className={`w-3 h-3 bg-white rounded-full transition-transform duration-200 ${pushEnabled ? 'translate-x-5' : 'translate-x-0'}`} />
