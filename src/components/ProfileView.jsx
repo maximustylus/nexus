@@ -1,7 +1,5 @@
 import React, { useState, useRef } from 'react';
-import { Camera, Save, Lock, LogOut, Shield, User, Loader2, AlertTriangle, CheckCircle2 } from 'lucide-react';
-
-// FIREBASE IMPORTS
+import { Camera, Save, Lock, LogOut, Shield, User, Loader2, AlertTriangle, CheckCircle2, Bell } from 'lucide-react';
 import { auth, db, storage } from '../firebase';
 import { doc, updateDoc } from 'firebase/firestore';
 import { ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
@@ -28,6 +26,9 @@ const ProfileView = ({ user }) => {
     const [isUpdatingPassword, setIsUpdatingPassword] = useState(false);
     const [passwordMessage, setPasswordMessage] = useState(null);
 
+    // 4. PREFERENCES STATE (🌟 Added for functional toggle)
+    const [pushEnabled, setPushEnabled] = useState(true);
+
     // --- HANDLERS ---
 
     const handleAvatarClick = () => {
@@ -38,7 +39,6 @@ const ProfileView = ({ user }) => {
         const file = e.target.files[0];
         if (!file || !user?.uid) return;
 
-        // Keep it under 5MB
         if (file.size > 5 * 1024 * 1024) {
             setProfileMessage({ type: 'error', text: 'Image must be less than 5MB.' });
             return;
@@ -46,12 +46,10 @@ const ProfileView = ({ user }) => {
 
         setIsUploading(true);
         try {
-            // Upload to our newly unlocked bucket!
             const storageRef = ref(storage, `avatars/${user.uid}_${Date.now()}`);
             const uploadTask = await uploadBytesResumable(storageRef, file);
             const downloadURL = await getDownloadURL(uploadTask.ref);
 
-            // Update user document in Firestore
             await updateDoc(doc(db, 'users', user.uid), {
                 photoURL: downloadURL
             });
@@ -70,18 +68,16 @@ const ProfileView = ({ user }) => {
         if (!user?.uid) return;
         setIsSaving(true);
         try {
-            // Scrub out any lingering Job Grades in parentheses (e.g., "Lead CEP (JG14)")
             const cleanRole = formData.role.replace(/\s*\(.*?\)/g, '').trim();
 
             await updateDoc(doc(db, 'users', user.uid), {
                 name: formData.name,
                 role: cleanRole,
-                title: cleanRole, // Sync both just in case
+                title: cleanRole,
                 department: formData.department,
                 bio: formData.bio
             });
             
-            // Update local state to show the cleaned version
             setFormData(prev => ({ ...prev, role: cleanRole }));
             setIsEditing(false);
             setProfileMessage({ type: 'success', text: 'Profile updated successfully!' });
@@ -109,9 +105,8 @@ const ProfileView = ({ user }) => {
                 setNewPassword('');
             }
         } catch (error) {
-            // Firebase requires a "recent login" to change a password.
             if (error.code === 'auth/requires-recent-login') {
-                setPasswordMessage({ type: 'error', text: 'For security, please sign out and sign back in to change your password.' });
+                setPasswordMessage({ type: 'error', text: 'Please sign out and back in to change password.' });
             } else {
                 setPasswordMessage({ type: 'error', text: error.message });
             }
@@ -131,16 +126,13 @@ const ProfileView = ({ user }) => {
             
             {/* --- HEADER BANNER & AVATAR --- */}
             <div className="bg-white dark:bg-slate-800 rounded-3xl overflow-hidden shadow-sm border border-slate-200 dark:border-slate-700">
-                {/* Banner Background */}
                 <div className="h-32 bg-gradient-to-r from-indigo-500 via-purple-500 to-indigo-600 w-full relative">
                     <div className="absolute inset-0 bg-black/10"></div>
                 </div>
 
-                {/* Avatar Section */}
                 <div className="px-6 pb-6 relative">
                     <div className="flex justify-between items-end -mt-12 mb-4">
                         <div className="relative group">
-                            {/* The Profile Picture */}
                             <div className="w-24 h-24 rounded-full border-4 border-white dark:border-slate-800 bg-indigo-100 flex items-center justify-center text-indigo-600 text-3xl font-black overflow-hidden shadow-md">
                                 {isUploading ? (
                                     <Loader2 className="animate-spin text-indigo-600" size={32} />
@@ -150,17 +142,12 @@ const ProfileView = ({ user }) => {
                                     user?.name?.charAt(0) || <User size={40} />
                                 )}
                             </div>
-                            
-                            {/* Hidden File Input */}
                             <input type="file" ref={fileInputRef} onChange={handleAvatarChange} accept="image/png, image/jpeg, image/webp" className="hidden" />
-                            
-                            {/* Camera Edit Overlay */}
                             <button onClick={handleAvatarClick} disabled={isUploading} className="absolute bottom-0 right-0 p-2 bg-slate-900 text-white rounded-full shadow-lg hover:bg-indigo-600 transition-colors z-10">
                                 <Camera size={14} />
                             </button>
                         </div>
 
-                        {/* Edit Profile Button */}
                         <button 
                             onClick={() => isEditing ? handleProfileSave() : setIsEditing(true)}
                             disabled={isSaving}
@@ -170,25 +157,13 @@ const ProfileView = ({ user }) => {
                         </button>
                     </div>
 
-                    {/* Quick Info Display */}
-                    {!isEditing && (
+                    {!isEditing ? (
                         <div>
                             <h1 className="text-2xl font-black text-slate-800 dark:text-white">{user?.name || 'Staff Member'}</h1>
                             <p className="text-sm font-bold text-slate-500 dark:text-slate-400 mt-1 uppercase tracking-wider">{user?.title || user?.role || 'Clinical Staff'} • {user?.department || 'General Ward'}</p>
                             {user?.bio && <p className="mt-4 text-sm text-slate-600 dark:text-slate-300 leading-relaxed">{user.bio}</p>}
                         </div>
-                    )}
-
-                    {/* Profile Messages */}
-                    {profileMessage && (
-                        <div className={`mt-4 p-3 rounded-xl flex items-center gap-2 text-sm font-bold ${profileMessage.type === 'success' ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-red-50 text-red-700 border border-red-200'}`}>
-                            {profileMessage.type === 'success' ? <CheckCircle2 size={16} /> : <AlertTriangle size={16} />}
-                            {profileMessage.text}
-                        </div>
-                    )}
-
-                    {/* EDIT MODE FORM */}
-                    {isEditing && (
+                    ) : (
                         <div className="space-y-4 mt-4 animate-in fade-in duration-300">
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                 <div className="space-y-1.5">
@@ -197,104 +172,58 @@ const ProfileView = ({ user }) => {
                                 </div>
                                 <div className="space-y-1.5">
                                     <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Department / Ward</label>
-                                    <input type="text" value={formData.department} onChange={(e) => setFormData({...formData, department: e.target.value})} placeholder="e.g., Cardiology, Ward 44" className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-2.5 text-sm focus:ring-2 focus:ring-indigo-500 outline-none" />
+                                    <input type="text" value={formData.department} onChange={(e) => setFormData({...formData, department: e.target.value})} placeholder="e.g., Ward 44" className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-2.5 text-sm focus:ring-2 focus:ring-indigo-500 outline-none" />
                                 </div>
                             </div>
                             <div className="space-y-1.5">
-                                <label className="text-xs font-bold text-slate-500 uppercase tracking-wider flex justify-between">
-                                    <span>Job Title / Role</span>
-                                    <span className="text-indigo-500 normal-case font-medium">Do not include Job Grades (e.g. JG14)</span>
-                                </label>
-                                <input type="text" value={formData.role} onChange={(e) => setFormData({...formData, role: e.target.value})} placeholder="e.g., Lead Clinical Exercise Physiologist" className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-2.5 text-sm focus:ring-2 focus:ring-indigo-500 outline-none" />
-                            </div>
-                            <div className="space-y-1.5">
-                                <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Short Bio / Status</label>
-                                <textarea value={formData.bio} onChange={(e) => setFormData({...formData, bio: e.target.value})} placeholder="Working on the new wellness initiative..." className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-2.5 text-sm focus:ring-2 focus:ring-indigo-500 outline-none resize-none h-20" />
+                                <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Job Title / Role</label>
+                                <input type="text" value={formData.role} onChange={(e) => setFormData({...formData, role: e.target.value})} className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-2.5 text-sm focus:ring-2 focus:ring-indigo-500 outline-none" />
                             </div>
                         </div>
                     )}
                 </div>
             </div>
 
-            {/* --- SECURITY & SETTINGS CARD --- */}
+            {/* --- SECURITY & PREFERENCES --- */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                
-                {/* Change Password */}
                 <div className="bg-white dark:bg-slate-800 rounded-3xl p-6 shadow-sm border border-slate-200 dark:border-slate-700 space-y-4">
                     <div className="flex items-center gap-2 mb-2">
                         <div className="p-2 bg-amber-100 text-amber-600 rounded-lg"><Shield size={18} /></div>
                         <h2 className="font-bold text-slate-800 dark:text-white">Account Security</h2>
                     </div>
-                    
                     <form onSubmit={handlePasswordUpdate} className="space-y-3">
-                        <div className="space-y-1.5">
-                            <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">New Password</label>
-                            <input 
-                                type="password" 
-                                value={newPassword} 
-                                onChange={(e) => setNewPassword(e.target.value)} 
-                                placeholder="Enter at least 6 characters" 
-                                className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-2.5 text-sm focus:ring-2 focus:ring-amber-500 outline-none" 
-                            />
-                        </div>
-                        <button 
-                            type="submit" 
-                            disabled={isUpdatingPassword || !newPassword}
-                            className="w-full bg-slate-800 hover:bg-slate-900 disabled:bg-slate-200 disabled:text-slate-400 text-white rounded-xl px-4 py-2.5 text-sm font-bold transition-colors flex justify-center items-center gap-2"
-                        >
+                        <input type="password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} placeholder="New Password" className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-2.5 text-sm outline-none" />
+                        <button type="submit" disabled={isUpdatingPassword || !newPassword} className="w-full bg-slate-800 text-white rounded-xl px-4 py-2.5 text-sm font-bold flex justify-center items-center gap-2">
                             {isUpdatingPassword ? <Loader2 size={16} className="animate-spin" /> : <><Lock size={14}/> Update Password</>}
                         </button>
                     </form>
-
-                    {passwordMessage && (
-                        <div className={`p-3 rounded-xl flex items-start gap-2 text-xs font-bold ${passwordMessage.type === 'success' ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-700'}`}>
-                            {passwordMessage.type === 'success' ? <CheckCircle2 size={14} className="shrink-0 mt-0.5" /> : <AlertTriangle size={14} className="shrink-0 mt-0.5" />}
-                            <p>{passwordMessage.text}</p>
-                        </div>
-                    )}
                 </div>
 
-                        <div className="bg-white dark:bg-slate-800 rounded-3xl p-6 shadow-sm border border-slate-200 dark:border-slate-700 space-y-4">
-                            <div className="flex items-center gap-2 mb-2">
-                                <div className="p-2 bg-indigo-100 text-indigo-600 rounded-lg"><Bell size={18} /></div>
-                                <h2 className="font-bold text-slate-800 dark:text-white">Preferences</h2>
-                            </div>
-                            <div className="flex items-center justify-between p-3 bg-slate-50 dark:bg-slate-900 rounded-xl">
-                                <div>
-                                    <p className="text-sm font-bold text-slate-700 dark:text-slate-200">Push Notifications</p>
-                                    <p className="text-[10px] text-slate-500">Enable daily pulse nudges and post alerts</p>
-                                </div>
-                                <button 
-                                    onClick={() => {/* We will wire this to Firestore toggles later */}}
-                                    className="w-10 h-5 bg-indigo-600 rounded-full relative flex items-center px-1"
-                                >
-                                    <div className="w-3 h-3 bg-white rounded-full ml-auto" />
-                                </button>
-                            </div>
-                        </div>
-                
-                {/* Danger Zone / System */}
-                <div className="bg-white dark:bg-slate-800 rounded-3xl p-6 shadow-sm border border-slate-200 dark:border-slate-700 flex flex-col justify-between space-y-4">
-                    <div>
-                        <div className="flex items-center gap-2 mb-4">
-                            <div className="p-2 bg-slate-100 text-slate-600 rounded-lg"><User size={18} /></div>
-                            <h2 className="font-bold text-slate-800 dark:text-white">System Access</h2>
-                        </div>
-                        <p className="text-sm text-slate-500 dark:text-slate-400 leading-relaxed">
-                            Logged in securely to NEXUS Clinical Network. Ensure you sign out if you are using a shared terminal.
-                        </p>
+                <div className="bg-white dark:bg-slate-800 rounded-3xl p-6 shadow-sm border border-slate-200 dark:border-slate-700 space-y-4">
+                    <div className="flex items-center gap-2 mb-2">
+                        <div className="p-2 bg-indigo-100 text-indigo-600 rounded-lg"><Bell size={18} /></div>
+                        <h2 className="font-bold text-slate-800 dark:text-white">Preferences</h2>
                     </div>
-                    
-                    <button 
-                        onClick={handleSignOut}
-                        className="w-full bg-red-50 hover:bg-red-100 text-red-600 border border-red-200 rounded-xl px-4 py-3 text-sm font-bold transition-colors flex justify-center items-center gap-2"
-                    >
-                        <LogOut size={16}/> Sign Out of NEXUS
-                    </button>
+                    <div className="flex items-center justify-between p-3 bg-slate-50 dark:bg-slate-900 rounded-xl">
+                        <div>
+                            <p className="text-sm font-bold text-slate-700 dark:text-slate-200">Notifications</p>
+                            <p className="text-[10px] text-slate-500">Enable post alerts</p>
+                        </div>
+                        <button 
+                            onClick={() => setPushEnabled(!pushEnabled)}
+                            className={`w-10 h-5 rounded-full relative flex items-center px-1 transition-colors duration-200 ${pushEnabled ? 'bg-indigo-600' : 'bg-slate-300 dark:bg-slate-600'}`}
+                        >
+                            <div className={`w-3 h-3 bg-white rounded-full transition-transform duration-200 ${pushEnabled ? 'translate-x-5' : 'translate-x-0'}`} />
+                        </button>
+                    </div>
                 </div>
             </div>
 
-            <div className="h-24" /> {/* Bottom Spacer for mobile nav */}
+            <button onClick={handleSignOut} className="w-full bg-red-50 hover:bg-red-100 text-red-600 border border-red-200 rounded-2xl px-4 py-4 text-sm font-bold transition-colors flex justify-center items-center gap-2">
+                <LogOut size={16}/> Sign Out of NEXUS
+            </button>
+
+            <div className="h-24" />
         </div>
     );
 };
