@@ -516,6 +516,8 @@ exports.processFeedPost = onCall({ secrets: ["GEMINI_API_KEY"] }, async (request
         throw new HttpsError('invalid-argument', 'Post content cannot be empty.');
     }
 
+    if (!API_KEY) throw new HttpsError('failed-precondition', 'AI service is not configured.');
+
     // 2. The Strict Prompt for Gemini
     const systemRules = `
     You are the NEXUS Feed Curator and PDPA Compliance Officer for a Singapore hospital.
@@ -553,30 +555,43 @@ exports.processFeedPost = onCall({ secrets: ["GEMINI_API_KEY"] }, async (request
     `;
 
     try {
-        const { GoogleGenerativeAI } = require("@google/generative-ai");
-        const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-
-        // 🌟 FIX 1: Use the universally accepted "gemini-pro" model
-        const model = genAI.getGenerativeModel({ model: "gemini-pro" });
+        // 🌟 FIX: Use your own robust resolveModel() and fetch() logic!
+        const modelName = await resolveModel();
+        const url = `https://generativelanguage.googleapis.com/v1beta/${modelName}:generateContent?key=${API_KEY}`;
 
         // 3. Send the raw text to Gemini
         const userContent = rawText ? rawText : "[Image Post with no text]";
         
-        // 🌟 FIX 2: Inject the rules directly into the prompt to bypass SDK version issues
-        const fullPrompt = `${systemRules}\n\nUSER POST TO ANALYZE:\n${userContent}`;
-        
-        const response = await model.generateContent(fullPrompt);
-        const responseText = response.response.text();
-        
-        const cleanJson = responseText.replace(/```json|```/g, '').trim();
-        const analysis = JSON.parse(cleanJson);
+        const response = await fetch(url, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            signal: AbortSignal.timeout(30000),
+            body: JSON.stringify({
+                systemInstruction: { parts: [{ text: systemRules }] },
+                contents: [{ role: 'user', parts: [{ text: `USER POST TO ANALYZE:\n${userContent}` }] }],
+                generationConfig: {
+                    temperature: 0.2,
+                    responseMimeType: 'application/json',
+                },
+            }),
+        });
+
+        const genData = await response.json();
+
+        if (!response.ok) {
+            console.error('[AURA GUARD API Error]', genData);
+            throw new Error(genData.error?.message ?? 'AURA API Error');
+        }
+
+        const rawResponseText = extractText(genData);
+        const { parsed: analysis } = parseJsonResponse(rawResponseText, ['is_approved']);
 
         // 4. Handle Rejections (Air-Gap Protection)
         if (!analysis.is_approved) {
             console.log(`[AURA GUARD] Post rejected: ${analysis.violation_type}`);
             return {
                 success: false,
-                feedback: analysis.feedback,
+                feedback: analysis.feedback || "Post blocked by PDPA guard.",
                 violation: analysis.violation_type
             };
         }
@@ -584,8 +599,8 @@ exports.processFeedPost = onCall({ secrets: ["GEMINI_API_KEY"] }, async (request
         // 5. Build the Base Database Object
         const postUpdateData = {
             raw_text: rawText || "",
-            category: analysis.category,
-            ai_enhancements: analysis.ai_enhancements,
+            category: analysis.category || "SOCIAL_BUTTERFLY",
+            ai_enhancements: analysis.ai_enhancements || {},
             external_link: externalLink || null, 
             image_url: imageUrl || null
         };
@@ -593,7 +608,7 @@ exports.processFeedPost = onCall({ secrets: ["GEMINI_API_KEY"] }, async (request
         // 6. Save to Firestore (Handle Edit vs. New Post)
         if (postId) {
             await admin.firestore().collection('feed_posts').doc(postId).update(postUpdateData);
-            return { success: true, postId: postId, category: analysis.category };
+            return { success: true, postId: postId, category: postUpdateData.category };
         } else {
             postUpdateData.author = authorName || 'Anonymous Staff';
             postUpdateData.role = authorRole || 'Staff';
@@ -603,7 +618,7 @@ exports.processFeedPost = onCall({ secrets: ["GEMINI_API_KEY"] }, async (request
             postUpdateData.isDemo = !!isDemo;
             
             const docRef = await admin.firestore().collection('feed_posts').add(postUpdateData);
-            return { success: true, postId: docRef.id, category: analysis.category };
+            return { success: true, postId: docRef.id, category: postUpdateData.category };
         }
 
     } catch (error) { 
