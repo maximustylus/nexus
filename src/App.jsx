@@ -139,13 +139,29 @@ function NexusApp() {
   const activeStaffList = isDemo ? MOCK_STAFF_NAMES : STAFF_LIST;
   const activeStaffIds = isDemo ? MOCK_STAFF_NAMES : STAFF_IDS;
 
-  useEffect(() => {
+    useEffect(() => {
     const unsubscribe = auth.onAuthStateChanged((u) => {
       if (u) {
-        const profile = checkAccess(u.email);
-        // We inject the user's Auth UID so we can save their profile picture later
-        if (profile) setUser({ ...profile, uid: u.uid }); 
-        else { setUser(null); signOut(auth); }
+        // 1. Get the basic profile from your utils/checkAccess
+        const initialProfile = checkAccess(u.email);
+        
+        // 2. Set up a REAL-TIME listener for this user's doc in Firestore
+        const userDocRef = doc(db, 'users', u.uid);
+        const unsubUserDoc = onSnapshot(userDocRef, (docSnap) => {
+          if (docSnap.exists()) {
+            // 🌟 Merge the hardcoded profile with the LIVE data from Firestore
+            setUser({ 
+              ...initialProfile, 
+              ...docSnap.data(), 
+              uid: u.uid 
+            });
+          } else {
+            // If no doc exists yet, use the initial profile
+            setUser({ ...initialProfile, uid: u.uid });
+          }
+        });
+
+        return () => unsubUserDoc();
       } else {
         setUser(null);
       }
@@ -153,6 +169,7 @@ function NexusApp() {
     });
     return () => unsubscribe();
   }, []);
+
   
   // 🌟 FETCH REAL-TIME PROFILE & NOTIFICATIONS
   useEffect(() => {
