@@ -130,46 +130,48 @@ function NexusApp() {
   }, [currentView]);
   
   const [user, setUser] = useState(null);
-  const [authLoading, setAuthLoading] = useState(true);
-  
+  const [authLoading, setAuthLoading] = useState(true)
   const [teamData, setTeamData] = useState([]); 
   const [staffLoads, setStaffLoads] = useState({});
   const [attendanceData, setAttendanceData] = useState({}); 
-
   const activeStaffList = isDemo ? MOCK_STAFF_NAMES : STAFF_LIST;
   const activeStaffIds = isDemo ? MOCK_STAFF_NAMES : STAFF_IDS;
 
-    useEffect(() => {
+      // 🌟 BULLETPROOF AUTH LISTENER
+  useEffect(() => {
     const unsubscribe = auth.onAuthStateChanged((u) => {
       if (u) {
-        // 1. Get the basic profile from your utils/checkAccess
-        const initialProfile = checkAccess(u.email);
-        
-        // 2. Set up a REAL-TIME listener for this user's doc in Firestore
-        const userDocRef = doc(db, 'users', u.uid);
-        const unsubUserDoc = onSnapshot(userDocRef, (docSnap) => {
-          if (docSnap.exists()) {
-            // 🌟 Merge the hardcoded profile with the LIVE data from Firestore
-            setUser({ 
-              ...initialProfile, 
-              ...docSnap.data(), 
-              uid: u.uid 
-            });
-          } else {
-            // If no doc exists yet, use the initial profile
+        try {
+          const initialProfile = checkAccess(u.email);
+          const userDocRef = doc(db, 'users', u.uid);
+          
+          // Listen for live updates to the user's profile
+          const unsubUserDoc = onSnapshot(userDocRef, (docSnap) => {
+            if (docSnap.exists()) {
+              setUser({ ...initialProfile, ...docSnap.data(), uid: u.uid });
+            } else {
+              setUser({ ...initialProfile, uid: u.uid });
+            }
+            setAuthLoading(false); // Stop spinning once data is loaded
+          }, (error) => {
+            console.error("Error fetching user data:", error);
             setUser({ ...initialProfile, uid: u.uid });
-          }
-        });
+            setAuthLoading(false); // Stop spinning even if there is an error
+          });
 
-        return () => unsubUserDoc();
+          return () => unsubUserDoc();
+        } catch (error) {
+          console.error("Auth Listener Error:", error);
+          setAuthLoading(false);
+        }
       } else {
         setUser(null);
+        setAuthLoading(false);
       }
-      setAuthLoading(false);
     });
+
     return () => unsubscribe();
   }, []);
-
   
   // 🌟 FETCH REAL-TIME PROFILE & NOTIFICATIONS
   useEffect(() => {
