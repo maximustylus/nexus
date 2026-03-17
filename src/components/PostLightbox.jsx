@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { X, ThumbsUp, Sparkles, ExternalLink, MoreHorizontal, Edit2, Trash2 } from 'lucide-react';
+import { ThumbsUp, Sparkles, MoreHorizontal, Edit2, Trash2 } from 'lucide-react';
 import { createPortal } from 'react-dom';
 
 const PostLightbox = ({ post, user, onClose, onLike, likedPosts, CATEGORIES, getColorTheme, CommentComponent, isMock, onEdit, onDelete }) => {
@@ -16,17 +16,34 @@ const PostLightbox = ({ post, user, onClose, onLike, likedPosts, CATEGORIES, get
             {/* BACKDROP */}
             <div className="absolute inset-0 bg-slate-900/95 backdrop-blur-sm" onClick={onClose} />
 
-            {/* 🌟 FLOATING CLOSE BUTTON (Outside the modal so it never overlaps) */}
-            <button onClick={onClose} className="fixed top-4 right-4 md:top-6 md:right-6 z-[110] p-2.5 md:p-3 bg-white/10 hover:bg-white/20 text-white rounded-full backdrop-blur-md transition-all shadow-lg active:scale-95">
-                <X size={20} />
-            </button>
-
             {/* MODAL CONTAINER */}
-            <div className="relative bg-white dark:bg-slate-800 w-full h-full md:h-auto max-w-6xl md:max-h-[90vh] md:rounded-3xl shadow-2xl overflow-hidden flex flex-col md:flex-row animate-in zoom-in-95 duration-300">
+            <div className="relative bg-white dark:bg-slate-800 w-full h-full md:h-auto max-w-6xl md:max-h-[90vh] md:rounded-3xl shadow-2xl overflow-hidden flex flex-col md:flex-row animate-in zoom-in-95 duration-300 border border-slate-200 dark:border-slate-700">
                 
-                {/* LEFT: CONTENT (Takes top half on mobile, left side on desktop) */}
-                <div className="flex-1 overflow-y-auto bg-slate-50 dark:bg-slate-900/50 p-5 md:p-10 scrollbar-hide">
-                    <div className="max-w-2xl mx-auto space-y-6 pb-6">
+                {/* 🌟 MOBILE ONLY TOP BAR (Native Mac Style) */}
+                <div className="md:hidden flex items-center justify-between p-4 bg-slate-50 dark:bg-slate-900 border-b border-slate-200/50 dark:border-slate-700/50 shrink-0 z-20">
+                    <div className="flex items-center gap-2">
+                        {/* Traffic Lights */}
+                        <button onClick={onClose} className="w-3.5 h-3.5 rounded-full bg-[#FF5F56] shadow-sm active:scale-95"></button>
+                        <button onClick={onClose} className="w-3.5 h-3.5 rounded-full bg-[#FFBD2E] shadow-sm active:scale-95"></button>
+                        <button onClick={onClose} className="w-3.5 h-3.5 rounded-full bg-[#27C93F] shadow-sm active:scale-95"></button>
+                    </div>
+                    <div className="flex items-center gap-2.5">
+                        <span className="font-black text-slate-400 dark:text-slate-500 text-[10px] uppercase tracking-widest">NEXUS Feed</span>
+                    </div>
+                </div>
+
+                {/* LEFT: CONTENT */}
+                <div className="flex-1 overflow-y-auto bg-slate-50 dark:bg-slate-900/50 p-5 md:p-10 scrollbar-hide relative">
+                    
+                    {/* 🌟 DESKTOP ONLY MAC CONTROLS (Floating Top Left) */}
+                    <div className="hidden md:flex absolute top-6 left-6 items-center gap-2 z-20">
+                        <button onClick={onClose} className="w-3.5 h-3.5 rounded-full bg-[#FF5F56] shadow-sm hover:scale-105 transition-transform"></button>
+                        <button onClick={onClose} className="w-3.5 h-3.5 rounded-full bg-[#FFBD2E] shadow-sm hover:scale-105 transition-transform"></button>
+                        <button onClick={onClose} className="w-3.5 h-3.5 rounded-full bg-[#27C93F] shadow-sm hover:scale-105 transition-transform"></button>
+                    </div>
+
+                    {/* Adjusted Desktop Padding to account for Mac dots */}
+                    <div className="max-w-2xl mx-auto space-y-6 pb-6 pt-2 md:pt-6">
                         
                         {/* Author Header */}
                         <div className="flex items-center gap-3 md:gap-4 relative">
@@ -44,11 +61,11 @@ const PostLightbox = ({ post, user, onClose, onLike, likedPosts, CATEGORIES, get
                             
                             <div className="flex items-center gap-2 shrink-0">
                                 {/* Category Badge */}
-                                <div className={`w-8 h-8 md:w-10 md:h-10 rounded-full flex items-center justify-center text-lg md:text-xl ${theme.bg} border ${theme.border}`} title={categoryConfig.label}>
+                                <div className={`hidden md:flex w-10 h-10 rounded-full items-center justify-center text-xl ${theme.bg} border ${theme.border}`} title={categoryConfig.label}>
                                     {categoryConfig.icon}
                                 </div>
 
-                                {/* 🌟 EDIT/DELETE MENU FOR LIGHTBOX */}
+                                {/* EDIT/DELETE MENU */}
                                 {isAuthor && !isMock && (
                                     <div className="relative">
                                         <button onClick={() => setShowMenu(!showMenu)} className="p-1.5 md:p-2 text-slate-400 hover:text-slate-800 dark:hover:text-white hover:bg-slate-200 dark:hover:bg-slate-700 rounded-full transition-colors">
@@ -100,15 +117,15 @@ const PostLightbox = ({ post, user, onClose, onLike, likedPosts, CATEGORIES, get
                     </div>
                 </div>
 
-                {/* 🌟 RIGHT: LIVE DISCUSSION (Fixed 45vh on mobile so it doesn't get squished) */}
+                {/* RIGHT: LIVE DISCUSSION */}
                 <div className="w-full h-[45vh] md:h-auto md:w-[400px] border-t md:border-t-0 md:border-l border-slate-200 dark:border-slate-700 flex flex-col bg-white dark:bg-slate-800 shrink-0 shadow-[0_-10px_20px_-10px_rgba(0,0,0,0.1)] md:shadow-none">
-                    <div className="p-4 md:p-6 border-b border-slate-100 dark:border-slate-700 flex items-center justify-between z-10 bg-white dark:bg-slate-800">
+                    <div className="p-4 md:p-6 border-b border-slate-100 dark:border-slate-700 flex items-center justify-between z-10 bg-white dark:bg-slate-800 shrink-0">
                         <h3 className="font-black text-slate-800 dark:text-white uppercase tracking-wider text-xs">Discussion</h3>
                         <button onClick={() => onLike(post.id)} className={`flex items-center gap-1.5 text-sm font-bold transition-colors ${likedPosts.has(post.id) ? 'text-indigo-600' : 'text-slate-400 hover:text-indigo-600'}`}>
                             <ThumbsUp size={16} className={likedPosts.has(post.id) ? 'fill-indigo-600' : ''} /> {post.likes || 0}
                         </button>
                     </div>
-                    <div className="flex-1 overflow-y-auto p-4 bg-slate-50 dark:bg-slate-900/30 pb-20 md:pb-4">
+                    <div className="flex-1 overflow-y-auto p-4 bg-slate-50 dark:bg-slate-900/30 pb-24 md:pb-4 scrollbar-hide">
                         {CommentComponent && (
                             <CommentComponent postId={post.id} user={user} isMock={isMock} postAuthor={post.author} />
                         )}
