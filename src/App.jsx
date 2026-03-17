@@ -601,85 +601,74 @@ function NexusApp() {
         </div>
       )}
 
-        {/* ACTION CLUSTER (Right Side - Reordered & LogOut Removed) */}
-        <div className="flex items-center justify-end gap-2 md:gap-4 shrink-0">
-          
-          {/* 1. PROFILE AVATAR (Moved to the far left of the cluster) */}
-          <button 
-            onClick={() => { setIsAdminOpen(false); setCurrentView('profile'); }}
-            className={`relative w-10 h-10 rounded-full overflow-hidden border-2 transition-all active:scale-95 flex items-center justify-center bg-indigo-100 text-indigo-600 font-black shrink-0 ${currentView === 'profile' ? 'border-indigo-500 ring-4 ring-indigo-500/10 shadow-md' : 'border-white dark:border-slate-700 hover:border-slate-300 shadow-sm'}`}
-          >
+{/* --- TOP NAVIGATION BAR --- */}
+<header className="sticky top-0 z-50 bg-white/80 dark:bg-slate-900/80 backdrop-blur-md border-b border-slate-200 dark:border-slate-800 px-4 py-3 flex items-center justify-between">
+    
+    {/* FAR LEFT: LOGO */}
+    <div className="flex items-center gap-2 cursor-pointer" onClick={() => /* Add your navigation to home here */ null}>
+        <div className="bg-indigo-600 text-white p-1.5 rounded-lg shadow-sm">
+            <Hexagon size={20} className="fill-current" />
+        </div>
+        <span className="font-black text-xl tracking-tight text-slate-800 dark:text-white hidden sm:block">
+            NEXUS
+        </span>
+    </div>
+
+    {/* RIGHT SIDE: CONTROLS */}
+    <div className="flex items-center gap-1 md:gap-3">
+        
+        {/* 1. Live/Demo Toggle */}
+        <button
+            onClick={() => {/* Toggle your isDemo state here */}}
+            className={`hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest transition-colors border mr-2 ${
+                isDemo 
+                ? 'bg-rose-50 text-rose-600 border-rose-200 dark:bg-rose-900/30 dark:border-rose-800' 
+                : 'bg-emerald-50 text-emerald-600 border-emerald-200 dark:bg-emerald-900/30 dark:border-emerald-800'
+            }`}
+        >
+            <ShieldAlert size={14} />
+            {isDemo ? 'Demo Mode' : 'Live Mode'}
+        </button>
+
+        {/* 2. Admin Logs */}
+        <button 
+            onClick={() => {/* Navigate to Admin View */}} 
+            className="p-2 text-slate-400 hover:text-indigo-600 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-full transition-colors"
+            title="Admin Logs"
+        >
+            <ShieldAlert size={20} />
+        </button>
+
+        {/* 3. Notifications (Bell) */}
+        <button className="p-2 text-slate-400 hover:text-indigo-600 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-full transition-colors relative">
+            <Bell size={20} />
+            {/* Optional Red Dot for active notifications */}
+            <span className="absolute top-1.5 right-2 w-2 h-2 bg-red-500 rounded-full border-2 border-white dark:border-slate-900"></span>
+        </button>
+
+        {/* 4. Sun/Moon (Dark Mode) */}
+        <button 
+            onClick={() => {/* Toggle your Dark Mode state here */}} 
+            className="p-2 text-slate-400 hover:text-indigo-600 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-full transition-colors"
+            title="Toggle Theme"
+        >
+            {/* Swap these based on your isDarkMode state */}
+            <Moon size={20} /> 
+        </button>
+
+        {/* 5. Profile Picture */}
+        <button 
+            onClick={() => {/* Navigate to Profile View */}} 
+            className="w-8 h-8 md:w-10 md:h-10 rounded-full overflow-hidden border-2 border-slate-200 dark:border-slate-700 bg-indigo-100 flex items-center justify-center font-black text-indigo-700 ml-1 hover:ring-2 hover:ring-indigo-500 transition-all shrink-0"
+        >
             {user?.photoURL ? (
                 <img src={user.photoURL} alt="Profile" className="w-full h-full object-cover" />
             ) : (
-                <span className="text-base uppercase">{user?.name ? user.name.charAt(0) : <User size={20}/>}</span>
+                <span className="uppercase">{user?.name ? user.name.charAt(0) : 'U'}</span>
             )}
-          </button>
-
-          {/* 2. NOTIFICATION BELL */}
-          <div className="relative">
-              <button 
-                  onClick={toggleBell}
-                  className={`p-2 rounded-full transition-all border sm:hover:border-slate-200 active:scale-95 ${isBellOpen ? 'bg-slate-100 dark:bg-slate-700 text-indigo-600 dark:text-indigo-400 border-slate-200 dark:border-slate-600' : 'bg-transparent text-slate-600 dark:text-slate-300 border-transparent hover:bg-slate-50 dark:hover:bg-slate-800'}`}
-              >
-                  <Bell size={18} />
-                  {unreadCount > 0 && !isDemo && (
-                      <span className="absolute top-1.5 right-1.5 w-2.5 h-2.5 bg-red-500 rounded-full animate-pulse ring-2 ring-white dark:ring-slate-800"></span>
-                  )}
-              </button>
-
-              {/* DROPDOWN */}
-              {isBellOpen && !isDemo && (
-                  <div className="absolute right-0 mt-3 w-80 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl shadow-2xl z-50 overflow-hidden animate-in zoom-in-95 duration-200">
-                      <div className="px-4 py-3 border-b border-slate-100 dark:border-slate-700 flex justify-between items-center bg-slate-50 dark:bg-slate-900/50">
-                          <h3 className="text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest">Inbox</h3>
-                      </div>
-                      <div className="max-h-80 overflow-y-auto scrollbar-hide">
-                          {notifications.length === 0 ? (
-                              <div className="p-8 text-center text-xs text-slate-400 font-medium">No new activity</div>
-                          ) : (
-                              notifications.map((n) => (
-                                  <div key={n.id} onClick={() => { setIsBellOpen(false); setCurrentView('feeds'); }} className={`p-4 border-b border-slate-50 dark:border-slate-700/50 hover:bg-slate-50 dark:hover:bg-slate-700/30 cursor-pointer transition-colors ${!n.read ? 'bg-indigo-50/30 dark:bg-indigo-900/10' : ''}`}>
-                                      <p className="text-sm text-slate-700 dark:text-slate-200">
-                                          <span className="font-bold">{n.sender}</span> {n.type === 'LIKE' ? 'liked your post' : 'commented on your post'}
-                                      </p>
-                                      {n.preview && <p className="text-[11px] text-slate-400 mt-1 italic truncate">"{n.preview}"</p>}
-                                  </div>
-                              ))
-                          )}
-                      </div>
-                  </div>
-              )}
-          </div>
-
-          {/* 3. THEME TOGGLE */}
-          <button onClick={toggleTheme} className="p-2 rounded-full transition-all text-slate-600 dark:text-slate-300 active:scale-95 active:bg-slate-200 dark:active:bg-slate-700 sm:hover:bg-slate-100 dark:sm:hover:bg-slate-700">
-            {isDark ? <Sun size={18} /> : <Moon size={18} />}
-          </button>
-
-          {/* 4. ADMIN BUTTON (Hidden if not admin) */}
-          {(user?.role === 'admin' || isDemo) && (
-            <button 
-              onClick={() => { setIsAdminOpen(!isAdminOpen); setCurrentView('dashboard'); }} 
-              className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-all shadow-sm ${isAdminOpen ? 'bg-blue-600 text-white' : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200'}`}
-            >
-              {isAdminOpen ? 'Close' : 'Admin'}
-            </button>
-          )}
-
-          {/* 5. LIVE/DEMO TOGGLE (Far right) */}
-          <div className="flex items-center gap-2">
-            <span className={`text-[10px] font-black uppercase tracking-tight ${isDemo ? 'text-emerald-600' : 'text-slate-400'}`}>
-               {isDemo ? 'Demo' : 'Live'}
-            </span>
-            <button 
-              onClick={toggleDemo} 
-              className={`w-8 h-4 rounded-full flex items-center p-0.5 transition-colors duration-300 ${isDemo ? 'bg-emerald-500' : 'bg-slate-300'}`}
-            >
-              <div className={`bg-white w-3 h-3 rounded-full shadow-md transform transition-transform duration-300 ${isDemo ? 'translate-x-4' : 'translate-x-0'}`} />
-            </button>
-          </div>
-        </div>
+        </button>
+    </div>
+</header>
       
     {/* MAIN CONTENT AREA */}
       {(isAdminOpen && (user?.role === 'admin' || isDemo)) ? (
