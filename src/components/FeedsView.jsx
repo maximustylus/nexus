@@ -271,6 +271,8 @@ const FeedsView = ({ user }) => {
                     getColorTheme={getColorTheme}
                     CommentComponent={CommentSection}
                     isMock={String(selectedPost.id).startsWith('m') || String(selectedPost.id).startsWith('live')}
+                    onEdit={startEditPost}        /* 🌟 PASSED DOWN */
+                    onDelete={handleDeletePost}   /* 🌟 PASSED DOWN */
                 />
             )}
             <div className="h-24" />
