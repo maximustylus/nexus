@@ -506,9 +506,9 @@ exports.scheduledPulseNudge = onSchedule({
 // FUNCTION 4: FEEDS, SMART WATERCOOLER & PDPA GUARD
 // =============================================================================
 
-// --- FEEDS: SMART WATERCOOLER & PDPA GUARD ---
-
-exports.processFeedPost = onCall(async (request) => {
+// 🌟 FIX 1: We added { secrets: ["GEMINI_API_KEY"] } so this function can access Gemini!
+exports.processFeedPost = onCall({ secrets: ["GEMINI_API_KEY"] }, async (request) => {
+    
     // 1. Extract data sent from the React frontend
     const { rawText, authorName, authorRole, isDemo, externalLink, imageUrl, postId } = request.data;
 
@@ -554,6 +554,10 @@ exports.processFeedPost = onCall(async (request) => {
     `;
 
     try {
+        // 🌟 FIX 2: Initialize Gemini right here inside the function!
+        const { GoogleGenerativeAI } = require("@google/generative-ai");
+        const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+
         const model = genAI.getGenerativeModel({ 
             model: "gemini-1.5-flash",
             systemInstruction: systemInstruction 
@@ -588,11 +592,9 @@ exports.processFeedPost = onCall(async (request) => {
 
         // 6. Save to Firestore (Handle Edit vs. New Post)
         if (postId) {
-            // IT'S AN EDIT: Update the existing document
             await admin.firestore().collection('feed_posts').doc(postId).update(postUpdateData);
             return { success: true, postId: postId, category: analysis.category };
         } else {
-            // IT'S A NEW POST: Add everything including author, timestamp, and 0 likes
             postUpdateData.author = authorName || 'Anonymous Staff';
             postUpdateData.role = authorRole || 'Staff';
             postUpdateData.timestamp = admin.firestore.FieldValue.serverTimestamp();
@@ -604,7 +606,7 @@ exports.processFeedPost = onCall(async (request) => {
             return { success: true, postId: docRef.id, category: analysis.category };
         }
 
-    } catch (error) { // 🌟 THIS IS THE CATCH BLOCK THAT WENT MISSING!
+    } catch (error) { 
         console.error("[AURA] AI Feed Processing Error:", error);
         throw new HttpsError('internal', 'AURA failed to process this post. Please try again.');
     }
