@@ -11,7 +11,6 @@ import { collection, onSnapshot, doc, query, where, orderBy, updateDoc } from 'f
 import { signOut } from 'firebase/auth';
 import { BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, 
   Tooltip, ResponsiveContainer, Cell, PieChart, Pie, Legend, ReferenceLine } from 'recharts';
-// 🌟 Added Hexagon to the lucide-react imports for the Demo Logo
 import { Sun, Moon, LogOut, LayoutDashboard, Calendar, Activity, 
   Filter, ShieldAlert, BookOpen, MessageCircle, Gift, History, Bell, User, Hexagon } from 'lucide-react'; 
 
@@ -146,18 +145,17 @@ function NexusApp() {
           const initialProfile = checkAccess(u.email);
           const userDocRef = doc(db, 'users', u.uid);
           
-          // Listen for live updates to the user's profile
           const unsubUserDoc = onSnapshot(userDocRef, (docSnap) => {
             if (docSnap.exists()) {
               setUser({ ...initialProfile, ...docSnap.data(), uid: u.uid });
             } else {
               setUser({ ...initialProfile, uid: u.uid });
             }
-            setAuthLoading(false); // Stop spinning once data is loaded
+            setAuthLoading(false); 
           }, (error) => {
             console.error("Error fetching user data:", error);
             setUser({ ...initialProfile, uid: u.uid });
-            setAuthLoading(false); // Stop spinning even if there is an error
+            setAuthLoading(false); 
           });
 
           return () => unsubUserDoc();
@@ -179,14 +177,12 @@ function NexusApp() {
       let unsubUser, unsubNotifications;
 
       if (user?.uid && !isDemo) {
-          // Listen for profile picture updates
           unsubUser = onSnapshot(doc(db, 'users', user.uid), (docSnap) => {
               if (docSnap.exists() && docSnap.data().photoURL) {
                   setUser(prev => ({ ...prev, photoURL: docSnap.data().photoURL }));
               }
           });
 
-          // Listen for notifications specifically for this user
           const q = query(
               collection(db, 'notifications'), 
               where('recipient', '==', user.name),
@@ -277,6 +273,10 @@ function NexusApp() {
   const activeTeamData = isDemo ? MOCK_TEAM_DATA : teamData;
   const activeStaffLoads = isDemo ? MOCK_STAFF_LOADS : staffLoads;
   
+  // 🌟 DEFINE SCALABLE ADMIN ACCESS
+  const ADMIN_EMAILS = ['muhammad.alif@kkh.com.sg', 'siti.nur.anisah.nh@kkh.com.sg'];
+  const hasAdminAccess = isDemo || (user?.email && ADMIN_EMAILS.includes(user.email.toLowerCase())) || user?.role === 'admin';
+
   const unreadCount = notifications.filter(n => !n.read).length;
 
   const markNotificationsAsRead = async () => {
@@ -601,19 +601,35 @@ function NexusApp() {
         </div>
       )}
 
-            {/* HEADER BAR */}
-      <div className="md:col-span-2 flex items-center justify-between mb-4 md:mb-6 bg-white dark:bg-slate-800 p-3 md:p-4 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 w-full shrink-0 z-50">
+      {/* HEADER BAR */}
+      <div className="md:col-span-2 flex items-center justify-between mb-4 md:mb-6 bg-white dark:bg-slate-800 p-3 md:p-4 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 w-full shrink-0 relative z-50">
         
-        {/* 1. BRANDING (Left - Transparent Logos Only) */}
-        <div className="flex items-center shrink-0 cursor-pointer" onClick={() => setCurrentView('dashboard')}>
-          {isDemo ? (
-              <img src="/nexus.png" alt="NEXUS" className="h-8 md:h-10 w-auto object-contain drop-shadow-sm" onError={(e) => { e.target.style.display = 'none'; }} />
-          ) : (
-              <img src="/logo.png" alt="Department" className="h-8 md:h-10 w-auto object-contain drop-shadow-sm" onError={(e) => { e.target.style.display = 'none'; }} />
-          )}
+        {/* 1. BRANDING & MODE TOGGLE (Left) */}
+        <div className="flex items-center gap-3 md:gap-5 shrink-0">
+            {/* Logos */}
+            <div className="cursor-pointer" onClick={() => setCurrentView('dashboard')}>
+                {isDemo ? (
+                    <img src="/nexus.png" alt="NEXUS" className="h-8 md:h-10 w-auto object-contain drop-shadow-sm" onError={(e) => { e.target.style.display = 'none'; }} />
+                ) : (
+                    <img src="/logo.png" alt="Department" className="h-8 md:h-10 w-auto object-contain drop-shadow-sm" onError={(e) => { e.target.style.display = 'none'; }} />
+                )}
+            </div>
+
+            {/* Live/Demo Toggle Switch */}
+            <div className="flex items-center gap-2 bg-slate-50 dark:bg-slate-900/50 p-1.5 md:p-2 rounded-full border border-slate-100 dark:border-slate-700">
+                <button 
+                    onClick={toggleDemo} 
+                    className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${isDemo ? 'bg-emerald-500' : 'bg-slate-400 dark:bg-slate-600'}`}
+                >
+                    <span className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white transition-transform ${isDemo ? 'translate-x-5' : 'translate-x-1'}`} />
+                </button>
+                <span className={`text-[10px] md:text-xs font-black uppercase tracking-widest pr-2 ${isDemo ? 'text-emerald-600' : 'text-slate-500 dark:text-slate-400'}`}>
+                    {isDemo ? 'Demo' : 'Live'}
+                </span>
+            </div>
         </div>
 
-        {/* 2. CENTER NAVIGATION (Desktop only) */}
+        {/* 2. CENTER NAVIGATION (Desktop only - Perfectly centered now) */}
         <div className="hidden lg:flex flex-1 justify-center px-4">
             <div className="flex bg-slate-100 dark:bg-slate-900/50 p-1 rounded-lg">
                 {['dashboard', 'feeds', 'pulse', 'roster', 'guide'].map(view => (
@@ -634,24 +650,11 @@ function NexusApp() {
 
         {/* 3. ACTION CLUSTER (Right Side - Exact Order) */}
         <div className="flex items-center justify-end gap-2 md:gap-3 shrink-0">
-
-          {/* A. LIVE/DEMO TOGGLE (Text + Switch) */}
-          <div className="flex items-center gap-2 border-r border-slate-200 dark:border-slate-700 pr-2 mr-1">
-            <span className={`text-[10px] font-black uppercase tracking-tight ${isDemo ? 'text-emerald-600' : 'text-slate-400'}`}>
-               {isDemo ? 'Demo' : 'Live'}
-            </span>
-            <button 
-              onClick={toggleDemo} 
-              className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${isDemo ? 'bg-emerald-500' : 'bg-slate-300 dark:bg-slate-600'}`}
-            >
-              <span className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white transition-transform ${isDemo ? 'translate-x-5' : 'translate-x-1'}`} />
-            </button>
-          </div>
           
-          {/* B. ADMIN BUTTON (Always visible, popup if unauthorized) */}
+          {/* A. ADMIN BUTTON */}
           <button 
             onClick={() => { 
-                if (user?.role === 'admin' || isDemo) {
+                if (hasAdminAccess) {
                     setIsAdminOpen(!isAdminOpen); 
                     setCurrentView('dashboard'); 
                 } else {
@@ -664,12 +667,12 @@ function NexusApp() {
             <ShieldAlert size={18} />
           </button>
 
-          {/* C. THEME TOGGLE */}
+          {/* B. THEME TOGGLE (Sun/Moon) */}
           <button onClick={toggleTheme} className="p-1.5 md:p-2 rounded-full transition-all text-slate-400 hover:text-slate-600 dark:text-slate-400 dark:hover:text-slate-200 active:scale-95 sm:hover:bg-slate-100 dark:sm:hover:bg-slate-700">
             {isDark ? <Sun size={18} /> : <Moon size={18} />}
           </button>
 
-          {/* D. NOTIFICATION BELL (Dropdown fixed!) */}
+          {/* C. NOTIFICATION BELL */}
           <div className="relative">
               <button 
                   onClick={toggleBell}
@@ -704,10 +707,10 @@ function NexusApp() {
               )}
           </div>
 
-          {/* E. PROFILE AVATAR */}
+          {/* D. PROFILE AVATAR */}
           <button 
             onClick={() => { setIsAdminOpen(false); setCurrentView('profile'); }}
-            className={`relative w-8 h-8 md:w-10 md:h-10 ml-1 rounded-full overflow-hidden border-2 transition-all active:scale-95 flex items-center justify-center bg-indigo-100 text-indigo-600 font-black shrink-0 ${currentView === 'profile' ? 'border-indigo-500 ring-4 ring-indigo-500/10 shadow-md' : 'border-white dark:border-slate-700 hover:border-slate-300 shadow-sm'}`}
+            className={`relative w-8 h-8 md:w-10 md:h-10 ml-1 rounded-full overflow-hidden border-2 transition-all active:scale-95 flex items-center justify-center bg-indigo-100 text-indigo-600 font-black shrink-0 ${currentView === 'profile' && !isAdminOpen ? 'border-indigo-500 ring-4 ring-indigo-500/10 shadow-md' : 'border-white dark:border-slate-700 hover:border-slate-300 shadow-sm'}`}
           >
             {user?.photoURL ? (
                 <img src={user.photoURL} alt="Profile" className="w-full h-full object-cover" />
@@ -720,7 +723,7 @@ function NexusApp() {
       </div>
       
         {/* MAIN CONTENT AREA */}
-        {(isAdminOpen && (user?.role === 'admin' || isDemo)) ? (
+        {(isAdminOpen && hasAdminAccess) ? (
             <div className="md:col-span-2">
             <AdminPanel teamData={activeTeamData} staffLoads={activeStaffLoads} user={user} />
             </div>
