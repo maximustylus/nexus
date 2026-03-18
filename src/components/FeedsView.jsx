@@ -63,7 +63,6 @@ const CommentSection = ({ postId, user, isMock, postAuthor }) => {
         <div className="mt-4 pt-4 border-t border-slate-100 dark:border-slate-700 animate-in slide-in-from-top-2 fade-in duration-200">
             <div className="space-y-3 max-h-48 overflow-y-auto pr-2 scrollbar-hide mb-3">
                 {comments.map(c => {
-                    // 🌟 SMART AVATAR FOR COMMENTS
                     const commentAvatar = (c.author === user?.name && user?.photoURL) ? user.photoURL : null;
                     return (
                         <div key={c.id} className="flex gap-2">
@@ -165,9 +164,26 @@ const FeedsView = ({ user }) => {
         }
     };
 
+    // 🌟 UPGRADED SHARE LOGIC
     const handleShare = async (post) => {
-        const shareText = `Check out this update from ${post.author} on NEXUS FEEDS:\n\n${post.raw_text || '[Image Attachment]'}\n\nView post: ${window.location.origin}/?view=feeds&postId=${post.id}`;
-        if (navigator.share) { try { await navigator.share({ title: 'NEXUS FEEDS', text: shareText }); } catch (e) {} } else { navigator.clipboard.writeText(shareText); alert("Copied!"); }
+        // Generates the exact URL for this specific post
+        const postUrl = `${window.location.origin}${window.location.pathname}?view=feeds&postId=${post.id}`;
+        
+        if (navigator.share) { 
+            try { 
+                await navigator.share({ 
+                    title: `NEXUS Post by ${post.author}`, 
+                    text: `Check out this update from ${post.author} on NEXUS FEEDS!`,
+                    url: postUrl
+                }); 
+            } catch (e) { 
+                console.error("Share failed", e); 
+            } 
+        } else { 
+            // Fallback for Desktop/Non-mobile browsers: Copies just the clean link
+            navigator.clipboard.writeText(postUrl); 
+            alert("Post link copied to clipboard!"); 
+        }
     };
 
     const handleLike = async (postId) => {
@@ -234,9 +250,15 @@ const FeedsView = ({ user }) => {
                 {displayPosts.map((post) => {
                     const theme = getColorTheme(post.category);
                     const isMock = String(post.id).startsWith('m') || String(post.id).startsWith('live');
-                    const isAuthor = user?.name ? user.name === post.author : post.author === 'Staff Member';
                     
-                    // 🌟 SMART AVATAR FOR FEED
+                    const safeUserName = user?.name?.toLowerCase() || '';
+                    const safePostAuthor = post?.author?.toLowerCase() || '';
+                    const isAuthor = safeUserName && safePostAuthor && (
+                        safeUserName.includes(safePostAuthor) || 
+                        safePostAuthor.includes(safeUserName) || 
+                        post.author === 'Staff Member'
+                    );
+                    
                     const avatarUrl = (isAuthor && user?.photoURL) ? user.photoURL : (post.authorPhotoUrl || post.author_photo_url);
 
                     return (
@@ -316,6 +338,7 @@ const FeedsView = ({ user }) => {
                 })}
             </div>
 
+            {/* 🌟 PASSING onShare TO THE LIGHTBOX */}
             {selectedPost && (
                 <PostLightbox 
                     post={selectedPost} 
@@ -329,6 +352,7 @@ const FeedsView = ({ user }) => {
                     isMock={String(selectedPost.id).startsWith('m') || String(selectedPost.id).startsWith('live')}
                     onEdit={startEditPost}
                     onDelete={handleDeletePost}
+                    onShare={handleShare}
                 />
             )}
             <div className="h-24" />
