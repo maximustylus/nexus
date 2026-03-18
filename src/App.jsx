@@ -85,7 +85,7 @@ function NexusApp() {
               return requestedView;
           }
       }
-      return 'dashboard'; 
+      return 'pulse'; 
   });
 
   const [dataYear, setDataYear] = useState('2026');
