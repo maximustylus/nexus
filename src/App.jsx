@@ -75,7 +75,19 @@ const CustomBarTooltip = ({ active, payload, label }) => {
 function NexusApp() {
   const { isDemo, toggleDemo } = useNexus(); 
   
-  const [currentView, setCurrentView] = useState('pulse');
+  // 🌟 SMART ROUTING: Checks if the user clicked a shared link before defaulting to the dashboard
+  const [currentView, setCurrentView] = useState(() => {
+      if (typeof window !== 'undefined') {
+          const params = new URLSearchParams(window.location.search);
+          const requestedView = params.get('view');
+          // If the URL asks for feeds, go to feeds. Otherwise, default to dashboard.
+          if (requestedView === 'feeds' || requestedView === 'dashboard' || requestedView === 'roster' || requestedView === 'profile') {
+              return requestedView;
+          }
+      }
+      return 'dashboard'; 
+  });
+
   const [dataYear, setDataYear] = useState('2026');
   const [isAdminOpen, setIsAdminOpen] = useState(false);
   const [isAuraOpen, setIsAuraOpen] = useState(false);
