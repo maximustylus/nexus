@@ -7,6 +7,9 @@ import { getFunctions, httpsCallable } from 'firebase/functions';
 import { ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
 import PostLightbox from './PostLightbox';
 
+// 🌟 IMPORT THE CUSTOM MODAL
+import ConfirmationModal from './ConfirmationModal';
+
 const CATEGORIES = {
     ALL: { id: 'ALL', label: 'All Feeds', icon: '🌍', color: 'slate' },
     BOOKWORM: { id: 'BOOKWORM', label: 'Bookworm', icon: '🐛', color: 'emerald', desc: 'Clinical & Science' },
@@ -98,6 +101,9 @@ const FeedsView = ({ user }) => {
 
     const [editingPostId, setEditingPostId] = useState(null);
     const [activeMenuId, setActiveMenuId] = useState(null);
+    
+    // 🌟 STATE: Controls which post is slated for deletion
+    const [postToDelete, setPostToDelete] = useState(null);
 
     const [linkPreview, setLinkPreview] = useState(null);
     const [selectedImage, setSelectedImage] = useState(null);
@@ -156,17 +162,24 @@ const FeedsView = ({ user }) => {
         window.scrollTo({ top: 0, behavior: 'smooth' });
     };
 
-    const handleDeletePost = async (postId) => {
+    // 🌟 CUSTOM DELETION LOGIC
+    const confirmDeletePost = (postId) => {
         setActiveMenuId(null);
-        if (window.confirm("Are you sure you want to delete this post? This cannot be undone.")) {
-            try { await deleteDoc(doc(db, 'feed_posts', postId)); } 
-            catch (error) { console.error("Error deleting post:", error); }
+        setPostToDelete(postId); // Opens the modal
+    };
+
+    const executeDelete = async () => {
+        if (!postToDelete) return;
+        try { 
+            await deleteDoc(doc(db, 'feed_posts', postToDelete)); 
+        } catch (error) { 
+            console.error("Error deleting post:", error); 
+        } finally {
+            setPostToDelete(null); // Closes the modal
         }
     };
 
-    // 🌟 UPGRADED SHARE LOGIC
     const handleShare = async (post) => {
-        // Generates the exact URL for this specific post
         const postUrl = `${window.location.origin}${window.location.pathname}?view=feeds&postId=${post.id}`;
         
         if (navigator.share) { 
@@ -180,7 +193,6 @@ const FeedsView = ({ user }) => {
                 console.error("Share failed", e); 
             } 
         } else { 
-            // Fallback for Desktop/Non-mobile browsers: Copies just the clean link
             navigator.clipboard.writeText(postUrl); 
             alert("Post link copied to clipboard!"); 
         }
@@ -293,7 +305,8 @@ const FeedsView = ({ user }) => {
                                                 <div className="absolute right-0 mt-2 w-36 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl shadow-lg overflow-hidden z-20 animate-in zoom-in-95 duration-100">
                                                     <button onClick={() => startEditPost(post)} className="w-full px-4 py-2.5 text-xs font-bold text-left text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700 flex items-center gap-2"><Edit2 size={14}/> Edit Post</button>
                                                     <div className="h-px w-full bg-slate-100 dark:bg-slate-700"></div>
-                                                    <button onClick={() => handleDeletePost(post.id)} className="w-full px-4 py-2.5 text-xs font-bold text-left text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 flex items-center gap-2"><Trash2 size={14}/> Delete</button>
+                                                    {/* 🌟 REPLACED NATIVE FUNCTION WITH confirmDeletePost */}
+                                                    <button onClick={() => confirmDeletePost(post.id)} className="w-full px-4 py-2.5 text-xs font-bold text-left text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 flex items-center gap-2"><Trash2 size={14}/> Delete</button>
                                                 </div>
                                             )}
                                         </div>
@@ -338,7 +351,7 @@ const FeedsView = ({ user }) => {
                 })}
             </div>
 
-            {/* 🌟 PASSING onShare TO THE LIGHTBOX */}
+            {/* LIGHTBOX */}
             {selectedPost && (
                 <PostLightbox 
                     post={selectedPost} 
@@ -351,10 +364,20 @@ const FeedsView = ({ user }) => {
                     CommentComponent={CommentSection}
                     isMock={String(selectedPost.id).startsWith('m') || String(selectedPost.id).startsWith('live')}
                     onEdit={startEditPost}
-                    onDelete={handleDeletePost}
+                    onDelete={confirmDeletePost} // 🌟 Passed the new modal handler here!
                     onShare={handleShare}
                 />
             )}
+
+            {/* 🌟 CUSTOM DELETE CONFIRMATION MODAL */}
+            <ConfirmationModal 
+                isOpen={!!postToDelete}
+                title="NEXUS says"
+                message="Are you sure you want to delete this post? This cannot be undone."
+                onCancel={() => setPostToDelete(null)}
+                onConfirm={executeDelete}
+            />
+
             <div className="h-24" />
         </div>
     );
