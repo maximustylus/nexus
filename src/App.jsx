@@ -75,13 +75,12 @@ const CustomBarTooltip = ({ active, payload, label }) => {
 function NexusApp() {
   const { isDemo, toggleDemo } = useNexus(); 
   
-  // 🌟 SMART ROUTING: Checks if the user clicked a shared link before defaulting to the dashboard
+  // 🌟 SMART ROUTING
   const [currentView, setCurrentView] = useState(() => {
       if (typeof window !== 'undefined') {
           const params = new URLSearchParams(window.location.search);
           const requestedView = params.get('view');
-          // If the URL asks for feeds, go to feeds. Otherwise, default to dashboard.
-          if (requestedView === 'feeds' || requestedView === 'dashboard' || requestedView === 'roster' || requestedView === 'profile') {
+          if (requestedView === 'feeds' || requestedView === 'dashboard' || requestedView === 'roster' || requestedView === 'profile' || requestedView === 'pulse') {
               return requestedView;
           }
       }
@@ -93,7 +92,6 @@ function NexusApp() {
   const [isAuraOpen, setIsAuraOpen] = useState(false);
   const [isGuideOpen, setIsGuideOpen] = useState(false);
   
-  // 🌟 NOTIFICATION STATE
   const [notifications, setNotifications] = useState([]);
   const [isBellOpen, setIsBellOpen] = useState(false);
 
@@ -149,15 +147,17 @@ function NexusApp() {
   const activeStaffList = isDemo ? MOCK_STAFF_NAMES : STAFF_LIST;
   const activeStaffIds = isDemo ? MOCK_STAFF_NAMES : STAFF_IDS;
 
-  // 🌟 BULLETPROOF AUTH LISTENER
+  // 🌟 BULLETPROOF, ANTI-ZOMBIE AUTH LISTENER
   useEffect(() => {
+    let unsubUserDoc = null; // Track listener so we can kill it
+
     const unsubscribe = auth.onAuthStateChanged((u) => {
       if (u) {
         try {
           const initialProfile = checkAccess(u.email);
           const userDocRef = doc(db, 'users', u.uid);
           
-          const unsubUserDoc = onSnapshot(userDocRef, (docSnap) => {
+          unsubUserDoc = onSnapshot(userDocRef, (docSnap) => {
             if (docSnap.exists()) {
               setUser({ ...initialProfile, ...docSnap.data(), uid: u.uid });
             } else {
@@ -166,22 +166,36 @@ function NexusApp() {
             setAuthLoading(false); 
           }, (error) => {
             console.error("Error fetching user data:", error);
-            setUser({ ...initialProfile, uid: u.uid });
+            // 🌟 SECURITY: Only fallback if still genuinely logged in
+            if (auth.currentUser) {
+                setUser({ ...initialProfile, uid: u.uid });
+            } else {
+                setUser(null);
+            }
             setAuthLoading(false); 
           });
 
-          return () => unsubUserDoc();
         } catch (error) {
           console.error("Auth Listener Error:", error);
           setAuthLoading(false);
         }
       } else {
+        // 🌟 HARD FLUSH ON LOGOUT
+        if (unsubUserDoc) {
+            unsubUserDoc(); // Kill the snapshot listener immediately
+            unsubUserDoc = null;
+        }
         setUser(null);
+        setNotifications([]); // Flush memory
+        setIsAdminOpen(false);
         setAuthLoading(false);
       }
     });
 
-    return () => unsubscribe();
+    return () => {
+        if (unsubUserDoc) unsubUserDoc();
+        unsubscribe();
+    };
   }, []);
   
   // 🌟 FETCH REAL-TIME PROFILE & NOTIFICATIONS
@@ -373,11 +387,18 @@ function NexusApp() {
       return MONTHS.map((m, i) => ({ name: m, value: rawValues[i] }));
   };
   
+  // 🌟 MASTER LOGOUT KILL-SWITCH
   const handleLogout = async () => { 
     if (isDemo) toggleDemo();
-    else await signOut(auth); 
+    try {
+        await signOut(auth); 
+    } catch (e) {
+        console.error("Logout error", e);
+    }
+    setUser(null); 
+    setNotifications([]);
     setIsAdminOpen(false); 
-    setCurrentView('dashboard');
+    setCurrentView('pulse'); // Reset to pulse for next login
   };
   
   const renderCustomizedLabel = ({ cx, cy, midAngle, innerRadius, outerRadius, percent }) => {
@@ -745,7 +766,8 @@ function NexusApp() {
             {currentView === 'feeds' && <FeedsView user={user} />}
             {currentView === 'roster' && <RosterView user={user} />}
             {currentView === 'pulse' && <WellbeingView user={user} />}
-            {currentView === 'profile' && <ProfileView user={user} />} 
+            {/* 🌟 PASSING ONLOGOUT TO PROFILEVIEW */}
+            {currentView === 'profile' && <ProfileView user={user} onLogout={handleLogout} />} 
             <div className="h-32 md:h-24 w-full shrink-0" />
             </div>
         )}
