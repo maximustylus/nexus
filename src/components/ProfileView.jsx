@@ -4,9 +4,12 @@ import { auth, db, storage } from '../firebase';
 import { doc, updateDoc, onSnapshot } from 'firebase/firestore';
 import { ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
 import { updatePassword } from 'firebase/auth';
+
+// 🌟 IMPORT THE CUSTOM MODAL
 import ConfirmationModal from './ConfirmationModal'; 
 
-const ProfileView = ({ user, onLogout }) => { 
+const ProfileView = ({ user, onLogout }) => {
+    // 🌟 DIRECT DB CONNECTION: Ensures Profile always shows what is ACTUALLY in the database
     const [liveProfile, setLiveProfile] = useState(user);
 
     useEffect(() => {
@@ -186,10 +189,10 @@ const ProfileView = ({ user, onLogout }) => {
                 </div>
             </div>
 
-            {/* 🌟 CUSTOM SIGN OUT BUTTON */}
+            {/* 🌟 CUSTOM SIGN OUT BUTTON (Fixed Dark Mode Contrast) */}
             <button 
                 onClick={() => setIsSignOutModalOpen(true)} 
-                className="w-full bg-red-50 text-red-600 border border-red-200 dark:bg-red-900/10 dark:border-red-900/30 dark:text-red-400 hover:bg-red-100 dark:hover:bg-red-900/30 transition-colors rounded-2xl px-4 py-4 text-sm font-bold flex justify-center items-center gap-2"
+                className="w-full bg-red-50 text-red-600 border border-red-200 dark:bg-red-500/10 dark:border-red-500/30 dark:text-red-400 hover:bg-red-100 dark:hover:bg-red-500/20 transition-colors rounded-2xl px-4 py-4 text-sm font-bold flex justify-center items-center gap-2"
             >
                 <LogOut size={16}/> Sign Out of NEXUS
             </button>
@@ -204,9 +207,9 @@ const ProfileView = ({ user, onLogout }) => {
                 onConfirm={() => {
                     setIsSignOutModalOpen(false);
                     if (onLogout) {
-                        onLogout(); 
+                        onLogout(); // Calls the secure hard flush from App.jsx
                     } else {
-                        auth.signOut(); 
+                        auth.signOut(); // Fallback
                     }
                 }}
             />
