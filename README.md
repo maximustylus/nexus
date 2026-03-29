@@ -172,6 +172,27 @@ Beta testers should utilise Demo Mode to verify system integrity:
 
 ***
 
+## Release History
+
+### NEXUS v1.5 [Current Beta]
+* **NEXUS Feeds Integration:** Deployed the Digital Watercooler for secure, PDPA-compliant clinical knowledge sharing and Community of Practice updates.
+* **Immersive Lightbox UI:** Implemented distraction-free reading environments with nested real-time discussion threads.
+* **Smart Routing Architecture:** Engineered URL parameter detection to support secure deep-linking and cross-platform post sharing.
+* **Security Enhancements:** Executed a master anti-zombie logout flush to instantly kill lingering Firebase database connections and replaced all native browser alerts with secure, custom-branded confirmation modals.
+
+### NEXUS v1.4 and AURA v2.3
+* **AURA Engine Upgrade (v2.3):** Evolved the AI from a reactive conversational bot into a proactive database middleware agent.
+* **Autonomous Roster Mediation:** Enabled AURA to actively listen to Firebase collections via live snapshots and independently execute peer-to-peer shift swap matrix rewrites.
+* **Native File Export:** Bypassed mobile browser limitations to allow AURA to compile parsed text and trigger direct Microsoft Word document downloads.
+* **Data Entry Payload Expansion:** Upgraded the LLM schema to extract operational parameters from natural language and generate secure database commit interfaces.
+* **Technical Debt Resolution:** Eliminated the iOS Safari phantom click UI bug through dynamic z-index management and patched Sandbox Cloud Function schema mismatch crashes.
+
+### NEXUS v1.0 to v1.3 (Legacy IDC App) and AURA v1.0 to v2.2
+* **Foundational Architecture:** Established the core React and Firebase dual-environment infrastructure separating Live production data from the local Sandbox.
+* **Wellbeing Analytics:** Deployed the primary Pulse tracking system and the daily Social Battery heatmap.
+* **Auto-Rostering Framework:** Built the initial zero-conflict scheduling logic and unified calendar interfaces.
+* **Early AURA Integration:** Introduced the baseline conversational agent focused heavily on Motivational Interviewing (OARS) and basic administrative query routing.
+
 ## Future Roadmap (Pending v1.6)
 
 * **Admin Security Audit Logs:** Implementation of a transparent access tracking system within the Admin Panel to monitor user logins, profile alterations, and data export events.
