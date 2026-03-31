@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { auth } from '../firebase'; 
 import { 
     signInWithEmailAndPassword, 
@@ -11,13 +12,14 @@ import {
 import { 
     Sun, Moon, ArrowRight, Activity, ShieldCheck, 
     Building2, Globe, ChevronLeft, AlertCircle, ShieldAlert, 
-    BrainCircuit, Shield, User, Lock, Mail, Sparkles, Zap, KeyRound, CheckCircle2
+    BrainCircuit, Shield, User, Users, Stethoscope, Lock, Mail, Sparkles, Zap, KeyRound, CheckCircle2
 } from 'lucide-react';
 import { useNexus } from '../context/NexusContext';
 import { checkAccess } from '../utils'; 
 
 const WelcomeScreen = (props) => {
     const onAuthSuccess = props.onStart || props.onLogin || props.onEnter;
+    const navigate = useNavigate();
     
     // --- HOOKS & CONTEXT ---
     const { toggleDemo } = useNexus(); 
@@ -160,37 +162,6 @@ const WelcomeScreen = (props) => {
         }
     };
 
-    // --- 3. PILLARS DATA ---
-    const pillars = [
-        {
-            title: 'AURA Intelligence',
-            subtitle: 'PILLAR A • THE HEART',
-            layer: 'EMOTIONAL LAYER',
-            icon: <BrainCircuit className="text-pink-500" size={20} />,
-            color: 'group-hover:border-pink-500/50',
-            bg: 'bg-pink-500/10',
-            desc: 'Real-time Social Battery indexing using Motivational Interviewing Techniques to prevent burnout.',
-        },
-        {
-            title: 'Smart Workload',
-            subtitle: 'PILLAR B • THE BRAIN',
-            layer: 'PREDICTIVE LAYER',
-            icon: <Activity className="text-indigo-500" size={20} />,
-            color: 'group-hover:border-indigo-500/50',
-            bg: 'bg-indigo-500/10',
-            desc: 'Machine Learning driven case volume forecasting and skill-mix routing for cognitive load balancing.',
-        },
-        {
-            title: 'Auto Rostering',
-            subtitle: 'PILLAR C • THE SKELETON',
-            layer: 'STRUCTURAL LAYER',
-            icon: <Shield className="text-purple-500" size={20} />,
-            color: 'group-hover:border-purple-500/50',
-            bg: 'bg-purple-500/10',
-            desc: 'Zero-conflict architecture with Instant Re-Healer™ logic for structural compliance.',
-        }
-    ];
-
     const isSplitView = view === 'AUTH' || view === 'ORG_REGISTER' || view === 'RESET';
 
     return (
@@ -205,7 +176,6 @@ const WelcomeScreen = (props) => {
             <div className={`fixed top-0 left-0 w-[800px] h-[800px] bg-indigo-500/20 rounded-full blur-[120px] pointer-events-none animate-float-slow ${animate ? 'opacity-100' : 'opacity-0'}`}></div>
             <div className={`fixed bottom-0 right-0 w-[600px] h-[600px] bg-emerald-500/15 rounded-full blur-[100px] pointer-events-none animate-float-delayed ${animate ? 'opacity-100' : 'opacity-0'}`}></div>
 
-            {/* 🛡️ FIX: Strengthened Base Shadows on Main Container */}
             <div className={`relative z-10 w-full max-w-7xl mx-auto bg-white/95 dark:bg-slate-900/95 backdrop-blur-3xl border border-white/80 dark:border-slate-700/80 rounded-[3rem] shadow-[0_20px_60px_rgba(0,0,0,0.1)] dark:shadow-[0_20px_60px_rgba(0,0,0,0.6)] transition-all duration-1000 transform overflow-hidden ${animate ? 'translate-y-0 opacity-100 scale-100' : 'translate-y-20 opacity-0 scale-95'}`}>
                 
                 {/* --- TOGGLE SWITCH (DOCKED INSIDE) --- */}
@@ -220,7 +190,7 @@ const WelcomeScreen = (props) => {
 
                 <div className="flex flex-col md:flex-row min-h-[800px]">
                     
-                    {/* LEFT SECTION: BRANDING & FOOTER */}
+                    {/* LEFT SECTION: BRANDING & GATEWAYS */}
                     <div className={`
                         relative z-20 flex flex-col justify-between p-8 md:p-16
                         transition-all duration-700 ease-[cubic-bezier(0.23,1,0.32,1)]
@@ -237,69 +207,98 @@ const WelcomeScreen = (props) => {
                             </div>
                             
                             <h1 className="text-5xl md:text-8xl font-black tracking-tighter mb-2 leading-none bg-gradient-to-br from-slate-900 via-slate-700 to-slate-900 dark:from-white dark:via-slate-200 dark:to-slate-500 bg-clip-text text-transparent pr-2">
-                                    NEXUS
-                                </h1>
+                                NEXUS
+                            </h1>
                             
                             <div className="flex items-center gap-3 mb-8 opacity-80">
                                 <div className="h-[1px] w-8 bg-indigo-500"></div>
                                 <p className="text-[10px] font-black text-indigo-600 dark:text-indigo-400 uppercase tracking-[0.4em]">
-                                    Smart Dashboard v1.4
+                                    System v152
                                 </p>
                                 <div className="h-[1px] w-8 bg-indigo-500"></div>
                             </div>
                         </div>
 
-                        {/* 2. Scrollable Content Area */}
-                        <div className={`w-full max-w-4xl transition-all duration-700 flex flex-col ${isSplitView ? 'opacity-0 h-0 overflow-hidden' : 'opacity-100 h-auto items-center'}`}>
-                            <p className="text-lg md:text-xl text-slate-600 dark:text-slate-300 font-medium mb-10 leading-relaxed max-w-2xl text-center">
-                                Master the Grind • Protect the Pulse • Build the Future<br/>
-                                <span className="text-xs md:text-sm opacity-60 font-normal">Unified intelligence for the modern healthcare teams.</span>
+                        {/* 2. Gateway Cards (Visible only on SPLASH) */}
+                        <div className={`w-full max-w-5xl transition-all duration-700 flex flex-col ${isSplitView ? 'opacity-0 h-0 overflow-hidden' : 'opacity-100 h-auto items-center'}`}>
+                            
+                            <p className="text-xl md:text-2xl text-slate-800 dark:text-slate-200 font-bold mb-10 leading-relaxed max-w-2xl text-center">
+                                Clinical Precision. <span className="text-indigo-500 dark:text-indigo-400">Human Empathy.</span><br/>
+                                <span className="text-sm md:text-base text-slate-500 dark:text-slate-400 font-medium mt-3 block">
+                                    Welcome to the digital sanctuary for modern healthcare. Please select your gateway to begin your journey.
+                                </span>
                             </p>
 
-                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-12 text-left w-full">
-                                {pillars.map((p, i) => (
-                                    /* 🛡️ FIX: Solid Backgrounds and Stronger Shadows on Cards */
-                                    <div key={i} className={`group p-5 rounded-3xl bg-white dark:bg-slate-800 shadow-md dark:shadow-lg border border-slate-200 dark:border-slate-700 hover:shadow-xl dark:hover:shadow-[0_10px_30px_rgba(0,0,0,0.5)] transition-all duration-300 hover:-translate-y-1 ${p.color}`}>
-                                        <div className={`${p.bg} p-2 rounded-lg w-fit mb-3 transition-transform group-hover:scale-110`}>{p.icon}</div>
-                                        <h3 className="font-bold text-[10px] text-slate-900 dark:text-white mb-1 uppercase tracking-wider">{p.title}</h3>
-                                        <p className="text-[9px] text-slate-500 dark:text-slate-400 leading-relaxed mb-3">{p.desc}</p>
-                                        <span className="text-[7px] font-black text-indigo-500 dark:text-indigo-400 uppercase tracking-widest px-2 py-1 bg-slate-100 dark:bg-slate-900 rounded-md border border-slate-200 dark:border-slate-700">{p.layer}</span>
-                                    </div>
-                                ))}
-                            </div>
-
-                            <div className="flex flex-col items-center gap-4 w-full max-w-sm">
-                                <button 
-                                    onClick={() => setView('AUTH')}
-                                    className="group relative px-12 py-4 bg-slate-900 dark:bg-white text-white dark:text-slate-900 font-black text-xs rounded-xl shadow-[0_10px_20px_rgba(0,0,0,0.2)] dark:shadow-[0_10px_20px_rgba(255,255,255,0.1)] hover:shadow-2xl hover:scale-[1.02] transition-all duration-300 w-full overflow-hidden"
-                                >
-                                    <span className="relative z-10 flex items-center justify-center gap-3 tracking-[0.2em]">
-                                        INITIALISE SYSTEM <ArrowRight size={16} className="group-hover:translate-x-1 transition-transform" />
-                                    </span>
-                                    <div className="absolute inset-0 bg-gradient-to-r from-indigo-500 via-purple-500 to-indigo-500 opacity-0 group-hover:opacity-10 transition-opacity duration-500 bg-[length:200%_auto] animate-gradient"></div>
-                                </button>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-12 w-full">
                                 
-                                <div className="flex gap-3 w-full">
-                                    {/* 🛡️ FIX: Drop shadows and solid backgrounds for bottom buttons */}
+                                {/* INDIVIDUALS CARD */}
+                                <div className="group relative flex flex-col items-start p-8 md:p-10 rounded-[2rem] bg-white dark:bg-slate-800 shadow-md dark:shadow-lg border border-slate-200 dark:border-slate-700 hover:shadow-2xl dark:hover:shadow-[0_10px_40px_rgba(16,185,129,0.15)] hover:border-emerald-500/30 transition-all duration-500 overflow-hidden text-left hover:-translate-y-1">
+                                    <div className="absolute top-0 right-0 w-40 h-40 bg-emerald-500/10 rounded-bl-full -mr-10 -mt-10 transition-transform group-hover:scale-110"></div>
+                                    <div className="mb-6 p-4 rounded-2xl bg-emerald-50 dark:bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 z-10">
+                                        <Users size={32} strokeWidth={2} />
+                                    </div>
+                                    <h2 className="text-2xl md:text-3xl font-black text-slate-900 dark:text-white uppercase tracking-tighter mb-4 z-10">
+                                        Individuals
+                                    </h2>
+                                    <p className="text-sm text-slate-500 dark:text-slate-400 mb-10 leading-relaxed font-medium z-10 flex-grow">
+                                        Access your personal health records, schedule virtual consultations with AuraChat, and explore clinical resources tailored to your wellness journey.
+                                    </p>
                                     <button 
-                                        onClick={handleDemoEnter} 
-                                        className="flex-1 flex items-center justify-center gap-2 px-4 py-3 bg-white dark:bg-slate-800 text-emerald-600 dark:text-emerald-400 font-bold text-[9px] rounded-lg border border-slate-200 dark:border-slate-700 shadow-md hover:shadow-lg dark:hover:shadow-[0_5px_20px_rgba(16,185,129,0.15)] hover:-translate-y-0.5 transition-all uppercase tracking-widest"
+                                        onClick={() => navigate('/individuals/language')}
+                                        className="mt-auto relative w-full px-6 py-4 bg-emerald-500 text-white font-black text-[10px] md:text-xs rounded-xl shadow-[0_10px_20px_rgba(16,185,129,0.2)] hover:shadow-xl hover:scale-[1.02] transition-all duration-300 overflow-hidden group/btn z-10"
                                     >
-                                        {loading ? <ShieldAlert size={12} className="animate-spin" /> : <ShieldAlert size={12} />} 
-                                        {loading ? 'Decrypting...' : 'Demo Mode'}
-                                    </button>
-                                    <button 
-                                        onClick={() => setView('ORG_REGISTER')} 
-                                        className="flex-1 flex items-center justify-center gap-2 px-4 py-3 bg-white dark:bg-slate-800 text-indigo-600 dark:text-indigo-400 font-bold text-[9px] rounded-lg border border-slate-200 dark:border-slate-700 shadow-md hover:shadow-lg dark:hover:shadow-[0_5px_20px_rgba(99,102,241,0.15)] hover:-translate-y-0.5 transition-all uppercase tracking-widest"
-                                    >
-                                        <Globe size={12} />
-                                        Scale Unit
+                                        <span className="relative z-10 flex items-center justify-center gap-3 tracking-[0.2em] uppercase">
+                                            Start Your Journey <ArrowRight size={16} className="group-hover/btn:translate-x-1 transition-transform" />
+                                        </span>
+                                        <div className="absolute inset-0 bg-gradient-to-r from-emerald-400 via-teal-500 to-emerald-400 opacity-0 group-hover/btn:opacity-100 transition-opacity duration-500 bg-[length:200%_auto] animate-gradient"></div>
                                     </button>
                                 </div>
+
+                                {/* PROFESSIONALS CARD */}
+                                <div className="group relative flex flex-col items-start p-8 md:p-10 rounded-[2rem] bg-white dark:bg-slate-800 shadow-md dark:shadow-lg border border-slate-200 dark:border-slate-700 hover:shadow-2xl dark:hover:shadow-[0_10px_40px_rgba(99,102,241,0.15)] hover:border-indigo-500/30 transition-all duration-500 overflow-hidden text-left hover:-translate-y-1">
+                                    <div className="absolute top-0 right-0 w-40 h-40 bg-indigo-500/10 rounded-bl-full -mr-10 -mt-10 transition-transform group-hover:scale-110"></div>
+                                    <div className="mb-6 p-4 rounded-2xl bg-indigo-50 dark:bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 z-10">
+                                        <Stethoscope size={32} strokeWidth={2} />
+                                    </div>
+                                    <h2 className="text-2xl md:text-3xl font-black text-slate-900 dark:text-white uppercase tracking-tighter mb-4 z-10">
+                                        Professionals
+                                    </h2>
+                                    <p className="text-sm text-slate-500 dark:text-slate-400 mb-10 leading-relaxed font-medium z-10 flex-grow">
+                                        Advanced diagnostics, secure data management, and research-grade tools designed for practitioners who demand excellence and precision.
+                                    </p>
+                                    <button 
+                                        onClick={() => setView('AUTH')}
+                                        className="mt-auto relative w-full px-6 py-4 bg-slate-900 dark:bg-white text-white dark:text-slate-900 font-black text-[10px] md:text-xs rounded-xl shadow-[0_10px_20px_rgba(0,0,0,0.2)] dark:shadow-[0_10px_20px_rgba(255,255,255,0.1)] hover:shadow-2xl hover:scale-[1.02] transition-all duration-300 overflow-hidden group/btn z-10"
+                                    >
+                                        <span className="relative z-10 flex items-center justify-center gap-3 tracking-[0.2em] uppercase">
+                                            Initialise NEXUS <Lock size={16} className="group-hover/btn:translate-x-1 transition-transform" />
+                                        </span>
+                                        <div className="absolute inset-0 bg-gradient-to-r from-indigo-500 via-purple-500 to-indigo-500 opacity-0 group-hover/btn:opacity-10 transition-opacity duration-500 bg-[length:200%_auto] animate-gradient"></div>
+                                    </button>
+                                </div>
+
+                            </div>
+
+                            {/* Utility Buttons */}
+                            <div className="flex gap-4 w-full max-w-sm mx-auto opacity-80 hover:opacity-100 transition-opacity">
+                                <button 
+                                    onClick={handleDemoEnter} 
+                                    className="flex-1 flex items-center justify-center gap-2 px-4 py-3 bg-white dark:bg-slate-800 text-slate-500 dark:text-slate-400 font-bold text-[9px] rounded-lg border border-slate-200 dark:border-slate-700 shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all uppercase tracking-widest"
+                                >
+                                    {loading ? <ShieldAlert size={12} className="animate-spin" /> : <ShieldAlert size={12} />} 
+                                    Demo
+                                </button>
+                                <button 
+                                    onClick={() => setView('ORG_REGISTER')} 
+                                    className="flex-1 flex items-center justify-center gap-2 px-4 py-3 bg-white dark:bg-slate-800 text-slate-500 dark:text-slate-400 font-bold text-[9px] rounded-lg border border-slate-200 dark:border-slate-700 shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all uppercase tracking-widest"
+                                >
+                                    <Globe size={12} />
+                                    Scale
+                                </button>
                             </div>
                         </div>
 
-                        {/* 3. Footer (DOCKED INSIDE) */}
+                        {/* 3. Footer */}
                         <div className={`pt-10 opacity-50 transition-all duration-500 ${isSplitView ? 'text-left' : 'text-center'}`}>
                             <p className="text-[9px] font-black text-slate-400 dark:text-slate-500 tracking-[0.5em] uppercase pointer-events-none">
                                 © 2026 Muhammad Alif
@@ -307,7 +306,7 @@ const WelcomeScreen = (props) => {
                         </div>
                     </div>
 
-                    {/* RIGHT SECTION: DYNAMIC CONTENT AREA */}
+                    {/* RIGHT SECTION: DYNAMIC CONTENT AREA (Auth, Reset, Scale) */}
                     <div className={`
                         relative z-10 flex flex-col justify-center
                         bg-slate-50 dark:bg-slate-900 border-l border-slate-200 dark:border-slate-800 shadow-inner
@@ -330,8 +329,8 @@ const WelcomeScreen = (props) => {
                                         {isLoginMode ? 'Verify Identity' : 'Initialise Profile'}
                                     </h2>
                                     <div className="text-slate-500 dark:text-slate-400 text-[10px] font-bold uppercase tracking-[0.2em] flex items-center gap-2">
-                                        <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></div>
-                                        {isLoginMode ? 'Secure Gateway Active' : 'New User Registration Protocol'}
+                                        <div className="w-2 h-2 rounded-full bg-indigo-500 animate-pulse"></div>
+                                        {isLoginMode ? 'Secure Gateway Active' : 'New Practitioner Registration'}
                                     </div>
                                 </div>
 
@@ -353,7 +352,6 @@ const WelcomeScreen = (props) => {
                                     {!isLoginMode && (
                                         <div className="relative group">
                                             <div className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-indigo-500 transition-colors"><User size={18} /></div>
-                                            {/* 🛡️ FIX: Input shadows */}
                                             <input 
                                                 type="text" 
                                                 placeholder="Full Display Name" 
@@ -411,7 +409,7 @@ const WelcomeScreen = (props) => {
                                         onClick={() => { setIsLoginMode(!isLoginMode); setError(''); setMessage(''); }} 
                                         className="text-[10px] font-black text-slate-500 hover:text-indigo-600 dark:hover:text-indigo-400 uppercase tracking-widest transition-colors"
                                     >
-                                        {isLoginMode ? "New to NEXUS? Request Access" : "Have credentials? Sign in"}
+                                        {isLoginMode ? "New Practitioner? Request Access" : "Have credentials? Sign in"}
                                     </button>
                                 </div>
                             </div>
