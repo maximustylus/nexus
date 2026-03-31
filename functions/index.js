@@ -626,3 +626,77 @@ exports.processFeedPost = onCall({ secrets: ["GEMINI_API_KEY"] }, async (request
         throw new HttpsError('internal', 'AURA failed to process this post. Please try again.');
     }
 });
+
+// =============================================================================
+// FUNCTION 5: PUBLIC TRIAGE CHAT (NEXUS v152 - Individuals Portal)
+// =============================================================================
+
+exports.publicTriageChat = onCall({
+    cors: true, // Critical: Allows the unauthenticated public React app to call this
+    secrets: ['GEMINI_API_KEY'],
+    timeoutSeconds: 60,
+}, async (request) => {
+    
+    // 1. Extract data from the public React frontend
+    const { message, language = 'English', history = [] } = request.data;
+
+    if (!API_KEY) throw new HttpsError('failed-precondition', 'AI service is not configured.');
+    if (!message || typeof message !== 'string') throw new HttpsError('invalid-argument', 'Message is required.');
+
+    try {
+        // 2. Reuse your existing robust model resolver
+        const modelName = await resolveModel();
+        const url = `https://generativelanguage.googleapis.com/v1beta/${modelName}:generateContent?key=${API_KEY}`;
+
+        // 3. Inject the dynamic language into the System Rules
+        const systemInstruction = `
+        You are AURA, a clinical triage assistant for Northern Singapore community health. 
+        Rules: 
+        1. You must converse strictly in ${language}. 
+        2. You will ask the ACSM PAVS and SingHealth SDOH questions one at a time, conversationally. Do not overwhelm the user. 
+        3. Once all questions are answered, calculate the risk score: High Needs (Red), Moderate Needs (Amber), or Low Needs (Green). 
+        4. Do not provide medical diagnoses. 
+        5. On the final turn, you must output a hidden JSON block containing {"traffic_light": "Red/Amber/Green", "pavs_score": X} so the system can generate the final report.
+        `.trim();
+
+        // 4. Format the payload exactly how your other functions do it
+        const contents = [
+            ...history.slice(-MAX_HISTORY_LEN).map(({ role, parts }) => ({ role, parts })),
+            { role: 'user', parts: [{ text: message }] }
+        ];
+
+        // 5. Fire the request
+        const response = await fetch(url, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            signal: AbortSignal.timeout(30000),
+            body: JSON.stringify({
+                systemInstruction: { parts: [{ text: systemInstruction }] },
+                contents: contents,
+                generationConfig: {
+                    temperature: 0.3, // Slightly lower temp for strict clinical scoring
+                    maxOutputTokens: 2048,
+                },
+            }),
+        });
+
+        const data = await response.json();
+
+        if (!response.ok) {
+            logger.error('[PUBLIC_TRIAGE] API Error', data);
+            throw new Error(data.error?.message ?? 'API Error');
+        }
+
+        // 6. Reuse your existing text extractor to safely handle safety blocks
+        const rawText = extractText(data);
+
+        // 7. ZERO RETENTION: We return the text directly to the user. 
+        // Notice there are ZERO admin.firestore() calls here.
+        return { response: rawText, success: true };
+
+    } catch (error) {
+        if (error instanceof HttpsError) throw error;
+        logger.error('[PUBLIC_TRIAGE] Neural Failure', error.message);
+        throw new HttpsError('internal', `Triage Link Unstable: ${error.message}`);
+    }
+});
