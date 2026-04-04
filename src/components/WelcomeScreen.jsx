@@ -184,17 +184,22 @@ const WelcomeScreen = (props) => {
             <div className={`fixed top-0 left-0 w-[800px] h-[800px] bg-indigo-500/20 rounded-full blur-[120px] pointer-events-none animate-float-slow ${animate ? 'opacity-100' : 'opacity-0'}`}></div>
             <div className={`fixed bottom-0 right-0 w-[600px] h-[600px] bg-emerald-500/15 rounded-full blur-[100px] pointer-events-none animate-float-delayed ${animate ? 'opacity-100' : 'opacity-0'}`}></div>
 
-            {/* MINIMALIST THEME TOGGLE */}
-            <div className="absolute top-6 left-1/2 -translate-x-1/2 z-50 flex items-center justify-center bg-white/80 dark:bg-slate-900/80 backdrop-blur-md p-2 rounded-full border border-slate-200 dark:border-slate-700 shadow-sm">
-                <button onClick={toggleTheme} className="p-2 rounded-full bg-slate-100 dark:bg-slate-800 hover:scale-110 transition-transform">
-                    {isDark ? <Sun size={16} className="text-amber-400" /> : <Moon size={16} className="text-slate-500 dark:text-slate-400" />}
-                </button>
-            </div>
+            {/* HEADER & CONTROLS ROW */}
+            <div className={`relative z-20 w-full max-w-xl flex justify-between items-center mb-6 mt-8 md:mt-0 transition-all duration-1000 transform ${animate ? 'translate-y-0 opacity-100' : '-translate-y-4 opacity-0'}`}>
+                {/* LOGO & TEXT (Left Aligned, Bigger) */}
+                <div className="flex items-center gap-4">
+                    <img src="/nexus.png" alt="NEXUS" className="w-14 h-14 md:w-16 md:h-16 drop-shadow-md" />
+                    <h1 className="text-4xl md:text-5xl font-black text-slate-900 dark:text-white tracking-tighter">NEXUS</h1>
+                </div>
 
-            {/* LOGO & HEADER */}
-            <div className="relative z-20 mb-8 flex items-center gap-3 mt-12 md:mt-0">
-                <img src="/nexus.png" alt="NEXUS" className="w-10 h-10 drop-shadow-md" />
-                <h1 className="text-3xl font-bold text-slate-900 dark:text-white tracking-tight">NEXUS</h1>
+                {/* THEME TOGGLE (Right Aligned) */}
+                <button 
+                    onClick={toggleTheme} 
+                    className="p-3 rounded-full bg-white/80 dark:bg-slate-900/80 backdrop-blur-md border border-slate-200 dark:border-slate-700 shadow-sm hover:scale-110 active:scale-95 transition-all"
+                    aria-label="Toggle Theme"
+                >
+                    {isDark ? <Sun size={18} className="text-amber-400" /> : <Moon size={18} className="text-slate-500 dark:text-slate-400" />}
+                </button>
             </div>
 
             {/* THE COMMAND CARD */}
@@ -251,8 +256,9 @@ const WelcomeScreen = (props) => {
                             </div>
 
                             <button 
+                                type="button"
                                 onClick={() => navigate('/individuals/language')}
-                                className="w-full py-4 px-2 rounded-xl font-black text-[10px] md:text-xs text-white bg-gradient-to-r from-indigo-500 to-emerald-400 hover:opacity-90 transition-opacity flex items-center justify-center gap-2 shadow-[0_10px_20px_rgba(16,185,129,0.2)] whitespace-nowrap overflow-hidden text-ellipsis"
+                                className="relative z-10 w-full py-4 px-2 rounded-xl font-black text-[10px] md:text-xs text-white bg-gradient-to-r from-indigo-500 to-emerald-400 hover:opacity-90 hover:scale-[1.02] active:scale-95 cursor-pointer transition-all flex items-center justify-center gap-2 shadow-[0_10px_20px_rgba(16,185,129,0.2)] whitespace-nowrap overflow-hidden text-ellipsis"
                             >
                                 <span>START • MULA • 开始 • தொடங்கு</span> <ArrowRight size={16} className="shrink-0" />
                             </button>
