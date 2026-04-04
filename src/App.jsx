@@ -1,3 +1,4 @@
+import AuraChat from './components/AuraChat';
 import FeedsView from './components/FeedsView';
 import FeedbackWidget from './components/FeedbackWidget';
 import AuraGreeting from './components/AuraGreeting';
