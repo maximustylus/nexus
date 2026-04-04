@@ -87,7 +87,7 @@ const RESOURCES_DB = {
   Amber: [
     {
       id: 'hpb_start2move',
-      url: 'https://www.healthhub.sg/programmes/start2move',
+      url: 'https://www.healthhub.sg/programmes/letsmoveit/start2move',
       en: { title: 'HPB Start2Move Programme', desc: 'A free 6-session beginner programme by ActiveSG to help you start exercising safely.' },
       ms: { title: 'Program Start2Move HPB', desc: 'Program percuma 6 sesi untuk pemula oleh ActiveSG untuk membantu anda mula bersenam dengan selamat.' },
       zh: { title: 'HPB Start2Move 计划', desc: 'ActiveSG 提供的免费 6 节初学者计划，帮助您安全地开始锻炼。' },
@@ -95,7 +95,7 @@ const RESOURCES_DB = {
     },
     {
       id: 'm3_nee_soon_saham',
-      url: 'https://www.facebook.com/M3NeeSoon/',
+      url: 'https://www.facebook.com/profile.php?id=100068636709214',
       en: { title: 'M3@Nee Soon: Saham Kesihatan', desc: 'Join beginner-friendly resistance band exercises with community partners like Darul Makmur Mosque.' },
       ms: { title: 'M3@Nee Soon: Saham Kesihatan', desc: 'Sertai senaman jalur rintangan mesra pemula bersama rakan kongsi komuniti seperti Masjid Darul Makmur.' },
       zh: { title: 'M3@Nee Soon: Saham Kesihatan 健康投资', desc: '与 Darul Makmur 清真寺等社区合作伙伴一起参加适合初学者的阻力带锻炼。' },
@@ -103,7 +103,7 @@ const RESOURCES_DB = {
     },
     {
       id: 'm3_marsiling_gaya',
-      url: 'https://www.facebook.com/M3MarsilingYewTee/',
+      url: 'https://www.facebook.com/M3atMarsilingYewTee',
       en: { title: 'M3@Marsiling-Yew Tee: Gaya Sihat & Kelab 60', desc: 'Personalised 6-8 week health programmes and active ageing support for seniors launched by An-Nur Mosque.' },
       ms: { title: 'M3@Marsiling-Yew Tee: Gaya Sihat & Kelab 60', desc: 'Program kesihatan peribadi 6-8 minggu dan sokongan penuaan aktif warga emas yang dilancarkan oleh Masjid An-Nur.' },
       zh: { title: 'M3@Marsiling-Yew Tee: Gaya Sihat & Kelab 60', desc: '由 An-Nur 清真寺推出的个性化 6-8 周健康计划和长者活跃乐龄支持。' },
@@ -129,7 +129,7 @@ const RESOURCES_DB = {
     },
     {
       id: 'm3_woodlands_trekking',
-      url: 'https://www.facebook.com/M3Woodlands/',
+      url: 'https://www.facebook.com/M3atWoodlands',
       en: { title: 'M3@Woodlands: Jom Trekking & Jalan Kakis', desc: 'Monthly trekking and brisk walking activities for residents on the 1st and 3rd Sundays of the month.' },
       ms: { title: 'M3@Woodlands: Jom Trekking & Jalan Kakis', desc: 'Aktiviti trekking dan berjalan pantas bulanan untuk penduduk pada hari Ahad pertama dan ketiga setiap bulan.' },
       zh: { title: 'M3@Woodlands: 徒步与快走活动', desc: '在每月的第一个和第三个星期日为居民举办的每月徒步和快走活动。' },
@@ -137,7 +137,7 @@ const RESOURCES_DB = {
     },
     {
       id: 'm3_woodlands_gym_yoga',
-      url: 'https://www.facebook.com/M3Woodlands/',
+      url: 'https://www.facebook.com/M3atWoodlands',
       en: { title: 'M3@Woodlands: Gym Kakis & Ladies Yoga', desc: 'Weekly yoga classes for ladies and initiatives for youth and residents to learn gym etiquette together.' },
       ms: { title: 'M3@Woodlands: Gym Kakis & Yoga Wanita', desc: 'Kelas yoga mingguan untuk wanita dan inisiatif belia untuk belajar etika gim dan bersenam bersama.' },
       zh: { title: 'M3@Woodlands: 健身伙伴与女士瑜伽', desc: '每周为女士提供的瑜伽课程，以及让青年和居民一起学习健身房礼仪和锻炼的计划。' },
@@ -157,7 +157,6 @@ const RESOURCES_DB = {
 export default function ResultPage() {
   const location = useLocation();
   const navigate = useNavigate();
-  // Safe fallback if users hit this page directly without going through the form
   const { score, data, postalSector } = location.state || { score: 'Green', data: {}, postalSector: '00' };
   
   const [lang, setLang] = useState('en');
@@ -167,7 +166,6 @@ export default function ResultPage() {
   useEffect(() => {
     const storedLang = localStorage.getItem('nexus_language');
     if (storedLang && DICTIONARY[storedLang]) setLang(storedLang);
-    
     setTimeout(() => setAnimate(true), 100);
   }, []);
 
@@ -177,32 +175,43 @@ export default function ResultPage() {
   const handleDownloadPDF = async () => {
     if (!resultRef.current) return;
     
-    // Telemetry: Track download intent with the 2-digit postal sector
     recordTelemetry(postalSector, { action: 'download_pdf', score, language: lang });
 
     try {
-      const canvas = await html2canvas(resultRef.current, { scale: 2, useCORS: true });
+      // Force html2canvas to capture the FULL height of the card, ignoring scroll boundaries
+      const canvas = await html2canvas(resultRef.current, { 
+        scale: 2, 
+        useCORS: true,
+        scrollY: -window.scrollY,
+        windowHeight: resultRef.current.scrollHeight
+      });
+      
       const imgData = canvas.toDataURL('image/png');
       const pdf = new jsPDF('p', 'mm', 'a4');
       const pdfWidth = pdf.internal.pageSize.getWidth();
       const pdfHeight = (canvas.height * pdfWidth) / canvas.width;
       
       pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight);
-      pdf.save('NEXUS_AURA_Result.pdf');
+      pdf.save(`NEXUS_AURA_Result_${score}.pdf`);
     } catch (error) {
       console.error('Error generating PDF:', error);
     }
   };
 
   const handleShare = async () => {
-    // Telemetry: Track share intent
     recordTelemetry(postalSector, { action: 'share_result', score, language: lang });
+
+    // Generate explicit text capturing their traffic light score and recommended CTAs
+    const colorLabel = score === 'Red' ? t.red : score === 'Amber' ? t.amber : t.green;
+    const ctaNames = suggestedResources.map(r => r[lang]?.title || r.en.title).join(', ');
+    
+    const shareText = `My NEXUS AURA Assessment result is: ${colorLabel}.\n\nRecommended for me: ${ctaNames}.\n\nDiscover your community pathway at NEXUS.`;
 
     if (navigator.share) {
       try {
         await navigator.share({
           title: 'NEXUS AURA Analysis',
-          text: `My AURA risk assessment is: ${score}. Discover your pathway at NEXUS.`,
+          text: shareText,
           url: window.location.origin,
         });
       } catch (error) {
@@ -214,12 +223,10 @@ export default function ResultPage() {
   };
 
   const handleResourceClick = (resourceId, url) => {
-    // Telemetry: Track specific resource click-through
     recordTelemetry(postalSector, { action: `click_resource_${resourceId}`, score, language: lang });
     window.open(url, '_blank');
   };
 
-  // Theming maps based on score
   const themeMap = {
     Red: {
       gradient: 'from-rose-500 to-red-600',
@@ -247,9 +254,7 @@ export default function ResultPage() {
     <div className="min-h-screen w-full bg-slate-50 dark:bg-slate-950 transition-colors duration-700 flex flex-col items-center py-12 px-4 md:px-6 relative overflow-x-hidden font-sans">
       
       {/* VISUAL BACKGROUND ELEMENTS */}
-      <div className="absolute inset-0 z-0 opacity-[0.03] dark:opacity-[0.05] pointer-events-none" 
-           style={{ backgroundImage: 'radial-gradient(circle at 1px 1px, currentColor 1px, transparent 0)', backgroundSize: '40px 40px' }}>
-      </div>
+      <div className="absolute inset-0 z-0 opacity-[0.03] dark:opacity-[0.05] pointer-events-none" style={{ backgroundImage: 'radial-gradient(circle at 1px 1px, currentColor 1px, transparent 0)', backgroundSize: '40px 40px' }}></div>
       <div className={`fixed top-0 left-0 w-[800px] h-[800px] bg-indigo-500/10 rounded-full blur-[120px] pointer-events-none animate-float-slow ${animate ? 'opacity-100' : 'opacity-0'}`}></div>
       <div className={`fixed bottom-0 right-0 w-[600px] h-[600px] bg-emerald-500/10 rounded-full blur-[100px] pointer-events-none animate-float-delayed ${animate ? 'opacity-100' : 'opacity-0'}`}></div>
 
@@ -257,31 +262,22 @@ export default function ResultPage() {
         
         {/* TOP CONTROLS */}
         <div className="flex flex-col md:flex-row justify-between items-center mb-8 gap-4 px-2">
-          <button 
-            onClick={() => navigate('/')} 
-            className="flex items-center self-start gap-2 px-4 py-2 bg-white/60 dark:bg-slate-800/60 backdrop-blur-md text-slate-500 dark:text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400 font-black text-xs uppercase tracking-widest rounded-full border border-slate-200 dark:border-slate-700 shadow-sm transition-all group"
-          >
+          <button onClick={() => navigate('/')} className="flex items-center self-start gap-2 px-4 py-2 bg-white/60 dark:bg-slate-800/60 backdrop-blur-md text-slate-500 dark:text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400 font-black text-xs uppercase tracking-widest rounded-full border border-slate-200 dark:border-slate-700 shadow-sm transition-all group">
             <ArrowLeft size={16} className="group-hover:-translate-x-1 transition-transform"/> {t.back}
           </button>
           
           <div className="flex space-x-3 self-end md:self-auto">
-            <button 
-              onClick={handleShare} 
-              className="flex items-center gap-2 px-4 py-2 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-bold text-xs uppercase tracking-widest rounded-lg border border-slate-200 dark:border-slate-700 shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all"
-            >
+            <button onClick={handleShare} className="flex items-center gap-2 px-4 py-2 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-bold text-xs uppercase tracking-widest rounded-lg border border-slate-200 dark:border-slate-700 shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all">
               <Share2 size={14} /> {t.share}
             </button>
-            <button 
-              onClick={handleDownloadPDF} 
-              className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white font-bold text-xs uppercase tracking-widest rounded-lg shadow-sm hover:bg-indigo-700 hover:shadow-md hover:-translate-y-0.5 transition-all"
-            >
+            <button onClick={handleDownloadPDF} className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white font-bold text-xs uppercase tracking-widest rounded-lg shadow-sm hover:bg-indigo-700 hover:shadow-md hover:-translate-y-0.5 transition-all">
               <Download size={14} /> {t.download}
             </button>
           </div>
         </div>
 
-        {/* PRINTABLE CARD AREA */}
-        <div ref={resultRef} className="bg-white dark:bg-[#111827] rounded-[2rem] shadow-xl border border-slate-200 dark:border-slate-800 overflow-hidden">
+        {/* PRINTABLE CARD AREA (Ref captures everything inside this div) */}
+        <div ref={resultRef} className="bg-white dark:bg-[#111827] rounded-[2rem] shadow-xl border border-slate-200 dark:border-slate-800 overflow-hidden relative">
           
           {/* DYNAMIC HEADER */}
           <div className={`px-8 py-12 bg-gradient-to-br ${activeTheme.gradient} text-center relative overflow-hidden flex flex-col items-center`}>
@@ -297,7 +293,7 @@ export default function ResultPage() {
             </div>
           </div>
 
-          <div className="p-8 md:p-12 space-y-10">
+          <div className="p-8 md:p-12 space-y-10 bg-white dark:bg-[#111827]">
             
             {/* AURA ANALYSIS TEXT */}
             <div className={`p-6 rounded-2xl ${activeTheme.bgCard}`}>
@@ -316,7 +312,7 @@ export default function ResultPage() {
                   <button 
                     key={resource.id}
                     onClick={() => handleResourceClick(resource.id, resource.url)}
-                    className="flex items-center justify-between p-6 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-2xl hover:border-indigo-500/50 hover:shadow-lg transition-all text-left group"
+                    className="flex items-center justify-between p-6 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-2xl hover:border-indigo-500/50 hover:shadow-lg transition-all text-left group w-full"
                   >
                     <div>
                       <h3 className="text-lg font-black text-indigo-600 dark:text-indigo-400 mb-1">
@@ -337,20 +333,6 @@ export default function ResultPage() {
           </div>
         </div>
       </div>
-
-      {/* ANIMATIONS */}
-      <style>{`
-          @keyframes float-slow {
-              0%, 100% { transform: translate(0, 0); }
-              50% { transform: translate(20px, 40px); }
-          }
-          @keyframes float-delayed {
-              0%, 100% { transform: translate(0, 0); }
-              50% { transform: translate(-30px, -20px); }
-          }
-          .animate-float-slow { animation: float-slow 15s ease-in-out infinite; }
-          .animate-float-delayed { animation: float-delayed 18s ease-in-out infinite; }
-      `}</style>
     </div>
   );
 }
