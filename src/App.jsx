@@ -14,6 +14,9 @@ import { BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid,
 import { Sun, Moon, LogOut, LayoutDashboard, Calendar, Activity, 
   Filter, ShieldAlert, BookOpen, MessageCircle, Gift, History, Bell, User, Hexagon } from 'lucide-react'; 
 
+// --- ROUTING ---
+import { Routes, Route } from 'react-router-dom';
+
 // --- CONTEXT & DATA STRATEGY ---
 import { NexusProvider, useNexus } from './context/NexusContext';
 import { MOCK_STAFF, MOCK_PROJECTS, MOCK_STAFF_NAMES } from './data/mockData'; 
@@ -26,8 +29,14 @@ import SmartReportView from './components/SmartReportView';
 import RosterView from './components/RosterView';
 import WellbeingView from './components/WellbeingView';
 import AuraPulseBot from './components/AuraPulseBot';
-import WelcomeScreen from './components/WelcomeScreen';
 import ProfileView from './components/ProfileView'; 
+
+// --- PUBLIC PORTAL IMPORTS ---
+import WelcomeScreen from './components/WelcomeScreen';
+import LanguageGate from './components/LanguageGate';
+import PathwaySelection from './components/PathwaySelection';
+import ConventionalForm from './components/ConventionalForm';
+import ResultPage from './components/ResultPage';
 
 // --- UTILITIES ---
 import { STAFF_LIST, STAFF_IDS, MONTHS, checkAccess, TEAM_DIRECTORY } from './utils';
@@ -91,10 +100,8 @@ function NexusApp() {
   const [isAdminOpen, setIsAdminOpen] = useState(false);
   const [isAuraOpen, setIsAuraOpen] = useState(false);
   const [isGuideOpen, setIsGuideOpen] = useState(false);
-  
   const [notifications, setNotifications] = useState([]);
   const [isBellOpen, setIsBellOpen] = useState(false);
-
   const [isDark, setIsDark] = useState(() => {
     if (typeof window !== 'undefined') {
       const savedTheme = localStorage.getItem('nexus_theme');
@@ -149,7 +156,7 @@ function NexusApp() {
 
   // 🌟 BULLETPROOF, ANTI-ZOMBIE AUTH LISTENER
   useEffect(() => {
-    let unsubUserDoc = null; // Track listener so we can kill it
+    let unsubUserDoc = null;
 
     const unsubscribe = auth.onAuthStateChanged((u) => {
       if (u) {
@@ -182,11 +189,11 @@ function NexusApp() {
       } else {
         // 🌟 HARD FLUSH ON LOGOUT
         if (unsubUserDoc) {
-            unsubUserDoc(); // Kill the snapshot listener immediately
+            unsubUserDoc(); 
             unsubUserDoc = null;
         }
         setUser(null);
-        setNotifications([]); // Flush memory
+        setNotifications([]);
         setIsAdminOpen(false);
         setAuthLoading(false);
       }
@@ -420,10 +427,6 @@ function NexusApp() {
       </div>
   );
 
-  if (!user && !isDemo) {
-      return <WelcomeScreen />;
-  }
-
   // --- SUB-COMPONENT: DASHBOARD VIEW ---
   const renderDashboardView = () => (
     <>
@@ -607,172 +610,190 @@ function NexusApp() {
     </>
   );
 
+  // 🌟 THE UNIFIED APP ROUTER
   return (
-      <ResponsiveLayout 
-        activeTab={currentView} 
-        onNavigate={setCurrentView}
-        floatingWidgets={
-          <>
-            <AppGuide isOpen={isGuideOpen} onClose={() => setIsGuideOpen(false)} />
-            <FeedbackWidget user={user} />
-            <AuraGreeting openAuraChat={() => setIsAuraOpen(true)} dailyPatientLoad={145} />
-            <AuraPulseBot isOpen={isAuraOpen} onClose={() => setIsAuraOpen(false)} user={user} />
-          </>
-        }
-      >
-      
-      {isDemo && (
-        <div className="md:col-span-2 bg-emerald-50 border border-emerald-200 rounded-lg p-3 mb-4 flex items-center justify-between animate-in slide-in-from-top">
-          <div className="flex items-center gap-2">
-             <ShieldAlert className="text-emerald-600" size={20} />
-             <div>
-               <h3 className="text-xs font-black text-emerald-800 uppercase tracking-wider">Sandbox Mode Active</h3>
-               <p className="text-[10px] text-emerald-600 font-medium">Simulation Data.</p>
-             </div>
-          </div>
-          <div className="text-[10px] font-mono bg-emerald-100 text-emerald-700 px-2 py-1 rounded">v1.41-OFFICIAL</div>
-        </div>
-      )}
+    <Routes>
+      {/* 1. PUBLIC INDIVIDUAL PATHWAYS */}
+      <Route path="/individuals/language" element={<LanguageGate />} />
+      <Route path="/individuals/pathway" element={<PathwaySelection />} />
+      <Route path="/individuals/form" element={<ConventionalForm />} />
+      <Route path="/individuals/result" element={<ResultPage />} />
 
-      {/* HEADER BAR */}
-      <div className="md:col-span-2 flex items-center justify-between mb-4 md:mb-6 bg-white dark:bg-slate-800 p-3 md:p-4 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 w-full shrink-0 relative z-50">
-        
-        {/* 1. BRANDING & MODE TOGGLE (Left) */}
-        <div className="flex items-center gap-3 md:gap-5 shrink-0">
-            {/* Logos */}
-            <div className="cursor-pointer" onClick={() => setCurrentView('dashboard')}>
-                {isDemo ? (
-                    <img src="/nexus.png" alt="NEXUS" className="h-8 md:h-10 w-auto object-contain drop-shadow-sm" onError={(e) => { e.target.style.display = 'none'; }} />
-                ) : (
-                    <img src="/logo.png" alt="Department" className="h-8 md:h-10 w-auto object-contain drop-shadow-sm" onError={(e) => { e.target.style.display = 'none'; }} />
-                )}
-            </div>
-
-            {/* Live/Demo Toggle Switch */}
-            <div className="flex items-center gap-2 bg-slate-50 dark:bg-slate-900/50 p-1.5 md:p-2 rounded-full border border-slate-100 dark:border-slate-700">
-                <button 
-                    onClick={toggleDemo} 
-                    className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${isDemo ? 'bg-emerald-500' : 'bg-slate-400 dark:bg-slate-600'}`}
-                >
-                    <span className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white transition-transform ${isDemo ? 'translate-x-5' : 'translate-x-1'}`} />
-                </button>
-                <span className={`text-[10px] md:text-xs font-black uppercase tracking-widest pr-2 ${isDemo ? 'text-emerald-600' : 'text-slate-500 dark:text-slate-400'}`}>
-                    {isDemo ? 'Demo' : 'Live'}
-                </span>
-            </div>
-        </div>
-
-        {/* 2. CENTER NAVIGATION (Desktop only - Perfectly centered now) */}
-        <div className="hidden lg:flex flex-1 justify-center px-4">
-            <div className="flex bg-slate-100 dark:bg-slate-900/50 p-1 rounded-lg">
-                {['dashboard', 'feeds', 'pulse', 'roster', 'guide'].map(view => (
-                    <button 
-                        key={view}
-                        onClick={() => { setIsAdminOpen(false); setCurrentView(view); }}
-                        className={`px-3 xl:px-4 py-1.5 rounded-md text-xs xl:text-sm font-bold capitalize transition-all ${
-                            currentView === view && !isAdminOpen 
-                            ? 'bg-white dark:bg-slate-800 text-indigo-600 dark:text-indigo-400 shadow-sm' 
-                            : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'
-                        }`}
-                    >
-                        {view}
-                    </button>
-                ))}
-            </div>
-        </div>
-
-        {/* 3. ACTION CLUSTER (Right Side - Exact Order) */}
-        <div className="flex items-center justify-end gap-2 md:gap-3 shrink-0">
-          
-          {/* A. ADMIN BUTTON */}
-          <button 
-            onClick={() => { 
-                if (hasAdminAccess) {
-                    setIsAdminOpen(!isAdminOpen); 
-                    setCurrentView('dashboard'); 
-                } else {
-                    alert("Admins Only Access");
-                }
-            }} 
-            className={`p-1.5 md:p-2 rounded-full transition-all active:scale-95 sm:hover:bg-slate-100 dark:sm:hover:bg-slate-700 ${isAdminOpen ? 'bg-indigo-50 text-indigo-600 dark:bg-indigo-900/50 dark:text-indigo-400' : 'text-slate-400 hover:text-indigo-600'}`}
-            title="Admin Logs"
+      {/* 2. THE MAIN GATEWAY & PROFESSIONAL WORKSPACE */}
+      <Route path="/" element={
+        (!user && !isDemo) ? (
+          // IF NOT LOGGED IN -> SHOW GATEWAY
+          <WelcomeScreen />
+        ) : (
+          // IF LOGGED IN / DEMO -> SHOW DASHBOARD
+          <ResponsiveLayout 
+            activeTab={currentView} 
+            onNavigate={setCurrentView}
+            floatingWidgets={
+              <>
+                <AppGuide isOpen={isGuideOpen} onClose={() => setIsGuideOpen(false)} />
+                <FeedbackWidget user={user} />
+                <AuraGreeting openAuraChat={() => setIsAuraOpen(true)} dailyPatientLoad={145} />
+                <AuraPulseBot isOpen={isAuraOpen} onClose={() => setIsAuraOpen(false)} user={user} />
+              </>
+            }
           >
-            <ShieldAlert size={18} />
-          </button>
+            
+          {isDemo && (
+            <div className="md:col-span-2 bg-emerald-50 border border-emerald-200 rounded-lg p-3 mb-4 flex items-center justify-between animate-in slide-in-from-top">
+              <div className="flex items-center gap-2">
+                 <ShieldAlert className="text-emerald-600" size={20} />
+                 <div>
+                   <h3 className="text-xs font-black text-emerald-800 uppercase tracking-wider">Sandbox Mode Active</h3>
+                   <p className="text-[10px] text-emerald-600 font-medium">Simulation Data.</p>
+                 </div>
+              </div>
+              <div className="text-[10px] font-mono bg-emerald-100 text-emerald-700 px-2 py-1 rounded">v1.41-OFFICIAL</div>
+            </div>
+          )}
 
-          {/* B. THEME TOGGLE (Sun/Moon) */}
-          <button onClick={toggleTheme} className="p-1.5 md:p-2 rounded-full transition-all text-slate-400 hover:text-slate-600 dark:text-slate-400 dark:hover:text-slate-200 active:scale-95 sm:hover:bg-slate-100 dark:sm:hover:bg-slate-700">
-            {isDark ? <Sun size={18} /> : <Moon size={18} />}
-          </button>
+          {/* HEADER BAR */}
+          <div className="md:col-span-2 flex items-center justify-between mb-4 md:mb-6 bg-white dark:bg-slate-800 p-3 md:p-4 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 w-full shrink-0 relative z-50">
+            
+            {/* 1. BRANDING & MODE TOGGLE (Left) */}
+            <div className="flex items-center gap-3 md:gap-5 shrink-0">
+                {/* Logos */}
+                <div className="cursor-pointer" onClick={() => setCurrentView('dashboard')}>
+                    {isDemo ? (
+                        <img src="/nexus.png" alt="NEXUS" className="h-8 md:h-10 w-auto object-contain drop-shadow-sm" onError={(e) => { e.target.style.display = 'none'; }} />
+                    ) : (
+                        <img src="/logo.png" alt="Department" className="h-8 md:h-10 w-auto object-contain drop-shadow-sm" onError={(e) => { e.target.style.display = 'none'; }} />
+                    )}
+                </div>
 
-          {/* C. NOTIFICATION BELL */}
-          <div className="relative">
+                {/* Live/Demo Toggle Switch */}
+                <div className="flex items-center gap-2 bg-slate-50 dark:bg-slate-900/50 p-1.5 md:p-2 rounded-full border border-slate-100 dark:border-slate-700">
+                    <button 
+                        onClick={toggleDemo} 
+                        className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${isDemo ? 'bg-emerald-500' : 'bg-slate-400 dark:bg-slate-600'}`}
+                    >
+                        <span className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white transition-transform ${isDemo ? 'translate-x-5' : 'translate-x-1'}`} />
+                    </button>
+                    <span className={`text-[10px] md:text-xs font-black uppercase tracking-widest pr-2 ${isDemo ? 'text-emerald-600' : 'text-slate-500 dark:text-slate-400'}`}>
+                        {isDemo ? 'Demo' : 'Live'}
+                    </span>
+                </div>
+            </div>
+
+            {/* 2. CENTER NAVIGATION (Desktop only - Perfectly centered now) */}
+            <div className="hidden lg:flex flex-1 justify-center px-4">
+                <div className="flex bg-slate-100 dark:bg-slate-900/50 p-1 rounded-lg">
+                    {['dashboard', 'feeds', 'pulse', 'roster', 'guide'].map(view => (
+                        <button 
+                            key={view}
+                            onClick={() => { setIsAdminOpen(false); setCurrentView(view); }}
+                            className={`px-3 xl:px-4 py-1.5 rounded-md text-xs xl:text-sm font-bold capitalize transition-all ${
+                                currentView === view && !isAdminOpen 
+                                ? 'bg-white dark:bg-slate-800 text-indigo-600 dark:text-indigo-400 shadow-sm' 
+                                : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'
+                            }`}
+                        >
+                            {view}
+                        </button>
+                    ))}
+                </div>
+            </div>
+
+            {/* 3. ACTION CLUSTER (Right Side - Exact Order) */}
+            <div className="flex items-center justify-end gap-2 md:gap-3 shrink-0">
+              
+              {/* A. ADMIN BUTTON */}
               <button 
-                  onClick={toggleBell}
-                  className={`p-1.5 md:p-2 rounded-full transition-all active:scale-95 ${isBellOpen ? 'bg-slate-100 dark:bg-slate-700 text-indigo-600 dark:text-indigo-400' : 'text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800'}`}
+                onClick={() => { 
+                    if (hasAdminAccess) {
+                        setIsAdminOpen(!isAdminOpen); 
+                        setCurrentView('dashboard'); 
+                    } else {
+                        alert("Admins Only Access");
+                    }
+                }} 
+                className={`p-1.5 md:p-2 rounded-full transition-all active:scale-95 sm:hover:bg-slate-100 dark:sm:hover:bg-slate-700 ${isAdminOpen ? 'bg-indigo-50 text-indigo-600 dark:bg-indigo-900/50 dark:text-indigo-400' : 'text-slate-400 hover:text-indigo-600'}`}
+                title="Admin Logs"
               >
-                  <Bell size={18} />
-                  {unreadCount > 0 && !isDemo && (
-                      <span className="absolute top-1 right-1 w-2.5 h-2.5 bg-red-500 rounded-full border-2 border-white dark:border-slate-800 animate-pulse"></span>
-                  )}
+                <ShieldAlert size={18} />
               </button>
 
-              {/* BELL DROPDOWN */}
-              {isBellOpen && !isDemo && (
-                  <div className="absolute right-0 mt-3 w-72 md:w-80 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl shadow-2xl z-50 animate-in zoom-in-95 duration-200">
-                      <div className="px-4 py-3 border-b border-slate-100 dark:border-slate-700 flex justify-between items-center bg-slate-50 dark:bg-slate-900/50 rounded-t-2xl">
-                          <h3 className="text-xs font-black text-slate-700 dark:text-slate-200 uppercase tracking-widest">Notifications</h3>
+              {/* B. THEME TOGGLE (Sun/Moon) */}
+              <button onClick={toggleTheme} className="p-1.5 md:p-2 rounded-full transition-all text-slate-400 hover:text-slate-600 dark:text-slate-400 dark:hover:text-slate-200 active:scale-95 sm:hover:bg-slate-100 dark:sm:hover:bg-slate-700">
+                {isDark ? <Sun size={18} /> : <Moon size={18} />}
+              </button>
+
+              {/* C. NOTIFICATION BELL */}
+              <div className="relative">
+                  <button 
+                      onClick={toggleBell}
+                      className={`p-1.5 md:p-2 rounded-full transition-all active:scale-95 ${isBellOpen ? 'bg-slate-100 dark:bg-slate-700 text-indigo-600 dark:text-indigo-400' : 'text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800'}`}
+                  >
+                      <Bell size={18} />
+                      {unreadCount > 0 && !isDemo && (
+                          <span className="absolute top-1 right-1 w-2.5 h-2.5 bg-red-500 rounded-full border-2 border-white dark:border-slate-800 animate-pulse"></span>
+                      )}
+                  </button>
+
+                  {/* BELL DROPDOWN */}
+                  {isBellOpen && !isDemo && (
+                      <div className="absolute right-0 mt-3 w-72 md:w-80 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl shadow-2xl z-50 animate-in zoom-in-95 duration-200">
+                          <div className="px-4 py-3 border-b border-slate-100 dark:border-slate-700 flex justify-between items-center bg-slate-50 dark:bg-slate-900/50 rounded-t-2xl">
+                              <h3 className="text-xs font-black text-slate-700 dark:text-slate-200 uppercase tracking-widest">Notifications</h3>
+                          </div>
+                          <div className="max-h-80 overflow-y-auto scrollbar-hide rounded-b-2xl">
+                              {notifications.length === 0 ? (
+                                  <div className="p-8 text-center text-xs text-slate-400 font-medium">No new activity</div>
+                              ) : (
+                                  notifications.map((n) => (
+                                      <div key={n.id} onClick={() => { setIsBellOpen(false); setCurrentView('feeds'); }} className={`p-4 border-b border-slate-50 dark:border-slate-700/50 hover:bg-slate-50 dark:hover:bg-slate-700/30 cursor-pointer transition-colors ${!n.read ? 'bg-indigo-50/30 dark:bg-indigo-900/10' : ''}`}>
+                                          <p className="text-sm text-slate-700 dark:text-slate-200">
+                                              <span className="font-bold">{n.sender}</span> {n.type === 'LIKE' ? 'liked your post' : 'commented on your post'}
+                                          </p>
+                                      </div>
+                                  ))
+                              )}
+                          </div>
                       </div>
-                      <div className="max-h-80 overflow-y-auto scrollbar-hide rounded-b-2xl">
-                          {notifications.length === 0 ? (
-                              <div className="p-8 text-center text-xs text-slate-400 font-medium">No new activity</div>
-                          ) : (
-                              notifications.map((n) => (
-                                  <div key={n.id} onClick={() => { setIsBellOpen(false); setCurrentView('feeds'); }} className={`p-4 border-b border-slate-50 dark:border-slate-700/50 hover:bg-slate-50 dark:hover:bg-slate-700/30 cursor-pointer transition-colors ${!n.read ? 'bg-indigo-50/30 dark:bg-indigo-900/10' : ''}`}>
-                                      <p className="text-sm text-slate-700 dark:text-slate-200">
-                                          <span className="font-bold">{n.sender}</span> {n.type === 'LIKE' ? 'liked your post' : 'commented on your post'}
-                                      </p>
-                                  </div>
-                              ))
-                          )}
-                      </div>
-                  </div>
-              )}
+                  )}
+              </div>
+
+              {/* D. PROFILE AVATAR */}
+              <button 
+                onClick={() => { setIsAdminOpen(false); setCurrentView('profile'); }}
+                className={`relative w-8 h-8 md:w-10 md:h-10 ml-1 rounded-full overflow-hidden border-2 transition-all active:scale-95 flex items-center justify-center bg-indigo-100 text-indigo-600 font-black shrink-0 ${currentView === 'profile' && !isAdminOpen ? 'border-indigo-500 ring-4 ring-indigo-500/10 shadow-md' : 'border-white dark:border-slate-700 hover:border-slate-300 shadow-sm'}`}
+              >
+                {user?.photoURL ? (
+                    <img src={user.photoURL} alt="Profile" className="w-full h-full object-cover" />
+                ) : (
+                    <span className="text-sm md:text-base uppercase">{user?.name ? user.name.charAt(0) : 'U'}</span>
+                )}
+              </button>
+
+            </div>
           </div>
-
-          {/* D. PROFILE AVATAR */}
-          <button 
-            onClick={() => { setIsAdminOpen(false); setCurrentView('profile'); }}
-            className={`relative w-8 h-8 md:w-10 md:h-10 ml-1 rounded-full overflow-hidden border-2 transition-all active:scale-95 flex items-center justify-center bg-indigo-100 text-indigo-600 font-black shrink-0 ${currentView === 'profile' && !isAdminOpen ? 'border-indigo-500 ring-4 ring-indigo-500/10 shadow-md' : 'border-white dark:border-slate-700 hover:border-slate-300 shadow-sm'}`}
-          >
-            {user?.photoURL ? (
-                <img src={user.photoURL} alt="Profile" className="w-full h-full object-cover" />
+          
+            {/* MAIN CONTENT AREA */}
+            {(isAdminOpen && hasAdminAccess) ? (
+                <div className="md:col-span-2">
+                <AdminPanel teamData={activeTeamData} staffLoads={activeStaffLoads} user={user} />
+                </div>
             ) : (
-                <span className="text-sm md:text-base uppercase">{user?.name ? user.name.charAt(0) : 'U'}</span>
+                <div className="md:col-span-2 w-full animate-in fade-in duration-500">
+                {currentView === 'dashboard' && renderDashboardView()}
+                {currentView === 'feeds' && <FeedsView user={user} />}
+                {currentView === 'roster' && <RosterView user={user} />}
+                {currentView === 'pulse' && <WellbeingView user={user} />}
+                {/* 🌟 PASSING ONLOGOUT TO PROFILEVIEW */}
+                {currentView === 'profile' && <ProfileView user={user} onLogout={handleLogout} />} 
+                <div className="h-32 md:h-24 w-full shrink-0" />
+                </div>
             )}
-          </button>
-
-        </div>
-      </div>
-      
-        {/* MAIN CONTENT AREA */}
-        {(isAdminOpen && hasAdminAccess) ? (
-            <div className="md:col-span-2">
-            <AdminPanel teamData={activeTeamData} staffLoads={activeStaffLoads} user={user} />
-            </div>
-        ) : (
-            <div className="md:col-span-2 w-full animate-in fade-in duration-500">
-            {currentView === 'dashboard' && renderDashboardView()}
-            {currentView === 'feeds' && <FeedsView user={user} />}
-            {currentView === 'roster' && <RosterView user={user} />}
-            {currentView === 'pulse' && <WellbeingView user={user} />}
-            {/* 🌟 PASSING ONLOGOUT TO PROFILEVIEW */}
-            {currentView === 'profile' && <ProfileView user={user} onLogout={handleLogout} />} 
-            <div className="h-32 md:h-24 w-full shrink-0" />
-            </div>
-        )}
-      
-    </ResponsiveLayout>
+          
+          </ResponsiveLayout>
+        )
+      } />
+    </Routes>
   );
 }
 
