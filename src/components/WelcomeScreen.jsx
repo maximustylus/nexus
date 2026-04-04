@@ -223,21 +223,21 @@ const WelcomeScreen = (props) => {
                 {/* DYNAMIC CONTENT AREA */}
                 <div className="p-8 md:p-12 min-h-[400px] flex flex-col justify-center">
                     
-                   {/* TAB 1: INDIVIDUALS (PUBLIC PORTAL) */}
+                    {/* TAB 1: INDIVIDUALS (PUBLIC PORTAL) */}
                     {activeTab === 'INDIVIDUALS' && (
-                        <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 text-center md:text-left">
+                        <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 text-center md:text-left relative">
                             <div className="mb-6 inline-flex p-4 rounded-2xl bg-emerald-50 dark:bg-emerald-500/10 text-emerald-600 dark:text-emerald-400">
                                 <User size={32} />
                             </div>
                             <h2 className="text-3xl font-black text-slate-900 dark:text-white mb-4">Individuals</h2>
                             
-                            {/* THE BREATHING CAROUSEL (RESPONSIVE GRID FIX) */}
-                            <div className="grid mb-10 pointer-events-none relative"> 
+                            {/* THE BREATHING CAROUSEL */}
+                            <div className="grid mb-10 relative z-0 pointer-events-none"> 
                                 {welcomeTexts.map((text, index) => (
                                     <p 
                                         key={index}
                                         className={`col-start-1 row-start-1 w-full text-slate-600 dark:text-slate-400 leading-relaxed text-sm font-medium transition-all duration-1000 ease-in-out ${
-                                            langIndex === index ? 'opacity-100 translate-y-0 z-10 relative' : 'opacity-0 translate-y-2 z-0 invisible'
+                                            langIndex === index ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-2 invisible'
                                         }`}
                                     >
                                         {text}
@@ -245,13 +245,21 @@ const WelcomeScreen = (props) => {
                                 ))}
                             </div>
 
-                            <button 
-                                type="button"
-                                onClick={() => navigate('/individuals/language')}
-                                className="relative z-50 pointer-events-auto w-full py-4 px-2 rounded-xl font-black text-[10px] md:text-xs text-white bg-gradient-to-r from-indigo-500 to-emerald-400 hover:opacity-90 hover:scale-[1.02] active:scale-95 cursor-pointer transition-all flex items-center justify-center gap-2 shadow-[0_10px_20px_rgba(16,185,129,0.2)] whitespace-nowrap overflow-hidden text-ellipsis"
-                            >
-                                <span>START • MULA • 开始 • தொடங்கு</span> <ArrowRight size={16} className="shrink-0" />
-                            </button>
+                            {/* THE BULLETPROOF START BUTTON */}
+                            <div className="relative z-[9999]">
+                                <button 
+                                    type="button"
+                                    onClick={(e) => {
+                                        e.preventDefault();
+                                        e.stopPropagation();
+                                        console.log("Routing to Language Gate...");
+                                        navigate('/individuals/language');
+                                    }}
+                                    className="w-full py-4 px-2 rounded-xl font-black text-[10px] md:text-xs text-white bg-gradient-to-r from-indigo-500 to-emerald-400 hover:opacity-90 hover:scale-[1.02] active:scale-95 cursor-pointer transition-all flex items-center justify-center gap-2 shadow-[0_10px_20px_rgba(16,185,129,0.2)] whitespace-nowrap overflow-hidden text-ellipsis"
+                                >
+                                    <span>START • MULA • 开始 • தொடங்கு</span> <ArrowRight size={16} className="shrink-0" />
+                                </button>
+                            </div>
                         </div>
                     )}
 
