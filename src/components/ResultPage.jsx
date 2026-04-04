@@ -3,7 +3,7 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { Download, Share2, ArrowLeft, ExternalLink, ShieldAlert, Activity, CheckCircle2 } from 'lucide-react';
 import { jsPDF } from 'jspdf';
 import html2canvas from 'html2canvas';
-import { recordTelemetry } from '../../utils/telemetry';
+import { recordTelemetry } from '../utils/telemetry';
 
 const DICTIONARY = {
   en: {
