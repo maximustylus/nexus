@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { calculateRiskScore } from '../../utils/scoring';
-import { recordTelemetry } from '../../utils/telemetry';
+import { calculateRiskScore } from '../utils/scoring';
+import { recordTelemetry } from '../utils/telemetry';
 import { ChevronLeft, FileText, Activity, HeartPulse, Users, MapPin } from 'lucide-react';
 
 const DICTIONARY = {
