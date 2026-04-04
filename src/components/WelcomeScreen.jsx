@@ -25,15 +25,12 @@ const WelcomeScreen = (props) => {
     
     const { toggleDemo } = useNexus(); 
 
-    // THE CORE NAVIGATION STATE
     const [activeTab, setActiveTab] = useState('INDIVIDUALS');
     const [authView, setAuthView] = useState('LOGIN');
     
-    // VISUAL STATES
     const [isDark, setIsDark] = useState(false);
     const [animate, setAnimate] = useState(false);
 
-    // AUTH DATA STATES
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
     const [name, setName] = useState('');
@@ -41,7 +38,6 @@ const WelcomeScreen = (props) => {
     const [message, setMessage] = useState(''); 
     const [loading, setLoading] = useState(false);
 
-    // MULTILINGUAL CAROUSEL STATE
     const [langIndex, setLangIndex] = useState(0);
 
     const welcomeTexts = [
@@ -55,12 +51,11 @@ const WelcomeScreen = (props) => {
         if (activeTab === 'INDIVIDUALS') {
             const interval = setInterval(() => {
                 setLangIndex((prev) => (prev + 1) % welcomeTexts.length);
-            }, 4500); // Breathes every 4.5 seconds
+            }, 4500); 
             return () => clearInterval(interval);
         }
     }, [activeTab]);
     
-    // THEME INITIALISATION
     useEffect(() => {
         const storedTheme = localStorage.getItem('nexus-theme');
         const systemPrefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
@@ -93,7 +88,6 @@ const WelcomeScreen = (props) => {
         setTimeout(() => { toggleDemo(); }, 1200);
     };
 
-    // AUTHENTICATION LOGIC
     const handleAuth = async (e) => {
         e.preventDefault();
         setError('');
@@ -101,12 +95,10 @@ const WelcomeScreen = (props) => {
         setLoading(true);
         
         try {
-            // STRICT DOMAIN CHECK
             if (!email.toLowerCase().endsWith('@kkh.com.sg')) {
                 throw new Error("ACCESS DENIED: Only @kkh.com.sg emails are authorised for NEXUS.");
             }
 
-            // WHITELIST CHECK
             const authorisedUser = checkAccess(email);
             if (!authorisedUser) {
                 throw new Error("ACCESS DENIED: Email is not registered on the official team roster.");
@@ -115,7 +107,6 @@ const WelcomeScreen = (props) => {
             if (authView === 'LOGIN') {
                 const userCredential = await signInWithEmailAndPassword(auth, email, password);
                 
-                // VERIFICATION GUARD
                 if (!userCredential.user.emailVerified) {
                     await sendEmailVerification(userCredential.user);
                     await signOut(auth);
@@ -125,7 +116,6 @@ const WelcomeScreen = (props) => {
                 if (onAuthSuccess) onAuthSuccess(authorisedUser);
 
             } else {
-                // REGISTRATION
                 if (!name) throw new Error("Please enter your full name.");
                 if (password.length < 6) throw new Error("Password must be 6+ characters.");
                 
@@ -186,13 +176,13 @@ const WelcomeScreen = (props) => {
 
             {/* HEADER & CONTROLS ROW */}
             <div className={`relative z-20 w-full max-w-xl flex justify-between items-center mb-6 mt-8 md:mt-0 transition-all duration-1000 transform ${animate ? 'translate-y-0 opacity-100' : '-translate-y-4 opacity-0'}`}>
-                {/* LOGO & TEXT (Left Aligned, Bigger) */}
-                <div className="flex items-center gap-4">
-                    <img src="/nexus.png" alt="NEXUS" className="w-14 h-14 md:w-16 md:h-16 drop-shadow-md" />
-                    <h1 className="text-4xl md:text-5xl font-black text-slate-900 dark:text-white tracking-tighter">NEXUS</h1>
+                {/* LOGO & TEXT */}
+                <div className="flex items-center gap-4 group cursor-default">
+                    <img src="/nexus.png" alt="NEXUS" className="w-16 h-16 md:w-20 md:h-20 drop-shadow-md transition-transform duration-500 group-hover:rotate-6 group-hover:scale-110" />
+                    <h1 className="text-5xl md:text-6xl font-black text-slate-900 dark:text-white tracking-tighter">NEXUS</h1>
                 </div>
 
-                {/* THEME TOGGLE (Right Aligned) */}
+                {/* THEME TOGGLE */}
                 <button 
                     onClick={toggleTheme} 
                     className="p-3 rounded-full bg-white/80 dark:bg-slate-900/80 backdrop-blur-md border border-slate-200 dark:border-slate-700 shadow-sm hover:scale-110 active:scale-95 transition-all"
@@ -241,13 +231,13 @@ const WelcomeScreen = (props) => {
                             </div>
                             <h2 className="text-3xl font-black text-slate-900 dark:text-white mb-4">Individuals</h2>
                             
-                            {/* THE BREATHING CAROUSEL */}
-                            <div className="h-[80px] md:h-[60px] mb-10 relative"> 
+                            {/* THE BREATHING CAROUSEL (RESPONSIVE GRID FIX) */}
+                            <div className="grid mb-10 pointer-events-none relative"> 
                                 {welcomeTexts.map((text, index) => (
                                     <p 
                                         key={index}
-                                        className={`absolute top-0 left-0 w-full text-slate-600 dark:text-slate-400 leading-relaxed text-sm font-medium transition-all duration-1000 ease-in-out ${
-                                            langIndex === index ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-2 pointer-events-none'
+                                        className={`col-start-1 row-start-1 w-full text-slate-600 dark:text-slate-400 leading-relaxed text-sm font-medium transition-all duration-1000 ease-in-out ${
+                                            langIndex === index ? 'opacity-100 translate-y-0 z-10 relative' : 'opacity-0 translate-y-2 z-0 invisible'
                                         }`}
                                     >
                                         {text}
@@ -258,7 +248,7 @@ const WelcomeScreen = (props) => {
                             <button 
                                 type="button"
                                 onClick={() => navigate('/individuals/language')}
-                                className="relative z-10 w-full py-4 px-2 rounded-xl font-black text-[10px] md:text-xs text-white bg-gradient-to-r from-indigo-500 to-emerald-400 hover:opacity-90 hover:scale-[1.02] active:scale-95 cursor-pointer transition-all flex items-center justify-center gap-2 shadow-[0_10px_20px_rgba(16,185,129,0.2)] whitespace-nowrap overflow-hidden text-ellipsis"
+                                className="relative z-50 pointer-events-auto w-full py-4 px-2 rounded-xl font-black text-[10px] md:text-xs text-white bg-gradient-to-r from-indigo-500 to-emerald-400 hover:opacity-90 hover:scale-[1.02] active:scale-95 cursor-pointer transition-all flex items-center justify-center gap-2 shadow-[0_10px_20px_rgba(16,185,129,0.2)] whitespace-nowrap overflow-hidden text-ellipsis"
                             >
                                 <span>START • MULA • 开始 • தொடங்கு</span> <ArrowRight size={16} className="shrink-0" />
                             </button>
