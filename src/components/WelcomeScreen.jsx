@@ -14,7 +14,7 @@ import {
     ChevronLeft, AlertCircle, ShieldAlert, 
     User, Lock, Mail, Zap, KeyRound, CheckCircle2,
     UserCircle, Stethoscope, PlaySquare, Globe,
-    Sparkles, Building2 // Restored these imports for the Scaling UI
+    Sparkles, Building2 
 } from 'lucide-react';
 import { useNexus } from '../context/NexusContext';
 import { checkAccess } from '../utils'; 
@@ -27,7 +27,7 @@ const WelcomeScreen = (props) => {
 
     // THE CORE NAVIGATION STATE
     const [activeTab, setActiveTab] = useState('INDIVIDUALS');
-    const [authView, setAuthView] = useState('LOGIN'); // 'LOGIN' | 'REGISTER' | 'RESET' | 'ORG_REGISTER'
+    const [authView, setAuthView] = useState('LOGIN');
     
     // VISUAL STATES
     const [isDark, setIsDark] = useState(false);
@@ -41,6 +41,25 @@ const WelcomeScreen = (props) => {
     const [message, setMessage] = useState(''); 
     const [loading, setLoading] = useState(false);
 
+    // MULTILINGUAL CAROUSEL STATE
+    const [langIndex, setLangIndex] = useState(0);
+
+    const welcomeTexts = [
+        "Explore community resources tailored to your health, lifestyle and wellness journey. AURA provides recommendations and can direct you to leading health and community programmes and services.",
+        "Terokai sumber komuniti yang disesuaikan untuk perjalanan kesihatan, gaya hidup dan kesejahteraan anda. AURA memberikan cadangan dan boleh menghalakan anda ke program dan perkhidmatan kesihatan dan komuniti yang terkemuka.",
+        "探索专为您的健康、生活方式和保健之旅量身定制的社区资源。AURA 提供建议，并能引导您参与领先的健康与社区计划和服务。",
+        "உங்கள் உடல்நலம், வாழ்க்கை முறை மற்றும் ஆரோக்கியப் பயணத்திற்கு ஏற்ப சமூக வளங்களை ஆராயுங்கள். AURA பரிந்துரைகளை வழங்கி, முன்னணி சுகாதார மற்றும் சமூக சேவைகளுக்கு உங்களை வழிநடத்தும்."
+    ];
+
+    useEffect(() => {
+        if (activeTab === 'INDIVIDUALS') {
+            const interval = setInterval(() => {
+                setLangIndex((prev) => (prev + 1) % welcomeTexts.length);
+            }, 4500); // Breathes every 4.5 seconds
+            return () => clearInterval(interval);
+        }
+    }, [activeTab]);
+    
     // THEME INITIALISATION
     useEffect(() => {
         const storedTheme = localStorage.getItem('nexus-theme');
@@ -115,7 +134,7 @@ const WelcomeScreen = (props) => {
                 await sendEmailVerification(userCredential.user);
                 await signOut(auth);
                 
-                setMessage("PROFILE CREATED. PLEASE CHECK YOUR KKH INBOX TO VERIFY YOUR EMAIL.");
+                setMessage("PROFILE CREATED. PLEASE CHECK YOUR CORPORATE INBOX TO VERIFY YOUR EMAIL.");
                 setAuthView('LOGIN'); 
                 setPassword(''); 
             }
@@ -209,21 +228,33 @@ const WelcomeScreen = (props) => {
                 {/* DYNAMIC CONTENT AREA */}
                 <div className="p-8 md:p-12 min-h-[400px] flex flex-col justify-center">
                     
-                    {/* TAB 1: INDIVIDUALS (PUBLIC PORTAL) */}
+                   {/* TAB 1: INDIVIDUALS (PUBLIC PORTAL) */}
                     {activeTab === 'INDIVIDUALS' && (
                         <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 text-center md:text-left">
                             <div className="mb-6 inline-flex p-4 rounded-2xl bg-emerald-50 dark:bg-emerald-500/10 text-emerald-600 dark:text-emerald-400">
                                 <User size={32} />
                             </div>
                             <h2 className="text-3xl font-black text-slate-900 dark:text-white mb-4">Individuals</h2>
-                            <p className="text-slate-600 dark:text-slate-400 mb-10 leading-relaxed text-sm font-medium">
-                                Explore community resources tailored to your health, lifestyle and wellness journey. AURA provides recommendations and can direct you to leading health and community programmes and services.
-                            </p>
+                            
+                            {/* THE BREATHING CAROUSEL */}
+                            <div className="h-[80px] md:h-[60px] mb-10 relative"> 
+                                {welcomeTexts.map((text, index) => (
+                                    <p 
+                                        key={index}
+                                        className={`absolute top-0 left-0 w-full text-slate-600 dark:text-slate-400 leading-relaxed text-sm font-medium transition-all duration-1000 ease-in-out ${
+                                            langIndex === index ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-2 pointer-events-none'
+                                        }`}
+                                    >
+                                        {text}
+                                    </p>
+                                ))}
+                            </div>
+
                             <button 
                                 onClick={() => navigate('/individuals/language')}
-                                className="w-full py-4 rounded-xl font-black text-xs md:text-sm text-white bg-gradient-to-r from-indigo-500 to-emerald-400 hover:opacity-90 transition-opacity flex items-center justify-center gap-3 shadow-[0_10px_20px_rgba(16,185,129,0.2)]"
+                                className="w-full py-4 px-2 rounded-xl font-black text-[10px] md:text-xs text-white bg-gradient-to-r from-indigo-500 to-emerald-400 hover:opacity-90 transition-opacity flex items-center justify-center gap-2 shadow-[0_10px_20px_rgba(16,185,129,0.2)] whitespace-nowrap overflow-hidden text-ellipsis"
                             >
-                                START YOUR JOURNEY <ArrowRight size={18} />
+                                <span>START • MULA • 开始 • தொடங்கு</span> <ArrowRight size={16} className="shrink-0" />
                             </button>
                         </div>
                     )}
