@@ -615,6 +615,7 @@ function NexusApp() {
     <Routes>
       {/* 1. PUBLIC INDIVIDUAL PATHWAYS */}
       <Route path="/individuals/language" element={<LanguageGate />} />
+      <Route path="/individuals/chat" element={<AuraChat />} />
       <Route path="/individuals/pathway" element={<PathwaySelection />} />
       <Route path="/individuals/form" element={<ConventionalForm />} />
       <Route path="/individuals/result" element={<ResultPage />} />
