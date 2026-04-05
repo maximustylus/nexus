@@ -455,12 +455,21 @@ export default function ConventionalForm() {
 
       <div className={`relative z-10 w-full max-w-3xl transition-all duration-1000 transform ${animate ? 'translate-y-0 opacity-100' : 'translate-y-10 opacity-0'}`}>
         
-        {/* TOP BAR */}
+      {/* TOP BAR */}
         <div className="flex justify-between items-center mb-6 px-2">
           <button onClick={() => navigate('/individuals/pathway')} className="flex items-center gap-2 px-4 py-2 bg-white/60 dark:bg-slate-800/60 backdrop-blur-md text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-white font-black text-xs uppercase tracking-widest rounded-full border border-slate-200 dark:border-slate-700 shadow-sm transition-all group">
               <ChevronLeft size={16} className="group-hover:-translate-x-1 transition-transform"/> {t.back}
           </button>
-          <div className="text-[10px] font-mono text-slate-400 bg-slate-200/50 dark:bg-slate-800/50 px-2 py-1 rounded">ID: {sessionId}</div>
+          
+          <div className="flex items-center gap-3">
+              <button 
+                  onClick={toggleTheme} 
+                  className="p-2 rounded-full bg-white/60 dark:bg-slate-800/60 backdrop-blur-md border border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-400 shadow-sm hover:scale-105 transition-all"
+              >
+                  {isDark ? <Sun size={14} className="text-amber-400" /> : <Moon size={14} />}
+              </button>
+              <div className="text-[10px] font-mono text-slate-400 bg-slate-200/50 dark:bg-slate-800/50 px-2 py-1 rounded">ID: {sessionId}</div>
+          </div>
         </div>
 
         {/* PROGRESS TABS */}
