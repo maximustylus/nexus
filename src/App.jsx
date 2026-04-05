@@ -16,7 +16,7 @@ import { Sun, Moon, LogOut, LayoutDashboard, Calendar, Activity,
   Filter, ShieldAlert, BookOpen, MessageCircle, Gift, History, Bell, User, Hexagon } from 'lucide-react'; 
 
 // --- ROUTING ---
-import { Routes, Route } from 'react-router-dom';
+import { Routes, Route, useLocation } from 'react-router-dom';
 
 // --- CONTEXT & DATA STRATEGY ---
 import { NexusProvider, useNexus } from './context/NexusContext';
@@ -84,8 +84,8 @@ const CustomBarTooltip = ({ active, payload, label }) => {
 
 function NexusApp() {
   const { isDemo, toggleDemo } = useNexus(); 
-  
-  // 🌟 SMART ROUTING
+  const location = useLocation();
+  const isPublicPathway = location.pathname.startsWith('/individuals');
   const [currentView, setCurrentView] = useState(() => {
       if (typeof window !== 'undefined') {
           const params = new URLSearchParams(window.location.search);
@@ -612,20 +612,31 @@ function NexusApp() {
   );
 
   // 🌟 THE UNIFIED APP ROUTER
-  return (
-    <Routes>
-      {/* 1. PUBLIC INDIVIDUAL PATHWAYS */}
-      <Route path="/individuals/language" element={<LanguageGate />} />
-      <Route path="/individuals/chat" element={<AuraChat />} />
-      <Route path="/individuals/pathway" element={<PathwaySelection />} />
-      <Route path="/individuals/form" element={<ConventionalForm />} />
-      <Route path="/individuals/result" element={<ResultPage />} />
+return (
+    <>
+      {/* GLOBAL FLOATING THEME TOGGLE FOR PUBLIC PATHWAYS */}
+      {isPublicPathway && (
+        <button 
+          onClick={toggleTheme} 
+          className="fixed top-4 right-4 md:top-6 md:right-6 z-[9999] p-3 bg-white/80 dark:bg-slate-800/80 backdrop-blur-md border border-slate-200 dark:border-slate-700 rounded-full shadow-lg text-slate-500 hover:text-indigo-600 dark:text-slate-400 dark:hover:text-indigo-400 transition-all hover:scale-110 active:scale-95"
+          title="Toggle Dark Mode"
+        >
+          {isDark ? <Sun size={20} /> : <Moon size={20} />}
+        </button>
+      )}
 
-      {/* 2. THE MAIN GATEWAY & PROFESSIONAL WORKSPACE */}
-      <Route path="/" element={
-        (!user && !isDemo) ? (
-          // IF NOT LOGGED IN -> SHOW GATEWAY
-          <WelcomeScreen />
+      <Routes>
+        {/* 1. PUBLIC INDIVIDUAL PATHWAYS */}
+        <Route path="/individuals/language" element={<LanguageGate />} />
+        <Route path="/individuals/pathway" element={<PathwaySelection />} />
+        <Route path="/individuals/form" element={<ConventionalForm />} />
+        <Route path="/individuals/chat" element={<AuraChat />} />
+        <Route path="/individuals/result" element={<ResultPage />} />
+
+        {/* 2. THE MAIN GATEWAY & PROFESSIONAL WORKSPACE */}
+        <Route path="/" element={
+          (!user && !isDemo) ? (
+            <WelcomeScreen />
         ) : (
           // IF LOGGED IN / DEMO -> SHOW DASHBOARD
           <ResponsiveLayout 
