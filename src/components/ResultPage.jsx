@@ -30,7 +30,8 @@ const DICTIONARY = {
     assessmentId: 'Assessment ID',
     prevId: 'Previous ID',
     postalSector: 'Postal Sector',
-    scanQR: 'Scan to access digital portal'
+    scanQR: 'Scan to access digital portal',
+    webLink: 'Website: '
   },
   ms: {
     loading: 'AURA sedang mengimbas sumber komuniti langsung di kawasan anda...',
@@ -56,7 +57,8 @@ const DICTIONARY = {
     assessmentId: 'ID Penilaian',
     prevId: 'ID Lepas',
     postalSector: 'Sektor Pos',
-    scanQR: 'Imbas untuk akses portal digital'
+    scanQR: 'Imbas untuk akses portal digital',
+    webLink: 'Laman Web: '
   },
   zh: {
     loading: 'AURA 正在扫描您所在地区的实时社区资源...',
@@ -82,7 +84,8 @@ const DICTIONARY = {
     assessmentId: '评估 ID',
     prevId: '之前的 ID',
     postalSector: '邮政区域',
-    scanQR: '扫描以访问数字门户'
+    scanQR: '扫描以访问数字门户',
+    webLink: '网址: '
   },
   ta: {
     loading: 'உங்கள் பகுதியில் உள்ள நேரடி சமூக வளங்களை AURA ஸ்கேன் செய்கிறது...',
@@ -108,7 +111,8 @@ const DICTIONARY = {
     assessmentId: 'மதிப்பீட்டு ID',
     prevId: 'முந்தைய ID',
     postalSector: 'அஞ்சல் பிரிவு',
-    scanQR: 'டிஜிட்டல் போர்ட்டலை அணுக ஸ்கேன் செய்யவும்'
+    scanQR: 'டிஜிட்டல் போர்ட்டலை அணுக ஸ்கேன் செய்யவும்',
+    webLink: 'இணையதளம்: '
   }
 };
 
@@ -235,6 +239,7 @@ export default function ResultPage() {
         logging: false,
         backgroundColor: '#ffffff',
         onclone: (clonedDoc) => {
+            clonedDoc.documentElement.classList.remove('dark');
             const svgs = clonedDoc.querySelectorAll('svg');
             svgs.forEach(svg => {
                 svg.setAttribute('width', svg.getBoundingClientRect().width);
@@ -292,19 +297,28 @@ export default function ResultPage() {
       gradient: 'from-rose-500 to-red-600',
       icon: <ShieldAlert className="w-12 h-12 text-white mb-4 drop-shadow-md" />,
       titleColor: 'text-rose-600 dark:text-rose-400',
-      bgCard: 'bg-rose-50 dark:bg-rose-500/10 border-rose-100 dark:border-rose-500/20'
+      bgCard: 'bg-rose-50 dark:bg-rose-500/10 border-rose-100 dark:border-rose-500/20',
+      printBorder: 'border-rose-500',
+      printBg: 'bg-rose-50',
+      printText: 'text-rose-700'
     },
     Amber: {
       gradient: 'from-amber-400 to-orange-500',
       icon: <Activity className="w-12 h-12 text-white mb-4 drop-shadow-md" />,
       titleColor: 'text-amber-600 dark:text-amber-500',
-      bgCard: 'bg-amber-50 dark:bg-amber-500/10 border-amber-100 dark:border-amber-500/20'
+      bgCard: 'bg-amber-50 dark:bg-amber-500/10 border-amber-100 dark:border-amber-500/20',
+      printBorder: 'border-amber-500',
+      printBg: 'bg-amber-50',
+      printText: 'text-amber-700'
     },
     Green: {
       gradient: 'from-emerald-400 to-teal-500',
       icon: <CheckCircle2 className="w-12 h-12 text-white mb-4 drop-shadow-md" />,
       titleColor: 'text-emerald-600 dark:text-emerald-400',
-      bgCard: 'bg-emerald-50 dark:bg-emerald-500/10 border-emerald-100 dark:border-emerald-500/20'
+      bgCard: 'bg-emerald-50 dark:bg-emerald-500/10 border-emerald-100 dark:border-emerald-500/20',
+      printBorder: 'border-emerald-500',
+      printBg: 'bg-emerald-50',
+      printText: 'text-emerald-700'
     }
   };
 
@@ -332,62 +346,78 @@ export default function ResultPage() {
   return (
     <div className="min-h-screen w-full bg-slate-50 dark:bg-slate-950 transition-colors duration-700 flex flex-col items-center py-12 px-4 md:px-6 relative overflow-x-hidden font-sans">
       
-      {/* HIDDEN PRINT TEMPLATE WITH DISPLACEMENT COORDINATES */}
+      {/* HIDDEN PRINT TEMPLATE WITH DISPLACEMENT COORDINATES AND CLINICAL STYLING */}
       <div style={{ position: 'absolute', top: '-10000px', left: '-10000px' }}>
         <div 
             ref={printRef} 
-            className="w-[794px] bg-white text-black p-12 flex flex-col gap-8"
+            className="w-[794px] bg-white text-black flex flex-col border border-slate-200 shadow-sm"
             style={{ fontFamily: 'Arial, sans-serif' }}
         >
-            <div className="flex justify-between items-end border-b-2 border-slate-900 pb-6">
+            {/* BRANDED CLINICAL HEADER */}
+            <div className="bg-slate-900 px-10 py-8 flex justify-between items-center">
+                <div className="flex items-center gap-3">
+                    <Sparkles className="text-indigo-400" size={32} />
+                    <div>
+                        <span className="text-3xl font-black text-white tracking-widest uppercase block leading-none">NEXUS</span>
+                        <span className="text-xs font-bold text-slate-400 uppercase tracking-widest mt-1 block">{t.reportTitle}</span>
+                    </div>
+                </div>
+                <div className="text-right space-y-1 text-sm font-medium text-slate-300">
+                    <p><span className="font-bold text-white">{t.date}:</span> {formattedDate}</p>
+                    <p><span className="font-bold text-white">{t.assessmentId}:</span> {activeSessionId}</p>
+                    {previousSessionId && <p><span className="font-bold text-white">{t.prevId}:</span> {previousSessionId}</p>}
+                    <p><span className="font-bold text-white">{t.postalSector}:</span> Sector {postalSector}</p>
+                </div>
+            </div>
+
+            {/* CONTENT BODY */}
+            <div className="p-10 flex flex-col gap-8">
+                
+                {/* RISK STRATIFICATION ALERT BOX */}
+                <div className={`p-6 border-l-8 ${activeTheme.printBorder} ${activeTheme.printBg} rounded-r-xl`}>
+                    <h2 className={`text-2xl font-black mb-2 ${activeTheme.printText}`}>
+                        {riskTier === 'Red' ? t.red : riskTier === 'Amber' ? t.amber : t.green}
+                    </h2>
+                    <p className="text-slate-700 text-base leading-relaxed mb-4 font-medium">
+                        {riskTier === 'Red' ? t.redDesc : riskTier === 'Amber' ? t.amberDesc : t.greenDesc}
+                    </p>
+                    <div className="space-y-2">
+                        {data.sdohFinancial && <p className="text-sm font-bold text-slate-600">• {t.sdohFinText}</p>}
+                        {data.sdohSocial && <p className="text-sm font-bold text-slate-600">• {t.sdohSocText}</p>}
+                        {data.psychoFlag && <p className="text-sm font-bold text-slate-600">• {t.sdohPsychoText}</p>}
+                    </div>
+                </div>
+
+                {/* RESOURCES GRID WITH EXPOSED HYPERLINKS */}
                 <div>
-                    <div className="flex items-center gap-2 mb-2">
-                        <Sparkles className="text-indigo-600" size={28} />
-                        <span className="text-3xl font-black tracking-widest text-slate-900 uppercase">NEXUS</span>
+                    <h3 className="text-xl font-black text-slate-900 border-b-2 border-slate-200 pb-3 mb-6 uppercase tracking-wider">{t.resources}</h3>
+                    <div className="grid grid-cols-2 gap-6">
+                        {suggestedResources.map((resource) => (
+                            <div key={resource.id} className="p-5 border border-slate-200 rounded-xl bg-slate-50 flex flex-col justify-between">
+                                <div>
+                                    <h4 className="font-black text-slate-900 mb-2">{resource[lang]?.title || resource.en.title}</h4>
+                                    <p className="text-sm text-slate-600 mb-4">{resource[lang]?.desc || resource.en.desc}</p>
+                                </div>
+                                <p className="text-xs font-mono text-indigo-600 break-all bg-indigo-50 p-2 rounded border border-indigo-100">
+                                    <span className="font-bold text-slate-500 mr-1">{t.webLink}</span>
+                                    {resource.url}
+                                </p>
+                            </div>
+                        ))}
                     </div>
-                    <h1 className="text-lg font-bold text-slate-500 uppercase tracking-widest">{t.reportTitle}</h1>
                 </div>
-                <div className="text-right space-y-1 text-sm font-medium text-slate-600">
-                    <p><span className="font-bold text-slate-900">{t.date}:</span> {formattedDate}</p>
-                    <p><span className="font-bold text-slate-900">{t.assessmentId}:</span> {activeSessionId}</p>
-                    {previousSessionId && <p><span className="font-bold text-slate-900">{t.prevId}:</span> {previousSessionId}</p>}
-                    <p><span className="font-bold text-slate-900">{t.postalSector}:</span> Sector {postalSector}</p>
-                </div>
-            </div>
 
-            <div className="p-6 border-l-4 border-slate-900 bg-slate-50">
-                <h2 className="text-2xl font-black text-slate-900 mb-2">{riskTier === 'Red' ? t.red : riskTier === 'Amber' ? t.amber : t.green}</h2>
-                <p className="text-slate-700 text-base leading-relaxed mb-4">
-                    {riskTier === 'Red' ? t.redDesc : riskTier === 'Amber' ? t.amberDesc : t.greenDesc}
-                </p>
-                <div className="space-y-2">
-                    {data.sdohFinancial && <p className="text-sm text-slate-600">• {t.sdohFinText}</p>}
-                    {data.sdohSocial && <p className="text-sm text-slate-600">• {t.sdohSocText}</p>}
-                    {data.psychoFlag && <p className="text-sm text-slate-600">• {t.sdohPsychoText}</p>}
-                </div>
-            </div>
-
-            <div>
-                <h3 className="text-xl font-bold text-slate-900 border-b border-slate-200 pb-3 mb-6 uppercase tracking-wider">{t.resources}</h3>
-                <div className="grid grid-cols-2 gap-6">
-                    {suggestedResources.map((resource) => (
-                        <div key={resource.id} className="p-5 border border-slate-200 rounded-xl bg-white">
-                            <h4 className="font-bold text-slate-900 mb-2">{resource[lang]?.title || resource.en.title}</h4>
-                            <p className="text-sm text-slate-600">{resource[lang]?.desc || resource.en.desc}</p>
+                {/* FOOTER */}
+                <div className="mt-auto pt-8 border-t border-slate-200 flex justify-between items-center">
+                    <div className="flex items-center gap-4">
+                        <img src={qrCodeUrl} alt="QR Code" crossOrigin="anonymous" className="w-20 h-20 border border-slate-200 rounded p-1" />
+                        <div className="text-sm text-slate-500 font-medium">
+                            <p className="font-black text-slate-900 uppercase tracking-widest mb-1">{t.scanQR}</p>
+                            <p className="text-indigo-600">https://nexus.web.app</p>
                         </div>
-                    ))}
-                </div>
-            </div>
-
-            <div className="mt-auto pt-10 flex justify-between items-center">
-                <div className="flex items-center gap-4">
-                    <img src={qrCodeUrl} alt="QR Code" crossOrigin="anonymous" className="w-24 h-24 border border-slate-200 rounded p-1" />
-                    <div className="text-sm text-slate-500 font-medium">
-                        <p className="font-bold text-slate-900 uppercase tracking-widest mb-1">{t.scanQR}</p>
-                        <p>nexus.web.app</p>
                     </div>
+                    <p className="text-xs text-slate-400 font-bold uppercase tracking-widest">NEXUS Health Platform</p>
                 </div>
-                <p className="text-xs text-slate-400 font-medium uppercase tracking-widest">NEXUS Health Platform</p>
             </div>
         </div>
       </div>
