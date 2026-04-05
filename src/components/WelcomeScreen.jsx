@@ -22,24 +22,18 @@ import { checkAccess } from '../utils';
 const WelcomeScreen = (props) => {
     const onAuthSuccess = props.onStart || props.onLogin || props.onEnter;
     const navigate = useNavigate();
-    
     const { toggleDemo } = useNexus(); 
-
     const [activeTab, setActiveTab] = useState('INDIVIDUALS');
     const [authView, setAuthView] = useState('LOGIN');
-    
     const [isDark, setIsDark] = useState(false);
     const [animate, setAnimate] = useState(false);
-
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
     const [name, setName] = useState('');
     const [error, setError] = useState('');
     const [message, setMessage] = useState(''); 
     const [loading, setLoading] = useState(false);
-
     const [langIndex, setLangIndex] = useState(0);
-
     const welcomeTexts = [
         "Explore community resources tailored to your health, lifestyle and wellness journey. AURA provides recommendations and can direct you to leading health and community programmes and services.",
         "Terokai sumber komuniti yang disesuaikan untuk perjalanan kesihatan, gaya hidup dan kesejahteraan anda. AURA memberikan cadangan dan boleh menghalakan anda ke program dan perkhidmatan kesihatan dan komuniti yang terkemuka.",
@@ -177,10 +171,16 @@ const WelcomeScreen = (props) => {
             {/* HEADER & CONTROLS ROW */}
             <div className={`relative z-20 w-full max-w-xl flex justify-between items-center mb-6 mt-8 md:mt-0 transition-all duration-1000 transform ${animate ? 'translate-y-0 opacity-100' : '-translate-y-4 opacity-0'}`}>
                 {/* LOGO & TEXT */}
-                <div className="flex items-center gap-4 group cursor-default">
-                    <img src="/nexus.png" alt="NEXUS" className="w-16 h-16 md:w-20 md:h-20 drop-shadow-md transition-transform duration-500 group-hover:rotate-6 group-hover:scale-110" />
-                    <h1 className="text-5xl md:text-6xl font-black text-slate-900 dark:text-white tracking-tighter">NEXUS</h1>
-                </div>
+                    <div className="flex flex-col items-center justify-center gap-6 group cursor-default text-center">
+                        <img 
+                            src="/nexus.png" 
+                            alt="NEXUS" 
+                            className="w-32 h-32 md:w-48 md:h-48 drop-shadow-xl transition-transform duration-500 group-hover:rotate-6 group-hover:scale-105" 
+                        />
+                        <h1 className="text-5xl md:text-7xl font-black text-slate-900 dark:text-white tracking-tighter">
+                            NEXUS
+                        </h1>
+                    </div>
 
                 {/* THEME TOGGLE */}
                 <button 
