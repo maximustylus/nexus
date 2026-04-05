@@ -1,29 +1,22 @@
-import AuraChat from './components/AuraChat';
-import FeedsView from './components/FeedsView';
-import FeedbackWidget from './components/FeedbackWidget';
-import AuraGreeting from './components/AuraGreeting';
-import ScrollToTop from './components/ScrollToTop';
 import React, { useState, useEffect, useRef } from 'react';
-import AppGuide from './components/AppGuide';
+import { Routes, Route, useLocation } from 'react-router-dom';
 import { getMessaging, onMessage } from "firebase/messaging";
-import { createPortal } from 'react-dom';
+
+// FIREBASE
 import { db, auth } from './firebase';
 import { collection, onSnapshot, doc, query, where, orderBy, updateDoc } from 'firebase/firestore'; 
 import { signOut } from 'firebase/auth';
+
+// CHARTS & ICONS
 import { BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, 
   Tooltip, ResponsiveContainer, Cell, PieChart, Pie, Legend, ReferenceLine } from 'recharts';
-import { Sun, Moon, LogOut, LayoutDashboard, Calendar, Activity, 
-  Filter, ShieldAlert, BookOpen, MessageCircle, Gift, History, Bell, User, Hexagon } from 'lucide-react'; 
+import { Sun, Moon, LayoutDashboard, History, Filter, ShieldAlert, Bell } from 'lucide-react'; 
 
-// --- ROUTING ---
-import { Routes, Route, useLocation } from 'react-router-dom';
-
-// --- CONTEXT & DATA STRATEGY ---
+// CONTEXT & DATA STRATEGY
 import { NexusProvider, useNexus } from './context/NexusContext';
-import { MOCK_STAFF, MOCK_PROJECTS, MOCK_STAFF_NAMES } from './data/mockData'; 
-import { MOCK_TEAM_DATA, MOCK_STAFF_LOADS } from './data/mockData';
+import { MOCK_STAFF_NAMES, MOCK_TEAM_DATA, MOCK_STAFF_LOADS } from './data/mockData';
 
-// --- COMPONENT IMPORTS ---
+// COMPONENT IMPORTS
 import AdminPanel from './components/AdminPanel';
 import ResponsiveLayout from './components/ResponsiveLayout'; 
 import SmartReportView from './components/SmartReportView';
@@ -31,15 +24,19 @@ import RosterView from './components/RosterView';
 import WellbeingView from './components/WellbeingView';
 import AuraPulseBot from './components/AuraPulseBot';
 import ProfileView from './components/ProfileView'; 
+import FeedsView from './components/FeedsView';
+import FeedbackWidget from './components/FeedbackWidget';
+import AuraGreeting from './components/AuraGreeting';
+import AuraChat from './components/AuraChat';
 
-// --- PUBLIC PORTAL IMPORTS ---
+// PUBLIC PORTAL IMPORTS
 import WelcomeScreen from './components/WelcomeScreen';
 import LanguageGate from './components/LanguageGate';
 import PathwaySelection from './components/PathwaySelection';
 import ConventionalForm from './components/ConventionalForm';
 import ResultPage from './components/ResultPage';
 
-// --- UTILITIES ---
+// UTILITIES (Here are your STAFF_LIST imports!)
 import { STAFF_LIST, STAFF_IDS, MONTHS, checkAccess, TEAM_DIRECTORY } from './utils';
 
 // ==========================================
