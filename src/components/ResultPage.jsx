@@ -24,7 +24,13 @@ const DICTIONARY = {
     download: 'Download PDF',
     share: 'Share Result',
     back: 'Back to Gateway',
-    cta: 'Take Action Today'
+    cta: 'Take Action Today',
+    reportTitle: 'Clinical Triage Report',
+    date: 'Date',
+    assessmentId: 'Assessment ID',
+    prevId: 'Previous ID',
+    postalSector: 'Postal Sector',
+    scanQR: 'Scan to access digital portal'
   },
   ms: {
     loading: 'AURA sedang mengimbas sumber komuniti langsung di kawasan anda...',
@@ -44,7 +50,13 @@ const DICTIONARY = {
     download: 'Muat Turun PDF',
     share: 'Kongsi Keputusan',
     back: 'Kembali ke Pintu Utama',
-    cta: 'Ambil Tindakan Hari Ini'
+    cta: 'Ambil Tindakan Hari Ini',
+    reportTitle: 'Laporan Triage Klinikal',
+    date: 'Tarikh',
+    assessmentId: 'ID Penilaian',
+    prevId: 'ID Lepas',
+    postalSector: 'Sektor Pos',
+    scanQR: 'Imbas untuk akses portal digital'
   },
   zh: {
     loading: 'AURA 正在扫描您所在地区的实时社区资源...',
@@ -64,7 +76,13 @@ const DICTIONARY = {
     download: '下载 PDF',
     share: '分享结果',
     back: '返回主页',
-    cta: '今天就采取行动'
+    cta: '今天就采取行动',
+    reportTitle: '临床分诊报告',
+    date: '日期',
+    assessmentId: '评估 ID',
+    prevId: '之前的 ID',
+    postalSector: '邮政区域',
+    scanQR: '扫描以访问数字门户'
   },
   ta: {
     loading: 'உங்கள் பகுதியில் உள்ள நேரடி சமூக வளங்களை AURA ஸ்கேன் செய்கிறது...',
@@ -84,109 +102,31 @@ const DICTIONARY = {
     download: 'PDF பதிவிறக்குக',
     share: 'முடிவைப் பகிர்க',
     back: 'முகப்பிற்குத் திரும்பு',
-    cta: 'இன்றே நடவடிக்கை எடுங்கள்'
+    cta: 'இன்றே நடவடிக்கை எடுங்கள்',
+    reportTitle: 'மருத்துவ அறிக்கை',
+    date: 'தேதி',
+    assessmentId: 'மதிப்பீட்டு ID',
+    prevId: 'முந்தைய ID',
+    postalSector: 'அஞ்சல் பிரிவு',
+    scanQR: 'டிஜிட்டல் போர்ட்டலை அணுக ஸ்கேன் செய்யவும்'
   }
 };
 
 const ALL_RESOURCES = {
-  healthier_sg: {
-    id: 'healthier_sg', url: 'https://www.healthiersg.gov.sg/', logo: '/logos/healthiersg.png',
-    en: { title: 'Healthier SG GP Review', desc: 'Schedule a fully subsidised annual check-in with your enrolled GP.' },
-    ms: { title: 'Semakan Klinik GP Healthier SG', desc: 'Jadualkan pemeriksaan tahunan bersubsidi penuh dengan doktor anda.' },
-    zh: { title: 'Healthier SG 全科医生复查', desc: '与您的签约医生安排全额补贴的年度检查。' },
-    ta: { title: 'Healthier SG GP மதிப்பாய்வு', desc: 'உங்கள் மருத்துவரிடம் முழு மானியத்துடன் கூடிய பரிசோதனையை திட்டமிடுங்கள்.' }
-  },
-  start2move: {
-    id: 'start2move', url: 'https://www.healthhub.sg/programmes/letsmoveit/start2move', logo: '/logos/hpb.png',
-    en: { title: 'HPB Start2Move', desc: 'A free 6-session beginner programme to help you start exercising safely.' },
-    ms: { title: 'Program Start2Move HPB', desc: 'Program percuma 6 sesi untuk pemula untuk mula bersenam dengan selamat.' },
-    zh: { title: 'HPB Start2Move 计划', desc: '免费的6节初学者计划，帮助您安全地开始锻炼。' },
-    ta: { title: 'HPB Start2Move திட்டம்', desc: 'பாதுகாப்பாக உடற்பயிற்சியைத் தொடங்க இலவச 6 அமர்வு தொடக்கத் திட்டம்.' }
-  },
-  active_health: {
-    id: 'active_health', url: 'https://www.myactivesg.com/active-health', logo: '/logos/activehealth.png',
-    en: { title: 'Active Health Labs', desc: 'Supervised clinical exercise and metabolic health programmes by SportSG.' },
-    ms: { title: 'Makmal Active Health', desc: 'Program senaman klinikal dan kesihatan metabolik yang diawasi oleh SportSG.' },
-    zh: { title: 'Active Health 实验室', desc: 'SportSG 提供的有监督临床锻炼和代谢健康计划。' },
-    ta: { title: 'Active Health ஆய்வகங்கள்', desc: 'SportSG-ன் மருத்துவ உடற்பயிற்சி மற்றும் சுகாதார திட்டங்கள்.' }
-  },
-  activesg_gym: {
-    id: 'activesg_gym', url: 'https://www.myactivesg.com/', logo: '/logos/activesg.png',
-    en: { title: 'ActiveSG Facilities', desc: 'Access affordable fitness gyms, pools, and group workout classes near you.' },
-    ms: { title: 'Fasiliti ActiveSG', desc: 'Akses gim, kolam renang dan kelas senaman berkumpulan berpatutan berhampiran anda.' },
-    zh: { title: 'ActiveSG 设施', desc: '使用您附近价格实惠的健身房、游泳池和团体锻炼课程。' },
-    ta: { title: 'ActiveSG வசதிகள்', desc: 'மலிவு விலையில் உடற்பயிற்சி நிலையங்கள் மற்றும் வகுப்புகளை அணுகவும்.' }
-  },
-  pa_courses: {
-    id: 'pa_courses', url: 'https://www.onepa.gov.sg/', logo: '/logos/pa.png',
-    en: { title: 'PA Community Courses', desc: 'Join local Tai Chi, Yoga, or Zumba classes at your nearest Community Club.' },
-    ms: { title: 'Kursus Komuniti PA', desc: 'Sertai kelas Tai Chi, Yoga, atau Zumba di Kelab Komuniti terdekat anda.' },
-    zh: { title: 'PA 社区课程', desc: '在离您最近的社区俱乐部参加太极拳、瑜伽或尊巴舞课程。' },
-    ta: { title: 'PA சமூக படிப்புகள்', desc: 'உங்கள் அருகிலுள்ள சமூக மன்றத்தில் உடற்பயிற்சி வகுப்புகளில் சேரவும்.' }
-  },
-  singhealth_healthup: {
-    id: 'singhealth_healthup', url: 'https://www.singhealth.com.sg/community-care/level-up-with-healthup', logo: '/logos/singhealth.png',
-    en: { title: 'SingHealth Health UP!', desc: 'Join community wellness programmes with guidance from Wellbeing Coordinators.' },
-    ms: { title: 'SingHealth Health UP!', desc: 'Sertai program kesejahteraan dengan bimbingan Penyelaras Kesejahteraan.' },
-    zh: { title: 'SingHealth Health UP!', desc: '参加社区健康计划并获得健康协调员的指导。' },
-    ta: { title: 'SingHealth Health UP!', desc: 'சமூக நலத் திட்டங்களில் வழிகாட்டுதலுடன் சேரவும்.' }
-  },
-  nuhs_chp: {
-    id: 'nuhs_chp', url: 'https://www.nuhs.edu.sg/care-in-the-community', logo: '/logos/nuhs.png',
-    en: { title: 'NUHS Community Health Post', desc: 'Access health screenings and lifestyle coaching in your neighbourhood.' },
-    ms: { title: 'Pos Kesihatan Komuniti NUHS', desc: 'Akses saringan kesihatan dan bimbingan gaya hidup di kejiranan anda.' },
-    zh: { title: 'NUHS 社区卫生站', desc: '在您的社区获得健康筛查和生活方式辅导。' },
-    ta: { title: 'NUHS சமூக சுகாதார நிலையம்', desc: 'சுகாதார பரிசோதனைகள் மற்றும் வழிகாட்டுதலை அணுகவும்.' }
-  },
-  nhg_coaches: {
-    id: 'nhg_coaches', url: 'https://form.gov.sg/663c452b463eff5b7438b117', logo: '/logos/nhg.png',
-    en: { title: 'NHG Health Coaches', desc: 'Connect with a Health Coach to set personalised goals for a healthier lifestyle.' },
-    ms: { title: 'Jurulatih Kesihatan NHG', desc: 'Berhubung dengan Jurulatih Kesihatan untuk menetapkan matlamat peribadi anda.' },
-    zh: { title: 'NHG 健康教练', desc: '与健康教练联系，设定个性化目标。' },
-    ta: { title: 'NHG சுகாதார பயிற்சியாளர்கள்', desc: 'தனிப்பயனாக்கப்பட்ட இலக்குகளை அமைக்க பயிற்சியாளருடன் இணையுங்கள்.' }
-  },
-  aic_aac: {
-    id: 'aic_aac', url: 'https://www.aic.sg/care-services/active-ageing-centres', logo: '/logos/aic.png',
-    en: { title: 'Active Ageing Centres (AAC)', desc: 'Neighbourhood hubs offering active programmes and social networks.' },
-    ms: { title: 'Pusat Penuaan Aktif (AAC)', desc: 'Hab kejiranan yang menawarkan program aktif dan rangkaian sosial.' },
-    zh: { title: '活跃乐龄中心 (AAC)', desc: '提供活跃计划和社交网络的社区中心。' },
-    ta: { title: 'சுறுசுறுப்பான முதுமை மையங்கள்', desc: 'சுறுசுறுப்பான திட்டங்கள் மற்றும் சமூக வலைப்பின்னல்களை வழங்கும் மையங்கள்.' }
-  },
-  touch_community: {
-    id: 'touch_community', url: 'https://www.touch.org.sg/', logo: '/logos/touch.png',
-    en: { title: 'TOUCH Community Services', desc: 'Holistic social support, befriending, and caregiving resources.' },
-    ms: { title: 'Perkhidmatan Komuniti TOUCH', desc: 'Sokongan sosial holistik, bantuan rakan, dan sumber penjagaan.' },
-    zh: { title: 'TOUCH 社区服务', desc: '全方位的社会支持、交友和护理资源。' },
-    ta: { title: 'TOUCH சமூக சேவைகள்', desc: 'முழுமையான சமூக ஆதரவு மற்றும் பராமரிப்பு வளங்கள்.' }
-  },
-  society_wings: {
-    id: 'society_wings', url: 'https://www.wings.sg/', logo: '/logos/wings.png',
-    en: { title: 'Society for WINGS', desc: 'Empowering women aged 40+ with health, wealth, and happiness programmes.' },
-    ms: { title: 'Persatuan untuk WINGS', desc: 'Memperkasakan wanita 40+ dengan program kesihatan dan kebahagiaan.' },
-    zh: { title: 'WINGS 协会', desc: '为 40 岁以上的女性提供健康、财富和幸福计划。' },
-    ta: { title: 'WINGS சங்கம்', desc: '40+ வயதுடைய பெண்களுக்கான சுகாதாரம் மற்றும் மகிழ்ச்சி திட்டங்கள்.' }
-  },
-  singhealth_careline: {
-    id: 'singhealth_careline', url: 'https://www.singhealth.com.sg/community-care/careline', logo: '/logos/careline.png',
-    en: { title: 'SingHealth CareLine', desc: 'A 24/7 personal tele-befriending service providing social support for seniors.' },
-    ms: { title: 'SingHealth CareLine', desc: 'Perkhidmatan tele-rakan 24/7 yang menyediakan sokongan sosial untuk warga emas.' },
-    zh: { title: 'SingHealth CareLine', desc: '为老年人提供社会支持的 24/7 个人电话交友服务。' },
-    ta: { title: 'SingHealth CareLine', desc: 'முதியோர்களுக்கான 24/7 தொலைபேசி நட்பு சேவை.' }
-  },
-  financial_chas: {
-    id: 'financial_chas', url: 'https://www.chas.sg/', logo: '/logos/chas.png',
-    en: { title: 'CHAS & Medical Subsidies', desc: 'Discover financial support schemes for your community healthcare needs.' },
-    ms: { title: 'CHAS & Subsidi Perubatan', desc: 'Ketahui skim sokongan kewangan untuk keperluan penjagaan kesihatan komuniti anda.' },
-    zh: { title: 'CHAS 与医疗补贴', desc: '了解满足您社区医疗保健需求的财务支持计划。' },
-    ta: { title: 'CHAS & மருத்துவ மானியங்கள்', desc: 'உங்கள் சமூக சுகாதார தேவைகளுக்கான நிதி ஆதரவு திட்டங்களை கண்டறியவும்.' }
-  },
-  mental_wellness: {
-    id: 'mental_wellness', url: 'https://www.mindline.sg/', logo: '/logos/mindline.png',
-    en: { title: 'Mindline.sg Support', desc: 'Free, confidential emotional support and mental wellness tools.' },
-    ms: { title: 'Sokongan Mindline.sg', desc: 'Sokongan emosi percuma dan sulit serta alat kesejahteraan mental.' },
-    zh: { title: 'Mindline.sg 支持', desc: '免费、保密的情感支持和心理健康工具。' },
-    ta: { title: 'Mindline.sg ஆதரவு', desc: 'இலவச, ரகசிய உணர்ச்சி ஆதரவு மற்றும் மனநல கருவிகள்.' }
-  }
+  healthier_sg: { id: 'healthier_sg', url: 'https://www.healthiersg.gov.sg/', logo: '/logos/healthiersg.png', en: { title: 'Healthier SG GP Review', desc: 'Schedule a fully subsidised annual check-in with your enrolled GP.' }, ms: { title: 'Semakan Klinik GP Healthier SG', desc: 'Jadualkan pemeriksaan tahunan bersubsidi penuh dengan doktor anda.' }, zh: { title: 'Healthier SG 全科医生复查', desc: '与您的签约医生安排全额补贴的年度检查。' }, ta: { title: 'Healthier SG GP மதிப்பாய்வு', desc: 'உங்கள் மருத்துவரிடம் முழு மானியத்துடன் கூடிய பரிசோதனையை திட்டமிடுங்கள்.' } },
+  start2move: { id: 'start2move', url: 'https://www.healthhub.sg/programmes/letsmoveit/start2move', logo: '/logos/hpb.png', en: { title: 'HPB Start2Move', desc: 'A free 6-session beginner programme to help you start exercising safely.' }, ms: { title: 'Program Start2Move HPB', desc: 'Program percuma 6 sesi untuk pemula untuk mula bersenam dengan selamat.' }, zh: { title: 'HPB Start2Move 计划', desc: '免费的6节初学者计划，帮助您安全地开始锻炼。' }, ta: { title: 'HPB Start2Move திட்டம்', desc: 'பாதுகாப்பாக உடற்பயிற்சியைத் தொடங்க இலவச 6 அமர்வு தொடக்கத் திட்டம்.' } },
+  active_health: { id: 'active_health', url: 'https://www.myactivesg.com/active-health', logo: '/logos/activehealth.png', en: { title: 'Active Health Labs', desc: 'Supervised clinical exercise and metabolic health programmes by SportSG.' }, ms: { title: 'Makmal Active Health', desc: 'Program senaman klinikal dan kesihatan metabolik yang diawasi oleh SportSG.' }, zh: { title: 'Active Health 实验室', desc: 'SportSG 提供的有监督临床锻炼和代谢健康计划。' }, ta: { title: 'Active Health ஆய்வகங்கள்', desc: 'SportSG-ன் மருத்துவ உடற்பயிற்சி மற்றும் சுகாதார திட்டங்கள்.' } },
+  activesg_gym: { id: 'activesg_gym', url: 'https://www.myactivesg.com/', logo: '/logos/activesg.png', en: { title: 'ActiveSG Facilities', desc: 'Access affordable fitness gyms, pools, and group workout classes near you.' }, ms: { title: 'Fasiliti ActiveSG', desc: 'Akses gim, kolam renang dan kelas senaman berkumpulan berpatutan berhampiran anda.' }, zh: { title: 'ActiveSG 设施', desc: '使用您附近价格实惠的健身房、游泳池和团体锻炼课程。' }, ta: { title: 'ActiveSG வசதிகள்', desc: 'மலிவு விலையில் உடற்பயிற்சி நிலையங்கள் மற்றும் வகுப்புகளை அணுகவும்.' } },
+  pa_courses: { id: 'pa_courses', url: 'https://www.onepa.gov.sg/', logo: '/logos/pa.png', en: { title: 'PA Community Courses', desc: 'Join local Tai Chi, Yoga, or Zumba classes at your nearest Community Club.' }, ms: { title: 'Kursus Komuniti PA', desc: 'Sertai kelas Tai Chi, Yoga, atau Zumba di Kelab Komuniti terdekat anda.' }, zh: { title: 'PA 社区课程', desc: '在离您最近的社区俱乐部参加太极拳、瑜伽或尊巴舞课程。' }, ta: { title: 'PA சமூக படிப்புகள்', desc: 'உங்கள் அருகிலுள்ள சமூக மன்றத்தில் உடற்பயிற்சி வகுப்புகளில் சேரவும்.' } },
+  singhealth_healthup: { id: 'singhealth_healthup', url: 'https://www.singhealth.com.sg/community-care/level-up-with-healthup', logo: '/logos/singhealth.png', en: { title: 'SingHealth Health UP!', desc: 'Join community wellness programmes with guidance from Wellbeing Coordinators.' }, ms: { title: 'SingHealth Health UP!', desc: 'Sertai program kesejahteraan dengan bimbingan Penyelaras Kesejahteraan.' }, zh: { title: 'SingHealth Health UP!', desc: '参加社区健康计划并获得健康协调员的指导。' }, ta: { title: 'SingHealth Health UP!', desc: 'சமூக நலத் திட்டங்களில் வழிகாட்டுதலுடன் சேரவும்.' } },
+  nuhs_chp: { id: 'nuhs_chp', url: 'https://www.nuhs.edu.sg/care-in-the-community', logo: '/logos/nuhs.png', en: { title: 'NUHS Community Health Post', desc: 'Access health screenings and lifestyle coaching in your neighbourhood.' }, ms: { title: 'Pos Kesihatan Komuniti NUHS', desc: 'Akses saringan kesihatan dan bimbingan gaya hidup di kejiranan anda.' }, zh: { title: 'NUHS 社区卫生站', desc: '在您的社区获得健康筛查和生活方式辅导。' }, ta: { title: 'NUHS சமூக சுகாதார நிலையம்', desc: 'சுகாதார பரிசோதனைகள் மற்றும் வழிகாட்டுதலை அணுகவும்.' } },
+  nhg_coaches: { id: 'nhg_coaches', url: 'https://form.gov.sg/663c452b463eff5b7438b117', logo: '/logos/nhg.png', en: { title: 'NHG Health Coaches', desc: 'Connect with a Health Coach to set personalised goals for a healthier lifestyle.' }, ms: { title: 'Jurulatih Kesihatan NHG', desc: 'Berhubung dengan Jurulatih Kesihatan untuk menetapkan matlamat peribadi anda.' }, zh: { title: 'NHG 健康教练', desc: '与健康教练联系，设定个性化目标。' }, ta: { title: 'NHG சுகாதார பயிற்சியாளர்கள்', desc: 'தனிப்பயனாக்கப்பட்ட இலக்குகளை அமைக்க பயிற்சியாளருடன் இணையுங்கள்.' } },
+  aic_aac: { id: 'aic_aac', url: 'https://www.aic.sg/care-services/active-ageing-centres', logo: '/logos/aic.png', en: { title: 'Active Ageing Centres (AAC)', desc: 'Neighbourhood hubs offering active programmes and social networks.' }, ms: { title: 'Pusat Penuaan Aktif (AAC)', desc: 'Hab kejiranan yang menawarkan program aktif dan rangkaian sosial.' }, zh: { title: '活跃乐龄中心 (AAC)', desc: '提供活跃计划和社交网络的社区中心。' }, ta: { title: 'சுறுசுறுப்பான முதுமை மையங்கள்', desc: 'சுறுசுறுப்பான திட்டங்கள் மற்றும் சமூக வலைப்பின்னல்களை வழங்கும் மையங்கள்.' } },
+  touch_community: { id: 'touch_community', url: 'https://www.touch.org.sg/', logo: '/logos/touch.png', en: { title: 'TOUCH Community Services', desc: 'Holistic social support, befriending, and caregiving resources.' }, ms: { title: 'Perkhidmatan Komuniti TOUCH', desc: 'Sokongan sosial holistik, bantuan rakan, dan sumber penjagaan.' }, zh: { title: 'TOUCH 社区服务', desc: '全方位的社会支持、交友和护理资源。' }, ta: { title: 'TOUCH சமூக சேவைகள்', desc: 'முழுமையான சமூக ஆதரவு மற்றும் பராமரிப்பு வளங்கள்.' } },
+  society_wings: { id: 'society_wings', url: 'https://www.wings.sg/', logo: '/logos/wings.png', en: { title: 'Society for WINGS', desc: 'Empowering women aged 40+ with health, wealth, and happiness programmes.' }, ms: { title: 'Persatuan untuk WINGS', desc: 'Memperkasakan wanita 40+ dengan program kesihatan dan kebahagiaan.' }, zh: { title: 'WINGS 协会', desc: '为 40 岁以上的女性提供健康、财富和幸福计划。' }, ta: { title: 'WINGS சங்கம்', desc: '40+ வயதுடைய பெண்களுக்கான சுகாதாரம் மற்றும் மகிழ்ச்சி திட்டங்கள்.' } },
+  singhealth_careline: { id: 'singhealth_careline', url: 'https://www.singhealth.com.sg/community-care/careline', logo: '/logos/careline.png', en: { title: 'SingHealth CareLine', desc: 'A 24/7 personal tele-befriending service providing social support for seniors.' }, ms: { title: 'SingHealth CareLine', desc: 'Perkhidmatan tele-rakan 24/7 yang menyediakan sokongan sosial untuk warga emas.' }, zh: { title: 'SingHealth CareLine', desc: '为老年人提供社会支持的 24/7 个人电话交友服务。' }, ta: { title: 'SingHealth CareLine', desc: 'முதியோர்களுக்கான 24/7 தொலைபேசி நட்பு சேவை.' } },
+  financial_chas: { id: 'financial_chas', url: 'https://www.chas.sg/', logo: '/logos/chas.png', en: { title: 'CHAS & Medical Subsidies', desc: 'Discover financial support schemes for your community healthcare needs.' }, ms: { title: 'CHAS & Subsidi Perubatan', desc: 'Ketahui skim sokongan kewangan untuk keperluan penjagaan kesihatan komuniti anda.' }, zh: { title: 'CHAS 与医疗补贴', desc: '了解满足您社区医疗保健需求的财务支持计划。' }, ta: { title: 'CHAS & மருத்துவ மானியங்கள்', desc: 'உங்கள் சமூக சுகாதார தேவைகளுக்கான நிதி ஆதரவு திட்டங்களை கண்டறியவும்.' } },
+  mental_wellness: { id: 'mental_wellness', url: 'https://www.mindline.sg/', logo: '/logos/mindline.png', en: { title: 'Mindline.sg Support', desc: 'Free, confidential emotional support and mental wellness tools.' }, ms: { title: 'Sokongan Mindline.sg', desc: 'Sokongan emosi percuma dan sulit serta alat kesejahteraan mental.' }, zh: { title: 'Mindline.sg 支持', desc: '免费、保密的情感支持和心理健康工具。' }, ta: { title: 'Mindline.sg ஆதரவு', desc: 'இலவச, ரகசிய உணர்ச்சி ஆதரவு மற்றும் மனநல கருவிகள்.' } }
 };
 
 const getRegionalHealthSystem = (sector) => {
@@ -219,7 +159,12 @@ export default function ResultPage() {
   const [animate, setAnimate] = useState(false);
   const [isGenerating, setIsGenerating] = useState(true);
   const [suggestedResources, setSuggestedResources] = useState([]);
-  const resultRef = useRef(null);
+  
+  const printRef = useRef(null);
+  const formattedDate = new Date().toLocaleDateString('en-GB');
+
+  // Dynamic QR Code pointing to the origin domain
+  const qrCodeUrl = `https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent(window.location.origin)}`;
 
   useEffect(() => {
     const storedLang = localStorage.getItem('nexus_language');
@@ -280,35 +225,18 @@ export default function ResultPage() {
   const t = DICTIONARY[lang] || DICTIONARY.en;
 
   const handleDownloadPDF = async () => {
-    if (!resultRef.current) return;
+    if (!printRef.current) return;
     recordTelemetry(postalSector, { action: 'download_pdf', score, language: lang });
 
     try {
-      const element = resultRef.current;
+      const element = printRef.current;
       
-      const originalOverflow = element.style.overflow;
-      const originalHeight = element.style.height;
-      element.style.overflow = 'visible';
-      element.style.height = 'max-content';
-
       const canvas = await html2canvas(element, { 
         scale: 2, 
         useCORS: true,
         logging: false,
-        backgroundColor: '#ffffff',
-        windowWidth: 1024,
-        onclone: (clonedDoc) => {
-            clonedDoc.documentElement.classList.remove('dark');
-            const svgs = clonedDoc.querySelectorAll('svg');
-            svgs.forEach(svg => {
-                svg.setAttribute('width', svg.getBoundingClientRect().width);
-                svg.setAttribute('height', svg.getBoundingClientRect().height);
-            });
-        }
+        backgroundColor: '#ffffff'
       });
-      
-      element.style.overflow = originalOverflow;
-      element.style.height = originalHeight;
 
       const imgData = canvas.toDataURL('image/png');
       const pdf = new jsPDF('p', 'mm', 'a4');
@@ -320,14 +248,11 @@ export default function ResultPage() {
       let renderHeight = (canvas.height * renderWidth) / canvas.width;
 
       if (renderHeight > pdfPageHeight) {
-        renderHeight = pdfPageHeight - 20; 
+        renderHeight = pdfPageHeight; 
         renderWidth = (canvas.width * renderHeight) / canvas.height;
       }
 
-      const marginX = (pdfWidth - renderWidth) / 2;
-      const marginY = 10;
-      
-      pdf.addImage(imgData, 'PNG', marginX, marginY, renderWidth, renderHeight);
+      pdf.addImage(imgData, 'PNG', 0, 0, renderWidth, renderHeight);
       pdf.save(`NEXUS_AURA_Result_${riskTier}.pdf`);
     } catch (error) {
       console.error('Error generating PDF:', error);
@@ -402,6 +327,69 @@ export default function ResultPage() {
   return (
     <div className="min-h-screen w-full bg-slate-50 dark:bg-slate-950 transition-colors duration-700 flex flex-col items-center py-12 px-4 md:px-6 relative overflow-x-hidden font-sans">
       
+      {/* HIDDEN PRINT TEMPLATE 
+        This is perfectly sized for A4 printing (794px width) and kept out of view.
+        It removes all dark mode UI elements, shadows, and interactive buttons for a clean clinical record.
+      */}
+      <div 
+        ref={printRef} 
+        className="fixed top-0 left-0 w-[794px] bg-white text-black p-12 pointer-events-none -z-50 opacity-0 flex flex-col gap-8"
+        style={{ fontFamily: 'Arial, sans-serif' }}
+      >
+        <div className="flex justify-between items-end border-b-2 border-slate-900 pb-6">
+            <div>
+                <div className="flex items-center gap-2 mb-2">
+                    <Sparkles className="text-indigo-600" size={28} />
+                    <span className="text-3xl font-black tracking-widest text-slate-900 uppercase">NEXUS</span>
+                </div>
+                <h1 className="text-lg font-bold text-slate-500 uppercase tracking-widest">{t.reportTitle}</h1>
+            </div>
+            <div className="text-right space-y-1 text-sm font-medium text-slate-600">
+                <p><span className="font-bold text-slate-900">{t.date}:</span> {formattedDate}</p>
+                <p><span className="font-bold text-slate-900">{t.assessmentId}:</span> {activeSessionId}</p>
+                {previousSessionId && <p><span className="font-bold text-slate-900">{t.prevId}:</span> {previousSessionId}</p>}
+                <p><span className="font-bold text-slate-900">{t.postalSector}:</span> Sector {postalSector}</p>
+            </div>
+        </div>
+
+        <div className="p-6 border-l-4 border-slate-900 bg-slate-50">
+            <h2 className="text-2xl font-black text-slate-900 mb-2">{riskTier === 'Red' ? t.red : riskTier === 'Amber' ? t.amber : t.green}</h2>
+            <p className="text-slate-700 text-base leading-relaxed mb-4">
+                {riskTier === 'Red' ? t.redDesc : riskTier === 'Amber' ? t.amberDesc : t.greenDesc}
+            </p>
+            <div className="space-y-2">
+                {data.sdohFinancial && <p className="text-sm text-slate-600">• {t.sdohFinText}</p>}
+                {data.sdohSocial && <p className="text-sm text-slate-600">• {t.sdohSocText}</p>}
+                {data.psychoFlag && <p className="text-sm text-slate-600">• {t.sdohPsychoText}</p>}
+            </div>
+        </div>
+
+        <div>
+            <h3 className="text-xl font-bold text-slate-900 border-b border-slate-200 pb-3 mb-6 uppercase tracking-wider">{t.resources}</h3>
+            <div className="grid grid-cols-2 gap-6">
+                {suggestedResources.map((resource) => (
+                    <div key={resource.id} className="p-5 border border-slate-200 rounded-xl bg-white">
+                        <h4 className="font-bold text-slate-900 mb-2">{resource[lang]?.title || resource.en.title}</h4>
+                        <p className="text-sm text-slate-600">{resource[lang]?.desc || resource.en.desc}</p>
+                    </div>
+                ))}
+            </div>
+        </div>
+
+        <div className="mt-auto pt-10 flex justify-between items-center">
+            <div className="flex items-center gap-4">
+                <img src={qrCodeUrl} alt="QR Code" crossOrigin="anonymous" className="w-24 h-24 border border-slate-200 rounded p-1" />
+                <div className="text-sm text-slate-500 font-medium">
+                    <p className="font-bold text-slate-900 uppercase tracking-widest mb-1">{t.scanQR}</p>
+                    <p>nexus.web.app</p>
+                </div>
+            </div>
+            <p className="text-xs text-slate-400 font-medium uppercase tracking-widest">NEXUS Health Platform</p>
+        </div>
+      </div>
+      {/* END HIDDEN PRINT TEMPLATE */}
+
+
       <div className="absolute inset-0 z-0 opacity-[0.03] dark:opacity-[0.05] pointer-events-none" style={{ backgroundImage: 'radial-gradient(circle at 1px 1px, currentColor 1px, transparent 0)', backgroundSize: '40px 40px' }}></div>
       <div className={`fixed top-0 left-0 w-[800px] h-[800px] bg-indigo-500/10 rounded-full blur-[120px] pointer-events-none animate-float-slow ${animate ? 'opacity-100' : 'opacity-0'}`}></div>
       <div className={`fixed bottom-0 right-0 w-[600px] h-[600px] bg-emerald-500/10 rounded-full blur-[100px] pointer-events-none animate-float-delayed ${animate ? 'opacity-100' : 'opacity-0'}`}></div>
@@ -423,7 +411,7 @@ export default function ResultPage() {
           </div>
         </div>
 
-        <div ref={resultRef} className="bg-white dark:bg-[#111827] rounded-[2rem] shadow-xl border border-slate-200 dark:border-slate-800 overflow-hidden relative">
+        <div className="bg-white dark:bg-[#111827] rounded-[2rem] shadow-xl border border-slate-200 dark:border-slate-800 overflow-hidden relative">
           
           <div className={`px-8 py-12 bg-gradient-to-br ${activeTheme.gradient} text-center relative overflow-hidden flex flex-col items-center`}>
             <div className="absolute top-0 right-0 w-40 h-40 bg-white/10 rounded-full blur-2xl -mr-10 -mt-10 pointer-events-none"></div>
@@ -517,23 +505,6 @@ export default function ResultPage() {
                     </div>
                   </button>
                 ))}
-              </div>
-            </div>
-
-            <div className="px-8 md:px-12 py-6 bg-slate-50 dark:bg-slate-900/50 border-t border-slate-200 dark:border-slate-800 flex justify-between items-center mt-4">
-              <div className="flex items-center gap-2">
-                <Sparkles className="text-indigo-500" size={18} />
-                <div>
-                  <span className="font-black text-slate-800 dark:text-slate-200 tracking-widest text-sm uppercase block leading-none">NEXUS</span>
-                  <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">AURA Triage</span>
-                </div>
-              </div>
-              <div className="text-right">
-                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-0.5">Assessment ID</p>
-                <p className="text-xs font-mono font-bold text-slate-600 dark:text-slate-300">{activeSessionId}</p>
-                {previousSessionId && (
-                  <p className="text-[10px] font-mono text-slate-400 mt-0.5">Prev: {previousSessionId}</p>
-                )}
               </div>
             </div>
 
