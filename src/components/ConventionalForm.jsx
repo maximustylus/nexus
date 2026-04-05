@@ -10,17 +10,15 @@ const DICTIONARY = {
     title: 'Health & Community Assessment',
     steps: ['Your Health', 'Challenges & Support', 'Your Experience', 'About You'],
     
-    // Step 1: Health (ACSM PAVS, Medical Risk & BPS-RS II)
     pavsQ1: 'On how many days in a typical week do you do moderate or vigorous physical activity?',
     pavsQ2: 'On those days, for how many minutes do you usually do this activity?',
     riskQ1: 'How many days a week do you do activities that strengthen your muscles?',
-    riskQ2: 'Have you been diagnosed with any chronic medical conditions? (If so, how many?)',
+    riskQ2: 'Please list any chronic medical conditions you have been diagnosed with (e.g. High Blood Pressure, Diabetes):',
     riskQ3: 'Has a doctor ever advised you to limit your physical activity?',
     riskQ4: 'Do you experience physical symptoms like chest pain during exercise?',
     riskQ5: 'Do you ever feel dizzy enough to lose your balance?',
     psychoQ1: 'Over the past month, have you frequently felt down, depressed, or hopeless?',
     
-    // Step 2: SDOH (Food Insecurity, Duke-NUS Finance, LSNS-6)
     sdohIntro: 'We want to understand what might be making it harder for you to stay healthy.',
     sdohFood: 'In the past 12 months, were you ever hungry but did not eat because you could not afford enough food?',
     sdohFinance: 'Do you feel you have adequate income to meet your monthly expenses?',
@@ -28,7 +26,6 @@ const DICTIONARY = {
     sdohSocial: 'How many relatives or friends do you see or hear from at least once a month?',
     socOpt1: 'None', socOpt2: '1 to 4 people', socOpt3: '5 to 8 people', socOpt4: '9 or more people',
     
-    // Step 3: Perception & Barriers (MOHH Survey)
     survAware: 'Have you heard about the health and wellness services available right in your neighbourhood?',
     survReferred: 'Has a doctor ever recommended you visit a community health post for a condition?',
     survRate: 'If you have used community services, how did the care feel compared to a hospital?',
@@ -38,11 +35,13 @@ const DICTIONARY = {
     barrFin: 'Cost concerns', barrLog: 'Too far or Transportation', barrTime: 'Lack of time', barrSoc: 'Caregiving duties', barrLang: 'Language barriers', barrHosp: 'Prefer the hospital', barrNone: 'No barriers',
     survImprove: 'If you could change one thing about healthcare in your neighbourhood, what would it be?',
     
-    // Step 4: Demographics & Housing Proxy
     demoIntro: 'Finally, to help us ensure we are serving everyone fairly, tell us a bit about yourself.',
     demoAge: 'Age Group',
+    ageOpt1: 'Under 21', ageOpt2: '21-40', ageOpt3: '41-60', ageOpt4: '60+',
     demoGender: 'Gender',
+    genOpt1: 'Male', genOpt2: 'Female',
     demoRace: 'Race',
+    raceOpt1: 'Chinese', raceOpt2: 'Malay', raceOpt3: 'Indian', raceOpt4: 'Others',
     demoHousing: 'To help us understand your community better, what type of housing do you currently reside in?',
     houseOpt1: 'HDB 1 to 2 Room', houseOpt2: 'HDB 3 to 5 Room', houseOpt3: 'Private Property',
     postalCode: 'First 2 digits of your Postal Code',
@@ -57,7 +56,7 @@ const DICTIONARY = {
     pavsQ1: 'Berapa hari dalam minggu biasa anda melakukan aktiviti fizikal sederhana atau berat?',
     pavsQ2: 'Pada hari tersebut, untuk berapa minit anda biasanya melakukan aktiviti ini?',
     riskQ1: 'Berapa hari seminggu anda melakukan aktiviti yang menguatkan otot anda?',
-    riskQ2: 'Pernahkah anda didiagnosis dengan sebarang keadaan perubatan kronik? (Jika ya, berapa banyak?)',
+    riskQ2: 'Sila nyatakan sebarang keadaan perubatan kronik yang telah disahkan (cth. Darah Tinggi, Kencing Manis):',
     riskQ3: 'Pernahkah doktor menasihati anda untuk mengehadkan aktiviti fizikal anda?',
     riskQ4: 'Adakah anda mengalami simptom fizikal seperti sakit dada semasa bersenam?',
     riskQ5: 'Adakah anda pernah berasa pening sehingga hilang keseimbangan?',
@@ -81,8 +80,11 @@ const DICTIONARY = {
     
     demoIntro: 'Akhir sekali, beritahu kami sedikit tentang diri anda.',
     demoAge: 'Kumpulan Umur',
+    ageOpt1: 'Bawah 21', ageOpt2: '21-40', ageOpt3: '41-60', ageOpt4: '60+',
     demoGender: 'Jantina',
+    genOpt1: 'Lelaki', genOpt2: 'Perempuan',
     demoRace: 'Bangsa',
+    raceOpt1: 'Cina', raceOpt2: 'Melayu', raceOpt3: 'India', raceOpt4: 'Lain-lain',
     demoHousing: 'Untuk membantu kami lebih memahami komuniti anda, apakah jenis perumahan yang anda diami sekarang?',
     houseOpt1: 'HDB 1 hingga 2 Bilik', houseOpt2: 'HDB 3 hingga 5 Bilik', houseOpt3: 'Hartanah Persendirian',
     postalCode: '2 digit pertama Poskod anda',
@@ -97,7 +99,7 @@ const DICTIONARY = {
     pavsQ1: '在通常的一周内，您有几天进行中度或剧烈的身体活动？',
     pavsQ2: '在这些天里，您通常进行多少分钟的活动？',
     riskQ1: '您每周有几天进行肌肉强化活动？',
-    riskQ2: '您是否被诊断出患有任何慢性医疗状况？（如果有，有多少种？）',
+    riskQ2: '请列出您被诊断出的任何慢性疾病（例如高血压、糖尿病）：',
     riskQ3: '医生是否曾建议您限制身体活动？',
     riskQ4: '您在运动时是否经历过胸痛等身体症状？',
     riskQ5: '您是否曾因头晕而失去平衡？',
@@ -121,8 +123,11 @@ const DICTIONARY = {
     
     demoIntro: '最后，请告诉我们一些关于您自己的信息。',
     demoAge: '年龄组',
+    ageOpt1: '21岁以下', ageOpt2: '21-40岁', ageOpt3: '41-60岁', ageOpt4: '60岁以上',
     demoGender: '性别',
+    genOpt1: '男', genOpt2: '女',
     demoRace: '种族',
+    raceOpt1: '华人', raceOpt2: '马来人', raceOpt3: '印度人', raceOpt4: '其他',
     demoHousing: '为了帮助我们更好地了解您的社区，您目前居住的房屋类型是什么？',
     houseOpt1: '组屋 1 至 2 房', houseOpt2: '组屋 3 至 5 房', houseOpt3: '私人房产',
     postalCode: '邮政编码前2位',
@@ -137,7 +142,7 @@ const DICTIONARY = {
     pavsQ1: 'வழக்கமான வாரத்தில் எத்தனை நாட்கள் மிதமான அல்லது கடுமையான உடல் செயல்பாடுகளைச் செய்கிறீர்கள்?',
     pavsQ2: 'அந்த நாட்களில், வழக்கமாக எத்தனை நிமிடங்கள் இந்த செயல்பாட்டைச் செய்கிறீர்கள்?',
     riskQ1: 'உங்கள் தசைகளை வலுப்படுத்தும் செயல்களை வாரத்தில் எத்தனை நாட்கள் செய்கிறீர்கள்?',
-    riskQ2: 'உங்களுக்கு ஏதேனும் நாள்பட்ட நோய்கள் உள்ளதா? (அப்படியானால், எத்தனை?)',
+    riskQ2: 'உங்களுக்கு கண்டறியப்பட்ட நாள்பட்ட மருத்துவ நிலைமைகளை பட்டியலிடுங்கள் (உதாரணமாக, உயர் இரத்த அழுத்தம், நீரிழிவு):',
     riskQ3: 'உங்கள் உடல் செயல்பாட்டைக் கட்டுப்படுத்த மருத்துவர் அறிவுறுத்தியுள்ளாரா?',
     riskQ4: 'உடற்பயிற்சியின் போது நெஞ்சு வலி போன்ற உடல் அறிகுறிகளை நீங்கள் அனுபவிக்கிறீர்களா?',
     riskQ5: 'உங்கள் சமநிலையை இழக்கும் அளவுக்கு உங்களுக்கு எப்போதாவது தலைசுற்றல் ஏற்படுகிறதா?',
@@ -161,8 +166,11 @@ const DICTIONARY = {
     
     demoIntro: 'இறுதியாக, உங்களைப் பற்றி கொஞ்சம் சொல்லுங்கள்.',
     demoAge: 'வயது குழு',
+    ageOpt1: '21க்கு கீழ்', ageOpt2: '21-40', ageOpt3: '41-60', ageOpt4: '60+',
     demoGender: 'பாலினம்',
+    genOpt1: 'ஆண்', genOpt2: 'பெண்',
     demoRace: 'இனம்',
+    raceOpt1: 'சீனர்கள்', raceOpt2: 'மலாய்', raceOpt3: 'இந்தியர்', raceOpt4: 'மற்றவர்கள்',
     demoHousing: 'உங்கள் சமூகத்தை நாங்கள் நன்கு புரிந்து கொள்ள, நீங்கள் தற்போது எந்த வகையான வீட்டில் வசிக்கிறீர்கள்?',
     houseOpt1: 'HDB 1 முதல் 2 அறைகள்', houseOpt2: 'HDB 3 முதல் 5 அறைகள்', houseOpt3: 'தனியார் சொத்து',
     postalCode: 'அஞ்சல் குறியீட்டின் முதல் 2 இலக்கங்கள்',
@@ -208,7 +216,7 @@ export default function ConventionalForm() {
       pavsDays: Number(formData.pavsDays) || 0,
       pavsMinutes: Number(formData.pavsMinutes) || 0,
       strengthDays: Number(formData.strengthDays) || 0,
-      medConditions: Number(formData.medConditions) || 0,
+      medConditions: formData.medConditions,
       medFlag: formData.medFlag,
       symptomsCount: Number(formData.symptomsCount) || 0,
       symptomFlag: formData.symptomFlag,
@@ -251,21 +259,21 @@ export default function ConventionalForm() {
             <div className="grid md:grid-cols-2 gap-6">
                 <div>
                     <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-2">{t.pavsQ1}</label>
-                    <input type="number" min="0" max="7" value={formData.pavsDays} onChange={e => setFormData({...formData, pavsDays: e.target.value})} className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-3 text-sm font-bold outline-none focus:ring-2 focus:ring-indigo-500" />
+                    <input type="number" min="0" max="7" value={formData.pavsDays} onChange={e => setFormData({...formData, pavsDays: e.target.value})} className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-3 text-sm md:text-base font-bold outline-none focus:ring-2 focus:ring-indigo-500" />
                 </div>
                 <div>
                     <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-2">{t.pavsQ2}</label>
-                    <input type="number" min="0" value={formData.pavsMinutes} onChange={e => setFormData({...formData, pavsMinutes: e.target.value})} className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-3 text-sm font-bold outline-none focus:ring-2 focus:ring-indigo-500" />
+                    <input type="number" min="0" value={formData.pavsMinutes} onChange={e => setFormData({...formData, pavsMinutes: e.target.value})} className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-3 text-sm md:text-base font-bold outline-none focus:ring-2 focus:ring-indigo-500" />
                 </div>
             </div>
             <div className="grid md:grid-cols-2 gap-6">
                 <div>
                     <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-2">{t.riskQ1}</label>
-                    <input type="number" min="0" max="7" value={formData.strengthDays} onChange={e => setFormData({...formData, strengthDays: e.target.value})} className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-3 text-sm font-bold outline-none focus:ring-2 focus:ring-indigo-500" />
+                    <input type="number" min="0" max="7" value={formData.strengthDays} onChange={e => setFormData({...formData, strengthDays: e.target.value})} className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-3 text-sm md:text-base font-bold outline-none focus:ring-2 focus:ring-indigo-500" />
                 </div>
                 <div>
                     <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-2">{t.riskQ2}</label>
-                    <input type="number" min="0" value={formData.medConditions} onChange={e => setFormData({...formData, medConditions: e.target.value})} className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-3 text-sm font-bold outline-none focus:ring-2 focus:ring-indigo-500" />
+                    <input type="text" placeholder="..." value={formData.medConditions} onChange={e => setFormData({...formData, medConditions: e.target.value})} className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-3 text-sm md:text-base font-bold outline-none focus:ring-2 focus:ring-indigo-500" />
                 </div>
             </div>
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-slate-50 dark:bg-slate-900 p-4 rounded-xl border border-slate-200 dark:border-slate-700">
@@ -278,7 +286,7 @@ export default function ConventionalForm() {
             <div className="grid md:grid-cols-2 gap-6 items-end">
                 <div>
                     <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-2">{t.riskQ4}</label>
-                    <input type="number" min="0" value={formData.symptomsCount} onChange={e => setFormData({...formData, symptomsCount: e.target.value})} className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-3 text-sm font-bold outline-none focus:ring-2 focus:ring-indigo-500" />
+                    <input type="number" min="0" value={formData.symptomsCount} onChange={e => setFormData({...formData, symptomsCount: e.target.value})} className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-3 text-sm md:text-base font-bold outline-none focus:ring-2 focus:ring-indigo-500" />
                 </div>
                 <div className="flex flex-col justify-between gap-4 bg-slate-50 dark:bg-slate-900 p-4 rounded-xl border border-slate-200 dark:border-slate-700">
                     <label className="text-sm font-bold text-slate-700 dark:text-slate-300">{t.riskQ5}</label>
@@ -314,7 +322,7 @@ export default function ConventionalForm() {
             </div>
             <div>
                 <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-2">{t.sdohFinance}</label>
-                <select value={formData.sdohFinance} onChange={e => setFormData({...formData, sdohFinance: e.target.value})} className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-3 text-sm font-bold outline-none focus:ring-2 focus:ring-amber-500">
+                <select value={formData.sdohFinance} onChange={e => setFormData({...formData, sdohFinance: e.target.value})} className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-3 text-sm md:text-base font-bold outline-none focus:ring-2 focus:ring-amber-500">
                     <option value="">--</option>
                     <option value={t.finOpt1}>{t.finOpt1}</option>
                     <option value={t.finOpt2}>{t.finOpt2}</option>
@@ -323,7 +331,7 @@ export default function ConventionalForm() {
             </div>
             <div>
                 <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-2">{t.sdohSocial}</label>
-                <select value={formData.sdohSocial} onChange={e => setFormData({...formData, sdohSocial: e.target.value})} className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-3 text-sm font-bold outline-none focus:ring-2 focus:ring-amber-500">
+                <select value={formData.sdohSocial} onChange={e => setFormData({...formData, sdohSocial: e.target.value})} className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-3 text-sm md:text-base font-bold outline-none focus:ring-2 focus:ring-amber-500">
                     <option value="">--</option>
                     <option value={t.socOpt1}>{t.socOpt1}</option>
                     <option value={t.socOpt2}>{t.socOpt2}</option>
@@ -349,7 +357,7 @@ export default function ConventionalForm() {
             ))}
             <div>
                 <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-2">{t.survRate}</label>
-                <select value={formData.rating} onChange={e => setFormData({...formData, rating: e.target.value})} className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-3 text-sm font-bold outline-none focus:ring-2 focus:ring-emerald-500">
+                <select value={formData.rating} onChange={e => setFormData({...formData, rating: e.target.value})} className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-3 text-sm md:text-base font-bold outline-none focus:ring-2 focus:ring-emerald-500">
                     <option value="">--</option>
                     <option value={t.rateOpt1}>{t.rateOpt1}</option>
                     <option value={t.rateOpt2}>{t.rateOpt2}</option>
@@ -378,7 +386,7 @@ export default function ConventionalForm() {
             </div>
             <div>
                 <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-3">{t.survImprove}</label>
-                <textarea rows={3} value={formData.improve} onChange={e => setFormData({...formData, improve: e.target.value})} className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-3 text-sm font-medium outline-none focus:ring-2 focus:ring-emerald-500" placeholder="..."></textarea>
+                <textarea rows={3} value={formData.improve} onChange={e => setFormData({...formData, improve: e.target.value})} className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-3 text-sm md:text-base font-medium outline-none focus:ring-2 focus:ring-emerald-500" placeholder="..."></textarea>
             </div>
         </div>
     </div>
@@ -392,7 +400,7 @@ export default function ConventionalForm() {
         <div className="grid md:grid-cols-2 gap-6">
             <div>
                 <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-2">{t.demoHousing}</label>
-                <select value={formData.housing} onChange={e => setFormData({...formData, housing: e.target.value})} className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-3 text-sm font-bold outline-none focus:ring-2 focus:ring-purple-500">
+                <select value={formData.housing} onChange={e => setFormData({...formData, housing: e.target.value})} className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-3 text-sm md:text-base font-bold outline-none focus:ring-2 focus:ring-purple-500">
                     <option value="">--</option>
                     <option value={t.houseOpt1}>{t.houseOpt1}</option>
                     <option value={t.houseOpt2}>{t.houseOpt2}</option>
@@ -401,35 +409,35 @@ export default function ConventionalForm() {
             </div>
             <div>
                 <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-2">{t.demoAge}</label>
-                <select value={formData.age} onChange={e => setFormData({...formData, age: e.target.value})} className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-3 text-sm font-bold outline-none focus:ring-2 focus:ring-purple-500">
+                <select value={formData.age} onChange={e => setFormData({...formData, age: e.target.value})} className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-3 text-sm md:text-base font-bold outline-none focus:ring-2 focus:ring-purple-500">
                     <option value="">--</option>
-                    <option>Under 21</option>
-                    <option>21-40</option>
-                    <option>41-60</option>
-                    <option>60+</option>
+                    <option value={t.ageOpt1}>{t.ageOpt1}</option>
+                    <option value={t.ageOpt2}>{t.ageOpt2}</option>
+                    <option value={t.ageOpt3}>{t.ageOpt3}</option>
+                    <option value={t.ageOpt4}>{t.ageOpt4}</option>
                 </select>
             </div>
             <div>
                 <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-2">{t.demoGender}</label>
-                <select value={formData.gender} onChange={e => setFormData({...formData, gender: e.target.value})} className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-3 text-sm font-bold outline-none focus:ring-2 focus:ring-purple-500">
+                <select value={formData.gender} onChange={e => setFormData({...formData, gender: e.target.value})} className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-3 text-sm md:text-base font-bold outline-none focus:ring-2 focus:ring-purple-500">
                     <option value="">--</option>
-                    <option>Male</option>
-                    <option>Female</option>
+                    <option value={t.genOpt1}>{t.genOpt1}</option>
+                    <option value={t.genOpt2}>{t.genOpt2}</option>
                 </select>
             </div>
             <div>
                 <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-2">{t.demoRace}</label>
-                <select value={formData.race} onChange={e => setFormData({...formData, race: e.target.value})} className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-3 text-sm font-bold outline-none focus:ring-2 focus:ring-purple-500">
+                <select value={formData.race} onChange={e => setFormData({...formData, race: e.target.value})} className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-3 text-sm md:text-base font-bold outline-none focus:ring-2 focus:ring-purple-500">
                     <option value="">--</option>
-                    <option>Chinese</option>
-                    <option>Malay</option>
-                    <option>Indian</option>
-                    <option>Others</option>
+                    <option value={t.raceOpt1}>{t.raceOpt1}</option>
+                    <option value={t.raceOpt2}>{t.raceOpt2}</option>
+                    <option value={t.raceOpt3}>{t.raceOpt3}</option>
+                    <option value={t.raceOpt4}>{t.raceOpt4}</option>
                 </select>
             </div>
             <div className="md:col-span-2">
                 <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-2">{t.postalCode}</label>
-                <input type="text" maxLength={2} placeholder="e.g. 73" value={formData.postalCode} onChange={e => setFormData({...formData, postalCode: e.target.value.replace(/\D/g, '')})} className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-3 text-sm font-bold outline-none focus:ring-2 focus:ring-purple-500" />
+                <input type="text" maxLength={2} placeholder="e.g. 73" value={formData.postalCode} onChange={e => setFormData({...formData, postalCode: e.target.value.replace(/\D/g, '')})} className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-3 text-sm md:text-base font-bold outline-none focus:ring-2 focus:ring-purple-500" />
             </div>
         </div>
     </div>
