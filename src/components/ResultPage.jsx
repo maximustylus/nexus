@@ -182,7 +182,6 @@ export default function ResultPage() {
       let plan = [];
       const rhs = getRegionalHealthSystem(postalSector);
       
-      // Global Interventions (Added Before Threshold Checks)
       plan.push(ALL_RESOURCES.ssmc_kkh);
       plan.push(ALL_RESOURCES.spag);
 
@@ -223,7 +222,7 @@ export default function ResultPage() {
       }
   
       const uniquePlan = Array.from(new Set(plan.map(r => r.id))).map(id => plan.find(r => r.id === id));
-      return uniquePlan.slice(0, 6); // Allow up to 6 resources to accommodate globals
+      return uniquePlan.slice(0, 6);
     };
 
     setTimeout(() => {
@@ -266,13 +265,18 @@ export default function ResultPage() {
       
       let renderWidth = pdfWidth;
       let renderHeight = (canvas.height * renderWidth) / canvas.width;
+      
+      let marginX = 0;
 
+      // Dynamic Centering Logic: If the content is taller than A4, it shrinks.
+      // We must calculate the new width and offset it so it stays horizontally centered.
       if (renderHeight > pdfPageHeight) {
         renderHeight = pdfPageHeight; 
         renderWidth = (canvas.width * renderHeight) / canvas.height;
+        marginX = (pdfWidth - renderWidth) / 2;
       }
 
-      pdf.addImage(imgData, 'PNG', 0, 0, renderWidth, renderHeight);
+      pdf.addImage(imgData, 'PNG', marginX, 0, renderWidth, renderHeight);
       pdf.save(`NEXUS_AURA_Result_${riskTier}_${activeSessionId}.pdf`);
       
     } catch (error) {
@@ -357,17 +361,16 @@ export default function ResultPage() {
   return (
     <div className="min-h-screen w-full bg-slate-50 dark:bg-slate-950 transition-colors duration-700 flex flex-col items-center py-12 px-4 md:px-6 relative overflow-x-hidden font-sans">
       
-      {/* HIDDEN PRINT TEMPLATE WITH CUSTOM LOGO AND ABSOLUTE URLs */}
+      {/* HIDDEN PRINT TEMPLATE */}
       <div style={{ position: 'absolute', top: '-10000px', left: '-10000px' }}>
         <div 
             ref={printRef} 
             className="w-[794px] bg-white text-black flex flex-col border border-slate-200 shadow-sm"
             style={{ fontFamily: 'Arial, sans-serif' }}
         >
-            {/* BRANDED CLINICAL HEADER */}
             <div className="bg-slate-900 px-10 py-8 flex justify-between items-center">
                 <div className="flex items-center gap-4">
-                    <img src={`${baseUrl}/nexus.png`} alt="NEXUS Logo" crossOrigin="anonymous" className="w-20 h-20 object-contain" />
+                    <img src={`${baseUrl}/logos/nexus.png`} alt="NEXUS Logo" crossOrigin="anonymous" className="w-10 h-10 object-contain" />
                     <div>
                         <span className="text-3xl font-black text-white tracking-widest uppercase block leading-none">NEXUS</span>
                         <span className="text-xs font-bold text-slate-400 uppercase tracking-widest mt-1 block">{t.reportTitle}</span>
@@ -381,10 +384,7 @@ export default function ResultPage() {
                 </div>
             </div>
 
-            {/* CONTENT BODY */}
             <div className="p-10 flex flex-col gap-8">
-                
-                {/* HIGH IMPACT RISK STRATIFICATION ALERT BOX */}
                 <div className={`p-8 rounded-xl ${activeTheme.printBg} shadow-md`}>
                     <h2 className={`text-3xl font-black mb-3 ${activeTheme.printText}`}>
                         {riskTier === 'Red' ? t.red : riskTier === 'Amber' ? t.amber : t.green}
@@ -399,7 +399,6 @@ export default function ResultPage() {
                     </div>
                 </div>
 
-                {/* RESOURCES GRID WITH LOGOS AND EXPOSED HYPERLINKS */}
                 <div>
                     <h3 className="text-xl font-black text-slate-900 border-b-2 border-slate-200 pb-3 mb-6 uppercase tracking-wider">{t.resources}</h3>
                     <div className="grid grid-cols-2 gap-6">
@@ -428,7 +427,6 @@ export default function ResultPage() {
                     </div>
                 </div>
 
-                {/* FOOTER */}
                 <div className="mt-auto pt-8 border-t border-slate-200 flex justify-between items-center">
                     <div className="flex items-center gap-4">
                         <img src={qrCodeUrl} alt="QR Code" crossOrigin="anonymous" className="w-20 h-20 border border-slate-200 rounded p-1" />
@@ -441,8 +439,6 @@ export default function ResultPage() {
             </div>
         </div>
       </div>
-      {/* END HIDDEN PRINT TEMPLATE */}
-
 
       <div className="absolute inset-0 z-0 opacity-[0.03] dark:opacity-[0.05] pointer-events-none" style={{ backgroundImage: 'radial-gradient(circle at 1px 1px, currentColor 1px, transparent 0)', backgroundSize: '40px 40px' }}></div>
       <div className={`fixed top-0 left-0 w-[800px] h-[800px] bg-indigo-500/10 rounded-full blur-[120px] pointer-events-none animate-float-slow ${animate ? 'opacity-100' : 'opacity-0'}`}></div>
@@ -565,7 +561,7 @@ export default function ResultPage() {
 
             <div className="px-8 md:px-12 py-6 bg-slate-50 dark:bg-slate-900/50 border-t border-slate-200 dark:border-slate-800 flex justify-between items-center mt-4">
               <div className="flex items-center gap-2">
-                <img src={`${baseUrl}/nexus.png`} alt="NEXUS Logo" crossOrigin="anonymous" className="w-5 h-5 object-contain" />
+                <img src={`${baseUrl}/logos/nexus.png`} alt="NEXUS Logo" crossOrigin="anonymous" className="w-15 h-15 object-contain" />
                 <div>
                   <span className="font-black text-slate-800 dark:text-slate-200 tracking-widest text-sm uppercase block leading-none">NEXUS</span>
                   <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">{t.reportTitle}</span>
