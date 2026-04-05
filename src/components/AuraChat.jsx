@@ -166,8 +166,34 @@ const DICTIONARY = {
     ]
   }
 };
+  
+  const [isDark, setIsDark] = useState(false);
 
-const AuraChatbot = () => {
+  useEffect(() => {
+      const storedTheme = localStorage.getItem('nexus-theme');
+      const systemPrefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+      if (storedTheme === 'dark' || (!storedTheme && systemPrefersDark)) {
+          setIsDark(true);
+          document.documentElement.classList.add('dark');
+      } else {
+          setIsDark(false);
+          document.documentElement.classList.remove('dark');
+      }
+  }, []);
+
+  const toggleTheme = () => {
+      const newTheme = !isDark;
+      setIsDark(newTheme);
+      if (newTheme) {
+          document.documentElement.classList.add('dark');
+          localStorage.setItem('nexus-theme', 'dark');
+      } else {
+          document.documentElement.classList.remove('dark');
+          localStorage.setItem('nexus-theme', 'light');
+      }
+  };
+
+  const AuraChatbot = () => {
   const navigate = useNavigate();
   const chatEndRef = useRef(null);
   
@@ -243,7 +269,7 @@ const AuraChatbot = () => {
     };
   };
 
-  const handleUserSubmission = (text) => {
+    const handleUserSubmission = (text) => {
     if (!text.trim()) return;
 
     setMessages(prev => [...prev, { sender: 'user', text }]);
@@ -324,14 +350,24 @@ const AuraChatbot = () => {
   return (
     <div className="flex flex-col h-screen max-w-md mx-auto bg-slate-50 dark:bg-slate-950 font-sans transition-colors duration-500">
       
-      <header className="flex items-center p-4 bg-white dark:bg-[#111827] shadow-sm border-b border-slate-200 dark:border-slate-800 transition-colors duration-500">
-        <button onClick={() => navigate(-1)} className="p-2 mr-2 text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-full transition-colors">
-          <ChevronLeft size={24} />
-        </button>
-        <div className="flex items-center gap-2">
-          <Sparkles className="text-indigo-500 dark:text-indigo-400" size={20} />
-          <h1 className="font-semibold text-lg text-slate-900 dark:text-white">AURA</h1>
+    <header className="flex items-center justify-between p-4 bg-white dark:bg-[#111827] shadow-sm border-b border-slate-200 dark:border-slate-800 transition-colors duration-500">
+        <div className="flex items-center">
+            <button onClick={() => navigate(-1)} className="p-2 mr-2 text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-full transition-colors">
+              <ChevronLeft size={24} />
+            </button>
+            <div className="flex items-center gap-2">
+              <Sparkles className="text-indigo-500 dark:text-indigo-400" size={20} />
+              <h1 className="font-semibold text-lg text-slate-900 dark:text-white">AURA</h1>
+            </div>
         </div>
+        
+        {/* NEW TOP-RIGHT TOGGLE */}
+        <button 
+            onClick={toggleTheme} 
+            className="p-2 rounded-full bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-400 shadow-sm hover:scale-105 active:scale-95 transition-all"
+        >
+            {isDark ? <Sun size={18} className="text-amber-400" /> : <Moon size={18} />}
+        </button>
       </header>
 
       <div className="flex-1 overflow-y-auto p-4 space-y-4">
