@@ -15,7 +15,7 @@ const DICTIONARY = {
     redDesc: 'AURA Analysis: Your risk profile indicates a need for supervised care. We highly recommend consulting a healthcare professional before starting a new exercise programme.',
     amberDesc: 'AURA Analysis: You have moderate needs. Consider gradually increasing your activity levels and exploring structured community resources.',
     greenDesc: 'AURA Analysis: Excellent! You meet the physical activity guidelines. Keep up the great work and maintain your routine.',
-    sdohFinText: 'We noted that cost is a concern for you. We have prioritised free and fully subsidised community options below.',
+    sdohFinText: 'We noted that cost is a concern for you.classn We have prioritised free and fully subsidised community options below.',
     sdohSocText: 'Staying connected is vital for your health. We have included community network programmes to help you meet new people.',
     sdohPsychoText: 'Your mental wellbeing is just as important as your physical health. We have added supportive emotional wellness resources for you.',
     trendActive: 'Longitudinal Tracking Active',
@@ -443,15 +443,23 @@ export default function ResultPage() {
       <div className="absolute inset-0 z-0 opacity-[0.03] dark:opacity-[0.05] pointer-events-none" style={{ backgroundImage: 'radial-gradient(circle at 1px 1px, currentColor 1px, transparent 0)', backgroundSize: '40px 40px' }}></div>
       <div className={`fixed top-0 left-0 w-[800px] h-[800px] bg-indigo-500/10 rounded-full blur-[120px] pointer-events-none animate-float-slow ${animate ? 'opacity-100' : 'opacity-0'}`}></div>
       <div className={`fixed bottom-0 right-0 w-[600px] h-[600px] bg-emerald-500/10 rounded-full blur-[100px] pointer-events-none animate-float-delayed ${animate ? 'opacity-100' : 'opacity-0'}`}></div>
-
       <div className={`relative z-10 w-full max-w-3xl transition-all duration-1000 transform ${animate ? 'translate-y-0 opacity-100 scale-100' : 'translate-y-10 opacity-0 scale-95'}`}>
-        
-        <div className="flex flex-col md:flex-row justify-between items-center mb-8 gap-4 px-2">
+      <div className="flex flex-col md:flex-row justify-between items-center mb-8 gap-4 px-2">
           <button onClick={() => navigate('/')} className="flex items-center self-start gap-2 px-4 py-2 bg-white/60 dark:bg-slate-800/60 backdrop-blur-md text-slate-500 dark:text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400 font-black text-xs uppercase tracking-widest rounded-full border border-slate-200 dark:border-slate-700 shadow-sm transition-all group">
             <ArrowLeft size={16} className="group-hover:-translate-x-1 transition-transform"/> {t.back}
           </button>
           
-          <div className="flex space-x-3 self-end md:self-auto">
+          <div className="flex space-x-3 items-center self-end md:self-auto">
+            
+            {/* NEW INTEGRATED TOGGLE */}
+            <button 
+                onClick={toggleTheme} 
+                className="flex items-center gap-2 px-3 py-2 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-bold text-xs uppercase tracking-widest rounded-lg border border-slate-200 dark:border-slate-700 shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all"
+            >
+                {isDark ? <Sun size={14} className="text-amber-400" /> : <Moon size={14} />}
+                <span className="hidden md:inline">{isDark ? 'Light' : 'Dark'}</span>
+            </button>
+
             <button onClick={handleShare} className="flex items-center gap-2 px-4 py-2 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-bold text-xs uppercase tracking-widest rounded-lg border border-slate-200 dark:border-slate-700 shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all">
               <Share2 size={14} /> {t.share}
             </button>
