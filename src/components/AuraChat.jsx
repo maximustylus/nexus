@@ -4,12 +4,13 @@ import { recordTelemetry } from '../utils/telemetry';
 import { calculateRiskScore } from '../utils/scoring';
 import { ChevronLeft, Send, Sparkles } from 'lucide-react';
 
-// Multilingual Dictionary with MI Reflection Logic
 const DICTIONARY = {
   en: {
     back: 'Back',
     typing: 'AURA is typing...',
     inputPlaceholder: 'Type your message...',
+    conclusion: 'Thank you for exploring this with me. I have mapped your profile and will now align you with the safest community programmes.',
+    error: 'There was a secure connection error while saving your profile. Please try again.',
     prompts: [
       "Hi! I'm AURA. To help find the right community resources for you, let's have a quick chat. Roughly how many days a week do you exercise, and for how long each time?",
       "Do you do any muscle-strengthening activities? Also, do you have any chronic conditions (like high blood pressure) or experience chest pain or dizziness when active?",
@@ -18,15 +19,15 @@ const DICTIONARY = {
       "Finally, just to make sure my recommendations fit you perfectly, could you share your age group, gender, race, and the first 2 digits of your postal code?"
     ],
     reflections: [
-      // Step 0 -> 1: Elicit Change Talk / Affirmation
-      (input) => input.includes('0') 
-        ? "It can be really tough to find the time or energy to start. Let's see how we can build something manageable." 
-        : "That's a great baseline. Any movement is a step in the right direction.",
-      // Step 1 -> 2: Acknowledge Risk Factors
+      (input) => {
+        const match = input.match(/\d+/);
+        const days = match ? parseInt(match[0], 10) : null;
+        return days === 0 
+          ? "It can be really tough to find the time or energy to start. Let's see how we can build something manageable." 
+          : "That's a great baseline. Any movement is a step in the right direction.";
+      },
       (input) => "Thank you for sharing that. Safety is our top priority, so keeping track of those factors is vital.",
-      // Step 2 -> 3: Validate SDOH Trust
       (input) => "I hear you. Your comfort and trust in healthcare providers are completely valid.",
-      // Step 3 -> 4: Empathise with Barriers
       (input) => "That is a very real challenge. Many people face similar hurdles, and identifying them helps us find better workarounds."
     ],
     quickReplies: [
@@ -41,6 +42,8 @@ const DICTIONARY = {
     back: 'Kembali',
     typing: 'AURA sedang menaip...',
     inputPlaceholder: 'Taip mesej anda...',
+    conclusion: 'Terima kasih kerana meneroka bersama saya. Saya telah memetakan profil anda dan kini akan menyelaraskan anda dengan program komuniti yang paling selamat.',
+    error: 'Terdapat ralat sambungan selamat semasa menyimpan profil anda. Sila cuba lagi.',
     prompts: [
       "Hai! Saya AURA. Jom borak sekejap supaya saya boleh cari sumber komuniti yang ngam untuk anda. Agak-agak berapa hari seminggu anda bersenam, dan berapa lama setiap sesi?",
       "Faham. Ada buat senaman kuatkan otot tak? Lepas tu, ada tak apa-apa penyakit kronik (macam darah tinggi) atau rasa sakit dada atau pening bila aktif?",
@@ -49,7 +52,13 @@ const DICTIONARY = {
       "Akhir sekali, untuk pastikan cadangan saya betul-betul sesuai dengan profil anda, boleh kongsi kumpulan umur, jantina, bangsa, dan 2 digit pertama poskod anda?"
     ],
     reflections: [
-      (input) => input.includes('0') ? "Memang susah nak cari masa atau tenaga untuk mula. Kita cuba cari jalan yang paling sesuai dan mudah untuk anda." : "Permulaan yang bagus. Sebarang pergerakan adalah langkah yang baik.",
+      (input) => {
+        const match = input.match(/\d+/);
+        const days = match ? parseInt(match[0], 10) : null;
+        return days === 0 
+          ? "Memang susah nak cari masa atau tenaga untuk mula. Kita cuba cari jalan yang paling sesuai dan mudah untuk anda." 
+          : "Permulaan yang bagus. Sebarang pergerakan adalah langkah yang baik.";
+      },
       (input) => "Terima kasih kerana sudi kongsi. Keselamatan anda adalah keutamaan kami, jadi maklumat ini sangat penting.",
       (input) => "Saya faham. Keselesaan dan kepercayaan anda terhadap penyedia perkhidmatan kesihatan memang sangat penting.",
       (input) => "Itu memang cabaran yang nyata. Ramai yang lalui benda sama, mengetahui hal ini bantu kami cari jalan penyelesaian yang lebih baik."
@@ -66,6 +75,8 @@ const DICTIONARY = {
     back: '返回',
     typing: 'AURA 正在输入...',
     inputPlaceholder: '输入您的消息...',
+    conclusion: '感谢您与我交流。我已经记录了您的个人资料，现在将为您匹配最安全的社区项目。',
+    error: '保存您的个人资料时发生安全连接错误。请重试。',
     prompts: [
       "你好！我是 AURA。为了帮你找到合适的社区资源，我们来简单聊聊吧。你通常每个星期做几天运动？每次大概多久？",
       "明白了。你有做一些强化肌肉的运动吗？另外，有没有慢性病（比如高血压），或者在活动时觉得胸痛或头晕？",
@@ -74,7 +85,13 @@ const DICTIONARY = {
       "最后，为了确保我的建议完全适合你，可以告诉我你的年龄段、性别、种族，以及邮政编码的前两位数吗？"
     ],
     reflections: [
-      (input) => input.includes('0') ? "万事开头难，找时间或精力运动确实不易。让我们看看如何制定一个轻松的计划。" : "很好的开始。只要动起来就是朝着正确的方向迈进。",
+      (input) => {
+        const match = input.match(/\d+/);
+        const days = match ? parseInt(match[0], 10) : null;
+        return days === 0 
+          ? "万事开头难，找时间或精力运动确实不易。让我们看看如何制定一个轻松的计划。" 
+          : "很好的开始。只要动起来就是朝着正确的方向迈进。";
+      },
       (input) => "谢谢你的分享。安全是我们的首要任务，了解这些情况非常重要。",
       (input) => "我完全理解。你对医疗服务提供者的信任和舒适感是非常合理的。",
       (input) => "这是一个很现实的挑战。很多人都面临类似的困难，了解这些能帮我们找到更好的解决办法。"
@@ -91,6 +108,8 @@ const DICTIONARY = {
     back: 'பின்செல்',
     typing: 'AURA தட்டச்சு செய்கிறார்...',
     inputPlaceholder: 'உங்கள் செய்தியை உள்ளிடவும்...',
+    conclusion: 'என்னுடன் இதை ஆராய்ந்ததற்கு நன்றி. நான் உங்கள் சுயவிவரத்தை வரைபடமாக்கியுள்ளேன், இப்போது உங்களை பாதுகாப்பான சமூக திட்டங்களுடன் இணைப்பேன்.',
+    error: 'உங்கள் சுயவிவரத்தைச் சேமிக்கும் போது பாதுகாப்பான இணைப்பு பிழை ஏற்பட்டது. தயவுசெய்து மீண்டும் முயற்சிக்கவும்.',
     prompts: [
       "வணக்கம்! நான் AURA. உங்களுக்கான சரியான சமூக வளங்களைக் கண்டறிய, சிறிது பேசலாம். வாரத்திற்கு எத்தனை நாட்கள் உடற்பயிற்சி செய்கிறீர்கள், ஒவ்வொரு முறையும் எவ்வளவு நேரம்?",
       "புரிந்தது. தசை வலுப்படுத்தும் பயிற்சிகளைச் செய்கிறீர்களா? மேலும், உங்களுக்கு நாள்பட்ட நோய்கள் (உயர் ரத்த அழுத்தம் போன்றவை) உள்ளதா, அல்லது சுறுசுறுப்பாக இருக்கும்போது நெஞ்சு வலி அல்லது தலைச்சுற்றல் வருமா?",
@@ -99,7 +118,13 @@ const DICTIONARY = {
       "இறுதியாக, எனது பரிந்துரைகள் உங்களுக்கு சரியாக பொருந்துவதை உறுதி செய்ய, உங்கள் வயது, பாலினம், இனம் மற்றும் அஞ்சல் குறியீட்டின் முதல் 2 இலக்கங்களை பகிர முடியுமா?"
     ],
     reflections: [
-      (input) => input.includes('0') ? "தொடங்குவதற்கு நேரமோ அல்லது ஆற்றலோ கிடைப்பது கடினமாக இருக்கலாம். உங்களுக்கு ஏற்ற ஒரு வழியை நாங்கள் கண்டுபிடிக்க முயல்வோம்." : "இது ஒரு சிறந்த தொடக்கம். எந்தவொரு உடல் அசைவும் சரியான திசையை நோக்கிய ஒரு படியாகும்.",
+      (input) => {
+        const match = input.match(/\d+/);
+        const days = match ? parseInt(match[0], 10) : null;
+        return days === 0 
+          ? "தொடங்குவதற்கு நேரமோ அல்லது ஆற்றலோ கிடைப்பது கடினமாக இருக்கலாம். உங்களுக்கு ஏற்ற ஒரு வழியை நாங்கள் கண்டுபிடிக்க முயல்வோம்." 
+          : "இது ஒரு சிறந்த தொடக்கம். எந்தவொரு உடல் அசைவும் சரியான திசையை நோக்கிய ஒரு படியாகும்.";
+      },
       (input) => "பகிர்ந்ததற்கு நன்றி. பாதுகாப்பு எங்கள் முதன்மை முன்னுரிமை, எனவே இந்த காரணிகளைக் கண்காணிப்பது முக்கியம்.",
       (input) => "எனக்குப் புரிகிறது. சுகாதார வழங்குநர்கள் மீதான உங்கள் வசதியும் நம்பிக்கையும் முற்றிலும் சரியானவை.",
       (input) => "இது மிகவும் உண்மையான சவால். பலரும் இதேபோன்ற தடைகளை எதிர்கொள்கின்றனர், இதை அறிவது சிறந்த தீர்வுகளைக் கண்டறிய உதவுகிறது."
@@ -117,8 +142,6 @@ const DICTIONARY = {
 const AuraChatbot = ({ userLanguage = 'en' }) => {
   const navigate = useNavigate();
   const chatEndRef = useRef(null);
-  
-  // Fallback to English if an unsupported language code is passed
   const langData = DICTIONARY[userLanguage] || DICTIONARY['en'];
   
   const [currentStep, setCurrentStep] = useState(0);
@@ -127,14 +150,12 @@ const AuraChatbot = ({ userLanguage = 'en' }) => {
   const [isTyping, setIsTyping] = useState(false);
   const [collectedData, setCollectedData] = useState({});
 
-  // Initialise chat
   useEffect(() => {
     if (messages.length === 0) {
       appendBotMessage(langData.prompts[0]);
     }
   }, []);
 
-  // Auto-scroll mechanism
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, isTyping]);
@@ -150,27 +171,22 @@ const AuraChatbot = ({ userLanguage = 'en' }) => {
   const handleUserSubmission = (text) => {
     if (!text.trim()) return;
 
-    // 1. Record User Message
     setMessages(prev => [...prev, { sender: 'user', text }]);
     setUserInput('');
 
-    // 2. Map data to clinical schema based on current step
     const stepKeys = ['activity_level', 'risk_factors', 'community_trust', 'barriers', 'demographics'];
     const currentKey = stepKeys[currentStep];
     const updatedData = { ...collectedData, [currentKey]: text };
     setCollectedData(updatedData);
 
-    // 3. Execute MI Dual-Message Flow
     setIsTyping(true);
     
     setTimeout(() => {
-      // Phase A: Generate and display the Reflection (Elicit/Affirm/Acknowledge)
       if (currentStep < langData.reflections.length) {
         const reflectionText = langData.reflections[currentStep](text);
         setMessages(prev => [...prev, { sender: 'bot', text: reflectionText }]);
       }
 
-      // Phase B: Pause, then introduce the next clinical prompt
       const nextStep = currentStep + 1;
       if (nextStep < langData.prompts.length) {
         setIsTyping(true);
@@ -178,43 +194,50 @@ const AuraChatbot = ({ userLanguage = 'en' }) => {
           setCurrentStep(nextStep);
           setMessages(prev => [...prev, { sender: 'bot', text: langData.prompts[nextStep] }]);
           setIsTyping(false);
-        }, 1200); // 1.2s Natural reading/pacing pause
+        }, 1200);
       } else {
         concludeTriage(updatedData);
       }
-    }, 800); // 0.8s Initial processing delay
+    }, 800);
   };
 
   const handleFormSubmit = (e) => {
-    e.preventDefault(); // Prevents page reload
+    e.preventDefault();
     handleUserSubmission(userInput);
   };
 
   const concludeTriage = async (finalData) => {
     setIsTyping(true);
-    
-    // Process clinical payload
     const riskScore = calculateRiskScore(finalData.risk_factors);
     
-    // Dispatch to backend
-    await recordTelemetry({
-      event: 'aura_triage_complete',
-      payload: finalData,
-      computedRisk: riskScore
-    });
+    try {
+      await recordTelemetry({
+        event: 'aura_triage_complete',
+        payload: finalData,
+        computedRisk: riskScore
+      });
 
-    setTimeout(() => {
-      setMessages(prev => [...prev, { 
-        sender: 'bot', 
-        text: 'Thank you for exploring this with me. I have mapped your profile and will now align you with the safest community programmes.' 
-      }]);
-      setIsTyping(false);
-    }, 1000);
+      setTimeout(() => {
+        setMessages(prev => [...prev, { 
+          sender: 'bot', 
+          text: langData.conclusion 
+        }]);
+        setIsTyping(false);
+      }, 1000);
+      
+    } catch (error) {
+      setTimeout(() => {
+        setMessages(prev => [...prev, { 
+          sender: 'bot', 
+          text: langData.error
+        }]);
+        setIsTyping(false);
+      }, 1000);
+    }
   };
 
   return (
     <div className="flex flex-col h-screen max-w-md mx-auto bg-gray-50 font-sans">
-      {/* Header */}
       <header className="flex items-center p-4 bg-white shadow-sm">
         <button onClick={() => navigate(-1)} className="p-2 mr-2 hover:bg-gray-100 rounded-full transition-colors">
           <ChevronLeft size={24} />
@@ -225,7 +248,6 @@ const AuraChatbot = ({ userLanguage = 'en' }) => {
         </div>
       </header>
 
-      {/* Chat Transcript */}
       <div className="flex-1 overflow-y-auto p-4 space-y-4">
         {messages.map((msg, idx) => (
           <div key={idx} className={`flex ${msg.sender === 'user' ? 'justify-end' : 'justify-start'}`}>
@@ -248,9 +270,7 @@ const AuraChatbot = ({ userLanguage = 'en' }) => {
         <div ref={chatEndRef} />
       </div>
 
-      {/* Input Console */}
       <div className="p-4 bg-white border-t border-gray-200 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)]">
-        {/* Dynamic Quick Replies */}
         {!isTyping && currentStep < langData.quickReplies.length && (
           <div className="flex flex-wrap gap-2 mb-4">
             {langData.quickReplies[currentStep].map((reply, idx) => (
@@ -265,7 +285,6 @@ const AuraChatbot = ({ userLanguage = 'en' }) => {
           </div>
         )}
 
-        {/* Semantic Form Input */}
         <form onSubmit={handleFormSubmit} className="flex items-center gap-2">
           <input
             type="text"
