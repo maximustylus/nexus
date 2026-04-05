@@ -1,100 +1,77 @@
-import React, { useEffect, useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ChevronLeft, Globe } from 'lucide-react';
+import { Globe2, ChevronRight } from 'lucide-react';
 
 const LANGUAGES = [
-  { code: 'en', label: 'English', greeting: 'Welcome', hoverColor: 'group-hover:border-emerald-500/50', bgGlow: 'from-emerald-400 to-teal-500' },
-  { code: 'ms', label: 'Melayu', greeting: 'Selamat Datang', hoverColor: 'group-hover:border-indigo-500/50', bgGlow: 'from-indigo-400 to-purple-500' },
-  { code: 'zh', label: '中文', greeting: '欢迎', hoverColor: 'group-hover:border-rose-500/50', bgGlow: 'from-rose-400 to-pink-500' },
-  { code: 'ta', label: 'தமிழ்', greeting: 'வரவேற்பு', hoverColor: 'group-hover:border-amber-500/50', bgGlow: 'from-amber-400 to-orange-500' },
+  { code: 'en', label: 'English', greeting: 'Welcome', color: 'indigo' },
+  { code: 'ms', label: 'Bahasa Melayu', greeting: 'Selamat Datang', color: 'emerald' },
+  { code: 'zh', label: '中文', greeting: '欢迎', color: 'amber' },
+  { code: 'ta', label: 'தமிழ்', greeting: 'வரவேற்கிறோம்', color: 'purple' }
 ];
 
 export default function LanguageGate() {
   const navigate = useNavigate();
   const [animate, setAnimate] = useState(false);
+  const [hoveredLang, setHoveredLang] = useState(null);
 
   useEffect(() => {
-    // Trigger entrance animation slightly after mount for a smooth transition
     setTimeout(() => setAnimate(true), 100);
   }, []);
 
-  const handleLanguageSelect = (code) => {
+  const handleSelect = (code) => {
     localStorage.setItem('nexus_language', code);
     navigate('/individuals/pathway');
   };
 
   return (
-    <div className="min-h-screen w-full bg-slate-50 dark:bg-slate-950 transition-colors duration-700 flex flex-col items-center justify-center relative overflow-hidden p-4 md:p-6 font-sans">
+    <div className="min-h-screen w-full bg-slate-50 dark:bg-slate-950 transition-colors duration-700 flex flex-col items-center justify-center p-4 md:p-6 relative overflow-hidden font-sans">
       
-      {/* VISUAL BACKGROUND ELEMENTS (Matches Welcome Screen) */}
-      <div className="absolute inset-0 z-0 opacity-[0.03] dark:opacity-[0.05] pointer-events-none" 
-           style={{ backgroundImage: 'radial-gradient(circle at 1px 1px, currentColor 1px, transparent 0)', backgroundSize: '40px 40px' }}>
-      </div>
-      <div className={`fixed top-0 left-0 w-[800px] h-[800px] bg-emerald-500/10 rounded-full blur-[120px] pointer-events-none animate-float-slow ${animate ? 'opacity-100' : 'opacity-0'}`}></div>
-      <div className={`fixed bottom-0 right-0 w-[600px] h-[600px] bg-indigo-500/10 rounded-full blur-[100px] pointer-events-none animate-float-delayed ${animate ? 'opacity-100' : 'opacity-0'}`}></div>
+      {/* UNIFIED BACKGROUND ELEMENTS */}
+      <div className="absolute inset-0 z-0 opacity-[0.03] dark:opacity-[0.05] pointer-events-none" style={{ backgroundImage: 'radial-gradient(circle at 1px 1px, currentColor 1px, transparent 0)', backgroundSize: '40px 40px' }}></div>
+      <div className={`fixed top-0 left-0 w-[600px] h-[600px] bg-blue-500/10 rounded-full blur-[120px] pointer-events-none animate-float-slow transition-opacity duration-1000 ${animate ? 'opacity-100' : 'opacity-0'}`}></div>
+      <div className={`fixed bottom-0 right-0 w-[500px] h-[500px] bg-teal-500/10 rounded-full blur-[100px] pointer-events-none animate-float-delayed transition-opacity duration-1000 ${animate ? 'opacity-100' : 'opacity-0'}`}></div>
 
-      <div className={`relative z-10 w-full max-w-4xl transition-all duration-1000 transform ${animate ? 'translate-y-0 opacity-100 scale-100' : 'translate-y-10 opacity-0 scale-95'}`}>
+      <div className={`relative z-10 w-full max-w-md transition-all duration-1000 transform ${animate ? 'translate-y-0 opacity-100 scale-100' : 'translate-y-10 opacity-0 scale-95'}`}>
         
-        {/* TOP BAR: Back Button & Context */}
-        <div className="flex justify-between items-center mb-12 px-2">
-          <button 
-            onClick={() => navigate('/')} 
-            className="flex items-center gap-2 px-4 py-2 bg-white/60 dark:bg-slate-800/60 backdrop-blur-md text-slate-500 dark:text-slate-400 hover:text-emerald-600 dark:hover:text-emerald-400 font-black text-xs uppercase tracking-widest rounded-full border border-slate-200 dark:border-slate-700 shadow-sm transition-all group"
-          >
-              <ChevronLeft size={16} className="group-hover:-translate-x-1 transition-transform"/> Gateway
-          </button>
+        <div className="bg-white dark:bg-[#111827] rounded-[2rem] shadow-2xl border border-slate-200 dark:border-slate-800 overflow-hidden text-center">
           
-          <div className="flex items-center gap-2 opacity-60">
-              <Globe size={16} className="text-slate-500 dark:text-slate-400" />
-              <span className="text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest">Protocol Active</span>
+          {/* HEADER */}
+          <div className="px-8 pt-12 pb-8 flex flex-col items-center">
+            <div className="w-16 h-16 bg-slate-50 dark:bg-slate-800/50 rounded-2xl flex items-center justify-center shadow-inner mb-6 border border-slate-100 dark:border-slate-700">
+              <Globe2 className="w-8 h-8 text-slate-700 dark:text-slate-300" />
+            </div>
+            <h1 className="text-3xl font-black text-slate-900 dark:text-white tracking-tight mb-2">
+              {hoveredLang ? LANGUAGES.find(l => l.code === hoveredLang)?.greeting : 'Welcome'}
+            </h1>
+            <p className="text-sm font-bold text-slate-400 uppercase tracking-widest">
+              Select your language
+            </p>
           </div>
-        </div>
 
-        {/* HEADER */}
-        <div className="text-center mb-12">
-          <h1 className="text-4xl md:text-5xl font-black text-slate-900 dark:text-white tracking-tighter mb-4">
-            Select Language
-          </h1>
-          <p className="text-slate-500 dark:text-slate-400 font-medium text-sm md:text-base max-w-lg mx-auto">
-            Please choose your preferred language to start your journey.
-          </p>
-        </div>
-        
-        {/* LANGUAGE GRID */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
-          {LANGUAGES.map((lang) => (
-            <button
-              key={lang.code}
-              onClick={() => handleLanguageSelect(lang.code)}
-              className={`group relative overflow-hidden bg-white dark:bg-[#111827] border border-slate-200 dark:border-slate-800 shadow-sm hover:shadow-xl rounded-[2rem] p-8 md:p-12 flex flex-col items-center justify-center transition-all duration-300 hover:-translate-y-1 ${lang.hoverColor}`}
-            >
-              {/* Subtle hover gradient background */}
-              <div className={`absolute inset-0 bg-gradient-to-br ${lang.bgGlow} opacity-0 group-hover:opacity-[0.03] dark:group-hover:opacity-[0.05] transition-opacity duration-300`}></div>
-              
-              <span className="text-4xl md:text-5xl font-black text-slate-900 dark:text-white mb-4 group-hover:scale-110 transition-transform duration-300 relative z-10">
-                {lang.label}
-              </span>
-              <span className="text-slate-500 dark:text-slate-400 text-sm md:text-base font-bold tracking-widest uppercase relative z-10">
-                {lang.greeting}
-              </span>
-            </button>
-          ))}
+          {/* LANGUAGE OPTIONS */}
+          <div className="p-4 bg-slate-50 dark:bg-slate-900/50 border-t border-slate-100 dark:border-slate-800">
+            <div className="grid gap-3">
+              {LANGUAGES.map((lang) => (
+                <button
+                  key={lang.code}
+                  onClick={() => handleSelect(lang.code)}
+                  onMouseEnter={() => setHoveredLang(lang.code)}
+                  onMouseLeave={() => setHoveredLang(null)}
+                  className={`flex items-center justify-between p-4 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl hover:border-${lang.color}-500 hover:shadow-md transition-all group active:scale-95`}
+                >
+                  <span className="text-lg font-bold text-slate-700 dark:text-slate-200 group-hover:text-slate-900 dark:group-hover:text-white transition-colors">
+                    {lang.label}
+                  </span>
+                  <div className={`w-8 h-8 rounded-full bg-slate-50 dark:bg-slate-900 flex items-center justify-center group-hover:bg-${lang.color}-50 dark:group-hover:bg-${lang.color}-500/20 transition-colors`}>
+                    <ChevronRight className={`w-4 h-4 text-slate-400 group-hover:text-${lang.color}-500 transition-colors`} />
+                  </div>
+                </button>
+              ))}
+            </div>
+          </div>
+
         </div>
       </div>
-
-      {/* ANIMATIONS */}
-      <style>{`
-          @keyframes float-slow {
-              0%, 100% { transform: translate(0, 0); }
-              50% { transform: translate(20px, 40px); }
-          }
-          @keyframes float-delayed {
-              0%, 100% { transform: translate(0, 0); }
-              50% { transform: translate(-30px, -20px); }
-          }
-          .animate-float-slow { animation: float-slow 15s ease-in-out infinite; }
-          .animate-float-delayed { animation: float-delayed 18s ease-in-out infinite; }
-      `}</style>
     </div>
   );
 }
