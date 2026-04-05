@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { useLocation, useNavigate, Navigate } from 'react-router-dom';
-import { Download, Share2, ArrowLeft, ExternalLink, ShieldAlert, Activity, CheckCircle2, Loader2, TrendingUp } from 'lucide-react';
+import { Download, Share2, ArrowLeft, ExternalLink, ShieldAlert, Activity, CheckCircle2, Loader2, Sparkles, TrendingUp } from 'lucide-react';
 import { jsPDF } from 'jspdf';
 import html2canvas from 'html2canvas';
 import { recordTelemetry } from '../utils/telemetry';
@@ -171,6 +171,9 @@ export default function ResultPage() {
   const nexusOfficialUrl = 'https://for.sg/nexus';
   const qrCodeUrl = `https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent(nexusOfficialUrl)}`;
 
+  // BASE URL FOR LOGOS TO RESOLVE HTML2CANVAS CORS ISSUES
+  const baseUrl = window.location.origin;
+
   useEffect(() => {
     const storedLang = localStorage.getItem('nexus_language');
     if (storedLang && DICTIONARY[storedLang]) setLang(storedLang);
@@ -295,33 +298,31 @@ export default function ResultPage() {
     window.open(url, '_blank');
   };
 
+  // UI Theme Config
   const themeMap = {
     Red: {
       gradient: 'from-rose-500 to-red-600',
       icon: <ShieldAlert className="w-12 h-12 text-white mb-4 drop-shadow-md" />,
       titleColor: 'text-rose-600 dark:text-rose-400',
       bgCard: 'bg-rose-50 dark:bg-rose-500/10 border-rose-100 dark:border-rose-500/20',
-      printBorder: 'border-rose-500',
-      printBg: 'bg-rose-50',
-      printText: 'text-rose-700'
+      printBg: 'bg-rose-600',
+      printText: 'text-white'
     },
     Amber: {
       gradient: 'from-amber-400 to-orange-500',
       icon: <Activity className="w-12 h-12 text-white mb-4 drop-shadow-md" />,
       titleColor: 'text-amber-600 dark:text-amber-500',
       bgCard: 'bg-amber-50 dark:bg-amber-500/10 border-amber-100 dark:border-amber-500/20',
-      printBorder: 'border-amber-500',
-      printBg: 'bg-amber-50',
-      printText: 'text-amber-700'
+      printBg: 'bg-amber-500',
+      printText: 'text-white'
     },
     Green: {
       gradient: 'from-emerald-400 to-teal-500',
       icon: <CheckCircle2 className="w-12 h-12 text-white mb-4 drop-shadow-md" />,
       titleColor: 'text-emerald-600 dark:text-emerald-400',
       bgCard: 'bg-emerald-50 dark:bg-emerald-500/10 border-emerald-100 dark:border-emerald-500/20',
-      printBorder: 'border-emerald-500',
-      printBg: 'bg-emerald-50',
-      printText: 'text-emerald-700'
+      printBg: 'bg-emerald-600',
+      printText: 'text-white'
     }
   };
 
@@ -349,7 +350,7 @@ export default function ResultPage() {
   return (
     <div className="min-h-screen w-full bg-slate-50 dark:bg-slate-950 transition-colors duration-700 flex flex-col items-center py-12 px-4 md:px-6 relative overflow-x-hidden font-sans">
       
-      {/* HIDDEN PRINT TEMPLATE WITH CUSTOM LOGO AND FOR.SG ROUTING */}
+      {/* HIDDEN PRINT TEMPLATE WITH CUSTOM LOGO AND ABSOLUTE URLs */}
       <div style={{ position: 'absolute', top: '-10000px', left: '-10000px' }}>
         <div 
             ref={printRef} 
@@ -358,8 +359,8 @@ export default function ResultPage() {
         >
             {/* BRANDED CLINICAL HEADER */}
             <div className="bg-slate-900 px-10 py-8 flex justify-between items-center">
-                <div className="flex items-center gap-3">
-                    <img src="/logos/nexus.png" alt="NEXUS Logo" className="w-8 h-8 object-contain" />
+                <div className="flex items-center gap-4">
+                    <img src={`${baseUrl}/logos/nexus.png`} alt="NEXUS Logo" crossOrigin="anonymous" className="w-10 h-10 object-contain" />
                     <div>
                         <span className="text-3xl font-black text-white tracking-widest uppercase block leading-none">NEXUS</span>
                         <span className="text-xs font-bold text-slate-400 uppercase tracking-widest mt-1 block">{t.reportTitle}</span>
@@ -376,32 +377,42 @@ export default function ResultPage() {
             {/* CONTENT BODY */}
             <div className="p-10 flex flex-col gap-8">
                 
-                {/* RISK STRATIFICATION ALERT BOX */}
-                <div className={`p-6 border-l-8 ${activeTheme.printBorder} ${activeTheme.printBg} rounded-r-xl`}>
-                    <h2 className={`text-2xl font-black mb-2 ${activeTheme.printText}`}>
+                {/* HIGH IMPACT RISK STRATIFICATION ALERT BOX */}
+                <div className={`p-8 rounded-xl ${activeTheme.printBg} shadow-md`}>
+                    <h2 className={`text-3xl font-black mb-3 ${activeTheme.printText}`}>
                         {riskTier === 'Red' ? t.red : riskTier === 'Amber' ? t.amber : t.green}
                     </h2>
-                    <p className="text-slate-700 text-base leading-relaxed mb-4 font-medium">
+                    <p className={`text-lg leading-relaxed mb-4 font-bold ${activeTheme.printText}`}>
                         {riskTier === 'Red' ? t.redDesc : riskTier === 'Amber' ? t.amberDesc : t.greenDesc}
                     </p>
-                    <div className="space-y-2">
-                        {data.sdohFinancial && <p className="text-sm font-bold text-slate-600">• {t.sdohFinText}</p>}
-                        {data.sdohSocial && <p className="text-sm font-bold text-slate-600">• {t.sdohSocText}</p>}
-                        {data.psychoFlag && <p className="text-sm font-bold text-slate-600">• {t.sdohPsychoText}</p>}
+                    <div className="space-y-2 mt-4 pt-4 border-t border-white/20">
+                        {data.sdohFinancial && <p className={`text-sm font-bold ${activeTheme.printText}`}>• {t.sdohFinText}</p>}
+                        {data.sdohSocial && <p className={`text-sm font-bold ${activeTheme.printText}`}>• {t.sdohSocText}</p>}
+                        {data.psychoFlag && <p className={`text-sm font-bold ${activeTheme.printText}`}>• {t.sdohPsychoText}</p>}
                     </div>
                 </div>
 
-                {/* RESOURCES GRID WITH EXPOSED HYPERLINKS */}
+                {/* RESOURCES GRID WITH LOGOS AND EXPOSED HYPERLINKS */}
                 <div>
                     <h3 className="text-xl font-black text-slate-900 border-b-2 border-slate-200 pb-3 mb-6 uppercase tracking-wider">{t.resources}</h3>
                     <div className="grid grid-cols-2 gap-6">
                         {suggestedResources.map((resource) => (
-                            <div key={resource.id} className="p-5 border border-slate-200 rounded-xl bg-slate-50 flex flex-col justify-between">
+                            <div key={resource.id} className="p-6 border border-slate-200 rounded-xl bg-slate-50 flex flex-col justify-between">
                                 <div>
-                                    <h4 className="font-black text-slate-900 mb-2">{resource[lang]?.title || resource.en.title}</h4>
-                                    <p className="text-sm text-slate-600 mb-4">{resource[lang]?.desc || resource.en.desc}</p>
+                                    <div className="flex items-center gap-4 mb-3">
+                                        <div className="w-12 h-12 shrink-0 bg-white rounded-lg border border-slate-200 flex items-center justify-center p-1.5 overflow-hidden">
+                                            <img 
+                                                src={`${baseUrl}${resource.logo}`} 
+                                                alt="Logo" 
+                                                crossOrigin="anonymous"
+                                                className="w-full h-full object-contain" 
+                                            />
+                                        </div>
+                                        <h4 className="font-black text-slate-900 text-lg leading-tight">{resource[lang]?.title || resource.en.title}</h4>
+                                    </div>
+                                    <p className="text-sm text-slate-600 mb-5">{resource[lang]?.desc || resource.en.desc}</p>
                                 </div>
-                                <p className="text-xs font-mono text-indigo-600 break-all bg-indigo-50 p-2 rounded border border-indigo-100">
+                                <p className="text-xs font-mono text-indigo-700 break-all bg-indigo-50 p-3 rounded-lg border border-indigo-100">
                                     <span className="font-bold text-slate-500 mr-1">{t.webLink}</span>
                                     {resource.url}
                                 </p>
