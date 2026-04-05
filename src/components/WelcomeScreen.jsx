@@ -1,39 +1,29 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { Routes, Route, useLocation } from 'react-router-dom';
-import { getMessaging, onMessage } from "firebase/messaging";
-import { db, auth } from '../firebase';
-import { collection, onSnapshot, doc, query, where, orderBy, updateDoc } from 'firebase/firestore'; 
-import { signOut } from 'firebase/auth';
-import { BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, 
-  Tooltip, ResponsiveContainer, Cell, PieChart, Pie, Legend, ReferenceLine } from 'recharts';
-import { Sun, Moon, LayoutDashboard, History, Filter, ShieldAlert, Bell } from 'lucide-react'; 
+import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 
-// --- CONTEXT & DATA STRATEGY ---
-import { NexusProvider, useNexus } from './context/NexusContext';
-import { MOCK_STAFF_NAMES, MOCK_TEAM_DATA, MOCK_STAFF_LOADS } from './data/mockData';
+// FIREBASE (Up one level)
+import { auth } from '../firebase'; 
+import { 
+    signInWithEmailAndPassword, 
+    createUserWithEmailAndPassword, 
+    updateProfile, 
+    signOut,
+    sendPasswordResetEmail,
+    sendEmailVerification
+} from 'firebase/auth';
 
-// --- COMPONENT IMPORTS ---
-import AdminPanel from './components/AdminPanel';
-import ResponsiveLayout from './components/ResponsiveLayout'; 
-import SmartReportView from './components/SmartReportView';
-import RosterView from './components/RosterView';
-import WellbeingView from './components/WellbeingView';
-import AuraPulseBot from './components/AuraPulseBot';
-import ProfileView from './components/ProfileView'; 
-import FeedsView from './components/FeedsView';
-import FeedbackWidget from './components/FeedbackWidget';
-import AuraGreeting from './components/AuraGreeting';
-import AuraChat from './components/AuraChat';
+// ICONS
+import { 
+    Sun, Moon, ArrowRight, ShieldCheck, 
+    ChevronLeft, AlertCircle, ShieldAlert, 
+    User, Lock, Mail, Zap, KeyRound, CheckCircle2,
+    UserCircle, Stethoscope, PlaySquare, Globe,
+    Sparkles, Building2 
+} from 'lucide-react';
 
-// --- PUBLIC PORTAL IMPORTS ---
-import WelcomeScreen from './components/WelcomeScreen';
-import LanguageGate from './components/LanguageGate';
-import PathwaySelection from './components/PathwaySelection';
-import ConventionalForm from './components/ConventionalForm';
-import ResultPage from './components/ResultPage';
-
-// --- UTILITIES ---
-import { STAFF_LIST, STAFF_IDS, MONTHS, checkAccess, TEAM_DIRECTORY } from './utils';
+// CONTEXT & UTILS (Up one level)
+import { useNexus } from '../context/NexusContext';
+import { checkAccess } from '../utils'; 
 
 // ==========================================
 // CONFIGURATION & CONSTANTS
