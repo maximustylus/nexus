@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { useLocation, useNavigate, Navigate } from 'react-router-dom';
-import { Download, Share2, ArrowLeft, ExternalLink, ShieldAlert, Activity, CheckCircle2, Loader2 } from 'lucide-react';
+import { Download, Share2, ArrowLeft, ExternalLink, ShieldAlert, Activity, CheckCircle2, Loader2, Sparkles, TrendingUp } from 'lucide-react';
 import { jsPDF } from 'jspdf';
 import html2canvas from 'html2canvas';
 import { recordTelemetry } from '../utils/telemetry';
@@ -18,6 +18,8 @@ const DICTIONARY = {
     sdohFinText: 'We noted that cost is a concern for you. We have prioritised free and fully subsidised community options below.',
     sdohSocText: 'Staying connected is vital for your health. We have included community network programmes to help you meet new people.',
     sdohPsychoText: 'Your mental wellbeing is just as important as your physical health. We have added supportive emotional wellness resources for you.',
+    trendActive: 'Longitudinal Tracking Active',
+    trendDesc: 'Your results have been linked to your previous assessment to monitor your clinical progress over time.',
     resources: 'Recommended Community Resources',
     download: 'Download PDF',
     share: 'Share Result',
@@ -36,6 +38,8 @@ const DICTIONARY = {
     sdohFinText: 'Kami mengambil maklum bahawa kos adalah kebimbangan anda. Kami telah mengutamakan pilihan komuniti percuma dan bersubsidi penuh di bawah.',
     sdohSocText: 'Kekal berhubung adalah penting untuk kesihatan anda. Kami telah menyertakan program rangkaian komuniti untuk membantu anda berjumpa orang baharu.',
     sdohPsychoText: 'Kesejahteraan mental anda sama pentingnya dengan kesihatan fizikal anda. Kami telah menambah sumber sokongan emosi untuk anda.',
+    trendActive: 'Penjejakan Membujur Aktif',
+    trendDesc: 'Keputusan anda telah dipautkan ke penilaian lepas anda untuk memantau kemajuan klinikal anda.',
     resources: 'Sumber Komuniti yang Disyorkan',
     download: 'Muat Turun PDF',
     share: 'Kongsi Keputusan',
@@ -54,6 +58,8 @@ const DICTIONARY = {
     sdohFinText: '我们注意到费用是您的一个顾虑。我们在下方优先列出了免费和全额补贴的社区选项。',
     sdohSocText: '保持社交联系对健康至关重要。我们包含了社区网络计划，帮助您结识新朋友。',
     sdohPsychoText: '您的心理健康与身体健康同等重要。我们为您添加了情感支持资源。',
+    trendActive: '纵向跟踪已激活',
+    trendDesc: '您的结果已链接到您之前的评估，以监测您的临床进展。',
     resources: '推荐的社区资源',
     download: '下载 PDF',
     share: '分享结果',
@@ -72,6 +78,8 @@ const DICTIONARY = {
     sdohFinText: 'செலவு உங்களுக்கு ஒரு கவலை என்பதை நாங்கள் கவனித்தோம். இலவச மற்றும் மானிய விருப்பங்களுக்கு முன்னுரிமை அளித்துள்ளோம்.',
     sdohSocText: 'தொடர்பில் இருப்பது உங்கள் ஆரோக்கியத்திற்கு முக்கியமானது. புதியவர்களைச் சந்திக்க உதவும் சமூக திட்டங்களைச் சேர்த்துள்ளோம்.',
     sdohPsychoText: 'உங்கள் மனநலமும் உங்கள் உடல் நலனைப் போலவே முக்கியமானது. உங்களுக்கான உணர்ச்சிபூர்வமான ஆதரவு வளங்களைச் சேர்த்துள்ளோம்.',
+    trendActive: 'நீண்டகால கண்காணிப்பு செயலில் உள்ளது',
+    trendDesc: 'உங்கள் மருத்துவ முன்னேற்றத்தைக் கண்காணிக்க உங்கள் முடிவுகள் முந்தைய மதிப்பீட்டுடன் இணைக்கப்பட்டுள்ளன.',
     resources: 'பரிந்துரைக்கப்பட்ட சமூக வளங்கள்',
     download: 'PDF பதிவிறக்குக',
     share: 'முடிவைப் பகிர்க',
@@ -189,7 +197,6 @@ const getRegionalHealthSystem = (sector) => {
   return 'NHG'; 
 };
 
-// Helper function to map numeric score to categorical tier
 const getRiskTier = (numericScore) => {
     if (numericScore >= 5) return 'Red';
     if (numericScore >= 2) return 'Amber';
@@ -200,13 +207,13 @@ export default function ResultPage() {
   const location = useLocation();
   const navigate = useNavigate();
   
-  // ROUTE GUARD: If no payload exists, redirect to pathway immediately.
   if (!location.state || location.state.score === undefined) {
       return <Navigate to="/individuals/pathway" replace />;
   }
 
-  const { score, data, postalSector } = location.state;
+  const { score, data, postalSector, sessionId, previousSessionId } = location.state;
   const riskTier = getRiskTier(score);
+  const activeSessionId = sessionId || 'NX-' + Math.random().toString(36).substr(2, 9).toUpperCase();
   
   const [lang, setLang] = useState('en');
   const [animate, setAnimate] = useState(false);
@@ -222,7 +229,6 @@ export default function ResultPage() {
       let plan = [];
       const rhs = getRegionalHealthSystem(postalSector);
       
-      // Map based on the derived categorical riskTier
       if (riskTier === 'Red') {
         plan.push(ALL_RESOURCES.healthier_sg);
         plan.push(ALL_RESOURCES.active_health);
@@ -289,9 +295,16 @@ export default function ResultPage() {
         scale: 2, 
         useCORS: true,
         logging: false,
-        scrollY: -window.scrollY,
-        windowWidth: document.documentElement.scrollWidth,
-        windowHeight: document.documentElement.scrollHeight
+        backgroundColor: '#ffffff',
+        windowWidth: 1024,
+        onclone: (clonedDoc) => {
+            clonedDoc.documentElement.classList.remove('dark');
+            const svgs = clonedDoc.querySelectorAll('svg');
+            svgs.forEach(svg => {
+                svg.setAttribute('width', svg.getBoundingClientRect().width);
+                svg.setAttribute('height', svg.getBoundingClientRect().height);
+            });
+        }
       });
       
       element.style.overflow = originalOverflow;
@@ -434,6 +447,16 @@ export default function ResultPage() {
                     {riskTier === 'Red' ? t.redDesc : riskTier === 'Amber' ? t.amberDesc : t.greenDesc}
                   </p>
                   
+                  {previousSessionId && (
+                      <div className="flex items-start gap-2 mt-4 pt-4 border-t border-black/5 dark:border-white/10">
+                          <TrendingUp className="w-5 h-5 mt-0.5 text-indigo-500 shrink-0" />
+                          <div>
+                              <p className="text-sm font-bold text-indigo-600 dark:text-indigo-400">{t.trendActive}</p>
+                              <p className="text-sm font-medium text-slate-600 dark:text-slate-400">{t.trendDesc}</p>
+                          </div>
+                      </div>
+                  )}
+
                   {data.sdohFinancial && (
                       <div className="flex items-start gap-2 mt-4 pt-4 border-t border-black/5 dark:border-white/10">
                           <CheckCircle2 className="w-5 h-5 mt-0.5 text-amber-500 shrink-0" />
@@ -494,6 +517,23 @@ export default function ResultPage() {
                     </div>
                   </button>
                 ))}
+              </div>
+            </div>
+
+            <div className="px-8 md:px-12 py-6 bg-slate-50 dark:bg-slate-900/50 border-t border-slate-200 dark:border-slate-800 flex justify-between items-center mt-4">
+              <div className="flex items-center gap-2">
+                <Sparkles className="text-indigo-500" size={18} />
+                <div>
+                  <span className="font-black text-slate-800 dark:text-slate-200 tracking-widest text-sm uppercase block leading-none">NEXUS</span>
+                  <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">AURA Triage</span>
+                </div>
+              </div>
+              <div className="text-right">
+                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-0.5">Assessment ID</p>
+                <p className="text-xs font-mono font-bold text-slate-600 dark:text-slate-300">{activeSessionId}</p>
+                {previousSessionId && (
+                  <p className="text-[10px] font-mono text-slate-400 mt-0.5">Prev: {previousSessionId}</p>
+                )}
               </div>
             </div>
 
