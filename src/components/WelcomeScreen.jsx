@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Routes, Route, useLocation } from 'react-router-dom';
 import { getMessaging, onMessage } from "firebase/messaging";
-import { db, auth } from './firebase';
+import { db, auth } from '../firebase';
 import { collection, onSnapshot, doc, query, where, orderBy, updateDoc } from 'firebase/firestore'; 
 import { signOut } from 'firebase/auth';
 import { BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, 
