@@ -171,19 +171,20 @@ const WelcomeScreen = (props) => {
             {/* MASTER CONTENT WRAPPER */}
             <div className={`relative z-20 w-full max-w-xl flex flex-col items-center justify-center transition-all duration-1000 transform ${animate ? 'translate-y-0 opacity-100' : 'translate-y-8 opacity-0'}`}>
                 
-                {/* TETHERED THEME TOGGLE */}
-                <div className="absolute top-0 right-0 md:top-8 md:-right-16 z-50">
-                    <button 
-                        onClick={toggleTheme} 
-                        className="p-3 rounded-full bg-white/80 dark:bg-slate-900/80 backdrop-blur-md border border-slate-200 dark:border-slate-700 shadow-sm hover:scale-110 active:scale-95 transition-all"
-                        aria-label="Toggle Theme"
-                    >
-                        {isDark ? <Sun size={18} className="text-amber-400" /> : <Moon size={18} className="text-slate-500 dark:text-slate-400" />}
-                    </button>
-                </div>
+                {/* LOGO, TEXT & TETHERED TOGGLE */}
+                <div className="relative w-full flex flex-col items-center justify-center gap-4 group cursor-default text-center mb-8 mt-8 md:mt-0">
+                    
+                    {/* INLINE TOP-RIGHT TOGGLE */}
+                    <div className="absolute top-0 right-0 z-50">
+                        <button 
+                            onClick={toggleTheme} 
+                            className="p-3 rounded-full bg-white/80 dark:bg-slate-900/80 backdrop-blur-md border border-slate-200 dark:border-slate-700 shadow-sm hover:scale-110 active:scale-95 transition-all"
+                            aria-label="Toggle Theme"
+                        >
+                            {isDark ? <Sun size={18} className="text-amber-400" /> : <Moon size={18} className="text-slate-500 dark:text-slate-400" />}
+                        </button>
+                    </div>
 
-                {/* LOGO & TEXT */}
-                <div className="w-full flex flex-col items-center justify-center gap-4 group cursor-default text-center mb-8 mt-8 md:mt-0">
                     <img 
                         src="/nexus.png" 
                         alt="NEXUS" 
