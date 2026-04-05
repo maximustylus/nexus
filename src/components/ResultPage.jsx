@@ -162,8 +162,6 @@ export default function ResultPage() {
   
   const printRef = useRef(null);
   const formattedDate = new Date().toLocaleDateString('en-GB');
-
-  // Dynamic QR Code pointing to the origin domain
   const qrCodeUrl = `https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent(window.location.origin)}`;
 
   useEffect(() => {
@@ -235,7 +233,14 @@ export default function ResultPage() {
         scale: 2, 
         useCORS: true,
         logging: false,
-        backgroundColor: '#ffffff'
+        backgroundColor: '#ffffff',
+        onclone: (clonedDoc) => {
+            const svgs = clonedDoc.querySelectorAll('svg');
+            svgs.forEach(svg => {
+                svg.setAttribute('width', svg.getBoundingClientRect().width);
+                svg.setAttribute('height', svg.getBoundingClientRect().height);
+            });
+        }
       });
 
       const imgData = canvas.toDataURL('image/png');
@@ -327,64 +332,63 @@ export default function ResultPage() {
   return (
     <div className="min-h-screen w-full bg-slate-50 dark:bg-slate-950 transition-colors duration-700 flex flex-col items-center py-12 px-4 md:px-6 relative overflow-x-hidden font-sans">
       
-      {/* HIDDEN PRINT TEMPLATE 
-        This is perfectly sized for A4 printing (794px width) and kept out of view.
-        It removes all dark mode UI elements, shadows, and interactive buttons for a clean clinical record.
-      */}
-      <div 
-        ref={printRef} 
-        className="fixed top-0 left-0 w-[794px] bg-white text-black p-12 pointer-events-none -z-50 opacity-0 flex flex-col gap-8"
-        style={{ fontFamily: 'Arial, sans-serif' }}
-      >
-        <div className="flex justify-between items-end border-b-2 border-slate-900 pb-6">
-            <div>
-                <div className="flex items-center gap-2 mb-2">
-                    <Sparkles className="text-indigo-600" size={28} />
-                    <span className="text-3xl font-black tracking-widest text-slate-900 uppercase">NEXUS</span>
-                </div>
-                <h1 className="text-lg font-bold text-slate-500 uppercase tracking-widest">{t.reportTitle}</h1>
-            </div>
-            <div className="text-right space-y-1 text-sm font-medium text-slate-600">
-                <p><span className="font-bold text-slate-900">{t.date}:</span> {formattedDate}</p>
-                <p><span className="font-bold text-slate-900">{t.assessmentId}:</span> {activeSessionId}</p>
-                {previousSessionId && <p><span className="font-bold text-slate-900">{t.prevId}:</span> {previousSessionId}</p>}
-                <p><span className="font-bold text-slate-900">{t.postalSector}:</span> Sector {postalSector}</p>
-            </div>
-        </div>
-
-        <div className="p-6 border-l-4 border-slate-900 bg-slate-50">
-            <h2 className="text-2xl font-black text-slate-900 mb-2">{riskTier === 'Red' ? t.red : riskTier === 'Amber' ? t.amber : t.green}</h2>
-            <p className="text-slate-700 text-base leading-relaxed mb-4">
-                {riskTier === 'Red' ? t.redDesc : riskTier === 'Amber' ? t.amberDesc : t.greenDesc}
-            </p>
-            <div className="space-y-2">
-                {data.sdohFinancial && <p className="text-sm text-slate-600">• {t.sdohFinText}</p>}
-                {data.sdohSocial && <p className="text-sm text-slate-600">• {t.sdohSocText}</p>}
-                {data.psychoFlag && <p className="text-sm text-slate-600">• {t.sdohPsychoText}</p>}
-            </div>
-        </div>
-
-        <div>
-            <h3 className="text-xl font-bold text-slate-900 border-b border-slate-200 pb-3 mb-6 uppercase tracking-wider">{t.resources}</h3>
-            <div className="grid grid-cols-2 gap-6">
-                {suggestedResources.map((resource) => (
-                    <div key={resource.id} className="p-5 border border-slate-200 rounded-xl bg-white">
-                        <h4 className="font-bold text-slate-900 mb-2">{resource[lang]?.title || resource.en.title}</h4>
-                        <p className="text-sm text-slate-600">{resource[lang]?.desc || resource.en.desc}</p>
+      {/* HIDDEN PRINT TEMPLATE WITH DISPLACEMENT COORDINATES */}
+      <div style={{ position: 'absolute', top: '-10000px', left: '-10000px' }}>
+        <div 
+            ref={printRef} 
+            className="w-[794px] bg-white text-black p-12 flex flex-col gap-8"
+            style={{ fontFamily: 'Arial, sans-serif' }}
+        >
+            <div className="flex justify-between items-end border-b-2 border-slate-900 pb-6">
+                <div>
+                    <div className="flex items-center gap-2 mb-2">
+                        <Sparkles className="text-indigo-600" size={28} />
+                        <span className="text-3xl font-black tracking-widest text-slate-900 uppercase">NEXUS</span>
                     </div>
-                ))}
-            </div>
-        </div>
-
-        <div className="mt-auto pt-10 flex justify-between items-center">
-            <div className="flex items-center gap-4">
-                <img src={qrCodeUrl} alt="QR Code" crossOrigin="anonymous" className="w-24 h-24 border border-slate-200 rounded p-1" />
-                <div className="text-sm text-slate-500 font-medium">
-                    <p className="font-bold text-slate-900 uppercase tracking-widest mb-1">{t.scanQR}</p>
-                    <p>nexus.web.app</p>
+                    <h1 className="text-lg font-bold text-slate-500 uppercase tracking-widest">{t.reportTitle}</h1>
+                </div>
+                <div className="text-right space-y-1 text-sm font-medium text-slate-600">
+                    <p><span className="font-bold text-slate-900">{t.date}:</span> {formattedDate}</p>
+                    <p><span className="font-bold text-slate-900">{t.assessmentId}:</span> {activeSessionId}</p>
+                    {previousSessionId && <p><span className="font-bold text-slate-900">{t.prevId}:</span> {previousSessionId}</p>}
+                    <p><span className="font-bold text-slate-900">{t.postalSector}:</span> Sector {postalSector}</p>
                 </div>
             </div>
-            <p className="text-xs text-slate-400 font-medium uppercase tracking-widest">NEXUS Health Platform</p>
+
+            <div className="p-6 border-l-4 border-slate-900 bg-slate-50">
+                <h2 className="text-2xl font-black text-slate-900 mb-2">{riskTier === 'Red' ? t.red : riskTier === 'Amber' ? t.amber : t.green}</h2>
+                <p className="text-slate-700 text-base leading-relaxed mb-4">
+                    {riskTier === 'Red' ? t.redDesc : riskTier === 'Amber' ? t.amberDesc : t.greenDesc}
+                </p>
+                <div className="space-y-2">
+                    {data.sdohFinancial && <p className="text-sm text-slate-600">• {t.sdohFinText}</p>}
+                    {data.sdohSocial && <p className="text-sm text-slate-600">• {t.sdohSocText}</p>}
+                    {data.psychoFlag && <p className="text-sm text-slate-600">• {t.sdohPsychoText}</p>}
+                </div>
+            </div>
+
+            <div>
+                <h3 className="text-xl font-bold text-slate-900 border-b border-slate-200 pb-3 mb-6 uppercase tracking-wider">{t.resources}</h3>
+                <div className="grid grid-cols-2 gap-6">
+                    {suggestedResources.map((resource) => (
+                        <div key={resource.id} className="p-5 border border-slate-200 rounded-xl bg-white">
+                            <h4 className="font-bold text-slate-900 mb-2">{resource[lang]?.title || resource.en.title}</h4>
+                            <p className="text-sm text-slate-600">{resource[lang]?.desc || resource.en.desc}</p>
+                        </div>
+                    ))}
+                </div>
+            </div>
+
+            <div className="mt-auto pt-10 flex justify-between items-center">
+                <div className="flex items-center gap-4">
+                    <img src={qrCodeUrl} alt="QR Code" crossOrigin="anonymous" className="w-24 h-24 border border-slate-200 rounded p-1" />
+                    <div className="text-sm text-slate-500 font-medium">
+                        <p className="font-bold text-slate-900 uppercase tracking-widest mb-1">{t.scanQR}</p>
+                        <p>nexus.web.app</p>
+                    </div>
+                </div>
+                <p className="text-xs text-slate-400 font-medium uppercase tracking-widest">NEXUS Health Platform</p>
+            </div>
         </div>
       </div>
       {/* END HIDDEN PRINT TEMPLATE */}
@@ -505,6 +509,23 @@ export default function ResultPage() {
                     </div>
                   </button>
                 ))}
+              </div>
+            </div>
+
+            <div className="px-8 md:px-12 py-6 bg-slate-50 dark:bg-slate-900/50 border-t border-slate-200 dark:border-slate-800 flex justify-between items-center mt-4">
+              <div className="flex items-center gap-2">
+                <Sparkles className="text-indigo-500" size={18} />
+                <div>
+                  <span className="font-black text-slate-800 dark:text-slate-200 tracking-widest text-sm uppercase block leading-none">NEXUS</span>
+                  <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">AURA Triage</span>
+                </div>
+              </div>
+              <div className="text-right">
+                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-0.5">Assessment ID</p>
+                <p className="text-xs font-mono font-bold text-slate-600 dark:text-slate-300">{activeSessionId}</p>
+                {previousSessionId && (
+                  <p className="text-[10px] font-mono text-slate-400 mt-0.5">Prev: {previousSessionId}</p>
+                )}
               </div>
             </div>
 
