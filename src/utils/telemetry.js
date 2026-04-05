@@ -1,6 +1,21 @@
-// A safe placeholder to capture analytics without crashing the app
-export const recordTelemetry = async (postalSector, eventData) => {
-    console.log(`[NEXUS Telemetry] Sector: ${postalSector}`, eventData);
-    // Future: Wire this up to Firebase Firestore to track clicks and drop-offs
-    return true;
+import { db } from '../firebase';
+import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
+
+export const recordTelemetry = async (postalSector, payload) => {
+    try {
+        const assessmentData = {
+            ...payload,
+            postalSector: postalSector || '00',
+            createdAt: serverTimestamp(),
+            clientReference: navigator.userAgent
+        };
+
+        const docRef = await addDoc(collection(db, 'community_assessments'), assessmentData);
+        
+        console.log('[NEXUS Telemetry] Data securely anchored. Document ID:', docRef.id);
+        return true;
+    } catch (error) {
+        console.error('[NEXUS Telemetry] Transmission failed:', error);
+        return false;
+    }
 };
