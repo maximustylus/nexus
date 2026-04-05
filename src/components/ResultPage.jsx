@@ -117,6 +117,8 @@ const DICTIONARY = {
 };
 
 const ALL_RESOURCES = {
+  ssmc_kkh: { id: 'ssmc_kkh', url: 'https://for.sg/exercise', logo: '/logos/ssmckkh.png', en: { title: 'SSMC@KKH Exercise Resources', desc: 'Expert clinical exercise prescriptions and safety resources for the community.' }, ms: { title: 'Sumber Senaman SSMC@KKH', desc: 'Preskripsi senaman klinikal pakar dan sumber keselamatan untuk komuniti.' }, zh: { title: 'SSMC@KKH 运动资源', desc: '为社区提供的专家临床运动处方和安全资源。' }, ta: { title: 'SSMC@KKH உடற்பயிற்சி வளங்கள்', desc: 'சமூகத்திற்கான நிபுணர் மருத்துவ உடற்பயிற்சி மற்றும் பாதுகாப்பு வளங்கள்.' } },
+  spag: { id: 'spag', url: 'https://for.sg/spag', logo: '/logos/sportsg.png', en: { title: 'Singapore Physical Activity Guidelines', desc: 'National guidelines and recommendations for physical activity and sedentary behaviour.' }, ms: { title: 'Garis Panduan Aktiviti Fizikal', desc: 'Garis panduan kebangsaan untuk aktiviti fizikal dan tingkah laku sedentari.' }, zh: { title: '新加坡体力活动指南', desc: '国家关于体力活动和久坐行为的指南。' }, ta: { title: 'சிங்கப்பூர் உடல் செயல்பாட்டு வழிகாட்டுதல்கள்', desc: 'உடல் செயல்பாடு மற்றும் உட்கார்ந்த நடத்தைக்கான தேசிய வழிகாட்டுதல்கள்.' } },
   healthier_sg: { id: 'healthier_sg', url: 'https://www.healthiersg.gov.sg/', logo: '/logos/healthiersg.png', en: { title: 'Healthier SG GP Review', desc: 'Schedule a fully subsidised annual check-in with your enrolled GP.' }, ms: { title: 'Semakan Klinik GP Healthier SG', desc: 'Jadualkan pemeriksaan tahunan bersubsidi penuh dengan doktor anda.' }, zh: { title: 'Healthier SG 全科医生复查', desc: '与您的签约医生安排全额补贴的年度检查。' }, ta: { title: 'Healthier SG GP மதிப்பாய்வு', desc: 'உங்கள் மருத்துவரிடம் முழு மானியத்துடன் கூடிய பரிசோதனையை திட்டமிடுங்கள்.' } },
   start2move: { id: 'start2move', url: 'https://www.healthhub.sg/programmes/letsmoveit/start2move', logo: '/logos/hpb.png', en: { title: 'HPB Start2Move', desc: 'A free 6-session beginner programme to help you start exercising safely.' }, ms: { title: 'Program Start2Move HPB', desc: 'Program percuma 6 sesi untuk pemula untuk mula bersenam dengan selamat.' }, zh: { title: 'HPB Start2Move 计划', desc: '免费的6节初学者计划，帮助您安全地开始锻炼。' }, ta: { title: 'HPB Start2Move திட்டம்', desc: 'பாதுகாப்பாக உடற்பயிற்சியைத் தொடங்க இலவச 6 அமர்வு தொடக்கத் திட்டம்.' } },
   active_health: { id: 'active_health', url: 'https://www.myactivesg.com/active-health', logo: '/logos/activehealth.png', en: { title: 'Active Health Labs', desc: 'Supervised clinical exercise and metabolic health programmes by SportSG.' }, ms: { title: 'Makmal Active Health', desc: 'Program senaman klinikal dan kesihatan metabolik yang diawasi oleh SportSG.' }, zh: { title: 'Active Health 实验室', desc: 'SportSG 提供的有监督临床锻炼和代谢健康计划。' }, ta: { title: 'Active Health ஆய்வகங்கள்', desc: 'SportSG-ன் மருத்துவ உடற்பயிற்சி மற்றும் சுகாதார திட்டங்கள்.' } },
@@ -170,7 +172,6 @@ export default function ResultPage() {
   const nexusOfficialUrl = 'https://for.sg/nexus';
   const qrCodeUrl = `https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent(nexusOfficialUrl)}`;
 
-  // BASE URL FOR LOGOS TO RESOLVE PATHS IN HOSTED ENVIRONMENTS
   const baseUrl = window.location.origin;
 
   useEffect(() => {
@@ -181,6 +182,10 @@ export default function ResultPage() {
       let plan = [];
       const rhs = getRegionalHealthSystem(postalSector);
       
+      // Global Interventions (Added Before Threshold Checks)
+      plan.push(ALL_RESOURCES.ssmc_kkh);
+      plan.push(ALL_RESOURCES.spag);
+
       if (riskTier === 'Red') {
         plan.push(ALL_RESOURCES.healthier_sg);
         plan.push(ALL_RESOURCES.active_health);
@@ -213,12 +218,12 @@ export default function ResultPage() {
           plan.push(ALL_RESOURCES.touch_community);
       }
       
-      if (data.gender === 'Female' && (data.age === '41-60' || data.age === '60+')) {
+      if (data.gender === 'Female' && (data.age === '36-64' || data.age === '65+')) {
           plan.push(ALL_RESOURCES.society_wings);
       }
   
       const uniquePlan = Array.from(new Set(plan.map(r => r.id))).map(id => plan.find(r => r.id === id));
-      return uniquePlan.slice(0, 4);
+      return uniquePlan.slice(0, 6); // Allow up to 6 resources to accommodate globals
     };
 
     setTimeout(() => {
@@ -268,8 +273,6 @@ export default function ResultPage() {
       }
 
       pdf.addImage(imgData, 'PNG', 0, 0, renderWidth, renderHeight);
-      
-      // DYNAMICALLY APPENDING SESSION ID TO FILENAME
       pdf.save(`NEXUS_AURA_Result_${riskTier}_${activeSessionId}.pdf`);
       
     } catch (error) {
@@ -300,7 +303,6 @@ export default function ResultPage() {
     window.open(url, '_blank');
   };
 
-  // UI Theme Config
   const themeMap = {
     Red: {
       gradient: 'from-rose-500 to-red-600',
@@ -405,12 +407,12 @@ export default function ResultPage() {
                             <div key={resource.id} className="p-6 border border-slate-200 rounded-xl bg-slate-50 flex flex-col justify-between">
                                 <div>
                                     <div className="flex items-center gap-4 mb-3">
-                                        <div className="w-12 h-12 shrink-0 bg-white rounded-lg border border-slate-200 flex items-center justify-center p-1.5 overflow-hidden">
+                                        <div className="w-12 h-12 aspect-square shrink-0 bg-white rounded-md border border-slate-200 flex items-center justify-center overflow-hidden">
                                             <img 
                                                 src={`${baseUrl}${resource.logo}`} 
                                                 alt="Logo" 
                                                 crossOrigin="anonymous"
-                                                className="w-full h-full object-contain" 
+                                                className="w-full h-full object-cover" 
                                             />
                                         </div>
                                         <h4 className="font-black text-slate-900 text-lg leading-tight">{resource[lang]?.title || resource.en.title}</h4>
@@ -530,12 +532,12 @@ export default function ResultPage() {
                   >
                     <div className="flex items-center gap-4 flex-1">
                       
-                      <div className="w-16 h-16 shrink-0 bg-white rounded-xl border border-slate-200 flex items-center justify-center p-2 shadow-sm overflow-hidden">
+                      <div className="w-16 h-16 md:w-20 md:h-20 aspect-square shrink-0 bg-white rounded-lg border border-slate-200 flex items-center justify-center overflow-hidden shadow-sm">
                         <img 
                           src={`${baseUrl}${resource.logo}`} 
                           alt={`${resource[lang]?.title || resource.en.title} logo`}
                           crossOrigin="anonymous"
-                          className="w-full h-full object-contain"
+                          className="w-full h-full object-cover"
                           onError={(e) => {
                             e.target.style.display = 'none';
                             e.target.parentElement.innerHTML = '<span class="text-[10px] font-black text-slate-400">LOGO</span>';
@@ -563,7 +565,7 @@ export default function ResultPage() {
 
             <div className="px-8 md:px-12 py-6 bg-slate-50 dark:bg-slate-900/50 border-t border-slate-200 dark:border-slate-800 flex justify-between items-center mt-4">
               <div className="flex items-center gap-2">
-                <img src={`${baseUrl}/nexus.png`} alt="NEXUS Logo" crossOrigin="anonymous" className="w-20 h-20 object-contain" />
+                <img src={`${baseUrl}/nexus.png`} alt="NEXUS Logo" crossOrigin="anonymous" className="w-5 h-5 object-contain" />
                 <div>
                   <span className="font-black text-slate-800 dark:text-slate-200 tracking-widest text-sm uppercase block leading-none">NEXUS</span>
                   <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">{t.reportTitle}</span>
