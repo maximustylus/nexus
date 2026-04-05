@@ -17,7 +17,8 @@ const DICTIONARY = {
       "Do you do any muscle-strengthening activities? Also, do you have any chronic conditions (like high blood pressure) or experience chest pain or dizziness when active?",
       "Switching gears: have you heard of the health services in your neighbourhood? If you've used them, how would you rate them compared to a hospital, and how much do you trust them (1 to 5)?",
       "What is the main thing stopping you from using community services? (e.g. cost, distance, no time). What could we improve?",
-      "Finally, just to make sure my recommendations fit you perfectly, could you share your age group, gender, race, and the first 2 digits of your postal code?"
+      "Almost done! Could you share your age group and gender? (e.g. Male, 41-60)",
+      "Lastly, what are the first 2 digits of your postal code so I can find services near you?"
     ],
     reflections: [
       (input) => {
@@ -29,14 +30,16 @@ const DICTIONARY = {
       },
       (input) => "Thank you for sharing that. Safety is our top priority, so keeping track of those factors is vital.",
       (input) => "I hear you. Your comfort and trust in healthcare providers are completely valid.",
-      (input) => "That is a very real challenge. Many people face similar hurdles, and identifying them helps us find better workarounds."
+      (input) => "That is a very real challenge. Many people face similar hurdles, and identifying them helps us find better workarounds.",
+      (input) => "Got it. Thank you."
     ],
     quickReplies: [
       ["0 days", "1-2 days, 30 mins", "3-4 days, 45 mins", "5+ days, 60 mins"],
       ["No strength training", "Yes, 2 days", "High blood pressure", "Occasional dizziness"],
       ["Not aware of them", "Rate: About the same", "Trust: 3/5", "Trust: 5/5"],
       ["Lack of time", "Too far away", "Too expensive", "Prefer hospitals"],
-      ["Under 21", "21-40", "41-60", "60+", "Male", "Female", "Sector 73"]
+      ["Male, 21-40", "Female, 21-40", "Male, 41-60", "Female, 41-60", "60+"],
+      ["Sector 73", "Sector 54", "Sector 18", "Not sure"]
     ]
   },
   ms: {
@@ -51,7 +54,8 @@ const DICTIONARY = {
       "Faham. Ada buat senaman kuatkan otot tak? Lepas tu, ada tak apa-apa penyakit kronik (macam darah tinggi) atau rasa sakit dada atau pening bila aktif?",
       "Terima kasih sudi kongsi. Nak tanya sikit, pernah dengar tak pasal servis kesihatan kat kawasan perumahan anda? Kalau pernah guna, macam mana servis dia berbanding hospital, dan berapa tahap kepercayaan anda (1 hingga 5)?",
       "Faham sangat. Apa yang paling menghalang anda daripada guna servis komuniti ni? (cth kos, jauh, takde masa). Apa yang boleh kami perbaiki?",
-      "Akhir sekali, untuk pastikan cadangan saya betul-betul sesuai dengan profil anda, boleh kongsi kumpulan umur, jantina, bangsa, dan 2 digit pertama poskod anda?"
+      "Hampir siap! Boleh kongsi kumpulan umur dan jantina anda? (cth: Lelaki, 41-60)",
+      "Akhir sekali, apakah 2 digit pertama poskod anda supaya saya boleh cari servis berdekatan?"
     ],
     reflections: [
       (input) => {
@@ -61,16 +65,18 @@ const DICTIONARY = {
           ? "Memang susah nak cari masa atau tenaga untuk mula. Kita cuba cari jalan yang paling sesuai dan mudah untuk anda." 
           : "Permulaan yang bagus. Sebarang pergerakan adalah langkah yang baik.";
       },
-      (input) => "Terima kasih kerana sudi kongsi. Keselamatan anda adalah keutamaan kami, jadi maklumat ini sangat penting.",
-      (input) => "Saya faham. Keselesaan dan kepercayaan anda terhadap penyedia perkhidmatan kesihatan memang sangat penting.",
-      (input) => "Itu memang cabaran yang nyata. Ramai yang lalui benda sama, mengetahui hal ini bantu kami cari jalan penyelesaian yang lebih baik."
+      (input) => "Terima kasih kerana sudi kongsi. Keselamatan anda adalah keutamaan kami.",
+      (input) => "Saya faham. Keselesaan dan kepercayaan anda memang sangat penting.",
+      (input) => "Itu memang cabaran yang nyata. Mengetahui hal ini bantu kami cari jalan penyelesaian.",
+      (input) => "Faham. Terima kasih."
     ],
     quickReplies: [
       ["0 hari", "1-2 hari, 30 minit", "3-4 hari, 45 minit", "5+ hari, 60 minit"],
       ["Tiada senaman otot", "Ya, 2 hari", "Darah tinggi", "Kadang-kadang pening"],
       ["Tak tahu", "Kadar: Sama je", "Percaya: 3/5", "Percaya: 5/5"],
       ["Takde masa", "Terlalu jauh", "Terlalu mahal", "Lebih suka hospital"],
-      ["Bawah 21", "21-40", "41-60", "60+", "Lelaki", "Perempuan", "Sektor 73"]
+      ["Lelaki, 21-40", "Perempuan, 21-40", "Lelaki, 41-60", "Perempuan, 41-60", "60+"],
+      ["Sektor 73", "Sektor 54", "Sektor 18", "Tidak pasti"]
     ]
   },
   zh: {
@@ -85,7 +91,8 @@ const DICTIONARY = {
       "明白了。你有做一些强化肌肉的运动吗？另外，有没有慢性病（比如高血压），或者在活动时觉得胸痛或头晕？",
       "谢谢你的分享。换个话题：你有听说过你家附近的社区医疗服务吗？如果用过的话，跟医院比起来你觉得怎么样？你对他们的信任度是多少（1 到 5 分）？",
       "了解。最主要是什么原因阻止你使用社区服务呢？（比如费用、距离、没时间）。我们有什么可以改进的地方？",
-      "最后，为了确保我的建议完全适合你，可以告诉我你的年龄段、性别、种族，以及邮政编码的前两位数吗？"
+      "快完成了！能分享一下您的年龄段和性别吗？（例如：男，41-60）",
+      "最后，您的邮政编码前两位数是多少，以便我查找您附近的资源？"
     ],
     reflections: [
       (input) => {
@@ -97,14 +104,16 @@ const DICTIONARY = {
       },
       (input) => "谢谢你的分享。安全是我们的首要任务，了解这些情况非常重要。",
       (input) => "我完全理解。你对医疗服务提供者的信任和舒适感是非常合理的。",
-      (input) => "这是一个很现实的挑战。很多人都面临类似的困难，了解这些能帮我们找到更好的解决办法。"
+      (input) => "这是一个很现实的挑战。了解这些能帮我们找到更好的解决办法。",
+      (input) => "明白，谢谢您。"
     ],
     quickReplies: [
       ["0 天", "1-2天, 30分钟", "3-4天, 45分钟", "5天以上, 60分钟"],
       ["没有力量训练", "有, 每周2天", "高血压", "偶尔头晕"],
       ["不知道", "评价: 差不多", "信任度: 3/5", "信任度: 5/5"],
       ["没时间", "太远了", "太贵了", "更喜欢去医院"],
-      ["21岁以下", "21-40岁", "41-60岁", "60岁以上", "男", "女", "邮区 73"]
+      ["男, 21-40", "女, 21-40", "男, 41-60", "女, 41-60", "60岁以上"],
+      ["邮区 73", "邮区 54", "邮区 18", "不确定"]
     ]
   },
   ta: {
@@ -116,10 +125,11 @@ const DICTIONARY = {
     error: 'உங்கள் சுயவிவரத்தைச் சேமிக்கும் போது பாதுகாப்பான இணைப்பு பிழை ஏற்பட்டது. தயவுசெய்து மீண்டும் முயற்சிக்கவும்.',
     prompts: [
       "வணக்கம்! நான் AURA. உங்களுக்கான சரியான சமூக வளங்களைக் கண்டறிய, சிறிது பேசலாம். வாரத்திற்கு எத்தனை நாட்கள் உடற்பயிற்சி செய்கிறீர்கள், ஒவ்வொரு முறையும் எவ்வளவு நேரம்?",
-      "புரிந்தது. தசை வலுப்படுத்தும் பயிற்சிகளைச் செய்கிறீர்களா? மேலும், உங்களுக்கு நாள்பட்ட நோய்கள் (உயர் ரத்த அழுத்தம் போன்றவை) உள்ளதா, அல்லது சுறுசுறுப்பாக இருக்கும்போது நெஞ்சு வலி அல்லது தலைச்சுற்றல் வருமா?",
-      "பகிர்ந்ததற்கு நன்றி. உங்கள் அருகில் உள்ள சுகாதார சேவைகளைப் பற்றி கேள்விப்பட்டிருக்கிறீர்களா? பயன்படுத்தியிருந்தால், மருத்துவமனையுடன் ஒப்பிடும்போது அதை எப்படி மதிப்பிடுவீர்கள், மற்றும் அவர்கள் மீது எவ்வளவு நம்பிக்கை உள்ளது (1 முதல் 5 வரை)?",
+      "புரிந்தது. தசை வலுப்படுத்தும் பயிற்சிகளைச் செய்கிறீர்களா? மேலும், உங்களுக்கு நாள்பட்ட நோய்கள் உள்ளதா, அல்லது சுறுசுறுப்பாக இருக்கும்போது நெஞ்சு வலி அல்லது தலைச்சுற்றல் வருமா?",
+      "பகிர்ந்ததற்கு நன்றி. உங்கள் அருகில் உள்ள சுகாதார சேவைகளைப் பற்றி கேள்விப்பட்டிருக்கிறீர்களா? பயன்படுத்தியிருந்தால், மருத்துவமனையுடன் ஒப்பிடும்போது அதை எப்படி மதிப்பிடுவீர்கள் (1 முதல் 5 வரை)?",
       "சரியான கருத்து. சமூக சேவைகளைப் பயன்படுத்துவதை எது தடுக்கிறது? (எ.கா. செலவு, தூரம், நேரமின்மை). நாங்கள் எதை மேம்படுத்தலாம்?",
-      "இறுதியாக, எனது பரிந்துரைகள் உங்களுக்கு சரியாக பொருந்துவதை உறுதி செய்ய, உங்கள் வயது, பாலினம், இனம் மற்றும் அஞ்சல் குறியீட்டின் முதல் 2 இலக்கங்களை பகிர முடியுமா?"
+      "கிட்டத்தட்ட முடிந்துவிட்டது! உங்கள் வயது மற்றும் பாலினத்தைப் பகிர முடியுமா? (எ.கா. ஆண், 41-60)",
+      "இறுதியாக, உங்களுக்கு அருகிலுள்ள சேவைகளைக் கண்டறிய உங்கள் அஞ்சல் குறியீட்டின் முதல் 2 இலக்கங்கள் என்ன?"
     ],
     reflections: [
       (input) => {
@@ -129,16 +139,18 @@ const DICTIONARY = {
           ? "தொடங்குவதற்கு நேரமோ அல்லது ஆற்றலோ கிடைப்பது கடினமாக இருக்கலாம். உங்களுக்கு ஏற்ற ஒரு வழியை நாங்கள் கண்டுபிடிக்க முயல்வோம்." 
           : "இது ஒரு சிறந்த தொடக்கம். எந்தவொரு உடல் அசைவும் சரியான திசையை நோக்கிய ஒரு படியாகும்.";
       },
-      (input) => "பகிர்ந்ததற்கு நன்றி. பாதுகாப்பு எங்கள் முதன்மை முன்னுரிமை, எனவே இந்த காரணிகளைக் கண்காணிப்பது முக்கியம்.",
-      (input) => "எனக்குப் புரிகிறது. சுகாதார வழங்குநர்கள் மீதான உங்கள் வசதியும் நம்பிக்கையும் முற்றிலும் சரியானவை.",
-      (input) => "இது மிகவும் உண்மையான சவால். பலரும் இதேபோன்ற தடைகளை எதிர்கொள்கின்றனர், இதை அறிவது சிறந்த தீர்வுகளைக் கண்டறிய உதவுகிறது."
+      (input) => "பகிர்ந்ததற்கு நன்றி. பாதுகாப்பு எங்கள் முதன்மை முன்னுரிமை.",
+      (input) => "எனக்குப் புரிகிறது. சுகாதார வழங்குநர்கள் மீதான உங்கள் நம்பிக்கையும் முற்றிலும் சரியானவை.",
+      (input) => "இது மிகவும் உண்மையான சவால். இதை அறிவது சிறந்த தீர்வுகளைக் கண்டறிய உதவுகிறது.",
+      (input) => "புரிந்தது, நன்றி."
     ],
     quickReplies: [
       ["0 நாட்கள்", "1-2 நாட்கள், 30 நிமிடம்", "3-4 நாட்கள், 45 நிமிடம்", "5+ நாட்கள், 60 நிமிடம்"],
       ["தசை பயிற்சி இல்லை", "ஆம், 2 நாட்கள்", "உயர் இரத்த அழுத்தம்", "அவ்வப்போது தலைச்சுற்றல்"],
       ["தெரியாது", "மதிப்பீடு: சுமார் அதே", "நம்பிக்கை: 3/5", "நம்பிக்கை: 5/5"],
       ["நேரமின்மை", "மிகவும் தூரம்", "அதிக செலவு", "மருத்துவமனைகளை விரும்புகிறேன்"],
-      ["21க்கு கீழ்", "21-40", "41-60", "60+", "ஆண்", "பெண்", "பிரிவு 73"]
+      ["ஆண், 21-40", "பெண், 21-40", "ஆண், 41-60", "பெண், 41-60", "60+"],
+      ["பிரிவு 73", "பிரிவு 54", "பிரிவு 18", "தெரியாது"]
     ]
   }
 };
@@ -147,7 +159,6 @@ const AuraChatbot = () => {
   const navigate = useNavigate();
   const chatEndRef = useRef(null);
   
-  // Synchronous initialisation to prevent English flashes on mount
   const [lang] = useState(() => localStorage.getItem('nexus_language') || 'en');
   const langData = DICTIONARY[lang] || DICTIONARY['en'];
   
@@ -175,13 +186,53 @@ const AuraChatbot = () => {
     }, 800);
   };
 
+  // NLP Parser to convert chat strings into structured clinical data
+  const parseClinicalData = (rawTextData) => {
+    const riskStr = (rawTextData.risk_factors || '').toLowerCase();
+    const actStr = (rawTextData.activity_level || '').toLowerCase();
+    const barrStr = (rawTextData.barriers || '').toLowerCase();
+    const demoStr = (rawTextData.demographics || '').toLowerCase();
+    const locStr = (rawTextData.postal_code || '');
+
+    // Extract minutes & days safely
+    const minMatch = actStr.match(/(\d+)\s*(min|分钟|நிமிடம்)/);
+    const pavsMinutes = minMatch ? parseInt(minMatch[1], 10) : 0;
+    const daysMatch = actStr.match(/(\d+)\s*(day|hari|天|நாட்கள்)/);
+    const pavsDays = daysMatch ? parseInt(daysMatch[1], 10) : 0;
+
+    // Multilingual clinical flags
+    const symptomFlag = /(dizziness|chest|pening|dada|头晕|胸痛|தலைச்சுற்றல்|நெஞ்சு வலி)/.test(riskStr);
+    const medFlag = /(blood pressure|darah tinggi|高血压|உயர் இரத்த அழுத்தம்)/.test(riskStr);
+
+    const sdohFinancial = /(cost|expensive|mahal|kos|贵|செலவு)/.test(barrStr);
+    const sdohSocial = /(caregiving|menjaga|照顾|கவனிப்பு)/.test(barrStr);
+
+    // Demographics mapping
+    let gender = 'Unknown';
+    if (/(female|perempuan|女|பெண்)/.test(demoStr)) gender = 'Female';
+    else if (/(male|lelaki|男|ஆண்)/.test(demoStr)) gender = 'Male';
+
+    let age = 'Unknown';
+    if (demoStr.includes('41-60')) age = '41-60';
+    else if (demoStr.includes('60+')) age = '60+';
+
+    const sectorMatch = locStr.match(/\d{2}/);
+    const postalSector = sectorMatch ? sectorMatch[0] : '00';
+
+    return {
+        pavsMinutes, pavsDays, strengthDays: 0, symptomFlag, medFlag, psychoFlag: false,
+        sdohFinancial, sdohSocial, gender, age, postalSector
+    };
+  };
+
   const handleUserSubmission = (text) => {
     if (!text.trim()) return;
 
     setMessages(prev => [...prev, { sender: 'user', text }]);
     setUserInput('');
 
-    const stepKeys = ['activity_level', 'risk_factors', 'community_trust', 'barriers', 'demographics'];
+    // Notice the updated stepKeys array to match the 6 steps
+    const stepKeys = ['activity_level', 'risk_factors', 'community_trust', 'barriers', 'demographics', 'postal_code'];
     const currentKey = stepKeys[currentStep];
     const updatedData = { ...collectedData, [currentKey]: text };
     setCollectedData(updatedData);
@@ -189,11 +240,13 @@ const AuraChatbot = () => {
     setIsTyping(true);
     
     setTimeout(() => {
+      // Step A: MI Reflection (if available for this step)
       if (currentStep < langData.reflections.length) {
         const reflectionText = langData.reflections[currentStep](text);
         setMessages(prev => [...prev, { sender: 'bot', text: reflectionText }]);
       }
 
+      // Step B: Next Prompt OR Conclude
       const nextStep = currentStep + 1;
       if (nextStep < langData.prompts.length) {
         setIsTyping(true);
@@ -215,18 +268,33 @@ const AuraChatbot = () => {
 
   const concludeTriage = async (finalData) => {
     setIsTyping(true);
-    const riskScore = calculateRiskScore(finalData.risk_factors);
+    
+    // Parse the unstructured chat text into a strict clinical JSON object
+    const parsedClinicalData = parseClinicalData(finalData);
+    const riskScore = calculateRiskScore(parsedClinicalData);
     
     try {
-      await recordTelemetry({
+      await recordTelemetry(parsedClinicalData.postalSector, {
         event: 'aura_triage_complete',
-        payload: finalData,
+        payload: parsedClinicalData,
         computedRisk: riskScore
       });
 
       setTimeout(() => {
         setMessages(prev => [...prev, { sender: 'bot', text: langData.conclusion }]);
         setIsTyping(false);
+        
+        // CRITICAL FIX: Navigate to the result page with the parsed state
+        setTimeout(() => {
+            navigate('/individuals/result', { 
+                state: { 
+                    score: riskScore, 
+                    data: parsedClinicalData, 
+                    postalSector: parsedClinicalData.postalSector 
+                } 
+            });
+        }, 1500); // 1.5s delay allows user to read the conclusion message
+        
       }, 1000);
       
     } catch (error) {
@@ -240,7 +308,6 @@ const AuraChatbot = () => {
   return (
     <div className="flex flex-col h-screen max-w-md mx-auto bg-slate-50 dark:bg-slate-950 font-sans transition-colors duration-500">
       
-      {/* Header */}
       <header className="flex items-center p-4 bg-white dark:bg-[#111827] shadow-sm border-b border-slate-200 dark:border-slate-800 transition-colors duration-500">
         <button onClick={() => navigate(-1)} className="p-2 mr-2 text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-full transition-colors">
           <ChevronLeft size={24} />
@@ -251,7 +318,6 @@ const AuraChatbot = () => {
         </div>
       </header>
 
-      {/* Chat Transcript */}
       <div className="flex-1 overflow-y-auto p-4 space-y-4">
         {messages.map((msg, idx) => (
           <div key={idx} className={`flex ${msg.sender === 'user' ? 'justify-end' : 'justify-start'}`}>
@@ -274,10 +340,8 @@ const AuraChatbot = () => {
         <div ref={chatEndRef} />
       </div>
 
-      {/* Input Console */}
       <div className="p-4 bg-white dark:bg-[#111827] border-t border-slate-200 dark:border-slate-800 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)] transition-colors duration-500">
         
-        {/* Dynamic Quick Replies with Hint */}
         {!isTyping && currentStep < langData.quickReplies.length && (
           <div className="mb-4 animate-in fade-in slide-in-from-bottom-2 duration-300">
             <p className="text-xs font-bold text-slate-500 dark:text-slate-400 mb-2 px-1">
@@ -288,7 +352,7 @@ const AuraChatbot = () => {
                 <button
                   key={idx}
                   onClick={() => handleUserSubmission(reply)}
-                  className="px-3 py-1.5 text-sm bg-indigo-50 dark:bg-indigo-500/10 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-500/30 rounded-full hover:bg-indigo-100 dark:hover:bg-indigo-500/20 transition-colors"
+                  className="px-3 py-1.5 text-sm bg-indigo-50 dark:bg-indigo-500/10 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-500/30 rounded-full hover:bg-indigo-100 dark:hover:bg-indigo-500/20 transition-colors text-left"
                 >
                   {reply}
                 </button>
@@ -297,7 +361,6 @@ const AuraChatbot = () => {
           </div>
         )}
 
-        {/* Semantic Form Input */}
         <form onSubmit={handleFormSubmit} className="flex items-center gap-2">
           <input
             type="text"
