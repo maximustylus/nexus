@@ -171,16 +171,16 @@ const WelcomeScreen = (props) => {
             {/* HEADER & CONTROLS ROW */}
             <div className={`relative z-20 w-full max-w-xl flex justify-between items-center mb-6 mt-8 md:mt-0 transition-all duration-1000 transform ${animate ? 'translate-y-0 opacity-100' : '-translate-y-4 opacity-0'}`}>
                 {/* LOGO & TEXT */}
-                    <div className="flex flex-col items-center justify-center gap-6 group cursor-default text-center">
-                        <img 
-                            src="/nexus.png" 
-                            alt="NEXUS" 
-                            className="w-32 h-32 md:w-48 md:h-48 drop-shadow-xl transition-transform duration-500 group-hover:rotate-6 group-hover:scale-105" 
-                        />
-                        <h1 className="text-5xl md:text-7xl font-black text-slate-900 dark:text-white tracking-tighter">
-                            NEXUS
-                        </h1>
-                    </div>
+                <div className="w-full flex flex-col items-center justify-center gap-4 group cursor-default text-center mb-8">
+                    <img 
+                        src="/nexus.png" 
+                        alt="NEXUS" 
+                        className="w-32 h-32 md:w-48 md:h-48 drop-shadow-xl transition-transform duration-500 group-hover:rotate-6 group-hover:scale-105" 
+                    />
+                    <h1 className="text-5xl md:text-7xl font-black text-slate-900 dark:text-white tracking-tighter">
+                        NEXUS
+                    </h1>
+                </div>
 
                 {/* THEME TOGGLE */}
                 <button 
