@@ -9,6 +9,7 @@ const DICTIONARY = {
     back: 'Back',
     typing: 'AURA is typing...',
     inputPlaceholder: 'Type your message...',
+    hintText: 'Type freely or select an example:',
     conclusion: 'Thank you for exploring this with me. I have mapped your profile and will now align you with the safest community programmes.',
     error: 'There was a secure connection error while saving your profile. Please try again.',
     prompts: [
@@ -42,6 +43,7 @@ const DICTIONARY = {
     back: 'Kembali',
     typing: 'AURA sedang menaip...',
     inputPlaceholder: 'Taip mesej anda...',
+    hintText: 'Taip secara bebas atau pilih contoh:',
     conclusion: 'Terima kasih kerana meneroka bersama saya. Saya telah memetakan profil anda dan kini akan menyelaraskan anda dengan program komuniti yang paling selamat.',
     error: 'Terdapat ralat sambungan selamat semasa menyimpan profil anda. Sila cuba lagi.',
     prompts: [
@@ -75,6 +77,7 @@ const DICTIONARY = {
     back: '返回',
     typing: 'AURA 正在输入...',
     inputPlaceholder: '输入您的消息...',
+    hintText: '自由输入，或选择一个示例：',
     conclusion: '感谢您与我交流。我已经记录了您的个人资料，现在将为您匹配最安全的社区项目。',
     error: '保存您的个人资料时发生安全连接错误。请重试。',
     prompts: [
@@ -108,6 +111,7 @@ const DICTIONARY = {
     back: 'பின்செல்',
     typing: 'AURA தட்டச்சு செய்கிறார்...',
     inputPlaceholder: 'உங்கள் செய்தியை உள்ளிடவும்...',
+    hintText: 'சுயமாக தட்டச்சு செய்யவும் அல்லது உதாரணத்தைத் தேர்ந்தெடுக்கவும்:',
     conclusion: 'என்னுடன் இதை ஆராய்ந்ததற்கு நன்றி. நான் உங்கள் சுயவிவரத்தை வரைபடமாக்கியுள்ளேன், இப்போது உங்களை பாதுகாப்பான சமூக திட்டங்களுடன் இணைப்பேன்.',
     error: 'உங்கள் சுயவிவரத்தைச் சேமிக்கும் போது பாதுகாப்பான இணைப்பு பிழை ஏற்பட்டது. தயவுசெய்து மீண்டும் முயற்சிக்கவும்.',
     prompts: [
@@ -139,10 +143,13 @@ const DICTIONARY = {
   }
 };
 
-const AuraChatbot = ({ userLanguage = 'en' }) => {
+const AuraChatbot = () => {
   const navigate = useNavigate();
   const chatEndRef = useRef(null);
-  const langData = DICTIONARY[userLanguage] || DICTIONARY['en'];
+  
+  // Synchronous initialisation to prevent English flashes on mount
+  const [lang] = useState(() => localStorage.getItem('nexus_language') || 'en');
+  const langData = DICTIONARY[lang] || DICTIONARY['en'];
   
   const [currentStep, setCurrentStep] = useState(0);
   const [messages, setMessages] = useState([]);
@@ -218,43 +225,40 @@ const AuraChatbot = ({ userLanguage = 'en' }) => {
       });
 
       setTimeout(() => {
-        setMessages(prev => [...prev, { 
-          sender: 'bot', 
-          text: langData.conclusion 
-        }]);
+        setMessages(prev => [...prev, { sender: 'bot', text: langData.conclusion }]);
         setIsTyping(false);
       }, 1000);
       
     } catch (error) {
       setTimeout(() => {
-        setMessages(prev => [...prev, { 
-          sender: 'bot', 
-          text: langData.error
-        }]);
+        setMessages(prev => [...prev, { sender: 'bot', text: langData.error }]);
         setIsTyping(false);
       }, 1000);
     }
   };
 
   return (
-    <div className="flex flex-col h-screen max-w-md mx-auto bg-gray-50 font-sans">
-      <header className="flex items-center p-4 bg-white shadow-sm">
-        <button onClick={() => navigate(-1)} className="p-2 mr-2 hover:bg-gray-100 rounded-full transition-colors">
+    <div className="flex flex-col h-screen max-w-md mx-auto bg-slate-50 dark:bg-slate-950 font-sans transition-colors duration-500">
+      
+      {/* Header */}
+      <header className="flex items-center p-4 bg-white dark:bg-[#111827] shadow-sm border-b border-slate-200 dark:border-slate-800 transition-colors duration-500">
+        <button onClick={() => navigate(-1)} className="p-2 mr-2 text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-full transition-colors">
           <ChevronLeft size={24} />
         </button>
         <div className="flex items-center gap-2">
-          <Sparkles className="text-blue-500" size={20} />
-          <h1 className="font-semibold text-lg">AURA</h1>
+          <Sparkles className="text-indigo-500 dark:text-indigo-400" size={20} />
+          <h1 className="font-semibold text-lg text-slate-900 dark:text-white">AURA</h1>
         </div>
       </header>
 
+      {/* Chat Transcript */}
       <div className="flex-1 overflow-y-auto p-4 space-y-4">
         {messages.map((msg, idx) => (
           <div key={idx} className={`flex ${msg.sender === 'user' ? 'justify-end' : 'justify-start'}`}>
-            <div className={`max-w-[80%] p-3 rounded-2xl ${
+            <div className={`max-w-[80%] p-3 rounded-2xl shadow-sm ${
               msg.sender === 'user' 
-                ? 'bg-blue-600 text-white rounded-br-none' 
-                : 'bg-white border border-gray-200 text-gray-800 rounded-bl-none shadow-sm'
+                ? 'bg-indigo-600 dark:bg-indigo-500 text-white rounded-br-none' 
+                : 'bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-200 rounded-bl-none'
             }`}>
               {msg.text}
             </div>
@@ -262,7 +266,7 @@ const AuraChatbot = ({ userLanguage = 'en' }) => {
         ))}
         {isTyping && (
           <div className="flex justify-start">
-            <div className="bg-gray-200 text-gray-500 text-sm px-4 py-2 rounded-2xl rounded-bl-none animate-pulse">
+            <div className="bg-slate-200 dark:bg-slate-800 text-slate-500 dark:text-slate-400 text-sm px-4 py-2 rounded-2xl rounded-bl-none animate-pulse">
               {langData.typing}
             </div>
           </div>
@@ -270,34 +274,43 @@ const AuraChatbot = ({ userLanguage = 'en' }) => {
         <div ref={chatEndRef} />
       </div>
 
-      <div className="p-4 bg-white border-t border-gray-200 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)]">
+      {/* Input Console */}
+      <div className="p-4 bg-white dark:bg-[#111827] border-t border-slate-200 dark:border-slate-800 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)] transition-colors duration-500">
+        
+        {/* Dynamic Quick Replies with Hint */}
         {!isTyping && currentStep < langData.quickReplies.length && (
-          <div className="flex flex-wrap gap-2 mb-4">
-            {langData.quickReplies[currentStep].map((reply, idx) => (
-              <button
-                key={idx}
-                onClick={() => handleUserSubmission(reply)}
-                className="px-3 py-1.5 text-sm bg-blue-50 text-blue-700 border border-blue-200 rounded-full hover:bg-blue-100 transition-colors"
-              >
-                {reply}
-              </button>
-            ))}
+          <div className="mb-4 animate-in fade-in slide-in-from-bottom-2 duration-300">
+            <p className="text-xs font-bold text-slate-500 dark:text-slate-400 mb-2 px-1">
+              {langData.hintText}
+            </p>
+            <div className="flex flex-wrap gap-2">
+              {langData.quickReplies[currentStep].map((reply, idx) => (
+                <button
+                  key={idx}
+                  onClick={() => handleUserSubmission(reply)}
+                  className="px-3 py-1.5 text-sm bg-indigo-50 dark:bg-indigo-500/10 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-500/30 rounded-full hover:bg-indigo-100 dark:hover:bg-indigo-500/20 transition-colors"
+                >
+                  {reply}
+                </button>
+              ))}
+            </div>
           </div>
         )}
 
+        {/* Semantic Form Input */}
         <form onSubmit={handleFormSubmit} className="flex items-center gap-2">
           <input
             type="text"
             value={userInput}
             onChange={(e) => setUserInput(e.target.value)}
             placeholder={langData.inputPlaceholder}
-            className="flex-1 p-3 border border-gray-300 rounded-full focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-shadow"
+            className="flex-1 p-3 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 text-slate-900 dark:text-white rounded-full focus:outline-none focus:border-indigo-500 dark:focus:border-indigo-400 focus:ring-1 focus:ring-indigo-500 dark:focus:ring-indigo-400 transition-shadow placeholder-slate-400 dark:placeholder-slate-500"
             disabled={isTyping}
           />
           <button 
             type="submit"
             disabled={!userInput.trim() || isTyping}
-            className="p-3 bg-blue-600 text-white rounded-full disabled:opacity-50 hover:bg-blue-700 transition-colors shadow-sm"
+            className="p-3 bg-indigo-600 dark:bg-indigo-500 text-white rounded-full disabled:opacity-50 disabled:cursor-not-allowed hover:bg-indigo-700 dark:hover:bg-indigo-600 transition-colors shadow-sm"
           >
             <Send size={20} />
           </button>
