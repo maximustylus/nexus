@@ -2,8 +2,9 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { recordTelemetry } from '../utils/telemetry';
 import { calculateRiskScore } from '../utils/scoring';
-import { ChevronLeft, Send, Sparkles, Activity } from 'lucide-react';
+import { ChevronLeft, Send, Sparkles } from 'lucide-react';
 
+// Multilingual Dictionary with MI Reflection Logic
 const DICTIONARY = {
   en: {
     back: 'Back',
@@ -11,10 +12,22 @@ const DICTIONARY = {
     inputPlaceholder: 'Type your message...',
     prompts: [
       "Hi! I'm AURA. To help find the right community resources for you, let's have a quick chat. Roughly how many days a week do you exercise, and for how long each time?",
-      "Got it. Do you do any muscle-strengthening activities? Also, do you have any chronic conditions (like high blood pressure) or experience chest pain/dizziness when active?",
-      "Thanks for sharing. Switching gears: have you heard of the health services in your neighbourhood? If you've used them, how would you rate them compared to a hospital, and how much do you trust them (1 to 5)?",
-      "Make sense. What’s the main thing stopping you from using community services? (e.g., cost, distance, no time). What could we improve?",
+      "Do you do any muscle-strengthening activities? Also, do you have any chronic conditions (like high blood pressure) or experience chest pain or dizziness when active?",
+      "Switching gears: have you heard of the health services in your neighbourhood? If you've used them, how would you rate them compared to a hospital, and how much do you trust them (1 to 5)?",
+      "What is the main thing stopping you from using community services? (e.g. cost, distance, no time). What could we improve?",
       "Finally, just to make sure my recommendations fit you perfectly, could you share your age group, gender, race, and the first 2 digits of your postal code?"
+    ],
+    reflections: [
+      // Step 0 -> 1: Elicit Change Talk / Affirmation
+      (input) => input.includes('0') 
+        ? "It can be really tough to find the time or energy to start. Let's see how we can build something manageable." 
+        : "That's a great baseline. Any movement is a step in the right direction.",
+      // Step 1 -> 2: Acknowledge Risk Factors
+      (input) => "Thank you for sharing that. Safety is our top priority, so keeping track of those factors is vital.",
+      // Step 2 -> 3: Validate SDOH Trust
+      (input) => "I hear you. Your comfort and trust in healthcare providers are completely valid.",
+      // Step 3 -> 4: Empathise with Barriers
+      (input) => "That is a very real challenge. Many people face similar hurdles, and identifying them helps us find better workarounds."
     ],
     quickReplies: [
       ["0 days", "1-2 days, 30 mins", "3-4 days, 45 mins", "5+ days, 60 mins"],
@@ -30,10 +43,16 @@ const DICTIONARY = {
     inputPlaceholder: 'Taip mesej anda...',
     prompts: [
       "Hai! Saya AURA. Jom borak sekejap supaya saya boleh cari sumber komuniti yang ngam untuk anda. Agak-agak berapa hari seminggu anda bersenam, dan berapa lama setiap sesi?",
-      "Faham. Ada buat senaman kuatkan otot tak? Lepas tu, ada tak apa-apa penyakit kronik (macam darah tinggi) atau rasa sakit dada/pening bila aktif?",
+      "Faham. Ada buat senaman kuatkan otot tak? Lepas tu, ada tak apa-apa penyakit kronik (macam darah tinggi) atau rasa sakit dada atau pening bila aktif?",
       "Terima kasih sudi kongsi. Nak tanya sikit, pernah dengar tak pasal servis kesihatan kat kawasan perumahan anda? Kalau pernah guna, macam mana servis dia berbanding hospital, dan berapa tahap kepercayaan anda (1 hingga 5)?",
-      "Faham sangat. Apa yang paling menghalang anda daripada guna servis komuniti ni? (cth: kos, jauh, takde masa). Apa yang boleh kami perbaiki?",
+      "Faham sangat. Apa yang paling menghalang anda daripada guna servis komuniti ni? (cth kos, jauh, takde masa). Apa yang boleh kami perbaiki?",
       "Akhir sekali, untuk pastikan cadangan saya betul-betul sesuai dengan profil anda, boleh kongsi kumpulan umur, jantina, bangsa, dan 2 digit pertama poskod anda?"
+    ],
+    reflections: [
+      (input) => input.includes('0') ? "Memang susah nak cari masa atau tenaga untuk mula. Kita cuba cari jalan yang paling sesuai dan mudah untuk anda." : "Permulaan yang bagus. Sebarang pergerakan adalah langkah yang baik.",
+      (input) => "Terima kasih kerana sudi kongsi. Keselamatan anda adalah keutamaan kami, jadi maklumat ini sangat penting.",
+      (input) => "Saya faham. Keselesaan dan kepercayaan anda terhadap penyedia perkhidmatan kesihatan memang sangat penting.",
+      (input) => "Itu memang cabaran yang nyata. Ramai yang lalui benda sama, mengetahui hal ini bantu kami cari jalan penyelesaian yang lebih baik."
     ],
     quickReplies: [
       ["0 hari", "1-2 hari, 30 minit", "3-4 hari, 45 minit", "5+ hari, 60 minit"],
@@ -49,10 +68,16 @@ const DICTIONARY = {
     inputPlaceholder: '输入您的消息...',
     prompts: [
       "你好！我是 AURA。为了帮你找到合适的社区资源，我们来简单聊聊吧。你通常每个星期做几天运动？每次大概多久？",
-      "明白了。你有做一些强化肌肉的运动吗？另外，有没有慢性病（比如高血压），或者在活动时觉得胸痛/头晕？",
+      "明白了。你有做一些强化肌肉的运动吗？另外，有没有慢性病（比如高血压），或者在活动时觉得胸痛或头晕？",
       "谢谢你的分享。换个话题：你有听说过你家附近的社区医疗服务吗？如果用过的话，跟医院比起来你觉得怎么样？你对他们的信任度是多少（1 到 5 分）？",
-      "了解。最主要是什么原因阻止你使用社区服务呢？（比如：费用、距离、没时间）。我们有什么可以改进的地方？",
+      "了解。最主要是什么原因阻止你使用社区服务呢？（比如费用、距离、没时间）。我们有什么可以改进的地方？",
       "最后，为了确保我的建议完全适合你，可以告诉我你的年龄段、性别、种族，以及邮政编码的前两位数吗？"
+    ],
+    reflections: [
+      (input) => input.includes('0') ? "万事开头难，找时间或精力运动确实不易。让我们看看如何制定一个轻松的计划。" : "很好的开始。只要动起来就是朝着正确的方向迈进。",
+      (input) => "谢谢你的分享。安全是我们的首要任务，了解这些情况非常重要。",
+      (input) => "我完全理解。你对医疗服务提供者的信任和舒适感是非常合理的。",
+      (input) => "这是一个很现实的挑战。很多人都面临类似的困难，了解这些能帮我们找到更好的解决办法。"
     ],
     quickReplies: [
       ["0 天", "1-2天, 30分钟", "3-4天, 45分钟", "5天以上, 60分钟"],
@@ -68,237 +93,199 @@ const DICTIONARY = {
     inputPlaceholder: 'உங்கள் செய்தியை உள்ளிடவும்...',
     prompts: [
       "வணக்கம்! நான் AURA. உங்களுக்கான சரியான சமூக வளங்களைக் கண்டறிய, சிறிது பேசலாம். வாரத்திற்கு எத்தனை நாட்கள் உடற்பயிற்சி செய்கிறீர்கள், ஒவ்வொரு முறையும் எவ்வளவு நேரம்?",
-      "புரிந்தது. தசை வலுப்படுத்தும் பயிற்சிகளைச் செய்கிறீர்களா? மேலும், உங்களுக்கு நாள்பட்ட நோய்கள் (உயர் ரத்த அழுத்தம் போன்றவை) உள்ளதா, அல்லது சுறுசுறுப்பாக இருக்கும்போது நெஞ்சு வலி/தலைச்சுற்றல் வருமா?",
+      "புரிந்தது. தசை வலுப்படுத்தும் பயிற்சிகளைச் செய்கிறீர்களா? மேலும், உங்களுக்கு நாள்பட்ட நோய்கள் (உயர் ரத்த அழுத்தம் போன்றவை) உள்ளதா, அல்லது சுறுசுறுப்பாக இருக்கும்போது நெஞ்சு வலி அல்லது தலைச்சுற்றல் வருமா?",
       "பகிர்ந்ததற்கு நன்றி. உங்கள் அருகில் உள்ள சுகாதார சேவைகளைப் பற்றி கேள்விப்பட்டிருக்கிறீர்களா? பயன்படுத்தியிருந்தால், மருத்துவமனையுடன் ஒப்பிடும்போது அதை எப்படி மதிப்பிடுவீர்கள், மற்றும் அவர்கள் மீது எவ்வளவு நம்பிக்கை உள்ளது (1 முதல் 5 வரை)?",
       "சரியான கருத்து. சமூக சேவைகளைப் பயன்படுத்துவதை எது தடுக்கிறது? (எ.கா. செலவு, தூரம், நேரமின்மை). நாங்கள் எதை மேம்படுத்தலாம்?",
       "இறுதியாக, எனது பரிந்துரைகள் உங்களுக்கு சரியாக பொருந்துவதை உறுதி செய்ய, உங்கள் வயது, பாலினம், இனம் மற்றும் அஞ்சல் குறியீட்டின் முதல் 2 இலக்கங்களை பகிர முடியுமா?"
     ],
+    reflections: [
+      (input) => input.includes('0') ? "தொடங்குவதற்கு நேரமோ அல்லது ஆற்றலோ கிடைப்பது கடினமாக இருக்கலாம். உங்களுக்கு ஏற்ற ஒரு வழியை நாங்கள் கண்டுபிடிக்க முயல்வோம்." : "இது ஒரு சிறந்த தொடக்கம். எந்தவொரு உடல் அசைவும் சரியான திசையை நோக்கிய ஒரு படியாகும்.",
+      (input) => "பகிர்ந்ததற்கு நன்றி. பாதுகாப்பு எங்கள் முதன்மை முன்னுரிமை, எனவே இந்த காரணிகளைக் கண்காணிப்பது முக்கியம்.",
+      (input) => "எனக்குப் புரிகிறது. சுகாதார வழங்குநர்கள் மீதான உங்கள் வசதியும் நம்பிக்கையும் முற்றிலும் சரியானவை.",
+      (input) => "இது மிகவும் உண்மையான சவால். பலரும் இதேபோன்ற தடைகளை எதிர்கொள்கின்றனர், இதை அறிவது சிறந்த தீர்வுகளைக் கண்டறிய உதவுகிறது."
+    ],
     quickReplies: [
       ["0 நாட்கள்", "1-2 நாட்கள், 30 நிமிடம்", "3-4 நாட்கள், 45 நிமிடம்", "5+ நாட்கள், 60 நிமிடம்"],
-      ["தசைப் பயிற்சி இல்லை", "ஆம், 2 நாட்கள்", "உயர் ரத்த அழுத்தம்", "அவ்வப்போது தலைச்சுற்றல்"],
+      ["தசை பயிற்சி இல்லை", "ஆம், 2 நாட்கள்", "உயர் இரத்த அழுத்தம்", "அவ்வப்போது தலைச்சுற்றல்"],
       ["தெரியாது", "மதிப்பீடு: சுமார் அதே", "நம்பிக்கை: 3/5", "நம்பிக்கை: 5/5"],
-      ["நேரமின்மை", "வெகு தொலைவு", "அதிக செலவு", "மருத்துவமனைகளை விரும்புகிறேன்"],
+      ["நேரமின்மை", "மிகவும் தூரம்", "அதிக செலவு", "மருத்துவமனைகளை விரும்புகிறேன்"],
       ["21க்கு கீழ்", "21-40", "41-60", "60+", "ஆண்", "பெண்", "பிரிவு 73"]
     ]
   }
 };
 
-export default function AuraChat() {
+const AuraChatbot = ({ userLanguage = 'en' }) => {
   const navigate = useNavigate();
-  const [lang, setLang] = useState('en');
-  const [animate, setAnimate] = useState(false);
-  const [sessionId] = useState(() => 'nx-aura-' + Math.random().toString(36).substr(2, 9));
+  const chatEndRef = useRef(null);
   
-  const messagesEndRef = useRef(null);
-  const [input, setInput] = useState('');
+  // Fallback to English if an unsupported language code is passed
+  const langData = DICTIONARY[userLanguage] || DICTIONARY['en'];
+  
+  const [currentStep, setCurrentStep] = useState(0);
+  const [messages, setMessages] = useState([]);
+  const [userInput, setUserInput] = useState('');
   const [isTyping, setIsTyping] = useState(false);
-  const [chatStep, setChatStep] = useState(0);
-  
-  // Set language properly on mount
+  const [collectedData, setCollectedData] = useState({});
+
+  // Initialise chat
   useEffect(() => {
-    const storedLang = localStorage.getItem('nexus_language');
-    if (storedLang && DICTIONARY[storedLang]) {
-        setLang(storedLang);
+    if (messages.length === 0) {
+      appendBotMessage(langData.prompts[0]);
     }
-    setTimeout(() => setAnimate(true), 100);
   }, []);
 
-  const t = DICTIONARY[lang] || DICTIONARY.en;
-
-  const [messages, setMessages] = useState([]);
-
-  // Initialize first message after language is set
+  // Auto-scroll mechanism
   useEffect(() => {
-    setMessages([{ id: 1, sender: 'aura', text: (DICTIONARY[lang] || DICTIONARY.en).prompts[0] }]);
-  }, [lang]);
-
-  // Mock State to capture parsed variables from the LLM conversation
-  const [parsedData, setParsedData] = useState({
-    pavsDays: 0, pavsMinutes: 0, strengthDays: 0, medConditions: 0, medFlag: false, symptomsCount: 0, symptomFlag: false,
-    aware: 'No', referred: 'No', rating: 'About the Same', trust: '3', barriers: [], improve: '',
-    age: '41-60', gender: 'Female', race: 'Chinese', postalCode: '73'
-  });
-
-  const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  };
-
-  useEffect(() => {
-    scrollToBottom();
+    chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, isTyping]);
 
-  const handleSend = async (e, forcedText = null) => {
-    if (e) e.preventDefault();
-    const textToSend = forcedText || input;
-    if (!textToSend.trim()) return;
-
-    setMessages(prev => [...prev, { id: Date.now(), sender: 'user', text: textToSend }]);
-    setInput('');
+  const appendBotMessage = (text) => {
     setIsTyping(true);
-
-    // Simulate LLM Processing and intent extraction
     setTimeout(() => {
+      setMessages(prev => [...prev, { sender: 'bot', text }]);
       setIsTyping(false);
-      
-      // Heuristic extraction for demonstration (gracefully catches numbers regardless of language)
-      if (chatStep === 0) {
-        if (textToSend.includes('3') || textToSend.includes('45')) setParsedData(prev => ({...prev, pavsDays: 3, pavsMinutes: 45}));
-      } else if (chatStep === 1) {
-        if (textToSend.includes('2')) setParsedData(prev => ({...prev, strengthDays: 2}));
-      } else if (chatStep === 3) {
-        setParsedData(prev => ({...prev, barriers: [...prev.barriers, textToSend]}));
-      }
-
-      if (chatStep < t.prompts.length - 1) {
-        setMessages(prev => [...prev, { id: Date.now(), sender: 'aura', text: t.prompts[chatStep + 1] }]);
-        setChatStep(prev => prev + 1);
-      } else {
-        finalizeAssessment();
-      }
-    }, 1200);
+    }, 800);
   };
 
-  const finalizeAssessment = async () => {
-    const endMessage = lang === 'ms' ? 'Terima kasih! Saya sedang menganalisis maklum balas anda. Menjana laluan komuniti anda sekarang...'
-                     : lang === 'zh' ? '谢谢！我已经分析了你的回答。正在为你生成专属的社区资源路径...'
-                     : lang === 'ta' ? 'நன்றி! நான் உங்கள் பதில்களை பகுப்பாய்வு செய்துள்ளேன். உங்கள் சமூக வழியை இப்போது உருவாக்குகிறேன்...'
-                     : 'Thank you! I have analysed your responses. Generating your personalised community pathway now...';
+  const handleUserSubmission = (text) => {
+    if (!text.trim()) return;
 
-    setMessages(prev => [...prev, { id: Date.now(), sender: 'aura', text: endMessage }]);
+    // 1. Record User Message
+    setMessages(prev => [...prev, { sender: 'user', text }]);
+    setUserInput('');
+
+    // 2. Map data to clinical schema based on current step
+    const stepKeys = ['activity_level', 'risk_factors', 'community_trust', 'barriers', 'demographics'];
+    const currentKey = stepKeys[currentStep];
+    const updatedData = { ...collectedData, [currentKey]: text };
+    setCollectedData(updatedData);
+
+    // 3. Execute MI Dual-Message Flow
+    setIsTyping(true);
     
-    const clinicalData = {
-      pavsDays: parsedData.pavsDays,
-      pavsMinutes: parsedData.pavsMinutes,
-      strengthDays: parsedData.strengthDays,
-      medConditions: parsedData.medConditions,
-      medFlag: parsedData.medFlag,
-      symptomsCount: parsedData.symptomsCount,
-      symptomFlag: parsedData.symptomFlag,
-      // Generic mock flag for demo purposes
-      sdohFinancial: parsedData.barriers.length > 0,
-      sdohLogistical: parsedData.barriers.length > 0,
-      sdohSocial: false
-    };
-
-    const score = calculateRiskScore(clinicalData);
-    const postalSector = parsedData.postalCode || '00';
-
-    const masterPayload = {
-      sessionId: sessionId,
-      action: 'unified_assessment_complete_aura',
-      language: lang,
-      score: score,
-      clinical: clinicalData,
-      perception: {
-          aware: parsedData.aware, referred: parsedData.referred, rating: parsedData.rating,
-          trust: parsedData.trust, barriers: parsedData.barriers, improve: parsedData.improve
-      },
-      demographics: {
-          age: parsedData.age, gender: parsedData.gender, race: parsedData.race, sector: postalSector
+    setTimeout(() => {
+      // Phase A: Generate and display the Reflection (Elicit/Affirm/Acknowledge)
+      if (currentStep < langData.reflections.length) {
+        const reflectionText = langData.reflections[currentStep](text);
+        setMessages(prev => [...prev, { sender: 'bot', text: reflectionText }]);
       }
-    };
 
-    await recordTelemetry(postalSector, masterPayload);
+      // Phase B: Pause, then introduce the next clinical prompt
+      const nextStep = currentStep + 1;
+      if (nextStep < langData.prompts.length) {
+        setIsTyping(true);
+        setTimeout(() => {
+          setCurrentStep(nextStep);
+          setMessages(prev => [...prev, { sender: 'bot', text: langData.prompts[nextStep] }]);
+          setIsTyping(false);
+        }, 1200); // 1.2s Natural reading/pacing pause
+      } else {
+        concludeTriage(updatedData);
+      }
+    }, 800); // 0.8s Initial processing delay
+  };
+
+  const handleFormSubmit = (e) => {
+    e.preventDefault(); // Prevents page reload
+    handleUserSubmission(userInput);
+  };
+
+  const concludeTriage = async (finalData) => {
+    setIsTyping(true);
+    
+    // Process clinical payload
+    const riskScore = calculateRiskScore(finalData.risk_factors);
+    
+    // Dispatch to backend
+    await recordTelemetry({
+      event: 'aura_triage_complete',
+      payload: finalData,
+      computedRisk: riskScore
+    });
 
     setTimeout(() => {
-      navigate('/individuals/result', { state: { score, data: clinicalData, postalSector } });
-    }, 1800);
+      setMessages(prev => [...prev, { 
+        sender: 'bot', 
+        text: 'Thank you for exploring this with me. I have mapped your profile and will now align you with the safest community programmes.' 
+      }]);
+      setIsTyping(false);
+    }, 1000);
   };
 
   return (
-    <div className="min-h-screen w-full bg-slate-50 dark:bg-slate-950 transition-colors duration-700 flex flex-col items-center py-6 px-4 md:px-6 relative overflow-x-hidden font-sans">
-      
-      <div className="absolute inset-0 z-0 opacity-[0.03] dark:opacity-[0.05] pointer-events-none" style={{ backgroundImage: 'radial-gradient(circle at 1px 1px, currentColor 1px, transparent 0)', backgroundSize: '40px 40px' }}></div>
-      <div className={`fixed top-0 left-0 w-[600px] h-[600px] bg-pink-500/10 rounded-full blur-[100px] pointer-events-none animate-float-slow transition-opacity duration-1000 ${animate ? 'opacity-100' : 'opacity-0'}`}></div>
-      <div className={`fixed bottom-0 right-0 w-[500px] h-[500px] bg-rose-500/10 rounded-full blur-[80px] pointer-events-none animate-float-delayed transition-opacity duration-1000 ${animate ? 'opacity-100' : 'opacity-0'}`}></div>
-
-      <div className={`relative z-10 w-full max-w-2xl h-[calc(100vh-3rem)] flex flex-col transition-all duration-1000 transform ${animate ? 'translate-y-0 opacity-100' : 'translate-y-10 opacity-0'}`}>
-        
-        {/* HEADER */}
-        <div className="flex justify-between items-center mb-4 px-2 shrink-0">
-          <button onClick={() => navigate('/individuals/pathway')} className="flex items-center gap-2 px-4 py-2 bg-white/60 dark:bg-slate-800/60 backdrop-blur-md text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-white font-black text-xs uppercase tracking-widest rounded-full border border-slate-200 dark:border-slate-700 shadow-sm transition-all group">
-              <ChevronLeft size={16} className="group-hover:-translate-x-1 transition-transform"/> {t.back}
-          </button>
-          <div className="flex items-center gap-2 px-3 py-1.5 bg-pink-50 dark:bg-pink-500/10 border border-pink-100 dark:border-pink-500/20 rounded-full">
-             <Sparkles size={14} className="text-pink-500" />
-             <span className="text-[10px] font-black text-pink-600 dark:text-pink-400 uppercase tracking-widest">AURA Active</span>
-          </div>
+    <div className="flex flex-col h-screen max-w-md mx-auto bg-gray-50 font-sans">
+      {/* Header */}
+      <header className="flex items-center p-4 bg-white shadow-sm">
+        <button onClick={() => navigate(-1)} className="p-2 mr-2 hover:bg-gray-100 rounded-full transition-colors">
+          <ChevronLeft size={24} />
+        </button>
+        <div className="flex items-center gap-2">
+          <Sparkles className="text-blue-500" size={20} />
+          <h1 className="font-semibold text-lg">AURA</h1>
         </div>
+      </header>
 
-        {/* CHAT CONTAINER */}
-        <div className="flex-1 bg-white dark:bg-[#111827] rounded-[2rem] shadow-xl border border-slate-200 dark:border-slate-800 overflow-hidden flex flex-col">
-          
-          <div className="flex-1 overflow-y-auto p-6 space-y-6 scrollbar-hide">
-            <div className="text-center pb-4">
-              <div className="w-16 h-16 bg-gradient-to-br from-pink-400 to-rose-500 rounded-full mx-auto flex items-center justify-center shadow-lg shadow-pink-500/30 mb-3">
-                <Activity className="text-white w-8 h-8" />
-              </div>
-              <h2 className="text-sm font-black text-slate-400 uppercase tracking-widest">Secure Session</h2>
-              <p className="text-[10px] font-mono text-slate-300">{sessionId}</p>
+      {/* Chat Transcript */}
+      <div className="flex-1 overflow-y-auto p-4 space-y-4">
+        {messages.map((msg, idx) => (
+          <div key={idx} className={`flex ${msg.sender === 'user' ? 'justify-end' : 'justify-start'}`}>
+            <div className={`max-w-[80%] p-3 rounded-2xl ${
+              msg.sender === 'user' 
+                ? 'bg-blue-600 text-white rounded-br-none' 
+                : 'bg-white border border-gray-200 text-gray-800 rounded-bl-none shadow-sm'
+            }`}>
+              {msg.text}
             </div>
-
-            {messages.map((msg) => (
-              <div key={msg.id} className={`flex ${msg.sender === 'user' ? 'justify-end' : 'justify-start'} animate-in fade-in slide-in-from-bottom-2`}>
-                <div className={`max-w-[80%] p-4 rounded-2xl text-sm font-medium leading-relaxed shadow-sm ${
-                  msg.sender === 'user' 
-                  ? 'bg-indigo-600 text-white rounded-tr-sm' 
-                  : 'bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300 rounded-tl-sm'
-                }`}>
-                  {msg.text}
-                </div>
-              </div>
-            ))}
-
-            {isTyping && (
-              <div className="flex justify-start animate-in fade-in">
-                <div className="bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-4 rounded-2xl rounded-tl-sm flex items-center gap-2">
-                  <div className="w-2 h-2 bg-pink-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
-                  <div className="w-2 h-2 bg-pink-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
-                  <div className="w-2 h-2 bg-pink-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
-                </div>
-              </div>
-            )}
-            <div ref={messagesEndRef} />
           </div>
-
-          {/* QUICK REPLIES */}
-          {!isTyping && chatStep < t.quickReplies.length && (
-            <div className="px-6 py-2 flex flex-wrap gap-2 animate-in fade-in">
-              {t.quickReplies[chatStep].map((reply, idx) => (
-                <button
-                  key={idx}
-                  onClick={(e) => handleSend(e, reply)}
-                  className="px-4 py-2 bg-pink-50 dark:bg-pink-500/10 hover:bg-pink-100 dark:hover:bg-pink-500/20 text-pink-600 dark:text-pink-400 border border-pink-200 dark:border-pink-500/30 rounded-full text-xs font-bold transition-colors"
-                >
-                  {reply}
-                </button>
-              ))}
+        ))}
+        {isTyping && (
+          <div className="flex justify-start">
+            <div className="bg-gray-200 text-gray-500 text-sm px-4 py-2 rounded-2xl rounded-bl-none animate-pulse">
+              {langData.typing}
             </div>
-          )}
+          </div>
+        )}
+        <div ref={chatEndRef} />
+      </div>
 
-          {/* INPUT BAR */}
-          <div className="p-4 bg-slate-50 dark:bg-slate-900/50 border-t border-slate-100 dark:border-slate-800">
-            <form onSubmit={handleSend} className="flex items-center gap-3">
-              <input
-                type="text"
-                value={input}
-                onChange={(e) => setInput(e.target.value)}
-                placeholder={isTyping ? t.typing : t.inputPlaceholder}
-                disabled={isTyping || chatStep >= t.prompts.length}
-                className="flex-1 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-3 text-sm font-medium text-slate-900 dark:text-white outline-none focus:ring-2 focus:ring-pink-500 disabled:opacity-50"
-              />
+      {/* Input Console */}
+      <div className="p-4 bg-white border-t border-gray-200 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)]">
+        {/* Dynamic Quick Replies */}
+        {!isTyping && currentStep < langData.quickReplies.length && (
+          <div className="flex flex-wrap gap-2 mb-4">
+            {langData.quickReplies[currentStep].map((reply, idx) => (
               <button
-                type="submit"
-                disabled={!input.trim() || isTyping}
-                className="p-3 bg-pink-500 text-white rounded-xl hover:bg-pink-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors shadow-sm"
+                key={idx}
+                onClick={() => handleUserSubmission(reply)}
+                className="px-3 py-1.5 text-sm bg-blue-50 text-blue-700 border border-blue-200 rounded-full hover:bg-blue-100 transition-colors"
               >
-                <Send size={18} />
+                {reply}
               </button>
-            </form>
+            ))}
           </div>
+        )}
 
-        </div>
+        {/* Semantic Form Input */}
+        <form onSubmit={handleFormSubmit} className="flex items-center gap-2">
+          <input
+            type="text"
+            value={userInput}
+            onChange={(e) => setUserInput(e.target.value)}
+            placeholder={langData.inputPlaceholder}
+            className="flex-1 p-3 border border-gray-300 rounded-full focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-shadow"
+            disabled={isTyping}
+          />
+          <button 
+            type="submit"
+            disabled={!userInput.trim() || isTyping}
+            className="p-3 bg-blue-600 text-white rounded-full disabled:opacity-50 hover:bg-blue-700 transition-colors shadow-sm"
+          >
+            <Send size={20} />
+          </button>
+        </form>
       </div>
     </div>
   );
-}
+};
+
+export default AuraChatbot;
