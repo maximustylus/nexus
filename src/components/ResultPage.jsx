@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { useLocation, useNavigate, Navigate } from 'react-router-dom';
-import { Download, Share2, ArrowLeft, ExternalLink, ShieldAlert, Activity, CheckCircle2, Loader2, Sparkles, TrendingUp } from 'lucide-react';
+import { Download, Share2, ArrowLeft, ExternalLink, ShieldAlert, Activity, CheckCircle2, Loader2, TrendingUp } from 'lucide-react';
 import { jsPDF } from 'jspdf';
 import html2canvas from 'html2canvas';
 import { recordTelemetry } from '../utils/telemetry';
@@ -166,7 +166,10 @@ export default function ResultPage() {
   
   const printRef = useRef(null);
   const formattedDate = new Date().toLocaleDateString('en-GB');
-  const qrCodeUrl = `https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent(window.location.origin)}`;
+  
+  // EXPLICIT HARDCODED URL FOR PRODUCTION ROUTING
+  const nexusOfficialUrl = 'https://for.sg/nexus';
+  const qrCodeUrl = `https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent(nexusOfficialUrl)}`;
 
   useEffect(() => {
     const storedLang = localStorage.getItem('nexus_language');
@@ -274,11 +277,11 @@ export default function ResultPage() {
     const colorLabel = riskTier === 'Red' ? t.red : riskTier === 'Amber' ? t.amber : t.green;
     const ctaNames = suggestedResources.map(r => r[lang]?.title || r.en.title).join(', ');
     
-    const shareText = `My NEXUS AURA Assessment result is: ${colorLabel}.\n\nRecommended for me: ${ctaNames}.\n\nDiscover your community pathway at NEXUS.`;
+    const shareText = `My NEXUS AURA Assessment result is: ${colorLabel}.\n\nRecommended for me: ${ctaNames}.\n\nDiscover your community pathway at NEXUS: ${nexusOfficialUrl}`;
 
     if (navigator.share) {
       try {
-        await navigator.share({ title: 'NEXUS AURA Analysis', text: shareText, url: window.location.origin });
+        await navigator.share({ title: 'NEXUS AURA Analysis', text: shareText, url: nexusOfficialUrl });
       } catch (error) {
         console.error('Error sharing:', error);
       }
@@ -346,7 +349,7 @@ export default function ResultPage() {
   return (
     <div className="min-h-screen w-full bg-slate-50 dark:bg-slate-950 transition-colors duration-700 flex flex-col items-center py-12 px-4 md:px-6 relative overflow-x-hidden font-sans">
       
-      {/* HIDDEN PRINT TEMPLATE WITH DISPLACEMENT COORDINATES AND CLINICAL STYLING */}
+      {/* HIDDEN PRINT TEMPLATE WITH CUSTOM LOGO AND FOR.SG ROUTING */}
       <div style={{ position: 'absolute', top: '-10000px', left: '-10000px' }}>
         <div 
             ref={printRef} 
@@ -356,7 +359,7 @@ export default function ResultPage() {
             {/* BRANDED CLINICAL HEADER */}
             <div className="bg-slate-900 px-10 py-8 flex justify-between items-center">
                 <div className="flex items-center gap-3">
-                    <Sparkles className="text-indigo-400" size={32} />
+                    <img src="/logos/nexus.png" alt="NEXUS Logo" className="w-8 h-8 object-contain" />
                     <div>
                         <span className="text-3xl font-black text-white tracking-widest uppercase block leading-none">NEXUS</span>
                         <span className="text-xs font-bold text-slate-400 uppercase tracking-widest mt-1 block">{t.reportTitle}</span>
@@ -413,7 +416,7 @@ export default function ResultPage() {
                         <img src={qrCodeUrl} alt="QR Code" crossOrigin="anonymous" className="w-20 h-20 border border-slate-200 rounded p-1" />
                         <div className="text-sm text-slate-500 font-medium">
                             <p className="font-black text-slate-900 uppercase tracking-widest mb-1">{t.scanQR}</p>
-                            <p className="text-indigo-600">https://nexus.web.app</p>
+                            <p className="text-indigo-600">{nexusOfficialUrl}</p>
                         </div>
                     </div>
                     <p className="text-xs text-slate-400 font-bold uppercase tracking-widest">NEXUS Health Platform</p>
@@ -544,7 +547,7 @@ export default function ResultPage() {
 
             <div className="px-8 md:px-12 py-6 bg-slate-50 dark:bg-slate-900/50 border-t border-slate-200 dark:border-slate-800 flex justify-between items-center mt-4">
               <div className="flex items-center gap-2">
-                <Sparkles className="text-indigo-500" size={18} />
+                <img src="/logos/nexus.png" alt="NEXUS Logo" className="w-5 h-5 object-contain" />
                 <div>
                   <span className="font-black text-slate-800 dark:text-slate-200 tracking-widest text-sm uppercase block leading-none">NEXUS</span>
                   <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">AURA Triage</span>
