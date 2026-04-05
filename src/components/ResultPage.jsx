@@ -365,7 +365,7 @@ export default function ResultPage() {
             {/* BRANDED CLINICAL HEADER */}
             <div className="bg-slate-900 px-10 py-8 flex justify-between items-center">
                 <div className="flex items-center gap-4">
-                    <img src={`${baseUrl}/nexus.png`} alt="NEXUS Logo" crossOrigin="anonymous" className="w-10 h-10 object-contain" />
+                    <img src={`${baseUrl}/nexus.png`} alt="NEXUS Logo" crossOrigin="anonymous" className="w-20 h-20 object-contain" />
                     <div>
                         <span className="text-3xl font-black text-white tracking-widest uppercase block leading-none">NEXUS</span>
                         <span className="text-xs font-bold text-slate-400 uppercase tracking-widest mt-1 block">{t.reportTitle}</span>
@@ -563,7 +563,7 @@ export default function ResultPage() {
 
             <div className="px-8 md:px-12 py-6 bg-slate-50 dark:bg-slate-900/50 border-t border-slate-200 dark:border-slate-800 flex justify-between items-center mt-4">
               <div className="flex items-center gap-2">
-                <img src={`${baseUrl}/nexus.png`} alt="NEXUS Logo" crossOrigin="anonymous" className="w-5 h-5 object-contain" />
+                <img src={`${baseUrl}/nexus.png`} alt="NEXUS Logo" crossOrigin="anonymous" className="w-20 h-20 object-contain" />
                 <div>
                   <span className="font-black text-slate-800 dark:text-slate-200 tracking-widest text-sm uppercase block leading-none">NEXUS</span>
                   <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">{t.reportTitle}</span>
