@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { useLocation, useNavigate, Navigate } from 'react-router-dom';
-import { Download, Share2, ArrowLeft, ExternalLink, ShieldAlert, Activity, CheckCircle2, Loader2, Sparkles, TrendingUp } from 'lucide-react';
+import { Download, Share2, ArrowLeft, ExternalLink, ShieldAlert, Activity, CheckCircle2, Loader2, TrendingUp } from 'lucide-react';
 import { jsPDF } from 'jspdf';
 import html2canvas from 'html2canvas';
 import { recordTelemetry } from '../utils/telemetry';
@@ -25,7 +25,7 @@ const DICTIONARY = {
     share: 'Share Result',
     back: 'Back to Gateway',
     cta: 'Take Action Today',
-    reportTitle: 'Clinical Triage Report',
+    reportTitle: 'SMART DASHBOARD',
     date: 'Date',
     assessmentId: 'Assessment ID',
     prevId: 'Previous ID',
@@ -52,7 +52,7 @@ const DICTIONARY = {
     share: 'Kongsi Keputusan',
     back: 'Kembali ke Pintu Utama',
     cta: 'Ambil Tindakan Hari Ini',
-    reportTitle: 'Laporan Triage Klinikal',
+    reportTitle: 'SMART DASHBOARD',
     date: 'Tarikh',
     assessmentId: 'ID Penilaian',
     prevId: 'ID Lepas',
@@ -79,7 +79,7 @@ const DICTIONARY = {
     share: '分享结果',
     back: '返回主页',
     cta: '今天就采取行动',
-    reportTitle: '临床分诊报告',
+    reportTitle: 'SMART DASHBOARD',
     date: '日期',
     assessmentId: '评估 ID',
     prevId: '之前的 ID',
@@ -106,7 +106,7 @@ const DICTIONARY = {
     share: 'முடிவைப் பகிர்க',
     back: 'முகப்பிற்குத் திரும்பு',
     cta: 'இன்றே நடவடிக்கை எடுங்கள்',
-    reportTitle: 'மருத்துவ அறிக்கை',
+    reportTitle: 'SMART DASHBOARD',
     date: 'தேதி',
     assessmentId: 'மதிப்பீட்டு ID',
     prevId: 'முந்தைய ID',
@@ -167,11 +167,10 @@ export default function ResultPage() {
   const printRef = useRef(null);
   const formattedDate = new Date().toLocaleDateString('en-GB');
   
-  // EXPLICIT HARDCODED URL FOR PRODUCTION ROUTING
   const nexusOfficialUrl = 'https://for.sg/nexus';
   const qrCodeUrl = `https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent(nexusOfficialUrl)}`;
 
-  // BASE URL FOR LOGOS TO RESOLVE HTML2CANVAS CORS ISSUES
+  // BASE URL FOR LOGOS TO RESOLVE PATHS IN HOSTED ENVIRONMENTS
   const baseUrl = window.location.origin;
 
   useEffect(() => {
@@ -269,7 +268,10 @@ export default function ResultPage() {
       }
 
       pdf.addImage(imgData, 'PNG', 0, 0, renderWidth, renderHeight);
-      pdf.save(`NEXUS_AURA_Result_${riskTier}.pdf`);
+      
+      // DYNAMICALLY APPENDING SESSION ID TO FILENAME
+      pdf.save(`NEXUS_AURA_Result_${riskTier}_${activeSessionId}.pdf`);
+      
     } catch (error) {
       console.error('Error generating PDF:', error);
     }
@@ -306,7 +308,8 @@ export default function ResultPage() {
       titleColor: 'text-rose-600 dark:text-rose-400',
       bgCard: 'bg-rose-50 dark:bg-rose-500/10 border-rose-100 dark:border-rose-500/20',
       printBg: 'bg-rose-600',
-      printText: 'text-white'
+      printText: 'text-white',
+      printBorder: 'border-rose-500'
     },
     Amber: {
       gradient: 'from-amber-400 to-orange-500',
@@ -314,7 +317,8 @@ export default function ResultPage() {
       titleColor: 'text-amber-600 dark:text-amber-500',
       bgCard: 'bg-amber-50 dark:bg-amber-500/10 border-amber-100 dark:border-amber-500/20',
       printBg: 'bg-amber-500',
-      printText: 'text-white'
+      printText: 'text-white',
+      printBorder: 'border-amber-500'
     },
     Green: {
       gradient: 'from-emerald-400 to-teal-500',
@@ -322,7 +326,8 @@ export default function ResultPage() {
       titleColor: 'text-emerald-600 dark:text-emerald-400',
       bgCard: 'bg-emerald-50 dark:bg-emerald-500/10 border-emerald-100 dark:border-emerald-500/20',
       printBg: 'bg-emerald-600',
-      printText: 'text-white'
+      printText: 'text-white',
+      printBorder: 'border-emerald-500'
     }
   };
 
@@ -430,7 +435,6 @@ export default function ResultPage() {
                             <p className="text-indigo-600">{nexusOfficialUrl}</p>
                         </div>
                     </div>
-                    <p className="text-xs text-slate-400 font-bold uppercase tracking-widest">NEXUS Health Platform</p>
                 </div>
             </div>
         </div>
@@ -526,11 +530,12 @@ export default function ResultPage() {
                   >
                     <div className="flex items-center gap-4 flex-1">
                       
-                      <div className="w-16 h-16 shrink-0 bg-white dark:bg-slate-800 rounded-xl border border-slate-100 dark:border-slate-700 flex items-center justify-center p-2 shadow-sm overflow-hidden">
+                      <div className="w-16 h-16 shrink-0 bg-white rounded-xl border border-slate-200 flex items-center justify-center p-2 shadow-sm overflow-hidden">
                         <img 
-                          src={resource.logo} 
+                          src={`${baseUrl}${resource.logo}`} 
                           alt={`${resource[lang]?.title || resource.en.title} logo`}
-                          className="w-full h-full object-contain mix-blend-multiply dark:mix-blend-normal"
+                          crossOrigin="anonymous"
+                          className="w-full h-full object-contain"
                           onError={(e) => {
                             e.target.style.display = 'none';
                             e.target.parentElement.innerHTML = '<span class="text-[10px] font-black text-slate-400">LOGO</span>';
@@ -558,10 +563,10 @@ export default function ResultPage() {
 
             <div className="px-8 md:px-12 py-6 bg-slate-50 dark:bg-slate-900/50 border-t border-slate-200 dark:border-slate-800 flex justify-between items-center mt-4">
               <div className="flex items-center gap-2">
-                <img src="/logos/nexus.png" alt="NEXUS Logo" className="w-5 h-5 object-contain" />
+                <img src={`${baseUrl}/logos/nexus.png`} alt="NEXUS Logo" crossOrigin="anonymous" className="w-5 h-5 object-contain" />
                 <div>
                   <span className="font-black text-slate-800 dark:text-slate-200 tracking-widest text-sm uppercase block leading-none">NEXUS</span>
-                  <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">AURA Triage</span>
+                  <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">{t.reportTitle}</span>
                 </div>
               </div>
               <div className="text-right">
