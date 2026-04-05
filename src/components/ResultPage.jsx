@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { useLocation, useNavigate, Navigate } from 'react-router-dom';
-import { Download, Share2, ArrowLeft, ExternalLink, ShieldAlert, Activity, CheckCircle2, Loader2, TrendingUp } from 'lucide-react';
+import { Download, Share2, ArrowLeft, ExternalLink, ShieldAlert, Activity, CheckCircle2, Loader2, TrendingUp, Sun, Moon } from 'lucide-react';
 import { jsPDF } from 'jspdf';
 import html2canvas from 'html2canvas';
 import { recordTelemetry } from '../utils/telemetry';
@@ -15,7 +15,7 @@ const DICTIONARY = {
     redDesc: 'AURA Analysis: Your risk profile indicates a need for supervised care. We highly recommend consulting a healthcare professional before starting a new exercise programme.',
     amberDesc: 'AURA Analysis: You have moderate needs. Consider gradually increasing your activity levels and exploring structured community resources.',
     greenDesc: 'AURA Analysis: Excellent! You meet the physical activity guidelines. Keep up the great work and maintain your routine.',
-    sdohFinText: 'We noted that cost is a concern for you.classn We have prioritised free and fully subsidised community options below.',
+    sdohFinText: 'We noted that cost is a concern for you. We have prioritised free and fully subsidised community options below.',
     sdohSocText: 'Staying connected is vital for your health. We have included community network programmes to help you meet new people.',
     sdohPsychoText: 'Your mental wellbeing is just as important as your physical health. We have added supportive emotional wellness resources for you.',
     trendActive: 'Longitudinal Tracking Active',
@@ -153,28 +153,65 @@ export default function ResultPage() {
   const location = useLocation();
   const navigate = useNavigate();
   
-  if (!location.state || location.state.score === undefined) {
-      return <Navigate to="/individuals/pathway" replace />;
-  }
-
-  const { score, data, postalSector, sessionId, previousSessionId } = location.state;
-  const riskTier = getRiskTier(score);
-  const activeSessionId = sessionId || 'NX-' + Math.random().toString(36).substr(2, 9).toUpperCase();
-  
+  // ==========================================
+  // RULE OF HOOKS FIX: All Hooks Declared Top-Level
+  // ==========================================
   const [lang, setLang] = useState('en');
   const [animate, setAnimate] = useState(false);
   const [isGenerating, setIsGenerating] = useState(true);
   const [suggestedResources, setSuggestedResources] = useState([]);
-  
+  const [isDark, setIsDark] = useState(false);
   const printRef = useRef(null);
+
+  // Safe Check for location state to prevent crashes during redirect
+  const hasState = location.state && location.state.score !== undefined;
+  
+  useEffect(() => {
+      if (!hasState) {
+          navigate('/individuals/pathway', { replace: true });
+      }
+  }, [hasState, navigate]);
+
+  // Safe Destructuring with Fallbacks
+  const safeState = location.state || { score: 0, data: {}, postalSector: '00' };
+  const { score, data, postalSector, sessionId, previousSessionId } = safeState;
+  
+  const riskTier = getRiskTier(score);
+  const activeSessionId = sessionId || 'NX-' + Math.random().toString(36).substr(2, 9).toUpperCase();
   const formattedDate = new Date().toLocaleDateString('en-GB');
   
   const nexusOfficialUrl = 'https://for.sg/nexus';
   const qrCodeUrl = `https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent(nexusOfficialUrl)}`;
-
   const baseUrl = window.location.origin;
 
+  // Theme Initialisation
   useEffect(() => {
+    const storedTheme = localStorage.getItem('nexus-theme');
+    const systemPrefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+    if (storedTheme === 'dark' || (!storedTheme && systemPrefersDark)) {
+        setIsDark(true);
+        document.documentElement.classList.add('dark');
+    } else {
+        setIsDark(false);
+        document.documentElement.classList.remove('dark');
+    }
+  }, []);
+
+  const toggleTheme = () => {
+    const newTheme = !isDark;
+    setIsDark(newTheme);
+    if (newTheme) {
+        document.documentElement.classList.add('dark');
+        localStorage.setItem('nexus-theme', 'dark');
+    } else {
+        document.documentElement.classList.remove('dark');
+        localStorage.setItem('nexus-theme', 'light');
+    }
+  };
+
+  useEffect(() => {
+    if (!hasState) return;
+
     const storedLang = localStorage.getItem('nexus_language');
     if (storedLang && DICTIONARY[storedLang]) setLang(storedLang);
 
@@ -231,7 +268,7 @@ export default function ResultPage() {
       setTimeout(() => setAnimate(true), 100);
     }, 1800);
 
-  }, [riskTier, data, postalSector]);
+  }, [riskTier, data, postalSector, hasState]);
 
   const t = DICTIONARY[lang] || DICTIONARY.en;
 
@@ -268,8 +305,6 @@ export default function ResultPage() {
       
       let marginX = 0;
 
-      // Dynamic Centering Logic: If the content is taller than A4, it shrinks.
-      // We must calculate the new width and offset it so it stays horizontally centered.
       if (renderHeight > pdfPageHeight) {
         renderHeight = pdfPageHeight; 
         renderWidth = (canvas.width * renderHeight) / canvas.height;
@@ -339,6 +374,8 @@ export default function ResultPage() {
 
   const activeTheme = themeMap[riskTier] || themeMap.Green;
 
+  if (!hasState) return null;
+
   if (isGenerating) {
     return (
       <div className="min-h-screen w-full bg-slate-50 dark:bg-slate-950 flex flex-col items-center justify-center p-6 relative overflow-hidden">
@@ -370,7 +407,7 @@ export default function ResultPage() {
         >
             <div className="bg-slate-900 px-10 py-8 flex justify-between items-center">
                 <div className="flex items-center gap-4">
-                    <img src={`${baseUrl}/logos/nexus.png`} alt="NEXUS Logo" crossOrigin="anonymous" className="w-10 h-10 object-contain" />
+                    <img src={`${baseUrl}/nexus.png`} alt="NEXUS Logo" crossOrigin="anonymous" className="w-10 h-10 object-contain" />
                     <div>
                         <span className="text-3xl font-black text-white tracking-widest uppercase block leading-none">NEXUS</span>
                         <span className="text-xs font-bold text-slate-400 uppercase tracking-widest mt-1 block">{t.reportTitle}</span>
@@ -443,15 +480,16 @@ export default function ResultPage() {
       <div className="absolute inset-0 z-0 opacity-[0.03] dark:opacity-[0.05] pointer-events-none" style={{ backgroundImage: 'radial-gradient(circle at 1px 1px, currentColor 1px, transparent 0)', backgroundSize: '40px 40px' }}></div>
       <div className={`fixed top-0 left-0 w-[800px] h-[800px] bg-indigo-500/10 rounded-full blur-[120px] pointer-events-none animate-float-slow ${animate ? 'opacity-100' : 'opacity-0'}`}></div>
       <div className={`fixed bottom-0 right-0 w-[600px] h-[600px] bg-emerald-500/10 rounded-full blur-[100px] pointer-events-none animate-float-delayed ${animate ? 'opacity-100' : 'opacity-0'}`}></div>
+
       <div className={`relative z-10 w-full max-w-3xl transition-all duration-1000 transform ${animate ? 'translate-y-0 opacity-100 scale-100' : 'translate-y-10 opacity-0 scale-95'}`}>
-      <div className="flex flex-col md:flex-row justify-between items-center mb-8 gap-4 px-2">
+        
+        <div className="flex flex-col md:flex-row justify-between items-center mb-8 gap-4 px-2">
           <button onClick={() => navigate('/')} className="flex items-center self-start gap-2 px-4 py-2 bg-white/60 dark:bg-slate-800/60 backdrop-blur-md text-slate-500 dark:text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400 font-black text-xs uppercase tracking-widest rounded-full border border-slate-200 dark:border-slate-700 shadow-sm transition-all group">
             <ArrowLeft size={16} className="group-hover:-translate-x-1 transition-transform"/> {t.back}
           </button>
           
           <div className="flex space-x-3 items-center self-end md:self-auto">
             
-            {/* NEW INTEGRATED TOGGLE */}
             <button 
                 onClick={toggleTheme} 
                 className="flex items-center gap-2 px-3 py-2 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-bold text-xs uppercase tracking-widest rounded-lg border border-slate-200 dark:border-slate-700 shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all"
@@ -569,7 +607,7 @@ export default function ResultPage() {
 
             <div className="px-8 md:px-12 py-6 bg-slate-50 dark:bg-slate-900/50 border-t border-slate-200 dark:border-slate-800 flex justify-between items-center mt-4">
               <div className="flex items-center gap-2">
-                <img src={`${baseUrl}/logos/nexus.png`} alt="NEXUS Logo" crossOrigin="anonymous" className="w-15 h-15 object-contain" />
+                <img src={`${baseUrl}/nexus.png`} alt="NEXUS Logo" crossOrigin="anonymous" className="w-16 h-16 object-contain" />
                 <div>
                   <span className="font-black text-slate-800 dark:text-slate-200 tracking-widest text-sm uppercase block leading-none">NEXUS</span>
                   <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">{t.reportTitle}</span>
