@@ -2,7 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { calculateRiskScore } from '../utils/scoring';
 import { recordTelemetry } from '../utils/telemetry';
-import { ChevronLeft, ChevronRight, Activity, MessageSquare, AlertCircle, User, Send } from 'lucide-react';
+// ADDED SUN AND MOON ICONS
+import { ChevronLeft, ChevronRight, Activity, MessageSquare, AlertCircle, User, Send, Sun, Moon } from 'lucide-react';
 
 const DICTIONARY = {
   en: {
@@ -186,12 +187,41 @@ export default function ConventionalForm() {
   const [animate, setAnimate] = useState(false);
   const [sessionId] = useState(() => 'nx-' + Math.random().toString(36).substr(2, 9)); 
 
+  // ADDED MISSING STATE FOR THEME
+  const [isDark, setIsDark] = useState(false);
+
   const [formData, setFormData] = useState({
     pavsDays: '', pavsMinutes: '', strengthDays: '', medConditions: '', medFlag: false, symptomsCount: '', symptomFlag: false, psychoFlag: false,
     sdohFood: '', sdohFinance: '', sdohSocial: '',
     aware: '', referred: '', rating: '', trust: '3', barriers: [], improve: '',
     age: '', gender: '', race: '', housing: '', postalCode: ''
   });
+
+  // ADDED INITIALIZER FOR THEME
+  useEffect(() => {
+    const storedTheme = localStorage.getItem('nexus_theme');
+    const systemPrefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+    if (storedTheme === 'dark' || (!storedTheme && systemPrefersDark)) {
+        setIsDark(true);
+        document.documentElement.classList.add('dark');
+    } else {
+        setIsDark(false);
+        document.documentElement.classList.remove('dark');
+    }
+  }, []);
+
+  // ADDED FUNCTION TO TOGGLE THEME
+  const toggleTheme = () => {
+    const newTheme = !isDark;
+    setIsDark(newTheme);
+    if (newTheme) {
+        document.documentElement.classList.add('dark');
+        localStorage.setItem('nexus_theme', 'dark');
+    } else {
+        document.documentElement.classList.remove('dark');
+        localStorage.setItem('nexus_theme', 'light');
+    }
+  };
 
   useEffect(() => {
     const storedLang = localStorage.getItem('nexus_language');
@@ -462,6 +492,7 @@ export default function ConventionalForm() {
           </button>
           
           <div className="flex items-center gap-3">
+              {/* TOGGLE ADDED TO RENDER */}
               <button 
                   onClick={toggleTheme} 
                   className="p-2 rounded-full bg-white/60 dark:bg-slate-800/60 backdrop-blur-md border border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-400 shadow-sm hover:scale-105 transition-all"
