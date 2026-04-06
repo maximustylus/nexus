@@ -1,9 +1,22 @@
+/**
+ * ConventionalForm.jsx — Enhanced v2.0
+ *
+ * Alignment with NEXUS v2.0 Biodesign System:
+ * • Adopts the unified Teal/Emerald clinical palette.
+ * • Removes dynamic Tailwind classes to ensure production stability.
+ * • Implements structured Domain Badges with Lucide icons (no emojis).
+ * • Groups questions into distinct clinical/SDOH cards for cognitive ease.
+ * • Adds immersive ambient backgrounds and standardized progress tracking.
+ */
+
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { calculateRiskScore } from '../utils/scoring';
 import { recordTelemetry } from '../utils/telemetry';
-// ADDED SUN AND MOON ICONS
-import { ChevronLeft, ChevronRight, Activity, MessageSquare, AlertCircle, User, Send, Sun, Moon } from 'lucide-react';
+import { 
+  ChevronLeft, ChevronRight, Activity, ShieldAlert, 
+  Users, MapPin, Send, Sun, Moon, HeartPulse
+} from 'lucide-react';
 
 const DICTIONARY = {
   en: {
@@ -180,14 +193,21 @@ const DICTIONARY = {
   }
 };
 
+// ─── DOMAIN BADGE COMPONENT ──────────────────────────────────────────────────
+const DomainBadge = ({ icon: Icon, label }) => (
+  <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-teal-50 dark:bg-teal-500/10 border border-teal-100 dark:border-teal-500/20 text-teal-700 dark:text-teal-400 mb-4">
+    <Icon size={14} />
+    <span className="text-[10px] font-black uppercase tracking-widest">{label}</span>
+  </div>
+);
+
 export default function ConventionalForm() {
   const navigate = useNavigate();
   const [lang, setLang] = useState('en');
   const [step, setStep] = useState(0);
   const [animate, setAnimate] = useState(false);
-  const [sessionId] = useState(() => 'nx-' + Math.random().toString(36).substr(2, 9)); 
+  const [sessionId] = useState(() => 'nx-' + Math.random().toString(36).substr(2, 9).toUpperCase()); 
 
-  // ADDED MISSING STATE FOR THEME
   const [isDark, setIsDark] = useState(false);
 
   const [formData, setFormData] = useState({
@@ -197,7 +217,6 @@ export default function ConventionalForm() {
     age: '', gender: '', race: '', housing: '', postalCode: ''
   });
 
-  // ADDED INITIALIZER FOR THEME
   useEffect(() => {
     const storedTheme = localStorage.getItem('nexus_theme');
     const systemPrefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
@@ -210,7 +229,6 @@ export default function ConventionalForm() {
     }
   }, []);
 
-  // ADDED FUNCTION TO TOGGLE THEME
   const toggleTheme = () => {
     const newTheme = !isDark;
     setIsDark(newTheme);
@@ -280,58 +298,71 @@ export default function ConventionalForm() {
     };
 
     await recordTelemetry(postalSector, masterPayload);
-    navigate('/individuals/result', { state: { score, data: clinicalData, postalSector } });
+    navigate('/individuals/result', { state: { score, data: clinicalData, postalSector, sessionId } });
   };
 
   const renderStep1 = () => (
     <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-500">
-        <div className="grid gap-6">
+        
+        {/* PAVS Card */}
+        <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-6 md:p-8 shadow-sm">
+            <DomainBadge icon={Activity} label="ACSM PAVS" />
             <div className="grid md:grid-cols-2 gap-6">
                 <div>
-                    <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-2">{t.pavsQ1}</label>
-                    <input type="number" min="0" max="7" value={formData.pavsDays} onChange={e => setFormData({...formData, pavsDays: e.target.value})} className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-3 text-sm md:text-base font-bold outline-none focus:ring-2 focus:ring-indigo-500" />
+                    <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-3">{t.pavsQ1}</label>
+                    <input type="number" min="0" max="7" value={formData.pavsDays} onChange={e => setFormData({...formData, pavsDays: e.target.value})} className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-3 text-sm font-bold outline-none focus:ring-2 focus:ring-teal-500 transition-shadow" />
                 </div>
                 <div>
-                    <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-2">{t.pavsQ2}</label>
-                    <input type="number" min="0" value={formData.pavsMinutes} onChange={e => setFormData({...formData, pavsMinutes: e.target.value})} className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-3 text-sm md:text-base font-bold outline-none focus:ring-2 focus:ring-indigo-500" />
+                    <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-3">{t.pavsQ2}</label>
+                    <input type="number" min="0" value={formData.pavsMinutes} onChange={e => setFormData({...formData, pavsMinutes: e.target.value})} className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-3 text-sm font-bold outline-none focus:ring-2 focus:ring-teal-500 transition-shadow" />
                 </div>
             </div>
-            <div className="grid md:grid-cols-2 gap-6">
-                <div>
-                    <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-2">{t.riskQ1}</label>
-                    <input type="number" min="0" max="7" value={formData.strengthDays} onChange={e => setFormData({...formData, strengthDays: e.target.value})} className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-3 text-sm md:text-base font-bold outline-none focus:ring-2 focus:ring-indigo-500" />
-                </div>
-                <div>
-                    <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-2">{t.riskQ2}</label>
-                    <input type="text" placeholder="..." value={formData.medConditions} onChange={e => setFormData({...formData, medConditions: e.target.value})} className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-3 text-sm md:text-base font-bold outline-none focus:ring-2 focus:ring-indigo-500" />
-                </div>
+            <div className="mt-6 pt-6 border-t border-slate-100 dark:border-slate-800">
+                <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-3">{t.riskQ1}</label>
+                <input type="number" min="0" max="7" value={formData.strengthDays} onChange={e => setFormData({...formData, strengthDays: e.target.value})} className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-3 text-sm font-bold outline-none focus:ring-2 focus:ring-teal-500 transition-shadow" />
             </div>
-            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-slate-50 dark:bg-slate-900 p-4 rounded-xl border border-slate-200 dark:border-slate-700">
-                <label className="text-sm font-bold text-slate-700 dark:text-slate-300">{t.riskQ3}</label>
-                <div className="flex space-x-6 shrink-0">
-                    <label className="flex items-center cursor-pointer group"><input type="radio" checked={formData.medFlag === true} onChange={() => setFormData({...formData, medFlag: true})} className="w-4 h-4 text-indigo-500 focus:ring-indigo-500" /><span className="ml-2 text-sm font-bold text-slate-600 dark:text-slate-400">{t.yes}</span></label>
-                    <label className="flex items-center cursor-pointer group"><input type="radio" checked={formData.medFlag === false} onChange={() => setFormData({...formData, medFlag: false})} className="w-4 h-4 text-indigo-500 focus:ring-indigo-500" /><span className="ml-2 text-sm font-bold text-slate-600 dark:text-slate-400">{t.no}</span></label>
+        </div>
+
+        {/* Clinical Safety Card */}
+        <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-6 md:p-8 shadow-sm">
+            <DomainBadge icon={ShieldAlert} label="Clinical Safety" />
+            <div className="grid md:grid-cols-2 gap-6 mb-6">
+                <div>
+                    <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-3">{t.riskQ2}</label>
+                    <input type="text" placeholder="..." value={formData.medConditions} onChange={e => setFormData({...formData, medConditions: e.target.value})} className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-3 text-sm font-bold outline-none focus:ring-2 focus:ring-teal-500 transition-shadow" />
+                </div>
+                <div className="flex flex-col justify-between gap-4 bg-slate-50 dark:bg-slate-950 p-4 rounded-xl border border-slate-200 dark:border-slate-800">
+                    <label className="text-sm font-bold text-slate-700 dark:text-slate-300">{t.riskQ3}</label>
+                    <div className="flex space-x-6 shrink-0">
+                        <label className="flex items-center cursor-pointer group"><input type="radio" checked={formData.medFlag === true} onChange={() => setFormData({...formData, medFlag: true})} className="w-4 h-4 text-teal-500 focus:ring-teal-500" /><span className="ml-2 text-sm font-bold text-slate-600 dark:text-slate-400 group-hover:text-teal-600 transition-colors">{t.yes}</span></label>
+                        <label className="flex items-center cursor-pointer group"><input type="radio" checked={formData.medFlag === false} onChange={() => setFormData({...formData, medFlag: false})} className="w-4 h-4 text-teal-500 focus:ring-teal-500" /><span className="ml-2 text-sm font-bold text-slate-600 dark:text-slate-400 group-hover:text-teal-600 transition-colors">{t.no}</span></label>
+                    </div>
                 </div>
             </div>
             <div className="grid md:grid-cols-2 gap-6 items-end">
                 <div>
-                    <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-2">{t.riskQ4}</label>
-                    <input type="number" min="0" value={formData.symptomsCount} onChange={e => setFormData({...formData, symptomsCount: e.target.value})} className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-3 text-sm md:text-base font-bold outline-none focus:ring-2 focus:ring-indigo-500" />
+                    <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-3">{t.riskQ4}</label>
+                    <input type="number" min="0" value={formData.symptomsCount} onChange={e => setFormData({...formData, symptomsCount: e.target.value})} className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-3 text-sm font-bold outline-none focus:ring-2 focus:ring-teal-500 transition-shadow" />
                 </div>
-                <div className="flex flex-col justify-between gap-4 bg-slate-50 dark:bg-slate-900 p-4 rounded-xl border border-slate-200 dark:border-slate-700">
+                <div className="flex flex-col justify-between gap-4 bg-slate-50 dark:bg-slate-950 p-4 rounded-xl border border-slate-200 dark:border-slate-800">
                     <label className="text-sm font-bold text-slate-700 dark:text-slate-300">{t.riskQ5}</label>
                     <div className="flex space-x-6 shrink-0">
-                        <label className="flex items-center cursor-pointer group"><input type="radio" checked={formData.symptomFlag === true} onChange={() => setFormData({...formData, symptomFlag: true})} className="w-4 h-4 text-indigo-500 focus:ring-indigo-500" /><span className="ml-2 text-sm font-bold text-slate-600 dark:text-slate-400">{t.yes}</span></label>
-                        <label className="flex items-center cursor-pointer group"><input type="radio" checked={formData.symptomFlag === false} onChange={() => setFormData({...formData, symptomFlag: false})} className="w-4 h-4 text-indigo-500 focus:ring-indigo-500" /><span className="ml-2 text-sm font-bold text-slate-600 dark:text-slate-400">{t.no}</span></label>
+                        <label className="flex items-center cursor-pointer group"><input type="radio" checked={formData.symptomFlag === true} onChange={() => setFormData({...formData, symptomFlag: true})} className="w-4 h-4 text-teal-500 focus:ring-teal-500" /><span className="ml-2 text-sm font-bold text-slate-600 dark:text-slate-400 group-hover:text-teal-600 transition-colors">{t.yes}</span></label>
+                        <label className="flex items-center cursor-pointer group"><input type="radio" checked={formData.symptomFlag === false} onChange={() => setFormData({...formData, symptomFlag: false})} className="w-4 h-4 text-teal-500 focus:ring-teal-500" /><span className="ml-2 text-sm font-bold text-slate-600 dark:text-slate-400 group-hover:text-teal-600 transition-colors">{t.no}</span></label>
                     </div>
                 </div>
             </div>
-            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-indigo-50 dark:bg-indigo-900/20 p-4 rounded-xl border border-indigo-100 dark:border-indigo-800">
-                <label className="text-sm font-bold text-indigo-900 dark:text-indigo-200">{t.psychoQ1}</label>
-                <div className="flex space-x-6 shrink-0">
-                    <label className="flex items-center cursor-pointer group"><input type="radio" checked={formData.psychoFlag === true} onChange={() => setFormData({...formData, psychoFlag: true})} className="w-4 h-4 text-indigo-500 focus:ring-indigo-500" /><span className="ml-2 text-sm font-bold text-indigo-800 dark:text-indigo-300">{t.yes}</span></label>
-                    <label className="flex items-center cursor-pointer group"><input type="radio" checked={formData.psychoFlag === false} onChange={() => setFormData({...formData, psychoFlag: false})} className="w-4 h-4 text-indigo-500 focus:ring-indigo-500" /><span className="ml-2 text-sm font-bold text-indigo-800 dark:text-indigo-300">{t.no}</span></label>
-                </div>
+        </div>
+
+        {/* Wellbeing Card */}
+        <div className="bg-teal-50/50 dark:bg-teal-900/10 border border-teal-100 dark:border-teal-800/30 rounded-3xl p-6 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div className="flex items-start gap-3">
+                <HeartPulse size={20} className="text-teal-600 mt-0.5" />
+                <label className="text-sm font-bold text-teal-900 dark:text-teal-100">{t.psychoQ1}</label>
+            </div>
+            <div className="flex space-x-6 shrink-0 pl-8 md:pl-0">
+                <label className="flex items-center cursor-pointer group"><input type="radio" checked={formData.psychoFlag === true} onChange={() => setFormData({...formData, psychoFlag: true})} className="w-4 h-4 text-teal-600 focus:ring-teal-500" /><span className="ml-2 text-sm font-bold text-teal-800 dark:text-teal-300">{t.yes}</span></label>
+                <label className="flex items-center cursor-pointer group"><input type="radio" checked={formData.psychoFlag === false} onChange={() => setFormData({...formData, psychoFlag: false})} className="w-4 h-4 text-teal-600 focus:ring-teal-500" /><span className="ml-2 text-sm font-bold text-teal-800 dark:text-teal-300">{t.no}</span></label>
             </div>
         </div>
     </div>
@@ -339,35 +370,37 @@ export default function ConventionalForm() {
 
   const renderStep2 = () => (
     <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-500">
-        <div className="p-4 bg-amber-50 dark:bg-amber-500/10 border border-amber-100 dark:border-amber-500/20 rounded-xl">
-            <p className="text-sm font-bold text-amber-700 dark:text-amber-400">{t.sdohIntro}</p>
-        </div>
-        <div className="grid gap-6">
-            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-slate-50 dark:bg-slate-900 p-4 rounded-xl border border-slate-200 dark:border-slate-700">
-                <label className="text-sm font-bold text-slate-700 dark:text-slate-300 w-full md:w-2/3">{t.sdohFood}</label>
-                <div className="flex space-x-6 shrink-0">
-                    <label className="flex items-center cursor-pointer group"><input type="radio" checked={formData.sdohFood === 'Yes'} onChange={() => setFormData({...formData, sdohFood: 'Yes'})} className="w-4 h-4 text-amber-500 focus:ring-amber-500" /><span className="ml-2 text-sm font-bold text-slate-600 dark:text-slate-400">{t.yes}</span></label>
-                    <label className="flex items-center cursor-pointer group"><input type="radio" checked={formData.sdohFood === 'No'} onChange={() => setFormData({...formData, sdohFood: 'No'})} className="w-4 h-4 text-amber-500 focus:ring-amber-500" /><span className="ml-2 text-sm font-bold text-slate-600 dark:text-slate-400">{t.no}</span></label>
+        <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-6 md:p-8 shadow-sm">
+            <DomainBadge icon={Users} label="SDOH" />
+            <p className="text-sm font-medium text-slate-500 dark:text-slate-400 mb-6">{t.sdohIntro}</p>
+            
+            <div className="grid gap-6">
+                <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-slate-50 dark:bg-slate-950 p-4 rounded-xl border border-slate-200 dark:border-slate-800">
+                    <label className="text-sm font-bold text-slate-700 dark:text-slate-300 w-full md:w-2/3">{t.sdohFood}</label>
+                    <div className="flex space-x-6 shrink-0">
+                        <label className="flex items-center cursor-pointer group"><input type="radio" checked={formData.sdohFood === 'Yes'} onChange={() => setFormData({...formData, sdohFood: 'Yes'})} className="w-4 h-4 text-teal-500 focus:ring-teal-500" /><span className="ml-2 text-sm font-bold text-slate-600 dark:text-slate-400">{t.yes}</span></label>
+                        <label className="flex items-center cursor-pointer group"><input type="radio" checked={formData.sdohFood === 'No'} onChange={() => setFormData({...formData, sdohFood: 'No'})} className="w-4 h-4 text-teal-500 focus:ring-teal-500" /><span className="ml-2 text-sm font-bold text-slate-600 dark:text-slate-400">{t.no}</span></label>
+                    </div>
                 </div>
-            </div>
-            <div>
-                <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-2">{t.sdohFinance}</label>
-                <select value={formData.sdohFinance} onChange={e => setFormData({...formData, sdohFinance: e.target.value})} className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-3 text-sm md:text-base font-bold outline-none focus:ring-2 focus:ring-amber-500">
-                    <option value="">--</option>
-                    <option value={t.finOpt1}>{t.finOpt1}</option>
-                    <option value={t.finOpt2}>{t.finOpt2}</option>
-                    <option value={t.finOpt3}>{t.finOpt3}</option>
-                </select>
-            </div>
-            <div>
-                <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-2">{t.sdohSocial}</label>
-                <select value={formData.sdohSocial} onChange={e => setFormData({...formData, sdohSocial: e.target.value})} className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-3 text-sm md:text-base font-bold outline-none focus:ring-2 focus:ring-amber-500">
-                    <option value="">--</option>
-                    <option value={t.socOpt1}>{t.socOpt1}</option>
-                    <option value={t.socOpt2}>{t.socOpt2}</option>
-                    <option value={t.socOpt3}>{t.socOpt3}</option>
-                    <option value={t.socOpt4}>{t.socOpt4}</option>
-                </select>
+                <div>
+                    <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-3">{t.sdohFinance}</label>
+                    <select value={formData.sdohFinance} onChange={e => setFormData({...formData, sdohFinance: e.target.value})} className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-3 text-sm font-bold outline-none focus:ring-2 focus:ring-teal-500">
+                        <option value="">--</option>
+                        <option value={t.finOpt1}>{t.finOpt1}</option>
+                        <option value={t.finOpt2}>{t.finOpt2}</option>
+                        <option value={t.finOpt3}>{t.finOpt3}</option>
+                    </select>
+                </div>
+                <div>
+                    <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-3">{t.sdohSocial}</label>
+                    <select value={formData.sdohSocial} onChange={e => setFormData({...formData, sdohSocial: e.target.value})} className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-3 text-sm font-bold outline-none focus:ring-2 focus:ring-teal-500">
+                        <option value="">--</option>
+                        <option value={t.socOpt1}>{t.socOpt1}</option>
+                        <option value={t.socOpt2}>{t.socOpt2}</option>
+                        <option value={t.socOpt3}>{t.socOpt3}</option>
+                        <option value={t.socOpt4}>{t.socOpt4}</option>
+                    </select>
+                </div>
             </div>
         </div>
     </div>
@@ -375,48 +408,57 @@ export default function ConventionalForm() {
 
   const renderStep3 = () => (
     <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-500">
-        <div className="grid gap-6">
-            {['aware', 'referred'].map(field => (
-                <div key={field} className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-slate-50 dark:bg-slate-900 p-4 rounded-xl border border-slate-200 dark:border-slate-700">
-                    <label className="text-sm font-bold text-slate-700 dark:text-slate-300 w-full md:w-2/3">{field === 'aware' ? t.survAware : t.survReferred}</label>
-                    <div className="flex space-x-6 shrink-0">
-                        <label className="flex items-center cursor-pointer group"><input type="radio" checked={formData[field] === 'Yes'} onChange={() => setFormData({...formData, [field]: 'Yes'})} className="w-4 h-4 text-emerald-500 focus:ring-emerald-500" /><span className="ml-2 text-sm font-bold text-slate-600 dark:text-slate-400">{t.yes}</span></label>
-                        <label className="flex items-center cursor-pointer group"><input type="radio" checked={formData[field] === 'No'} onChange={() => setFormData({...formData, [field]: 'No'})} className="w-4 h-4 text-emerald-500 focus:ring-emerald-500" /><span className="ml-2 text-sm font-bold text-slate-600 dark:text-slate-400">{t.no}</span></label>
+        <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-6 md:p-8 shadow-sm">
+            <DomainBadge icon={MapPin} label="Community Perception" />
+            
+            <div className="grid gap-6">
+                {['aware', 'referred'].map(field => (
+                    <div key={field} className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-slate-50 dark:bg-slate-950 p-4 rounded-xl border border-slate-200 dark:border-slate-800">
+                        <label className="text-sm font-bold text-slate-700 dark:text-slate-300 w-full md:w-2/3">{field === 'aware' ? t.survAware : t.survReferred}</label>
+                        <div className="flex space-x-6 shrink-0">
+                            <label className="flex items-center cursor-pointer group"><input type="radio" checked={formData[field] === 'Yes'} onChange={() => setFormData({...formData, [field]: 'Yes'})} className="w-4 h-4 text-teal-500 focus:ring-teal-500" /><span className="ml-2 text-sm font-bold text-slate-600 dark:text-slate-400">{t.yes}</span></label>
+                            <label className="flex items-center cursor-pointer group"><input type="radio" checked={formData[field] === 'No'} onChange={() => setFormData({...formData, [field]: 'No'})} className="w-4 h-4 text-teal-500 focus:ring-teal-500" /><span className="ml-2 text-sm font-bold text-slate-600 dark:text-slate-400">{t.no}</span></label>
+                        </div>
+                    </div>
+                ))}
+                
+                <div className="grid md:grid-cols-2 gap-6">
+                    <div>
+                        <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-3">{t.survRate}</label>
+                        <select value={formData.rating} onChange={e => setFormData({...formData, rating: e.target.value})} className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-3 text-sm font-bold outline-none focus:ring-2 focus:ring-teal-500">
+                            <option value="">--</option>
+                            <option value={t.rateOpt1}>{t.rateOpt1}</option>
+                            <option value={t.rateOpt2}>{t.rateOpt2}</option>
+                            <option value={t.rateOpt3}>{t.rateOpt3}</option>
+                            <option value={t.rateOpt4}>{t.rateOpt4}</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-3">{t.survTrust}</label>
+                        <div className="flex gap-2">
+                            {[1,2,3,4,5].map(num => (
+                                <button key={num} type="button" onClick={() => setFormData({...formData, trust: String(num)})} className={`flex-1 py-3 rounded-xl font-black text-lg transition-all border ${formData.trust === String(num) ? 'bg-teal-500 text-white border-teal-500 shadow-md' : 'bg-slate-50 dark:bg-slate-950 text-slate-400 border-slate-200 dark:border-slate-800 hover:border-teal-300'}`}>{num}</button>
+                            ))}
+                        </div>
                     </div>
                 </div>
-            ))}
-            <div>
-                <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-2">{t.survRate}</label>
-                <select value={formData.rating} onChange={e => setFormData({...formData, rating: e.target.value})} className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-3 text-sm md:text-base font-bold outline-none focus:ring-2 focus:ring-emerald-500">
-                    <option value="">--</option>
-                    <option value={t.rateOpt1}>{t.rateOpt1}</option>
-                    <option value={t.rateOpt2}>{t.rateOpt2}</option>
-                    <option value={t.rateOpt3}>{t.rateOpt3}</option>
-                    <option value={t.rateOpt4}>{t.rateOpt4}</option>
-                </select>
-            </div>
-            <div>
-                <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-2">{t.survTrust}</label>
-                <div className="flex gap-2">
-                    {[1,2,3,4,5].map(num => (
-                        <button key={num} type="button" onClick={() => setFormData({...formData, trust: String(num)})} className={`flex-1 py-3 rounded-xl font-black text-lg transition-colors border ${formData.trust === String(num) ? 'bg-emerald-500 text-white border-emerald-500' : 'bg-slate-50 dark:bg-slate-900 text-slate-400 border-slate-200 dark:border-slate-700 hover:border-emerald-300'}`}>{num}</button>
-                    ))}
+
+                <div className="border-t border-slate-100 dark:border-slate-800 pt-6">
+                    <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-4">{t.barriersIntro}</label>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3 bg-slate-50 dark:bg-slate-950 p-5 rounded-2xl border border-slate-200 dark:border-slate-800">
+                        {['barrFin', 'barrLog', 'barrTime', 'barrSoc', 'barrLang', 'barrHosp', 'barrNone'].map(optKey => (
+                            <label key={optKey} className="flex items-center cursor-pointer group p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-900 transition-colors">
+                                <input type="checkbox" checked={formData.barriers.includes(t[optKey])} onChange={() => handleArrayToggle(t[optKey])} className="w-5 h-5 text-teal-500 border-slate-300 rounded focus:ring-teal-500" />
+                                <span className="ml-3 text-sm font-bold text-slate-600 dark:text-slate-400 group-hover:text-slate-900 dark:group-hover:text-white transition-colors">{t[optKey]}</span>
+                            </label>
+                        ))}
+                    </div>
                 </div>
-            </div>
-            <div>
-                <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-4">{t.barriersIntro}</label>
-                <div className="space-y-3 bg-slate-50 dark:bg-slate-900 p-4 rounded-xl border border-slate-200 dark:border-slate-700">
-                    {['barrFin', 'barrLog', 'barrTime', 'barrSoc', 'barrLang', 'barrHosp', 'barrNone'].map(optKey => (
-                        <label key={optKey} className="flex items-center cursor-pointer group">
-                            <input type="checkbox" checked={formData.barriers.includes(t[optKey])} onChange={() => handleArrayToggle(t[optKey])} className="w-5 h-5 text-emerald-500 border-slate-300 rounded focus:ring-emerald-500" />
-                            <span className="ml-3 text-sm font-bold text-slate-600 dark:text-slate-400 group-hover:text-slate-900 dark:group-hover:text-white transition-colors">{t[optKey]}</span>
-                        </label>
-                    ))}
+
+                <div>
+                    <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-3">{t.survImprove}</label>
+                    <textarea rows={3} value={formData.improve} onChange={e => setFormData({...formData, improve: e.target.value})} className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-2xl px-4 py-3 text-sm font-medium outline-none focus:ring-2 focus:ring-teal-500" placeholder="..."></textarea>
                 </div>
-            </div>
-            <div>
-                <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-3">{t.survImprove}</label>
-                <textarea rows={3} value={formData.improve} onChange={e => setFormData({...formData, improve: e.target.value})} className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-3 text-sm md:text-base font-medium outline-none focus:ring-2 focus:ring-emerald-500" placeholder="..."></textarea>
             </div>
         </div>
     </div>
@@ -424,116 +466,117 @@ export default function ConventionalForm() {
 
   const renderStep4 = () => (
     <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-500">
-        <div className="p-4 bg-purple-50 dark:bg-purple-500/10 border border-purple-100 dark:border-purple-500/20 rounded-xl">
-            <p className="text-sm font-bold text-purple-700 dark:text-purple-400">{t.demoIntro}</p>
-        </div>
-        <div className="grid md:grid-cols-2 gap-6">
-            <div>
-                <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-2">{t.demoHousing}</label>
-                <select value={formData.housing} onChange={e => setFormData({...formData, housing: e.target.value})} className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-3 text-sm md:text-base font-bold outline-none focus:ring-2 focus:ring-purple-500">
-                    <option value="">--</option>
-                    <option value={t.houseOpt1}>{t.houseOpt1}</option>
-                    <option value={t.houseOpt2}>{t.houseOpt2}</option>
-                    <option value={t.houseOpt3}>{t.houseOpt3}</option>
-                </select>
-            </div>
-            <div>
-                <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-2">{t.demoAge}</label>
-                <select value={formData.age} onChange={e => setFormData({...formData, age: e.target.value})} className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-3 text-sm md:text-base font-bold outline-none focus:ring-2 focus:ring-purple-500">
-                    <option value="">--</option>
-                    <option value={t.ageOpt1}>{t.ageOpt1}</option>
-                    <option value={t.ageOpt2}>{t.ageOpt2}</option>
-                    <option value={t.ageOpt3}>{t.ageOpt3}</option>
-                    <option value={t.ageOpt4}>{t.ageOpt4}</option>
-                </select>
-            </div>
-            <div>
-                <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-2">{t.demoGender}</label>
-                <select value={formData.gender} onChange={e => setFormData({...formData, gender: e.target.value})} className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-3 text-sm md:text-base font-bold outline-none focus:ring-2 focus:ring-purple-500">
-                    <option value="">--</option>
-                    <option value={t.genOpt1}>{t.genOpt1}</option>
-                    <option value={t.genOpt2}>{t.genOpt2}</option>
-                </select>
-            </div>
-            <div>
-                <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-2">{t.demoRace}</label>
-                <select value={formData.race} onChange={e => setFormData({...formData, race: e.target.value})} className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-3 text-sm md:text-base font-bold outline-none focus:ring-2 focus:ring-purple-500">
-                    <option value="">--</option>
-                    <option value={t.raceOpt1}>{t.raceOpt1}</option>
-                    <option value={t.raceOpt2}>{t.raceOpt2}</option>
-                    <option value={t.raceOpt3}>{t.raceOpt3}</option>
-                    <option value={t.raceOpt4}>{t.raceOpt4}</option>
-                </select>
-            </div>
-            <div className="md:col-span-2">
-                <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-2">{t.postalCode}</label>
-                <input type="text" maxLength={2} placeholder="e.g. 73" value={formData.postalCode} onChange={e => setFormData({...formData, postalCode: e.target.value.replace(/\D/g, '')})} className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-3 text-sm md:text-base font-bold outline-none focus:ring-2 focus:ring-purple-500" />
+        <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-6 md:p-8 shadow-sm">
+            <p className="text-sm font-bold text-slate-500 dark:text-slate-400 mb-6">{t.demoIntro}</p>
+            <div className="grid md:grid-cols-2 gap-6">
+                <div>
+                    <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-3">{t.demoHousing}</label>
+                    <select value={formData.housing} onChange={e => setFormData({...formData, housing: e.target.value})} className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-3 text-sm font-bold outline-none focus:ring-2 focus:ring-teal-500">
+                        <option value="">--</option>
+                        <option value={t.houseOpt1}>{t.houseOpt1}</option>
+                        <option value={t.houseOpt2}>{t.houseOpt2}</option>
+                        <option value={t.houseOpt3}>{t.houseOpt3}</option>
+                    </select>
+                </div>
+                <div>
+                    <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-3">{t.demoAge}</label>
+                    <select value={formData.age} onChange={e => setFormData({...formData, age: e.target.value})} className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-3 text-sm font-bold outline-none focus:ring-2 focus:ring-teal-500">
+                        <option value="">--</option>
+                        <option value={t.ageOpt1}>{t.ageOpt1}</option>
+                        <option value={t.ageOpt2}>{t.ageOpt2}</option>
+                        <option value={t.ageOpt3}>{t.ageOpt3}</option>
+                        <option value={t.ageOpt4}>{t.ageOpt4}</option>
+                    </select>
+                </div>
+                <div>
+                    <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-3">{t.demoGender}</label>
+                    <select value={formData.gender} onChange={e => setFormData({...formData, gender: e.target.value})} className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-3 text-sm font-bold outline-none focus:ring-2 focus:ring-teal-500">
+                        <option value="">--</option>
+                        <option value={t.genOpt1}>{t.genOpt1}</option>
+                        <option value={t.genOpt2}>{t.genOpt2}</option>
+                    </select>
+                </div>
+                <div>
+                    <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-3">{t.demoRace}</label>
+                    <select value={formData.race} onChange={e => setFormData({...formData, race: e.target.value})} className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-3 text-sm font-bold outline-none focus:ring-2 focus:ring-teal-500">
+                        <option value="">--</option>
+                        <option value={t.raceOpt1}>{t.raceOpt1}</option>
+                        <option value={t.raceOpt2}>{t.raceOpt2}</option>
+                        <option value={t.raceOpt3}>{t.raceOpt3}</option>
+                        <option value={t.raceOpt4}>{t.raceOpt4}</option>
+                    </select>
+                </div>
+                <div className="md:col-span-2 border-t border-slate-100 dark:border-slate-800 pt-6">
+                    <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-3">{t.postalCode}</label>
+                    <input type="text" maxLength={2} placeholder="e.g. 73" value={formData.postalCode} onChange={e => setFormData({...formData, postalCode: e.target.value.replace(/\D/g, '')})} className="w-full md:w-1/2 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-3 text-sm font-bold outline-none focus:ring-2 focus:ring-teal-500" />
+                </div>
             </div>
         </div>
     </div>
   );
 
-  const icons = [<Activity size={20}/>, <AlertCircle size={20}/>, <MessageSquare size={20}/>, <User size={20}/>];
   const renders = [renderStep1, renderStep2, renderStep3, renderStep4];
-  const themeColors = ['indigo', 'amber', 'emerald', 'purple'];
-  const activeColor = themeColors[step];
 
   return (
-    <div className="min-h-screen w-full bg-slate-50 dark:bg-slate-950 transition-colors duration-700 flex flex-col items-center py-12 px-4 md:px-6 relative overflow-x-hidden font-sans">
-      <div className="absolute inset-0 z-0 opacity-[0.03] dark:opacity-[0.05] pointer-events-none" style={{ backgroundImage: 'radial-gradient(circle at 1px 1px, currentColor 1px, transparent 0)', backgroundSize: '40px 40px' }}></div>
-      <div className={`fixed top-0 left-0 w-[800px] h-[800px] bg-${activeColor}-500/10 rounded-full blur-[120px] pointer-events-none animate-float-slow transition-colors duration-1000 ${animate ? 'opacity-100' : 'opacity-0'}`}></div>
+    <div className="min-h-screen w-full bg-stone-50 dark:bg-slate-950 transition-colors duration-700 flex flex-col items-center py-6 px-4 md:py-12 md:px-6 relative overflow-x-hidden font-sans">
+      
+      {/* Immersive Background Orbs */}
+      <div className={`fixed top-0 left-0 w-[700px] h-[700px] bg-teal-500/8 rounded-full blur-[120px] pointer-events-none transition-opacity duration-1000 ${animate ? 'opacity-100' : 'opacity-0'}`} />
+      <div className={`fixed bottom-0 right-0 w-[500px] h-[500px] bg-emerald-500/8 rounded-full blur-[100px] pointer-events-none transition-opacity duration-1000 delay-300 ${animate ? 'opacity-100' : 'opacity-0'}`} />
 
-      <div className={`relative z-10 w-full max-w-3xl transition-all duration-1000 transform ${animate ? 'translate-y-0 opacity-100' : 'translate-y-10 opacity-0'}`}>
+      <div className={`relative z-10 w-full max-w-3xl transition-all duration-1000 transform ${animate ? 'translate-y-0 opacity-100' : 'translate-y-8 opacity-0'}`}>
         
-      {/* TOP BAR */}
-        <div className="flex justify-between items-center mb-6 px-2">
-          <button onClick={() => navigate('/individuals/pathway')} className="flex items-center gap-2 px-4 py-2 bg-white/60 dark:bg-slate-800/60 backdrop-blur-md text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-white font-black text-xs uppercase tracking-widest rounded-full border border-slate-200 dark:border-slate-700 shadow-sm transition-all group">
-              <ChevronLeft size={16} className="group-hover:-translate-x-1 transition-transform"/> {t.back}
+        {/* TOP NAV & CONTROLS */}
+        <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4">
+          <button onClick={() => navigate('/individuals/pathway')} className="flex items-center gap-2 px-4 py-2 bg-white/70 dark:bg-slate-800/70 backdrop-blur-md text-slate-500 dark:text-slate-400 hover:text-teal-600 dark:hover:text-teal-400 font-bold text-xs uppercase tracking-widest rounded-full border border-slate-200 dark:border-slate-700 shadow-sm transition-all group">
+              <ChevronLeft size={14} className="group-hover:-translate-x-1 transition-transform"/> {t.back}
           </button>
           
-          <div className="flex items-center gap-3">
-              {/* TOGGLE ADDED TO RENDER */}
+          <div className="flex items-center gap-3 self-end md:self-auto">
               <button 
                   onClick={toggleTheme} 
-                  className="p-2 rounded-full bg-white/60 dark:bg-slate-800/60 backdrop-blur-md border border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-400 shadow-sm hover:scale-105 transition-all"
+                  className="p-2 rounded-full bg-white/70 dark:bg-slate-800/70 backdrop-blur-md border border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-400 shadow-sm hover:-translate-y-0.5 transition-all"
               >
-                  {isDark ? <Sun size={14} className="text-amber-400" /> : <Moon size={14} />}
+                  {isDark ? <Sun size={15} className="text-amber-400" /> : <Moon size={15} />}
               </button>
-              <div className="text-[10px] font-mono text-slate-400 bg-slate-200/50 dark:bg-slate-800/50 px-2 py-1 rounded">ID: {sessionId}</div>
+              <div className="text-[10px] font-mono font-bold text-teal-600 dark:text-teal-400 bg-teal-50 dark:bg-teal-500/10 px-3 py-1.5 rounded-lg border border-teal-100 dark:border-teal-500/20 shadow-sm">
+                  ID: {sessionId}
+              </div>
           </div>
         </div>
 
-        {/* PROGRESS TABS */}
-        <div className="flex justify-between items-center mb-8 px-2">
-            {t.steps.map((title, idx) => (
-                <div key={idx} className={`flex-1 h-1.5 mx-1 rounded-full transition-colors duration-500 ${step >= idx ? `bg-${themeColors[idx]}-500` : 'bg-slate-200 dark:bg-slate-800'}`} />
-            ))}
+        {/* HEADER & PROGRESS */}
+        <div className="mb-8">
+            <h1 className="text-2xl md:text-3xl font-black text-slate-900 dark:text-white tracking-tight mb-6">{t.title}</h1>
+            
+            {/* Segmented Progress Bar */}
+            <div className="bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm">
+                <div className="flex items-center justify-between mb-3 px-1">
+                    <span className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest">{t.steps[step]}</span>
+                    <span className="text-xs font-bold text-teal-600 dark:text-teal-400">{Math.round(((step + 1) / 4) * 100)}%</span>
+                </div>
+                <div className="flex justify-between items-center gap-2">
+                    {t.steps.map((_, idx) => (
+                        <div key={idx} className="flex-1 h-1.5 rounded-full overflow-hidden bg-slate-100 dark:bg-slate-800">
+                            <div className={`h-full w-full transition-transform duration-500 origin-left ${step >= idx ? 'bg-teal-500 scale-x-100' : 'scale-x-0'}`} />
+                        </div>
+                    ))}
+                </div>
+            </div>
         </div>
 
-        {/* MAIN CARD */}
-        <div className="bg-white dark:bg-[#111827] rounded-[2rem] shadow-xl border border-slate-200 dark:border-slate-800 overflow-hidden mb-8">
-          <div className={`px-8 py-8 bg-${activeColor}-50 dark:bg-${activeColor}-500/10 border-b border-${activeColor}-100 dark:border-${activeColor}-500/20 flex items-center gap-5 transition-colors duration-500`}>
-             <div className={`w-14 h-14 bg-white dark:bg-${activeColor}-500/20 rounded-2xl flex items-center justify-center shadow-sm shrink-0 text-${activeColor}-500 transition-colors duration-500`}>
-                {icons[step]}
-             </div>
-             <div>
-                <h1 className="text-xl md:text-2xl font-black text-slate-900 dark:text-white tracking-tight mb-1">{t.title}</h1>
-                <p className={`text-xs font-bold text-${activeColor}-600 dark:text-${activeColor}-400 uppercase tracking-widest transition-colors duration-500`}>{t.steps[step]}</p>
-             </div>
-          </div>
-          
-          <form onSubmit={handleSubmit} className="p-8 md:p-12">
-              {renders[step]()}
-          </form>
-        </div>
+        {/* FORM CONTENT */}
+        <form onSubmit={handleSubmit} className="mb-8">
+            {renders[step]()}
+        </form>
 
-        {/* NAVIGATION CONTROLS */}
-        <div className="flex justify-between items-center gap-4">
+        {/* BOTTOM NAVIGATION */}
+        <div className="flex flex-col-reverse md:flex-row justify-between items-center gap-4 mt-8">
             <button 
                 type="button" 
                 onClick={() => setStep(prev => Math.max(0, prev - 1))} 
                 disabled={step === 0} 
-                className={`flex-1 md:flex-none flex justify-center items-center gap-2 py-4 px-8 rounded-xl font-black text-xs uppercase tracking-widest transition-all ${step === 0 ? 'bg-slate-100 dark:bg-slate-800 text-slate-400 cursor-not-allowed opacity-50' : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:shadow-md border border-slate-200 dark:border-slate-700 active:scale-95'}`}
+                className={`w-full md:w-auto flex justify-center items-center gap-2 py-3.5 px-8 rounded-xl font-bold text-xs uppercase tracking-widest transition-all ${step === 0 ? 'opacity-0 pointer-events-none' : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white border border-slate-200 dark:border-slate-700 shadow-sm hover:shadow-md active:scale-95'}`}
             >
                 <ChevronLeft size={16} /> {t.btnPrev}
             </button>
@@ -542,16 +585,16 @@ export default function ConventionalForm() {
                 <button 
                     type="button" 
                     onClick={() => setStep(prev => Math.min(3, prev + 1))} 
-                    className={`flex-1 md:flex-none flex justify-center items-center gap-2 py-4 px-8 bg-${activeColor}-500 text-white font-black text-xs uppercase tracking-widest rounded-xl hover:bg-${activeColor}-600 transition-all shadow-[0_10px_20px_rgba(0,0,0,0.1)] active:scale-95`}
+                    className="w-full md:w-auto flex justify-center items-center gap-2 py-3.5 px-8 bg-teal-600 text-white font-bold text-xs uppercase tracking-widest rounded-xl hover:bg-teal-700 transition-all shadow-[0_8px_16px_rgba(13,148,136,0.2)] active:scale-95"
                 >
                     {t.btnNext} <ChevronRight size={16} />
                 </button>
             ) : (
                 <button 
                     onClick={handleSubmit} 
-                    className="flex-1 md:flex-none flex justify-center items-center gap-2 py-4 px-8 bg-purple-500 text-white font-black text-xs uppercase tracking-widest rounded-xl hover:bg-purple-600 transition-all shadow-[0_10px_20px_rgba(168,85,247,0.2)] active:scale-95"
+                    className="w-full md:w-auto flex justify-center items-center gap-2 py-3.5 px-8 bg-slate-900 dark:bg-teal-500 text-white font-bold text-xs uppercase tracking-widest rounded-xl hover:bg-slate-800 dark:hover:bg-teal-400 transition-all shadow-[0_8px_16px_rgba(15,23,42,0.2)] dark:shadow-[0_8px_16px_rgba(20,184,166,0.2)] active:scale-95"
                 >
-                    <Send size={16} /> {t.btnSubmit}
+                    {t.btnSubmit} <Send size={16} className="ml-1" />
                 </button>
             )}
         </div>
