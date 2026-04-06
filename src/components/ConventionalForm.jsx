@@ -1,15 +1,3 @@
-/**
- * ConventionalForm.jsx — Enhanced v4.0.2 (Validation Patched)
- *
- * Alignment with NEXUS v2.0 Biodesign System:
- * • Adopts the unified Teal/Emerald clinical palette.
- * • Removes dynamic Tailwind classes to ensure production stability.
- * • Implements structured Domain Badges with Lucide icons (no emojis).
- * • Groups questions into distinct clinical/SDOH cards for cognitive ease.
- * • Adds immersive ambient backgrounds and standardized progress tracking.
- * • ENFORCES strict step-by-step field validation before allowing progression.
- */
-
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { calculateRiskScore } from '../utils/scoring';
@@ -21,8 +9,6 @@ import {
 
 // ─────────────────────────────────────────────────────────────────────────────
 // CANONICAL OPTION ARRAYS
-// value = exact AURA quick-reply string → stored in formData → parsed identically
-// Translations apply to display labels only, never to stored values
 // ─────────────────────────────────────────────────────────────────────────────
 
 const PAVS_DAYS = [
@@ -111,27 +97,17 @@ const RACE_OPTIONS = [
 ];
 
 // ─────────────────────────────────────────────────────────────────────────────
-// PARSING — mirrors AuraChatbot.jsx parseClinicalData() exactly
+// PARSING
 // ─────────────────────────────────────────────────────────────────────────────
 
 const DAYS_MIDPOINT = {
-  '0 days': 0,
-  '1–2 days': 1.5,
-  '3–4 days': 3.5,
-  '5–7 days': 6,
+  '0 days': 0, '1–2 days': 1.5, '3–4 days': 3.5, '5–7 days': 6,
 };
 const MINS_MIDPOINT = {
-  'Less than 20 mins': 15,
-  '20–30 mins': 25,
-  '30–45 mins': 37,
-  '45–60 mins': 52,
-  '60+ mins': 65,
+  'Less than 20 mins': 15, '20–30 mins': 25, '30–45 mins': 37, '45–60 mins': 52, '60+ mins': 65,
 };
 const STR_MIDPOINT = {
-  'No strength training': 0,
-  '1 day a week': 1,
-  '2 days a week': 2,
-  '3+ days a week': 3,
+  'No strength training': 0, '1 day a week': 1, '2 days a week': 2, '3+ days a week': 3,
 };
 
 const MED_FLAG_VALUES     = new Set(['High blood pressure', 'Prediabetes or diabetes', 'Heart condition']);
@@ -162,18 +138,14 @@ const deriveFlags = (f) => {
   const medFlag      = !noConditions && f.medical.some(v => MED_FLAG_VALUES.has(v));
   const symptomFlag  = !noConditions && f.medical.includes(SYMPTOM_FLAG_VALUE);
 
-  const sdohFinancial     = f.barriers.some(v => FINANCIAL_BARR_VALS.has(v))
-                          || f.incomeAdequacy === 'Inadequate';
+  const sdohFinancial     = f.barriers.some(v => FINANCIAL_BARR_VALS.has(v)) || f.incomeAdequacy === 'Inadequate';
   const sdohSocial        = SOCIAL_FLAG_VALS.has(f.social);
   const sdohPsychological = PSYCHO_FLAG_VALS.has(f.wellbeing);
 
   const sdohFoodInsecure = f.foodInsecure === true;
   const sdohHousing      = f.housing === 'HDB 1-2 Room';
 
-  const age    = f.ageGroup === '60+' ? '60+'
-               : f.ageGroup === '41-60' ? '41-60'
-               : f.ageGroup === '21-40' ? '21-40'
-               : 'Unknown';
+  const age    = f.ageGroup === '60+' ? '60+' : f.ageGroup === '41-60' ? '41-60' : f.ageGroup === '21-40' ? '21-40' : 'Unknown';
   const gender = f.gender || 'Unknown';
 
   return {
@@ -187,7 +159,7 @@ const deriveFlags = (f) => {
   };
 };
 
-// ─── UI DICTIONARY — display strings only, no clinical values ────────────────
+// ─── UI DICTIONARY ───────────────────────────────────────────────────────────
 const D = {
   en: {
     title: 'Health & Community Assessment',
@@ -226,13 +198,13 @@ const D = {
     ratingOpts: ['Better than hospital', 'About the same', 'Needs improvement', 'Not applicable — have not used community services'],
     trustQ: 'How comfortable and safe do you feel receiving health care in the community?',
     trustScale: '1 = Not at all comfortable   ·   5 = Very comfortable',
-    improveQ: 'If you could change one thing about healthcare in your neighbourhood, what would it be? (Optional)',
+    improveQ: 'If you could change one thing about healthcare in your neighbourhood, what would it be?',
     demoHead: 'About You',
     demoIntro: 'These details help us ensure resources reach every community equitably. All responses are de-identified.',
     ageQ: 'Age Group', genderQ: 'Gender', raceQ: 'Ethnicity',
     postalQ: 'First 2 digits of your Postal Code',
     postalHint: 'e.g. 73 (Woodlands) · 75–76 (Yishun) · 75 (Sembawang) · 68 (Admiralty / Canberra)',
-    prevIdQ: 'Previous NEXUS Assessment ID (optional)',
+    prevIdQ: 'Previous NEXUS Assessment ID',
     prevIdHint: 'If you completed a previous AURA or NEXUS assessment, paste your ID here to link records and track progress. Leave blank if this is your first assessment.',
     summaryHead: 'Assessment Summary',
   },
@@ -273,13 +245,13 @@ const D = {
     ratingOpts: ['Lebih baik daripada hospital', 'Lebih kurang sama', 'Perlu diperbaiki', 'Tidak berkenaan'],
     trustQ: 'Sejauh mana anda berasa selesa menerima penjagaan dalam komuniti?',
     trustScale: '1 = Tidak selesa langsung   ·   5 = Sangat selesa',
-    improveQ: 'Jika anda boleh mengubah satu perkara tentang penjagaan kesihatan di kejiranan anda, apakah itu? (Pilihan)',
+    improveQ: 'Jika anda boleh mengubah satu perkara tentang penjagaan kesihatan di kejiranan anda, apakah itu?',
     demoHead: 'Mengenai Anda',
     demoIntro: 'Maklumat ini membantu kami memastikan sumber sampai ke semua komuniti secara saksama. Semua jawapan tidak dapat dikenal pasti.',
     ageQ: 'Kumpulan Umur', genderQ: 'Jantina', raceQ: 'Etnik',
     postalQ: '2 digit pertama Poskod anda',
     postalHint: 'cth. 73 (Woodlands) · 75–76 (Yishun) · 68 (Canberra)',
-    prevIdQ: 'ID Penilaian NEXUS Sebelumnya (pilihan)',
+    prevIdQ: 'ID Penilaian NEXUS Sebelumnya',
     prevIdHint: 'Jika anda pernah menjalani penilaian AURA atau NEXUS, tampal ID anda di sini. Biarkan kosong jika ini penilaian pertama anda.',
     summaryHead: 'Ringkasan Penilaian',
   },
@@ -320,13 +292,13 @@ const D = {
     ratingOpts: ['比医院好', '差不多', '需要改进', '不适用 — 未使用过社区服务'],
     trustQ: '您在社区接受护理感到多舒适？',
     trustScale: '1 = 完全不舒适   ·   5 = 非常舒适',
-    improveQ: '如果您能改变社区医疗的一件事，那会是什么？（可选）',
+    improveQ: '如果您能改变社区医疗的一件事，那会是什么？',
     demoHead: '关于您',
     demoIntro: '这些信息帮助我们确保资源公平地覆盖每个社区。所有信息均已去识别化。',
     ageQ: '年龄组', genderQ: '性别', raceQ: '族裔',
     postalQ: '邮政编码前2位',
     postalHint: '例如 73（兀兰）· 75–76（义顺）· 68（甘巴旺）',
-    prevIdQ: '之前的 NEXUS 评估 ID（可选）',
+    prevIdQ: '之前的 NEXUS 评估 ID',
     prevIdHint: '如果您之前完成了 AURA 或 NEXUS 评估，请粘贴您的 ID 以关联记录。如这是第一次，请留空。',
     summaryHead: '评估摘要',
   },
@@ -367,13 +339,13 @@ const D = {
     ratingOpts: ['மருத்துவமனையை விட சிறந்தது', 'சுமார் அதே', 'மேம்பாடு தேவை', 'பொருந்தாது'],
     trustQ: 'சமூகத்தில் சுகாதார கவனிப்பு பெறுவது எவ்வளவு வசதியாக உணர்கிறீர்கள்?',
     trustScale: '1 = இல்லவே இல்லை   ·   5 = மிகவும் வசதியானது',
-    improveQ: 'சுகாதார சேவையில் ஒன்றை மாற்ற முடிந்தால், அது என்னவாக இருக்கும்? (விருப்பமானது)',
+    improveQ: 'சுகாதார சேவையில் ஒன்றை மாற்ற முடிந்தால், அது என்னவாக இருக்கும்?',
     demoHead: 'உங்களை பற்றி',
     demoIntro: 'இந்த தகவல் ஒவ்வொரு சமூகத்திற்கும் வளங்கள் நியாயமாக சேர உதவுகிறது.',
     ageQ: 'வயது குழு', genderQ: 'பாலினம்', raceQ: 'இனம்',
     postalQ: 'அஞ்சல் குறியீட்டின் முதல் 2 இலக்கங்கள்',
     postalHint: 'எ.கா. 73 (Woodlands) · 75–76 (Yishun) · 68 (Canberra)',
-    prevIdQ: 'முந்தைய NEXUS மதிப்பீட்டு ID (விருப்பமானது)',
+    prevIdQ: 'முந்தைய NEXUS மதிப்பீட்டு ID',
     prevIdHint: 'முன்பு AURA அல்லது NEXUS மதிப்பீட்டை முடித்திருந்தால், ID ஐ ஒட்டவும்.',
     summaryHead: 'மதிப்பீட்டு சுருக்கம்',
   },
@@ -395,6 +367,8 @@ const Card = ({ children, tinted = false }) => (
   </div>
 );
 const Note = ({ text }) => <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mt-1.5 ml-1">{text}</p>;
+const Req = () => <span className="text-teal-500 ml-1" title="Required">*</span>;
+
 const RadioRow = ({ opt, selected, onSelect, lang }) => (
   <label className={`flex items-center gap-3 cursor-pointer p-3 rounded-xl border transition-all ${selected ? 'bg-teal-50 dark:bg-teal-900/30 border-teal-300 dark:border-teal-600' : 'bg-slate-50 dark:bg-slate-950 border-slate-200 dark:border-slate-800 hover:border-teal-200 dark:hover:border-teal-700'}`}>
     <input type="radio" checked={selected} onChange={onSelect} className="w-4 h-4 text-teal-600 focus:ring-teal-500" />
@@ -410,7 +384,6 @@ const CheckRow = ({ opt, checked, onChange, disabled, lang }) => (
   </label>
 );
 
-// PAVS live preview — same midpoints as AURA parseClinicalData
 const PavsLive = ({ days, mins, t }) => {
   const score = Math.round((DAYS_MIDPOINT[days] ?? 0) * (MINS_MIDPOINT[mins] ?? 0));
   if (!days && !mins) return null;
@@ -445,35 +418,11 @@ export default function ConventionalForm() {
   const [busy,    setBusy]    = useState(false);
   const [sessionId] = useState(() => 'NX-' + Math.random().toString(36).substr(2, 9).toUpperCase());
 
-  // formData — all clinical values stored as exact AURA quick-reply strings
   const [f, setF] = useState({
-    // Step 1 — AURA Q0–Q3 + Q6
-    pavsDays:   '',   // AURA Q0 value
-    pavsMins:   '',   // AURA Q1 value
-    strength:   '',   // AURA Q2 value
-    medical:    [],   // AURA Q3 values (multi-select, same 5 options)
-    wellbeing:  '',   // AURA Q6 value (placed in Step 1 with clinical)
-
-    // Step 2 — AURA Q4 + Q5 + PDF-validated enrichment
-    barriers:       [],   // AURA Q4 values
-    social:         '',   // AURA Q5 value
-    foodInsecure:   null, // PDF: Lien Centre Q1
-    incomeAdequacy: '',   // PDF: Duke-NUS
-    housing:        '',   // PDF: BPS-RS II
-
-    // Step 3 — community perception (form-only)
-    aware:    null,
-    referred: null,
-    rating:   '',
-    trust:    '3',
-    improve:  '',
-
-    // Step 4 — AURA Q7 + Q8 + Q9
-    ageGroup:   '',
-    gender:     '',
-    race:       '',
-    postalCode: '',
-    previousId: '',
+    pavsDays:   '', pavsMins:   '', strength:   '', medical:    [], wellbeing:  '',
+    barriers:       [], social:         '', foodInsecure:   null, incomeAdequacy: '', housing:        '',
+    aware:    null, referred: null, rating:   '', trust:    '3', improve:  '',
+    ageGroup:   '', gender:     '', race:       '', postalCode: '', previousId: '',
   });
 
   const set    = useCallback((k, v) => setF(p => ({ ...p, [k]: v })), []);
@@ -524,6 +473,7 @@ export default function ConventionalForm() {
       return f.aware !== null && f.referred !== null && f.rating !== '' && f.trust !== '';
     }
     if (step === 3) {
+      // REQUIREMENT FIX: Explicitly enforce the postalCode constraint
       return f.ageGroup !== '' && f.gender !== '' && f.race !== '' && f.postalCode.length === 2;
     }
     return true;
@@ -558,14 +508,14 @@ export default function ConventionalForm() {
         <Badge icon={Activity} label="ACSM PAVS · SPAG Strength Screen" />
         <div className="grid md:grid-cols-2 gap-5">
           <div>
-            <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-2 leading-snug">{t.pavsQ1}</label>
+            <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-2 leading-snug">{t.pavsQ1} <Req/></label>
             <select value={f.pavsDays} onChange={e => set('pavsDays', e.target.value)} className={selCls}>
               <option value="">{t.sel}</option>
               {PAVS_DAYS.map(o => <option key={o.value} value={o.value}>{o[lang] || o.en}</option>)}
             </select>
           </div>
           <div>
-            <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-2 leading-snug">{t.pavsQ2}</label>
+            <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-2 leading-snug">{t.pavsQ2} <Req/></label>
             <select value={f.pavsMins} onChange={e => set('pavsMins', e.target.value)} className={selCls}>
               <option value="">{t.sel}</option>
               {PAVS_MINS.map(o => <option key={o.value} value={o.value}>{o[lang] || o.en}</option>)}
@@ -575,7 +525,7 @@ export default function ConventionalForm() {
         <PavsLive days={f.pavsDays} mins={f.pavsMins} t={t} />
 
         <div className="mt-5 pt-5 border-t border-slate-100 dark:border-slate-800">
-          <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-2 leading-snug">{t.strengthQ}</label>
+          <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-2 leading-snug">{t.strengthQ} <Req/></label>
           <select value={f.strength} onChange={e => set('strength', e.target.value)} className={`${selCls} md:w-2/3`}>
             <option value="">{t.sel}</option>
             {STRENGTH_DAYS.map(o => <option key={o.value} value={o.value}>{o[lang] || o.en}</option>)}
@@ -585,7 +535,7 @@ export default function ConventionalForm() {
 
       <Card>
         <Badge icon={ShieldAlert} label={t.clinHead} />
-        <p className="text-sm font-bold text-slate-700 dark:text-slate-300 mb-3 leading-snug">{t.medQ}</p>
+        <p className="text-sm font-bold text-slate-700 dark:text-slate-300 mb-3 leading-snug">{t.medQ} <Req/></p>
         <div className="bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-2xl p-4 space-y-1">
           {MEDICAL_OPTIONS.map(o => (
             <CheckRow
@@ -605,7 +555,7 @@ export default function ConventionalForm() {
           <Brain size={18} className="text-teal-600 dark:text-teal-400 shrink-0 mt-0.5" />
           <div>
             <p className="text-[10px] font-black text-teal-600 dark:text-teal-400 uppercase tracking-widest mb-0.5">{t.wellHead}</p>
-            <p className="text-sm font-bold text-teal-900 dark:text-teal-100 leading-snug">{t.wellQ}</p>
+            <p className="text-sm font-bold text-teal-900 dark:text-teal-100 leading-snug">{t.wellQ} <Req/></p>
             <Note text={t.wellNote} />
           </div>
         </div>
@@ -627,7 +577,7 @@ export default function ConventionalForm() {
         <div className="space-y-6">
 
           <div>
-            <p className="text-sm font-bold text-slate-700 dark:text-slate-300 mb-3 leading-snug">{t.barrQ}</p>
+            <p className="text-sm font-bold text-slate-700 dark:text-slate-300 mb-3 leading-snug">{t.barrQ} <Req/></p>
             <div className="bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-2xl p-4 grid grid-cols-1 md:grid-cols-2 gap-1">
               {BARRIERS.map(o => (
                 <CheckRow key={o.value} opt={o} checked={f.barriers.includes(o.value)} onChange={() => togArr('barriers', o.value)} lang={lang} />
@@ -636,7 +586,7 @@ export default function ConventionalForm() {
           </div>
 
           <div>
-            <p className="text-sm font-bold text-slate-700 dark:text-slate-300 mb-1 leading-snug">{t.socialQ}</p>
+            <p className="text-sm font-bold text-slate-700 dark:text-slate-300 mb-1 leading-snug">{t.socialQ} <Req/></p>
             <Note text={t.socialNote} />
             <div className="space-y-2 mt-3">
               {SOCIAL_OPTIONS.map(o => (
@@ -646,7 +596,7 @@ export default function ConventionalForm() {
           </div>
 
           <div className="border-t border-slate-100 dark:border-slate-800 pt-5">
-            <p className="text-sm font-bold text-slate-700 dark:text-slate-300 mb-1 leading-snug">{t.foodQ}</p>
+            <p className="text-sm font-bold text-slate-700 dark:text-slate-300 mb-1 leading-snug">{t.foodQ} <Req/></p>
             <Note text={t.foodNote} />
             <div className="flex gap-6 mt-3">
               {[true, false].map(v => (
@@ -659,7 +609,7 @@ export default function ConventionalForm() {
           </div>
 
           <div>
-            <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-1 leading-snug">{t.incomeQ}</label>
+            <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-1 leading-snug">{t.incomeQ} <Req/></label>
             <Note text={t.incomeNote} />
             <select value={f.incomeAdequacy} onChange={e => set('incomeAdequacy', e.target.value)} className={`${selCls} mt-2`}>
               <option value="">{t.sel}</option>
@@ -668,7 +618,7 @@ export default function ConventionalForm() {
           </div>
 
           <div>
-            <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-1 leading-snug">{t.housingQ}</label>
+            <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-1 leading-snug">{t.housingQ} <Req/></label>
             <Note text={t.housingNote} />
             <select value={f.housing} onChange={e => set('housing', e.target.value)} className={`${selCls} mt-2`}>
               <option value="">{t.sel}</option>
@@ -694,7 +644,7 @@ export default function ConventionalForm() {
         <div className="space-y-5">
           {[{ label: t.awareQ, key: 'aware' }, { label: t.referQ, key: 'referred' }].map(({ label, key }) => (
             <div key={key} className="flex flex-col md:flex-row md:items-center justify-between gap-4 p-4 bg-slate-50 dark:bg-slate-950 rounded-xl border border-slate-200 dark:border-slate-800">
-              <p className="text-sm font-bold text-slate-700 dark:text-slate-300 md:w-2/3 leading-snug">{label}</p>
+              <p className="text-sm font-bold text-slate-700 dark:text-slate-300 md:w-2/3 leading-snug">{label} <Req/></p>
               <div className="flex gap-6">
                 {[true, false].map(v => (
                   <label key={String(v)} className="flex items-center gap-2 cursor-pointer group">
@@ -707,14 +657,14 @@ export default function ConventionalForm() {
           ))}
           <div className="grid md:grid-cols-2 gap-5">
             <div>
-              <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-2 leading-snug">{t.ratingQ}</label>
+              <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-2 leading-snug">{t.ratingQ} <Req/></label>
               <select value={f.rating} onChange={e => set('rating', e.target.value)} className={selCls}>
                 <option value="">{t.sel}</option>
                 {t.ratingOpts.map(o => <option key={o} value={o}>{o}</option>)}
               </select>
             </div>
             <div>
-              <p className="text-sm font-bold text-slate-700 dark:text-slate-300 mb-1 leading-snug">{t.trustQ}</p>
+              <p className="text-sm font-bold text-slate-700 dark:text-slate-300 mb-1 leading-snug">{t.trustQ} <Req/></p>
               <p className="text-[10px] text-slate-400 mb-3">{t.trustScale}</p>
               <div className="flex gap-2">
                 {[1,2,3,4,5].map(n => (
@@ -726,7 +676,9 @@ export default function ConventionalForm() {
             </div>
           </div>
           <div>
-            <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-2">{t.improveQ}</label>
+            <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-2">
+              {t.improveQ} <span className="text-slate-400 font-normal text-xs ml-1">(Optional)</span>
+            </label>
             <textarea rows={3} value={f.improve} onChange={e => set('improve', e.target.value)} className={`${inputCls} resize-none rounded-2xl`} placeholder="…" />
           </div>
         </div>
@@ -744,45 +696,41 @@ export default function ConventionalForm() {
           <Badge icon={Home} label={t.demoHead} />
           <p className="text-sm text-slate-500 dark:text-slate-400 font-medium mb-6 leading-relaxed">{t.demoIntro}</p>
           <div className="grid md:grid-cols-2 gap-5">
-            {/* Age — AURA Q7, normalised to AURA parser output */}
             <div>
-              <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-2">{t.ageQ}</label>
+              <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-2">{t.ageQ} <Req/></label>
               <select value={f.ageGroup} onChange={e => set('ageGroup', e.target.value)} className={selCls}>
                 <option value="">{t.sel}</option>
                 {AGE_OPTIONS.map(o => <option key={o.value} value={o.value}>{o[lang] || o.en}</option>)}
               </select>
             </div>
-            {/* Gender — AURA Q7 */}
             <div>
-              <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-2">{t.genderQ}</label>
+              <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-2">{t.genderQ} <Req/></label>
               <select value={f.gender} onChange={e => set('gender', e.target.value)} className={selCls}>
                 <option value="">{t.sel}</option>
                 {GENDER_OPTIONS.map(o => <option key={o.value} value={o.value}>{o[lang] || o.en}</option>)}
               </select>
             </div>
-            {/* Ethnicity — form enrichment */}
             <div>
-              <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-2">{t.raceQ}</label>
+              <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-2">{t.raceQ} <Req/></label>
               <select value={f.race} onChange={e => set('race', e.target.value)} className={selCls}>
                 <option value="">{t.sel}</option>
                 {RACE_OPTIONS.map(o => <option key={o.value} value={o.value}>{o[lang] || o.en}</option>)}
               </select>
             </div>
-            {/* Postal code — AURA Q8 */}
             <div>
-              <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-2">{t.postalQ}</label>
+              <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-2">{t.postalQ} <Req/></label>
               <input type="text" maxLength={2} value={f.postalCode} onChange={e => set('postalCode', e.target.value.replace(/\D/g, ''))} className={inputCls} placeholder="e.g. 73" />
               <Note text={t.postalHint} />
             </div>
-            {/* Previous NEXUS ID — AURA Q9 */}
             <div className="md:col-span-2 pt-2 border-t border-slate-100 dark:border-slate-800">
-              <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-2">{t.prevIdQ}</label>
+              <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-2">
+                {t.prevIdQ} <span className="text-slate-400 font-normal text-xs ml-1">(Optional)</span>
+              </label>
               <input type="text" value={f.previousId} onChange={e => set('previousId', e.target.value)} className={inputCls} placeholder="NX-XXXXXXXXX" />
               <p className="text-xs text-slate-400 mt-2 leading-relaxed">{t.prevIdHint}</p>
             </div>
           </div>
 
-          {/* Pre-submit summary preview */}
           {liveScore > 0 && (
             <div className="mt-6 pt-6 border-t border-slate-100 dark:border-slate-800">
               <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3 flex items-center gap-1.5">
@@ -839,7 +787,7 @@ export default function ConventionalForm() {
             <div className="flex items-center justify-between mb-3 px-1">
               <div>
                 <span className="text-xs font-black text-slate-800 dark:text-white uppercase tracking-wider">{t.steps[step]}</span>
-                <span className="text-[10px] text-slate-400 ml-2">— {t.subs[step]}</span>
+                <span className="text-[10px] text-slate-400 ml-2 hidden md:inline">— {t.subs[step]}</span>
               </div>
               <span className="text-xs font-bold text-teal-600 dark:text-teal-400">{Math.round(((step+1)/4)*100)}%</span>
             </div>
@@ -873,14 +821,21 @@ export default function ConventionalForm() {
               {t.btnNext} <ChevronRight size={15} />
             </button>
           ) : (
-            <button 
-              type="button" 
-              onClick={handleSubmit} 
-              disabled={busy || !isStepValid()}
-              className={`flex justify-center items-center gap-2 py-3.5 px-8 font-bold text-xs uppercase tracking-widest rounded-xl transition-all active:scale-95 ${isStepValid() && !busy ? 'bg-slate-900 dark:bg-teal-500 text-white hover:bg-slate-800 dark:hover:bg-teal-400 shadow-[0_8px_20px_rgba(15,23,42,0.2)] dark:shadow-[0_8px_20px_rgba(20,184,166,0.25)]' : 'bg-slate-200 dark:bg-slate-800 text-slate-400 cursor-not-allowed'}`}
-            >
-              {busy ? <><span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" /> Processing…</> : <>{t.btnSubmit} <Send size={15} /></>}
-            </button>
+            <div className="flex flex-col w-full md:w-auto items-end gap-2">
+              <button 
+                type="button" 
+                onClick={handleSubmit} 
+                disabled={busy || !isStepValid()}
+                className={`w-full flex justify-center items-center gap-2 py-3.5 px-8 font-bold text-xs uppercase tracking-widest rounded-xl transition-all active:scale-95 ${isStepValid() && !busy ? 'bg-slate-900 dark:bg-teal-500 text-white hover:bg-slate-800 dark:hover:bg-teal-400 shadow-[0_8px_20px_rgba(15,23,42,0.2)] dark:shadow-[0_8px_20px_rgba(20,184,166,0.25)]' : 'bg-slate-200 dark:bg-slate-800 text-slate-400 cursor-not-allowed'}`}
+              >
+                {busy ? <><span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" /> Processing…</> : <>{t.btnSubmit} <Send size={15} /></>}
+              </button>
+              {!isStepValid() && (
+                  <p className="text-amber-500 dark:text-amber-400 text-[10px] font-bold w-full text-center md:text-right px-1">
+                      Please complete all required demographic fields.
+                  </p>
+              )}
+            </div>
           )}
         </div>
       </div>
