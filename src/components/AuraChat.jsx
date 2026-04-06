@@ -2,7 +2,34 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { recordTelemetry } from '../utils/telemetry';
 import { calculateRiskScore } from '../utils/scoring';
-import { ChevronLeft, Send, Sun, Moon, ExternalLink, CheckCircle, BrainCircuit } from 'lucide-react';
+import { ChevronLeft, Send, Sun, Moon, ExternalLink, CheckCircle } from 'lucide-react';
+import { getFunctions, httpsCallable } from 'firebase/functions';
+
+// ── Cloud Function — same pattern as AuraPulseBot.jsx ────────────────────────
+// Gemini API key is secured in Firebase Cloud Functions (never client-side)
+const functions = getFunctions(undefined, 'us-central1');
+const secureChatWithAura = httpsCallable(functions, 'chatWithAura');
+
+// ── Well Well persona system prompt for community health triage ───────────────
+// Used as the `prompt` param passed to the Cloud Function, same as personas
+// in AuraPulseBot. Well Well uses Motivational Interviewing (OARS) and is
+// calibrated for Singapore community members, not clinical staff.
+const WELL_WELL_PROMPT = \`You are Well Well, a warm and professionally trained community health navigator within Singapore's NEXUS health programme. You use Motivational Interviewing (MI) techniques — specifically OARS: Open questions, Affirmations, Reflective listening, and Summaries.
+
+You are currently guiding a community member through the NEXUS structured health assessment. After each answer, you will receive the question domain, the user's answer, and all prior answers collected so far. Your job is to write a brief, natural acknowledgement (1–2 sentences, under 40 words) that:
+- Reflects what the person actually said — specific, never generic
+- Uses an affirming, non-judgmental MI tone
+- Matches emotional register: warm and encouraging for positive behaviours, compassionate and non-alarming for health concerns, calm and matter-of-fact for neutral answers
+- Naturally bridges to the next question (which will follow automatically — do NOT write the next question yourself)
+
+Hard rules:
+- NEVER say "Great!", "Wonderful!", "Awesome!" — these feel hollow
+- NEVER say "on those active days" or similar if the person answered 0 days of exercise
+- NEVER minimise a health concern (e.g. chest pain, isolation, food insecurity) with cheerful filler
+- NEVER use clinical jargon — speak plainly, as a trusted health coach would
+- Do NOT repeat the question back to the person
+- Do NOT mention AURA, Well Well, NEXUS, or any system names
+- Respond in English unless the person's answer is clearly in Malay, Chinese, or Tamil — then mirror their language\`;
 
 // ─── DOMAIN CONFIGURATION ─────────────────────────────────────────────────────
 // Each step declares its clinical domain for badge display and progress colouring.
@@ -16,13 +43,14 @@ const DOMAIN_CONFIG = [
   { key: 'medical',      badge: '🩺 Clinical Safety Screen',      group: 'clinical' },
   { key: 'barriers',     badge: '🔑 SDOH · Financial & Access',  group: 'sdoh'     },
   { key: 'social',       badge: '🤝 SDOH · Social Support',      group: 'sdoh'     },
+  { key: 'food_insecurity', badge: '🥗 SDOH · Food Security',      group: 'sdoh'     },
   { key: 'wellbeing',    badge: '🧠 SDOH · Psychological',       group: 'sdoh'     },
   { key: 'demographics', badge: '👤 Your Profile',               group: 'admin'    },
   { key: 'postal_code',  badge: '📍 Resource Mapping',           group: 'admin'    },
   { key: 'previous_id',  badge: '🔗 NEXUS Record Linkage',       group: 'admin'    },
 ];
 
-const TOTAL_STEPS = DOMAIN_CONFIG.length; // 10
+const TOTAL_STEPS = DOMAIN_CONFIG.length; // 11
 
 // Progress segment colour by group
 const GROUP_COLOURS = {
@@ -192,16 +220,19 @@ const DICTIONARY = {
     progressLabel: (step, total) => `Step ${step + 1} of ${total}`,
     // 10 prompts — indices match DOMAIN_CONFIG
     prompts: [
-      /* 0 pavs_days    */ 'Hi, I\'m AURA 👋 I\'m here to connect you with the right community health resources. Let\'s start with physical activity. On a typical week, how many days do you do moderate or vigorous exercise? (e.g. brisk walking, cycling, swimming, gym)',
-      /* 1 pavs_mins    */ 'Great — and on those active days, roughly how many minutes do you usually exercise each time?',
-      /* 2 strength     */ 'Do you do any muscle-strengthening activities? (e.g. weights, resistance bands, bodyweight exercises like push-ups or squats)',
-      /* 3 medical      */ 'Do you have any ongoing health conditions — such as high blood pressure, prediabetes, or heart disease? And do you ever feel chest pain or dizziness when you are physically active?',
-      /* 4 barriers     */ 'What is the main thing that makes it difficult to access health or fitness services in your community? Be honest — there are no wrong answers.',
-      /* 5 social       */ 'Roughly how many people — family or friends — could you call on for support if you needed help? And would you say you have people you can talk to openly?',
-      /* 6 wellbeing    */ 'Over the past two weeks, how have you been feeling overall? Have you felt stressed, low in mood, or overwhelmed — for example, due to work, caregiving, or financial pressure?',
-      /* 7 demographics */ 'Almost done! Could you share your age group and gender? This helps me find programmes designed for your profile. (e.g. Female, 41–60)',
-      /* 8 postal_code  */ 'What are the first two digits of your postal code? This lets me map the nearest resources to you.',
-      /* 9 previous_id  */ 'Last question — do you have a previous NEXUS Assessment ID? If yes, paste it below so I can link your records. If not, just select No.',
+      /* 0  pavs_days       */ 'Hi, I\'m AURA 👋 I\'m here to connect you with the right community health resources. Let\'s start with physical activity. On a typical week, how many days do you do moderate or vigorous exercise? (e.g. brisk walking, cycling, swimming, gym)',
+      /* 1  pavs_mins       */ (data) => data.pavs_days === '0 days'
+        ? 'No problem at all — most people start exactly where you are, and that is why these programmes exist. If you were to start being active, roughly how long do you think you could manage each session?'
+        : 'Great — and on those active days, roughly how many minutes do you usually exercise each time?',
+      /* 2  strength        */ 'Do you do any muscle-strengthening activities? (e.g. weights, resistance bands, bodyweight exercises like push-ups or squats)',
+      /* 3  medical         */ 'Do you have any ongoing health conditions — such as high blood pressure, prediabetes, or heart disease? And do you ever feel chest pain or dizziness when you are physically active?',
+      /* 4  barriers        */ 'What is the main thing that makes it difficult to access health or fitness services in your community? Be honest — there are no wrong answers.',
+      /* 5  social          */ 'Roughly how many people — family or friends — could you call on for support if you needed help? And would you say you have people you can talk to openly?',
+      /* 6  food_insecurity */ 'One more quick question — in the past 12 months, were there times when you were hungry but did not eat because you could not afford enough food?',
+      /* 7  wellbeing       */ 'Over the past two weeks, how have you been feeling overall? Have you felt stressed, low in mood, or overwhelmed — for example, due to work, caregiving, or financial pressure?',
+      /* 8  demographics    */ 'Almost done! Could you share your age group and gender? This helps me find programmes designed for your profile. (e.g. Female, 41–60)',
+      /* 9  postal_code     */ 'What are the first two digits of your postal code? This lets me map the nearest resources to you.',
+      /* 10 previous_id     */ 'Last question — do you have a previous NEXUS Assessment ID? If yes, paste it below so I can link your records. If not, just select No.',
     ],
 
     // Reflections — empathic, motivational, clinically appropriate
@@ -226,10 +257,11 @@ const DICTIONARY = {
       /* 3 */ () => 'Thank you for sharing that — I will use this to make sure your recommendations are safe and appropriate. ',
       /* 4 */ () => 'That is a very real barrier. Naming it helps us find the right workaround. ',
       /* 5 */ () => 'Social connection is one of the most powerful protective factors for long-term health. ',
-      /* 6 */ () => 'Your mental wellbeing matters as much as your physical health. ',
-      /* 7 */ () => 'Noted. ',
-      /* 8 */ () => 'Mapping your nearest resources now. ',
-      /* 9 */ (input) =>
+      /* 6 */ (input) => input.toLowerCase().includes('yes') ? 'Thank you for trusting me with that \u2014 food security is something we will factor directly into your plan. ' : 'Good to know. ',
+      /* 7 */ () => 'Your mental wellbeing matters as much as your physical health. ',
+      /* 8 */ () => 'Noted. ',
+      /* 9 */ () => 'Mapping your nearest resources now. ',
+      /* 10 */ (input) =>
         /(no|none|don'?t)/i.test(input)
           ? 'No problem — I will start a fresh record for you today. '
           : 'I will link your previous records to track your progress over time. ',
@@ -243,10 +275,11 @@ const DICTIONARY = {
       /* 3 medical      */ ['No conditions or symptoms', 'High blood pressure', 'Prediabetes or diabetes', 'Heart condition', 'Dizziness or chest pain when active'],
       /* 4 barriers     */ ['Lack of time', 'Too expensive', 'Too far away', 'I prefer hospitals over community', 'Unsure what is available', 'No barriers for me'],
       /* 5 social       */ ['I have several people I can rely on', 'I have one or two close people', 'I mostly manage on my own', 'I feel quite isolated'],
-      /* 6 wellbeing    */ ['Feeling good overall', 'Some stress but managing', 'Feeling quite stressed or low', 'Overwhelmed — caregiving or financial pressure'],
+      /* 6 food_insecurity */ ['Yes, this has happened', 'No, I have always had enough'],
+      /* 7 wellbeing    */ ['Feeling good overall', 'Some stress but managing', 'Feeling quite stressed or low', 'Overwhelmed — caregiving or financial pressure'],
       /* 7 demographics */ ['Male, 21–40', 'Female, 21–40', 'Male, 41–60', 'Female, 41–60', 'Male, 60+', 'Female, 60+'],
-      /* 8 postal_code  */ ['73 (Woodlands)', '75–76 (Yishun)', '75 (Sembawang)', '68 (Admiralty/Canberra)', 'Other / Not sure'],
-      /* 9 previous_id  */ ['No previous ID'],
+      /* 9 postal_code  */ ['73 (Woodlands)', '75–76 (Yishun)', '75 (Sembawang)', '68 (Admiralty/Canberra)', 'Other / Not sure'],
+      /* 10 previous_id  */ ['No previous ID'],
     ],
   },
 
@@ -271,6 +304,7 @@ const DICTIONARY = {
       'Adakah anda mempunyai sebarang penyakit kronik seperti darah tinggi, pradiabetes, atau penyakit jantung? Adakah anda pernah rasa sakit dada atau pening ketika aktif?',
       'Apakah cabaran utama anda untuk menggunakan perkhidmatan kesihatan komuniti?',
       'Lebih kurang berapa ramai orang — keluarga atau rakan — yang boleh anda hubungi jika memerlukan bantuan? Adakah anda mempunyai seseorang untuk bercerita?',
+      'Satu soalan lagi — dalam 12 bulan yang lalu, pernahkah anda lapar tetapi tidak makan kerana tidak mampu membeli makanan yang cukup?',
       'Dalam dua minggu lalu, bagaimana perasaan anda secara keseluruhan? Adakah anda berasa tertekan, murung, atau terbeban?',
       'Hampir siap! Boleh kongsi kumpulan umur dan jantina anda? (cth. Perempuan, 41–60)',
       'Apakah dua digit pertama poskod anda supaya saya boleh mencari sumber berdekatan?',
@@ -283,6 +317,7 @@ const DICTIONARY = {
       () => 'Terima kasih kerana berkongsi. Saya akan pastikan cadangan anda selamat. ',
       () => 'Itu satu cabaran yang nyata. ',
       () => 'Sokongan sosial adalah faktor perlindungan yang penting. ',
+      (input) => /(ya|yes)/i.test(input) ? 'Terima kasih kerana berkongsi — ini akan diambil kira dalam pelan anda. ' : 'Baik, direkodkan. ',
       () => 'Kesejahteraan mental anda sama pentingnya dengan kesihatan fizikal. ',
       () => 'Direkodkan. ',
       () => 'Memetakan sumber berdekatan sekarang. ',
@@ -295,6 +330,7 @@ const DICTIONARY = {
       ['Tiada penyakit atau simptom', 'Darah tinggi', 'Pradiabetes atau diabetes', 'Penyakit jantung', 'Pening atau sakit dada semasa aktif'],
       ['Kekurangan masa', 'Terlalu mahal', 'Terlalu jauh', 'Lebih suka hospital', 'Tidak pasti apa yang ada', 'Tiada halangan'],
       ['Ada beberapa orang yang boleh saya hubungi', 'Ada satu atau dua orang rapat', 'Saya mostly uruskan sendiri', 'Saya rasa agak keseorangan'],
+      ['Ya, ini pernah berlaku', 'Tidak, saya sentiasa ada makanan yang cukup'],
       ['Perasaan baik secara keseluruhannya', 'Ada sedikit tekanan tapi boleh kawal', 'Rasa sangat tertekan atau sedih', 'Terbeban — tanggungjawab penjagaan atau tekanan kewangan'],
       ['Lelaki, 21–40', 'Perempuan, 21–40', 'Lelaki, 41–60', 'Perempuan, 41–60', 'Lelaki, 60+', 'Perempuan, 60+'],
       ['73 (Woodlands)', '75–76 (Yishun)', '75 (Sembawang)', '68 (Admiralty/Canberra)', 'Lain-lain / Tidak pasti'],
@@ -323,6 +359,7 @@ const DICTIONARY = {
       '您是否有任何慢性病，例如高血压、糖尿病前期或心脏病？运动时是否曾感到胸痛或头晕？',
       '什么是您使用社区健康服务的主要障碍？',
       '大概有多少家人或朋友可以在您需要时提供帮助？您是否有可以倾心交谈的人？',
+      '还有一个问题——在过去12个月里，您是否因为买不起足够的食物而挨过饿？',
       '在过去两周里，您的整体感觉如何？是否感到压力大、情绪低落或不知所措？',
       '快完成了！能告诉我您的年龄段和性别吗？（例如：女，41–60）',
       '您的邮政编码前两位数是什么？这样我可以为您找到附近的资源。',
@@ -335,6 +372,7 @@ const DICTIONARY = {
       () => '感谢您的分享，我会确保建议对您安全适合。',
       () => '这是一个很现实的障碍。',
       () => '社会连接是保护长期健康的重要因素。',
+      (input) => /是|yes/i.test(input) ? '谢谢您告诉我这些，我们会将这点纳入您的健康计划中。' : '好的，已记录。',
       () => '您的心理健康与身体健康同样重要。',
       () => '已记录，谢谢。',
       () => '正在为您定位附近的资源。',
@@ -417,8 +455,8 @@ const parseClinicalData = (raw) => {
 
   const daysN = daysStr.includes('0 day') || daysStr === '0' ? 0
               : daysStr.match(/5.?7|5\+|every day/i)         ? 6
-              : daysStr.match(/3.?4/i)                       ? 3.5
-              : daysStr.match(/1.?2/i)                       ? 1.5
+              : daysStr.match(/3.?4/i)                        ? 3.5
+              : daysStr.match(/1.?2/i)                        ? 1.5
               : parseInt((daysStr.match(/\d+/) || ['0'])[0], 10);
 
   const minsN = minsStr.includes('60+') || minsStr.includes('60 min') ? 65
@@ -463,9 +501,9 @@ const parseClinicalData = (raw) => {
   else if (/(male|lelaki|男|ஆண்)/.test(demoStr))          gender = 'Male';
 
   let age = 'Unknown';
-  if (demoStr.includes('60+'))                           age = '60+';
-  else if (demoStr.includes('41'))                       age = '41-60';
-  else if (demoStr.includes('21'))                       age = '21-40';
+  if (demoStr.includes('60+'))                             age = '60+';
+  else if (demoStr.includes('41'))                         age = '41-60';
+  else if (demoStr.includes('21'))                         age = '21-40';
 
   // Location
   const locStr       = (raw.postal_code || '');
@@ -473,6 +511,10 @@ const parseClinicalData = (raw) => {
   const postalSector = sectorMatch ? sectorMatch[0] : '00';
 
   // Continuity
+  // Food insecurity — Lien Centre Q1 (SDOH PDF p.10)
+  const foodStr        = (raw.food_insecurity || '').toLowerCase();
+  const sdohFoodInsecure = /(yes|ya|是|ஆம்)/.test(foodStr);
+
   const prevStr    = (raw.previous_id || '');
   const isNoId     = /(no|none|tidak|tiada|没|无|不|இல்லை)/i.test(prevStr) || prevStr.trim() === '';
   const previousId = isNoId ? null : prevStr.trim().toUpperCase();
@@ -480,7 +522,7 @@ const parseClinicalData = (raw) => {
   return {
     pavsScore, pavsDays, pavsMinutes, strengthDays,
     symptomFlag, medFlag,
-    sdohFinancial, sdohSocial, sdohPsychological,
+    sdohFinancial, sdohSocial, sdohPsychological, sdohFoodInsecure,
     gender, age, postalSector, previousId,
     // Legacy compat for calculateRiskScore util
     psychoFlag: sdohPsychological,
@@ -488,12 +530,14 @@ const parseClinicalData = (raw) => {
 };
 
 // ─── AURA AVATAR ──────────────────────────────────────────────────────────────
-// FIX: Replaced the gradient 'A' circle with the minimalist BrainCircuit icon
 const AuraAvatar = ({ size = 'sm' }) => (
-  <BrainCircuit 
-    className="text-teal-600 dark:text-teal-500 flex-shrink-0" 
-    size={size === 'sm' ? 24 : 28} 
-  />
+  <div className={`
+    ${size === 'sm' ? 'w-7 h-7 text-xs' : 'w-9 h-9 text-sm'}
+    rounded-full flex items-center justify-center font-bold text-white flex-shrink-0
+    bg-gradient-to-br from-teal-400 to-emerald-600 shadow-sm ring-2 ring-teal-100 dark:ring-teal-900
+  `}>
+    A
+  </div>
 );
 
 // ─── PROGRESS BAR ─────────────────────────────────────────────────────────────
@@ -607,7 +651,7 @@ const AuraChatbot = () => {
 
   // ── Theme initialisation
   useEffect(() => {
-    const stored = localStorage.getItem('nexus_theme');
+    const stored = localStorage.getItem('nexus-theme');
     const sysDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
     const dark = stored === 'dark' || (!stored && sysDark);
     setIsDark(dark);
@@ -618,7 +662,7 @@ const AuraChatbot = () => {
     const next = !isDark;
     setIsDark(next);
     document.documentElement.classList.toggle('dark', next);
-    localStorage.setItem('nexus_theme', next ? 'dark' : 'light');
+    localStorage.setItem('nexus-theme', next ? 'dark' : 'light');
   };
 
   // ── First prompt
@@ -646,35 +690,79 @@ const AuraChatbot = () => {
   };
 
   // ── Handle submission (quick reply or typed)
-  const handleUserSubmission = (text) => {
+  const handleUserSubmission = async (text) => {
     if (!text.trim() || isTyping || isComplete) return;
 
     setMessages(prev => [...prev, { sender: 'user', text }]);
     setUserInput('');
 
-    const stepKey    = DOMAIN_CONFIG[currentStep]?.key || `step_${currentStep}`;
+    const stepKey     = DOMAIN_CONFIG[currentStep]?.key || `step_${currentStep}`;
     const updatedData = { ...collectedData, [stepKey]: text };
     setCollectedData(updatedData);
-
     setIsTyping(true);
 
-    setTimeout(() => {
-      const reflection = langData.reflections[currentStep]?.(text) ?? '';
-      const nextStep   = currentStep + 1;
+    // Build conversation history in the same format AuraPulseBot uses
+    // so the Cloud Function receives a consistent payload
+    const history = messages
+      .filter(m => !m.isGreeting)
+      .map(m => ({
+        role:  m.sender === 'bot' ? 'model' : 'user',
+        parts: [{ text: m.text }],
+      }));
 
-      if (nextStep < TOTAL_STEPS) {
-        const combined = reflection + langData.prompts[nextStep];
-        setCurrentStep(nextStep);
-        setMessages(prev => [...prev, { sender: 'bot', text: combined, step: nextStep }]);
-        setIsTyping(false);
-      } else {
-        // Final step — generate CTA
-        const closing = reflection + ' I have mapped your full profile. Generating your personalised plan now\u2026';
-        setMessages(prev => [...prev, { sender: 'bot', text: closing, step: currentStep }]);
-        setIsTyping(false);
-        concludeTriage(updatedData);
+    // Context passed as `prompt` — mirrors AuraPulseBot contextPrompt pattern
+    const contextPrompt = [
+      WELL_WELL_PROMPT,
+      `
+
+Assessment domain: ${stepKey} (step ${currentStep + 1} of ${TOTAL_STEPS})`,
+      `User just answered: "${text}"`,
+      `All answers collected so far:
+${Object.entries(updatedData).map(([k, v]) => `  ${k}: ${v}`).join('
+')}`,
+    ].join('
+');
+
+    // Get AI-generated acknowledgement via Cloud Function (Gemini, API key secured)
+    let aiAck = '';
+    try {
+      const result = await secureChatWithAura({
+        userText:  text,
+        history,
+        role:      'Community Member — Well Well',
+        prompt:    contextPrompt,
+        isDemo:    false,
+      });
+      // Cloud Function returns { data: { text: '...' } }
+      const raw      = result.data?.text ?? '';
+      const stripped = raw.replace(/```json|```/g, '').trim();
+      // Try to parse as JSON (Cloud Function may return structured response)
+      try {
+        const parsed = JSON.parse(stripped.substring(stripped.indexOf('{'), stripped.lastIndexOf('}') + 1));
+        aiAck = parsed.reply?.trim() ?? stripped;
+      } catch {
+        aiAck = stripped;
       }
-    }, 1000);
+    } catch {
+      // Fallback to static reflection if Cloud Function unavailable
+      aiAck = langData.reflections[currentStep]?.(text) ?? '';
+    }
+
+    const nextStep = currentStep + 1;
+    if (nextStep < TOTAL_STEPS) {
+      // Resolve next question — may be a function of collected data (e.g. Q1 for 0-days case)
+      const nextPromptRaw = langData.prompts[nextStep];
+      const nextPrompt    = typeof nextPromptRaw === 'function' ? nextPromptRaw(updatedData) : nextPromptRaw;
+      const combined      = (aiAck ? aiAck + ' ' : '') + nextPrompt;
+      setCurrentStep(nextStep);
+      setMessages(prev => [...prev, { sender: 'bot', text: combined, step: nextStep }]);
+      setIsTyping(false);
+    } else {
+      const closing = (aiAck ? aiAck + ' ' : '') + 'I have mapped your full profile. Generating your personalised plan now…';
+      setMessages(prev => [...prev, { sender: 'bot', text: closing, step: currentStep }]);
+      setIsTyping(false);
+      concludeTriage(updatedData);
+    }
   };
 
   const handleFormSubmit = (e) => {
