@@ -604,16 +604,7 @@ export default function App() {
 
   return (
     <>
-      {isPublicPathway && (
-        <button 
-          onClick={toggleTheme} 
-          className="fixed top-4 right-4 md:top-6 md:right-6 z-[9999] p-3 bg-white/80 dark:bg-slate-800/80 backdrop-blur-md border border-slate-200 dark:border-slate-700 rounded-full shadow-lg text-slate-500 hover:text-indigo-600 dark:text-slate-400 dark:hover:text-indigo-400 transition-all hover:scale-110 active:scale-95"
-          title="Toggle Dark Mode"
-        >
-          {isDark ? <Sun size={20} /> : <Moon size={20} />}
-        </button>
-      )}
-
+      
       <Routes>
         <Route path="/individuals/language" element={<LanguageGate />} />
         <Route path="/individuals/pathway" element={<PathwaySelection />} />
