@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 
-// FIREBASE (Up one level)
+// FIREBASE
 import { auth } from '../firebase'; 
 import { 
     signInWithEmailAndPassword, 
@@ -780,14 +780,5 @@ function NexusApp() {
       } />
     </Routes>
     </>
-  );
-}
-
-// --- APP WRAPPER ---
-export default function App() {
-  return (
-    <NexusProvider>
-      <NexusApp />
-    </NexusProvider>
   );
 }
