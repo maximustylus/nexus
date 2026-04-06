@@ -12,7 +12,7 @@ import { BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid,
   Tooltip, ResponsiveContainer, Cell, PieChart, Pie, Legend, ReferenceLine } from 'recharts';
 import { Sun, Moon, LayoutDashboard, History, Filter, ShieldAlert, Bell } from 'lucide-react'; 
 
-// CONTEXT & DATA STRATEGY (Provider removed, only using the hook here)
+// CONTEXT & DATA STRATEGY (Only the hook is needed here now!)
 import { useNexus } from './context/NexusContext';
 import { MOCK_STAFF_NAMES, MOCK_TEAM_DATA, MOCK_STAFF_LOADS } from './data/mockData';
 
@@ -79,11 +79,12 @@ const CustomBarTooltip = ({ active, payload, label }) => {
     return null;
 };
 
-// 🌟 MAIN APPLICATION LOGIC DIRECTLY EXPORTED
+// 🌟 DIRECT EXPORT OF THE MAIN APP
 export default function App() {
   const { isDemo, toggleDemo } = useNexus(); 
   const location = useLocation();
   const isPublicPathway = location.pathname.startsWith('/individuals');
+  
   const [currentView, setCurrentView] = useState(() => {
       if (typeof window !== 'undefined') {
           const params = new URLSearchParams(window.location.search);
@@ -101,6 +102,7 @@ export default function App() {
   const [isGuideOpen, setIsGuideOpen] = useState(false);
   const [notifications, setNotifications] = useState([]);
   const [isBellOpen, setIsBellOpen] = useState(false);
+  
   const [isDark, setIsDark] = useState(() => {
     if (typeof window !== 'undefined') {
       const savedTheme = localStorage.getItem('nexus_theme');
@@ -396,7 +398,7 @@ export default function App() {
     setUser(null); 
     setNotifications([]);
     setIsAdminOpen(false); 
-    setCurrentView('pulse');
+    setCurrentView('pulse'); 
   };
   
   const renderCustomizedLabel = ({ cx, cy, midAngle, innerRadius, outerRadius, percent }) => {
