@@ -12,8 +12,8 @@ import { BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid,
   Tooltip, ResponsiveContainer, Cell, PieChart, Pie, Legend, ReferenceLine } from 'recharts';
 import { Sun, Moon, LayoutDashboard, History, Filter, ShieldAlert, Bell } from 'lucide-react'; 
 
-// CONTEXT & DATA STRATEGY
-import { NexusProvider, useNexus } from './context/NexusContext';
+// CONTEXT & DATA STRATEGY (Provider removed, only using the hook here)
+import { useNexus } from './context/NexusContext';
 import { MOCK_STAFF_NAMES, MOCK_TEAM_DATA, MOCK_STAFF_LOADS } from './data/mockData';
 
 // COMPONENT IMPORTS
@@ -79,12 +79,11 @@ const CustomBarTooltip = ({ active, payload, label }) => {
     return null;
 };
 
-// 🌟 MAIN APPLICATION LOGIC (RENAMED TO MATCH WRAPPER)
-function App() {
+// 🌟 MAIN APPLICATION LOGIC DIRECTLY EXPORTED
+export default function App() {
   const { isDemo, toggleDemo } = useNexus(); 
   const location = useLocation();
   const isPublicPathway = location.pathname.startsWith('/individuals');
-  
   const [currentView, setCurrentView] = useState(() => {
       if (typeof window !== 'undefined') {
           const params = new URLSearchParams(window.location.search);
@@ -102,7 +101,6 @@ function App() {
   const [isGuideOpen, setIsGuideOpen] = useState(false);
   const [notifications, setNotifications] = useState([]);
   const [isBellOpen, setIsBellOpen] = useState(false);
-  
   const [isDark, setIsDark] = useState(() => {
     if (typeof window !== 'undefined') {
       const savedTheme = localStorage.getItem('nexus_theme');
@@ -301,7 +299,9 @@ function App() {
   const activeTeamData = isDemo ? MOCK_TEAM_DATA : teamData;
   const activeStaffLoads = isDemo ? MOCK_STAFF_LOADS : staffLoads;
   
-  const hasAdminAccess = isDemo || (user?.email && ['muhammad.alif@kkh.com.sg', 'siti.nur.anisah.nh@kkh.com.sg'].includes(user.email.toLowerCase())) || user?.role === 'admin';
+  const ADMIN_EMAILS = ['muhammad.alif@kkh.com.sg', 'siti.nur.anisah.nh@kkh.com.sg'];
+  const hasAdminAccess = isDemo || (user?.email && ADMIN_EMAILS.includes(user.email.toLowerCase())) || user?.role === 'admin';
+
   const unreadCount = notifications.filter(n => !n.read).length;
 
   const markNotificationsAsRead = async () => {
@@ -779,14 +779,5 @@ function App() {
       } />
     </Routes>
     </>
-  );
-}
-
-// --- APP WRAPPER ---
-export default function AppWrapper() {
-  return (
-    <NexusProvider>
-      <App />
-    </NexusProvider>
   );
 }
