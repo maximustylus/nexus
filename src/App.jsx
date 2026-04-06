@@ -12,9 +12,7 @@ import { BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid,
   Tooltip, ResponsiveContainer, Cell, PieChart, Pie, Legend, ReferenceLine } from 'recharts';
 import { Sun, Moon, LayoutDashboard, History, Filter, ShieldAlert, Bell } from 'lucide-react'; 
 
-console.log("CACHE BUSTER v2");
-
-// CONTEXT & DATA STRATEGY (Provider is strictly in main.jsx now)
+// CONTEXT & DATA STRATEGY
 import { useNexus } from './context/NexusContext';
 import { MOCK_STAFF_NAMES, MOCK_TEAM_DATA, MOCK_STAFF_LOADS } from './data/mockData';
 
@@ -82,10 +80,10 @@ const CustomBarTooltip = ({ active, payload, label }) => {
     return null;
 };
 
-// 🌟 DIRECT EXPORT OF THE MAIN APP
 export default function App() {
   const { isDemo, toggleDemo } = useNexus(); 
   const location = useLocation();
+  const isPublicPathway = location.pathname.startsWith('/individuals');
   
   const [currentView, setCurrentView] = useState(() => {
       if (typeof window !== 'undefined') {
@@ -240,7 +238,7 @@ export default function App() {
     if (!isDemo && !user) return;
 
     if (isDemo) {
-      console.log("🧪 [NEXUS] Loading Sandbox...");
+      console.log("[NEXUS] Loading Sandbox...");
     } else {
       const targetCollection = dataYear === '2026' ? 'cep_team' : `archive_${dataYear}`;
 
@@ -268,7 +266,7 @@ export default function App() {
             if (docSnap.exists()) { setAttendanceData(docSnap.data()); }
         });
       } catch (error) {
-        console.error("🔥 NEXUS Connection Failed:", error);
+        console.error("NEXUS Connection Failed:", error);
       }
     }
 
