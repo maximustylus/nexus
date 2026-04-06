@@ -1,3 +1,15 @@
+/**
+ * ConventionalForm.jsx — Enhanced v4.0.2 (Validation Patched)
+ *
+ * Alignment with NEXUS v2.0 Biodesign System:
+ * • Adopts the unified Teal/Emerald clinical palette.
+ * • Removes dynamic Tailwind classes to ensure production stability.
+ * • Implements structured Domain Badges with Lucide icons (no emojis).
+ * • Groups questions into distinct clinical/SDOH cards for cognitive ease.
+ * • Adds immersive ambient backgrounds and standardized progress tracking.
+ * • ENFORCES strict step-by-step field validation before allowing progression.
+ */
+
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { calculateRiskScore } from '../utils/scoring';
@@ -500,9 +512,26 @@ export default function ConventionalForm() {
   const t = D[lang] || D.en;
   const noMedical = f.medical.includes(MEDICAL_EXCLUSIVE);
 
+  // ── VALIDATION ─────────────────────────────────────────────────────────────
+  const isStepValid = () => {
+    if (step === 0) {
+      return f.pavsDays !== '' && f.pavsMins !== '' && f.strength !== '' && f.medical.length > 0 && f.wellbeing !== '';
+    }
+    if (step === 1) {
+      return f.barriers.length > 0 && f.social !== '' && f.foodInsecure !== null && f.incomeAdequacy !== '' && f.housing !== '';
+    }
+    if (step === 2) {
+      return f.aware !== null && f.referred !== null && f.rating !== '' && f.trust !== '';
+    }
+    if (step === 3) {
+      return f.ageGroup !== '' && f.gender !== '' && f.race !== '' && f.postalCode.length === 2;
+    }
+    return true;
+  };
+
   // ── SUBMIT ─────────────────────────────────────────────────────────────────
   const handleSubmit = async () => {
-    if (busy) return;
+    if (busy || !isStepValid()) return;
     setBusy(true);
     const flags   = deriveFlags(f);
     const ctaTier = selectCTA(flags);
@@ -715,6 +744,7 @@ export default function ConventionalForm() {
           <Badge icon={Home} label={t.demoHead} />
           <p className="text-sm text-slate-500 dark:text-slate-400 font-medium mb-6 leading-relaxed">{t.demoIntro}</p>
           <div className="grid md:grid-cols-2 gap-5">
+            {/* Age — AURA Q7, normalised to AURA parser output */}
             <div>
               <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-2">{t.ageQ}</label>
               <select value={f.ageGroup} onChange={e => set('ageGroup', e.target.value)} className={selCls}>
@@ -722,6 +752,7 @@ export default function ConventionalForm() {
                 {AGE_OPTIONS.map(o => <option key={o.value} value={o.value}>{o[lang] || o.en}</option>)}
               </select>
             </div>
+            {/* Gender — AURA Q7 */}
             <div>
               <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-2">{t.genderQ}</label>
               <select value={f.gender} onChange={e => set('gender', e.target.value)} className={selCls}>
@@ -729,6 +760,7 @@ export default function ConventionalForm() {
                 {GENDER_OPTIONS.map(o => <option key={o.value} value={o.value}>{o[lang] || o.en}</option>)}
               </select>
             </div>
+            {/* Ethnicity — form enrichment */}
             <div>
               <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-2">{t.raceQ}</label>
               <select value={f.race} onChange={e => set('race', e.target.value)} className={selCls}>
@@ -736,11 +768,13 @@ export default function ConventionalForm() {
                 {RACE_OPTIONS.map(o => <option key={o.value} value={o.value}>{o[lang] || o.en}</option>)}
               </select>
             </div>
+            {/* Postal code — AURA Q8 */}
             <div>
               <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-2">{t.postalQ}</label>
               <input type="text" maxLength={2} value={f.postalCode} onChange={e => set('postalCode', e.target.value.replace(/\D/g, ''))} className={inputCls} placeholder="e.g. 73" />
               <Note text={t.postalHint} />
             </div>
+            {/* Previous NEXUS ID — AURA Q9 */}
             <div className="md:col-span-2 pt-2 border-t border-slate-100 dark:border-slate-800">
               <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-2">{t.prevIdQ}</label>
               <input type="text" value={f.previousId} onChange={e => set('previousId', e.target.value)} className={inputCls} placeholder="NX-XXXXXXXXX" />
@@ -748,6 +782,7 @@ export default function ConventionalForm() {
             </div>
           </div>
 
+          {/* Pre-submit summary preview */}
           {liveScore > 0 && (
             <div className="mt-6 pt-6 border-t border-slate-100 dark:border-slate-800">
               <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3 flex items-center gap-1.5">
@@ -827,14 +862,23 @@ export default function ConventionalForm() {
             className={`flex justify-center items-center gap-2 py-3.5 px-7 rounded-xl font-bold text-xs uppercase tracking-widest transition-all ${step === 0 ? 'opacity-0 pointer-events-none' : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700 hover:text-slate-900 dark:hover:text-white shadow-sm hover:shadow-md active:scale-95'}`}>
             <ChevronLeft size={15} /> {t.btnPrev}
           </button>
+          
           {step < 3 ? (
-            <button type="button" onClick={() => setStep(p => Math.min(3, p+1))}
-              className="flex justify-center items-center gap-2 py-3.5 px-8 bg-teal-600 text-white font-bold text-xs uppercase tracking-widest rounded-xl hover:bg-teal-700 transition-all shadow-[0_8px_20px_rgba(13,148,136,0.25)] active:scale-95">
+            <button 
+              type="button" 
+              onClick={() => setStep(p => Math.min(3, p+1))} 
+              disabled={!isStepValid()}
+              className={`flex justify-center items-center gap-2 py-3.5 px-8 font-bold text-xs uppercase tracking-widest rounded-xl transition-all active:scale-95 ${isStepValid() ? 'bg-teal-600 text-white hover:bg-teal-700 shadow-[0_8px_20px_rgba(13,148,136,0.25)]' : 'bg-slate-200 dark:bg-slate-800 text-slate-400 cursor-not-allowed'}`}
+            >
               {t.btnNext} <ChevronRight size={15} />
             </button>
           ) : (
-            <button type="button" onClick={handleSubmit} disabled={busy}
-              className="flex justify-center items-center gap-2 py-3.5 px-8 bg-slate-900 dark:bg-teal-500 text-white font-bold text-xs uppercase tracking-widest rounded-xl hover:bg-slate-800 dark:hover:bg-teal-400 transition-all shadow-[0_8px_20px_rgba(15,23,42,0.2)] dark:shadow-[0_8px_20px_rgba(20,184,166,0.25)] active:scale-95 disabled:opacity-60">
+            <button 
+              type="button" 
+              onClick={handleSubmit} 
+              disabled={busy || !isStepValid()}
+              className={`flex justify-center items-center gap-2 py-3.5 px-8 font-bold text-xs uppercase tracking-widest rounded-xl transition-all active:scale-95 ${isStepValid() && !busy ? 'bg-slate-900 dark:bg-teal-500 text-white hover:bg-slate-800 dark:hover:bg-teal-400 shadow-[0_8px_20px_rgba(15,23,42,0.2)] dark:shadow-[0_8px_20px_rgba(20,184,166,0.25)]' : 'bg-slate-200 dark:bg-slate-800 text-slate-400 cursor-not-allowed'}`}
+            >
               {busy ? <><span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" /> Processing…</> : <>{t.btnSubmit} <Send size={15} /></>}
             </button>
           )}
