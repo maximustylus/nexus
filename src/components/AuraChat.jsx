@@ -1,28 +1,3 @@
-/**
- * AuraChatbot.jsx — Enhanced v2.0
- *
- * Clinical grounding:
- * • ACSM Physical Activity Vital Sign (PAVS): 2-question split → Days × Minutes = score
- * Thresholds: <150 min/wk = Insufficiently Active | 150–300 = Meets SPAG | >300 = Active
- * • SingHealth SDOH 5-Domain Framework: Financial, Food Security, Housing, Social, Psychological
- * • BPS-RS II: Psychological domain items (P20–P25) inform Q6 wellbeing screen
- * • LSNS-6: Social network items inform Q5 social isolation screen
- * • Northern Singapore Health Ecosystem Report (March 2026): 8-tier CTA matrix (Section 5.7)
- *
- * UX/Biodesign improvements:
- * • 10-step flow with proper PAVS split (Q0 = Days, Q1 = Minutes)
- * • SDOH expanded to cover Social + Psychological domains (Q5, Q6)
- * • Domain badge per AURA message (transparency of clinical purpose)
- * • Segmented progress bar with step counter
- * • AURA avatar in every bot bubble (Minimalist BrainCircuit styling)
- * • Tiered CTA card rendered as structured output (not raw text)
- * • isTyping guard prevents quick reply render confusion
- * • Session ID visible in header for clinical trust
- * • Teal/emerald design system (biodesign health palette)
- *
- * Source: Northern SG Health Ecosystem Report + Singapore SDOH Validated Questionnaires (2026)
- */
-
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { recordTelemetry } from '../utils/telemetry';
@@ -632,7 +607,7 @@ const AuraChatbot = () => {
 
   // ── Theme initialisation
   useEffect(() => {
-    const stored = localStorage.getItem('nexus-theme');
+    const stored = localStorage.getItem('nexus_theme');
     const sysDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
     const dark = stored === 'dark' || (!stored && sysDark);
     setIsDark(dark);
@@ -643,7 +618,7 @@ const AuraChatbot = () => {
     const next = !isDark;
     setIsDark(next);
     document.documentElement.classList.toggle('dark', next);
-    localStorage.setItem('nexus-theme', next ? 'dark' : 'light');
+    localStorage.setItem('nexus_theme', next ? 'dark' : 'light');
   };
 
   // ── First prompt
