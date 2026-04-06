@@ -36,7 +36,7 @@ import PathwaySelection from './components/PathwaySelection';
 import ConventionalForm from './components/ConventionalForm';
 import ResultPage from './components/ResultPage';
 
-// UTILITIES (Here are your STAFF_LIST imports!)
+// UTILITIES
 import { STAFF_LIST, STAFF_IDS, MONTHS, checkAccess, TEAM_DIRECTORY } from './utils';
 
 // ==========================================
@@ -635,7 +635,6 @@ return (
           (!user && !isDemo) ? (
             <WelcomeScreen />
         ) : (
-          // IF LOGGED IN / DEMO -> SHOW DASHBOARD
           <ResponsiveLayout 
             activeTab={currentView} 
             onNavigate={setCurrentView}
@@ -667,7 +666,6 @@ return (
             
             {/* 1. BRANDING & MODE TOGGLE (Left) */}
             <div className="flex items-center gap-3 md:gap-5 shrink-0">
-                {/* Logos */}
                 <div className="cursor-pointer" onClick={() => setCurrentView('dashboard')}>
                     {isDemo ? (
                         <img src="/nexus.png" alt="NEXUS" className="h-8 md:h-10 w-auto object-contain drop-shadow-sm" onError={(e) => { e.target.style.display = 'none'; }} />
@@ -676,7 +674,6 @@ return (
                     )}
                 </div>
 
-                {/* Live/Demo Toggle Switch */}
                 <div className="flex items-center gap-2 bg-slate-50 dark:bg-slate-900/50 p-1.5 md:p-2 rounded-full border border-slate-100 dark:border-slate-700">
                     <button 
                         onClick={toggleDemo} 
@@ -690,7 +687,7 @@ return (
                 </div>
             </div>
 
-            {/* 2. CENTER NAVIGATION (Desktop only - Perfectly centered now) */}
+            {/* 2. CENTER NAVIGATION (Desktop only) */}
             <div className="hidden lg:flex flex-1 justify-center px-4">
                 <div className="flex bg-slate-100 dark:bg-slate-900/50 p-1 rounded-lg">
                     {['dashboard', 'feeds', 'pulse', 'roster', 'guide'].map(view => (
@@ -709,10 +706,9 @@ return (
                 </div>
             </div>
 
-            {/* 3. ACTION CLUSTER (Right Side - Exact Order) */}
+            {/* 3. ACTION CLUSTER (Right Side) */}
             <div className="flex items-center justify-end gap-2 md:gap-3 shrink-0">
               
-              {/* A. ADMIN BUTTON */}
               <button 
                 onClick={() => { 
                     if (hasAdminAccess) {
@@ -728,12 +724,10 @@ return (
                 <ShieldAlert size={18} />
               </button>
 
-              {/* B. THEME TOGGLE (Sun/Moon) */}
               <button onClick={toggleTheme} className="p-1.5 md:p-2 rounded-full transition-all text-slate-400 hover:text-slate-600 dark:text-slate-400 dark:hover:text-slate-200 active:scale-95 sm:hover:bg-slate-100 dark:sm:hover:bg-slate-700">
                 {isDark ? <Sun size={18} /> : <Moon size={18} />}
               </button>
 
-              {/* C. NOTIFICATION BELL */}
               <div className="relative">
                   <button 
                       onClick={toggleBell}
@@ -745,7 +739,6 @@ return (
                       )}
                   </button>
 
-                  {/* BELL DROPDOWN */}
                   {isBellOpen && !isDemo && (
                       <div className="absolute right-0 mt-3 w-72 md:w-80 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl shadow-2xl z-50 animate-in zoom-in-95 duration-200">
                           <div className="px-4 py-3 border-b border-slate-100 dark:border-slate-700 flex justify-between items-center bg-slate-50 dark:bg-slate-900/50 rounded-t-2xl">
@@ -768,7 +761,6 @@ return (
                   )}
               </div>
 
-              {/* D. PROFILE AVATAR */}
               <button 
                 onClick={() => { setIsAdminOpen(false); setCurrentView('profile'); }}
                 className={`relative w-8 h-8 md:w-10 md:h-10 ml-1 rounded-full overflow-hidden border-2 transition-all active:scale-95 flex items-center justify-center bg-indigo-100 text-indigo-600 font-black shrink-0 ${currentView === 'profile' && !isAdminOpen ? 'border-indigo-500 ring-4 ring-indigo-500/10 shadow-md' : 'border-white dark:border-slate-700 hover:border-slate-300 shadow-sm'}`}
@@ -783,7 +775,6 @@ return (
             </div>
           </div>
           
-            {/* MAIN CONTENT AREA */}
             {(isAdminOpen && hasAdminAccess) ? (
                 <div className="md:col-span-2">
                 <AdminPanel teamData={activeTeamData} staffLoads={activeStaffLoads} user={user} />
@@ -794,7 +785,6 @@ return (
                 {currentView === 'feeds' && <FeedsView user={user} />}
                 {currentView === 'roster' && <RosterView user={user} />}
                 {currentView === 'pulse' && <WellbeingView user={user} />}
-                {/* 🌟 PASSING ONLOGOUT TO PROFILEVIEW */}
                 {currentView === 'profile' && <ProfileView user={user} onLogout={handleLogout} />} 
                 <div className="h-32 md:h-24 w-full shrink-0" />
                 </div>
