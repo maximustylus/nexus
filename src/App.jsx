@@ -12,8 +12,8 @@ import { BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid,
   Tooltip, ResponsiveContainer, Cell, PieChart, Pie, Legend, ReferenceLine } from 'recharts';
 import { Sun, Moon, LayoutDashboard, History, Filter, ShieldAlert, Bell } from 'lucide-react'; 
 
-// CONTEXT & DATA STRATEGY
-import { NexusProvider, useNexus } from './context/NexusContext';
+// CONTEXT & DATA STRATEGY (Notice: NexusProvider is gone from here!)
+import { useNexus } from './context/NexusContext';
 import { MOCK_STAFF_NAMES, MOCK_TEAM_DATA, MOCK_STAFF_LOADS } from './data/mockData';
 
 // COMPONENT IMPORTS
@@ -79,7 +79,8 @@ const CustomBarTooltip = ({ active, payload, label }) => {
     return null;
 };
 
-function NexusApp() {
+// EXPORT DIRECTLY AS APP
+export default function App() {
   const { isDemo, toggleDemo } = useNexus(); 
   const location = useLocation();
   const isPublicPathway = location.pathname.startsWith('/individuals');
@@ -171,7 +172,6 @@ function NexusApp() {
             setAuthLoading(false); 
           }, (error) => {
             console.error("Error fetching user data:", error);
-            // 🌟 SECURITY: Only fallback if still genuinely logged in
             if (auth.currentUser) {
                 setUser({ ...initialProfile, uid: u.uid });
             } else {
@@ -185,7 +185,6 @@ function NexusApp() {
           setAuthLoading(false);
         }
       } else {
-        // 🌟 HARD FLUSH ON LOGOUT
         if (unsubUserDoc) {
             unsubUserDoc(); 
             unsubUserDoc = null;
@@ -304,7 +303,6 @@ function NexusApp() {
   const activeTeamData = isDemo ? MOCK_TEAM_DATA : teamData;
   const activeStaffLoads = isDemo ? MOCK_STAFF_LOADS : staffLoads;
   
-  // 🌟 DEFINE SCALABLE ADMIN ACCESS
   const ADMIN_EMAILS = ['muhammad.alif@kkh.com.sg', 'siti.nur.anisah.nh@kkh.com.sg'];
   const hasAdminAccess = isDemo || (user?.email && ADMIN_EMAILS.includes(user.email.toLowerCase())) || user?.role === 'admin';
 
@@ -392,7 +390,6 @@ function NexusApp() {
       return MONTHS.map((m, i) => ({ name: m, value: rawValues[i] }));
   };
   
-  // 🌟 MASTER LOGOUT KILL-SWITCH
   const handleLogout = async () => { 
     if (isDemo) toggleDemo();
     try {
@@ -403,7 +400,7 @@ function NexusApp() {
     setUser(null); 
     setNotifications([]);
     setIsAdminOpen(false); 
-    setCurrentView('pulse'); // Reset to pulse for next login
+    setCurrentView('pulse');
   };
   
   const renderCustomizedLabel = ({ cx, cy, midAngle, innerRadius, outerRadius, percent }) => {
@@ -425,7 +422,6 @@ function NexusApp() {
       </div>
   );
 
-  // --- SUB-COMPONENT: DASHBOARD VIEW ---
   const renderDashboardView = () => (
     <>
       <div className="md:col-span-2 flex flex-col md:flex-row md:justify-between md:items-center bg-white dark:bg-slate-800 p-5 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 mb-6 gap-4">
@@ -608,10 +604,8 @@ function NexusApp() {
     </>
   );
 
-  // 🌟 THE UNIFIED APP ROUTER
-return (
+  return (
     <>
-      {/* GLOBAL FLOATING THEME TOGGLE FOR PUBLIC PATHWAYS */}
       {isPublicPathway && (
         <button 
           onClick={toggleTheme} 
@@ -623,14 +617,12 @@ return (
       )}
 
       <Routes>
-        {/* 1. PUBLIC INDIVIDUAL PATHWAYS */}
         <Route path="/individuals/language" element={<LanguageGate />} />
         <Route path="/individuals/pathway" element={<PathwaySelection />} />
         <Route path="/individuals/form" element={<ConventionalForm />} />
         <Route path="/individuals/chat" element={<AuraChat />} />
         <Route path="/individuals/result" element={<ResultPage />} />
 
-        {/* 2. THE MAIN GATEWAY & PROFESSIONAL WORKSPACE */}
         <Route path="/" element={
           (!user && !isDemo) ? (
             <WelcomeScreen />
@@ -661,10 +653,8 @@ return (
             </div>
           )}
 
-          {/* HEADER BAR */}
           <div className="md:col-span-2 flex items-center justify-between mb-4 md:mb-6 bg-white dark:bg-slate-800 p-3 md:p-4 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 w-full shrink-0 relative z-50">
             
-            {/* 1. BRANDING & MODE TOGGLE (Left) */}
             <div className="flex items-center gap-3 md:gap-5 shrink-0">
                 <div className="cursor-pointer" onClick={() => setCurrentView('dashboard')}>
                     {isDemo ? (
@@ -687,7 +677,6 @@ return (
                 </div>
             </div>
 
-            {/* 2. CENTER NAVIGATION (Desktop only) */}
             <div className="hidden lg:flex flex-1 justify-center px-4">
                 <div className="flex bg-slate-100 dark:bg-slate-900/50 p-1 rounded-lg">
                     {['dashboard', 'feeds', 'pulse', 'roster', 'guide'].map(view => (
@@ -706,7 +695,6 @@ return (
                 </div>
             </div>
 
-            {/* 3. ACTION CLUSTER (Right Side) */}
             <div className="flex items-center justify-end gap-2 md:gap-3 shrink-0">
               
               <button 
@@ -795,14 +783,5 @@ return (
       } />
     </Routes>
     </>
-  );
-}
-
-// --- APP WRAPPER ---
-export default function App() {
-  return (
-    <NexusProvider>
-      <NexusApp />
-    </NexusProvider>
   );
 }
