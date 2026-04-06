@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { MessageSquare, FileText, ChevronLeft, BrainCircuit } from 'lucide-react';
+// ADDED SUN AND MOON ICONS
+import { MessageSquare, FileText, ChevronLeft, BrainCircuit, Sun, Moon } from 'lucide-react';
 
 const DICTIONARY = {
   en: {
@@ -45,15 +46,43 @@ export default function PathwaySelection() {
   const navigate = useNavigate();
   const [lang, setLang] = useState('en');
   const [animate, setAnimate] = useState(false);
+  const [sessionId] = useState(() => 'nx-' + Math.random().toString(36).substr(2, 9));
+
+  // ADDED MISSING THEME STATE
+  const [isDark, setIsDark] = useState(false);
+
+  // ADDED THEME INITIALIZER
+  useEffect(() => {
+    const storedTheme = localStorage.getItem('nexus_theme');
+    const systemPrefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+    if (storedTheme === 'dark' || (!storedTheme && systemPrefersDark)) {
+        setIsDark(true);
+        document.documentElement.classList.add('dark');
+    } else {
+        setIsDark(false);
+        document.documentElement.classList.remove('dark');
+    }
+  }, []);
+
+  // ADDED TOGGLE FUNCTION
+  const toggleTheme = () => {
+    const newTheme = !isDark;
+    setIsDark(newTheme);
+    if (newTheme) {
+        document.documentElement.classList.add('dark');
+        localStorage.setItem('nexus_theme', 'dark');
+    } else {
+        document.documentElement.classList.remove('dark');
+        localStorage.setItem('nexus_theme', 'light');
+    }
+  };
 
   useEffect(() => {
-    // Retrieve language preference
     const storedLang = localStorage.getItem('nexus_language');
     if (storedLang && DICTIONARY[storedLang]) {
       setLang(storedLang);
     }
     
-    // Trigger entrance animation
     setTimeout(() => setAnimate(true), 100);
   }, []);
 
@@ -71,24 +100,33 @@ export default function PathwaySelection() {
 
       <div className={`relative z-10 w-full max-w-4xl transition-all duration-1000 transform ${animate ? 'translate-y-0 opacity-100 scale-100' : 'translate-y-10 opacity-0 scale-95'}`}>
         
-        {/* TOP BAR: Back Button & Context */}
-        <div className="flex justify-between items-center mb-12 px-2">
-          <button 
-            onClick={() => navigate('/individuals/language')} 
-            className="flex items-center gap-2 px-4 py-2 bg-white/60 dark:bg-slate-800/60 backdrop-blur-md text-slate-500 dark:text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400 font-black text-xs uppercase tracking-widest rounded-full border border-slate-200 dark:border-slate-700 shadow-sm transition-all group"
-          >
-              <ChevronLeft size={16} className="group-hover:-translate-x-1 transition-transform"/> {t.back}
-          </button>
-          
-          <div className="flex items-center gap-2 opacity-60">
-              <BrainCircuit size={16} className="text-slate-500 dark:text-slate-400" />
-              <span className="text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest">{t.context}</span>
-          </div>
+        {/* TOP BAR MOVED OUTSIDE FOR CONSISTENCY */}
+        <div className="flex justify-between items-center mb-12 px-2 w-full">
+            <button 
+                onClick={() => navigate('/individuals/language')} 
+                className="flex items-center gap-2 px-4 py-2 bg-white/60 dark:bg-slate-800/60 backdrop-blur-md text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-white font-black text-xs uppercase tracking-widest rounded-full border border-slate-200 dark:border-slate-700 shadow-sm transition-all group"
+            >
+                <ChevronLeft size={16} className="group-hover:-translate-x-1 transition-transform"/> {t.back}
+            </button>
+            
+            <div className="flex items-center gap-3">
+                <button 
+                    onClick={toggleTheme} 
+                    className="p-2 rounded-full bg-white/60 dark:bg-slate-800/60 backdrop-blur-md border border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-400 shadow-sm hover:scale-105 transition-all"
+                >
+                    {isDark ? <Sun size={14} className="text-amber-400" /> : <Moon size={14} />}
+                </button>
+                <div className="text-[10px] font-mono text-slate-400 bg-slate-200/50 dark:bg-slate-800/50 px-2 py-1 rounded">ID: {sessionId}</div>
+            </div>
         </div>
 
         {/* HEADER */}
-        <div className="text-center mb-12">
-          <h1 className="text-4xl md:text-5xl font-black text-slate-900 dark:text-white tracking-tighter mb-4">
+        <div className="text-center mb-12 flex flex-col items-center">
+          <div className="flex items-center gap-2 opacity-60 mb-4 bg-white dark:bg-slate-800 px-4 py-2 rounded-full shadow-sm border border-slate-200 dark:border-slate-700">
+              <BrainCircuit size={16} className="text-slate-500 dark:text-slate-400" />
+              <span className="text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest">{t.context}</span>
+          </div>
+          <h1 className="text-4xl md:text-5xl font-black text-slate-900 dark:text-white tracking-tighter">
             {t.title}
           </h1>
         </div>
