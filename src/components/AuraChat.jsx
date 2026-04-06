@@ -2,8 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { recordTelemetry } from '../utils/telemetry';
 import { calculateRiskScore } from '../utils/scoring';
-// ADDED SUN AND MOON ICONS
-import { ChevronLeft, Send, Sparkles, Sun, Moon } from 'lucide-react';
+import { ChevronLeft, Send, Sun, Moon } from 'lucide-react';
 
 const DICTIONARY = {
   en: {
@@ -169,7 +168,6 @@ const DICTIONARY = {
 };
 
 const AuraChatbot = () => {
-  // 1. ALL HOOKS SAFELY MOVED INSIDE THE COMPONENT
   const [isDark, setIsDark] = useState(false);
   const navigate = useNavigate();
   const chatEndRef = useRef(null);
@@ -184,7 +182,6 @@ const AuraChatbot = () => {
   const [isTyping, setIsTyping] = useState(false);
   const [collectedData, setCollectedData] = useState({});
 
-  // 2. THEME INITIALIZER MOVED INSIDE THE COMPONENT
   useEffect(() => {
       const storedTheme = localStorage.getItem('nexus-theme');
       const systemPrefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
@@ -197,7 +194,6 @@ const AuraChatbot = () => {
       }
   }, []);
 
-  // 3. TOGGLE FUNCTION MOVED INSIDE THE COMPONENT
   const toggleTheme = () => {
       const newTheme = !isDark;
       setIsDark(newTheme);
@@ -353,8 +349,14 @@ const AuraChatbot = () => {
               <ChevronLeft size={24} />
             </button>
             <div className="flex items-center gap-2">
-              <Sparkles className="text-indigo-500 dark:text-indigo-400" size={20} />
-              <h1 className="font-semibold text-lg text-slate-900 dark:text-white">AURA</h1>
+              {/* REPLACED SPARKLES WITH DETAILED 3D LOGO */}
+              <img 
+                  src="/logo.png" 
+                  alt="AURA 3D Logo" 
+                  className="w-8 h-8 object-contain drop-shadow-sm" 
+                  onError={(e) => { e.target.style.display = 'none'; }} 
+              />
+              <h1 className="font-semibold text-lg text-slate-900 dark:text-white tracking-tight">AURA</h1>
             </div>
         </div>
         
