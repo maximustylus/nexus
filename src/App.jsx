@@ -12,7 +12,7 @@ import { BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid,
   Tooltip, ResponsiveContainer, Cell, PieChart, Pie, Legend, ReferenceLine } from 'recharts';
 import { Sun, Moon, LayoutDashboard, History, Filter, ShieldAlert, Bell } from 'lucide-react'; 
 
-// 🌟 THE FIX: BOTH THE HOOK AND THE PROVIDER ARE IMPORTED HERE ONCE
+// CONTEXT & DATA STRATEGY
 import { NexusProvider, useNexus } from './context/NexusContext';
 import { MOCK_STAFF_NAMES, MOCK_TEAM_DATA, MOCK_STAFF_LOADS } from './data/mockData';
 
@@ -79,8 +79,8 @@ const CustomBarTooltip = ({ active, payload, label }) => {
     return null;
 };
 
-// 🌟 MAIN APPLICATION LOGIC
-function NexusApp() {
+// 🌟 MAIN APPLICATION LOGIC (RENAMED TO MATCH WRAPPER)
+function App() {
   const { isDemo, toggleDemo } = useNexus(); 
   const location = useLocation();
   const isPublicPathway = location.pathname.startsWith('/individuals');
@@ -301,9 +301,7 @@ function NexusApp() {
   const activeTeamData = isDemo ? MOCK_TEAM_DATA : teamData;
   const activeStaffLoads = isDemo ? MOCK_STAFF_LOADS : staffLoads;
   
-  const ADMIN_EMAILS = ['muhammad.alif@kkh.com.sg', 'siti.nur.anisah.nh@kkh.com.sg'];
-  const hasAdminAccess = isDemo || (user?.email && ADMIN_EMAILS.includes(user.email.toLowerCase())) || user?.role === 'admin';
-
+  const hasAdminAccess = isDemo || (user?.email && ['muhammad.alif@kkh.com.sg', 'siti.nur.anisah.nh@kkh.com.sg'].includes(user.email.toLowerCase())) || user?.role === 'admin';
   const unreadCount = notifications.filter(n => !n.read).length;
 
   const markNotificationsAsRead = async () => {
