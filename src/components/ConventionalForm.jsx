@@ -1,56 +1,3 @@
-/**
- * ConventionalForm.jsx — v4.0 (PDF + AURA Grounded)
- *
- * ─── THREE-WAY ALIGNMENT GUARANTEE ─────────────────────────────────────────
- *
- * 1. PDF: northern_sg_health_ecosystem_report.pdf
- *    • ACSM PAVS §2.3: exact two-question wording, SPAG thresholds (<150/150-300/>300)
- *    • §5.7 CTA matrix: 8-tier logic reproduced identically
- *
- * 2. PDF: Singapore_SDOH_Validated_Questionnaires.pdf
- *    • BPS-RS II P22: psychological domain — "feeling down, depressed, or hopeless"
- *    • BPS-RS II S33/S37: financial — income adequacy + affordability barrier
- *    • LSNS-6: social network — grounding for Q5 social support screen
- *    • Duke-NUS perceived income adequacy: 3-level validated scale
- *    • Lien Centre food insufficiency screen: exact 2-question wording
- *    • Housing schema: HDB 1-2 Room = lowest SES, highest risk
- *
- * 3. AuraChatbot.jsx (generated code):
- *    • Q0 pavs_days quick replies: ['0 days', '1–2 days', '3–4 days', '5–7 days']
- *    • Q1 pavs_mins quick replies: ['Less than 20 mins', '20–30 mins', '30–45 mins', '45–60 mins', '60+ mins']
- *    • Q2 strength quick replies: ['No strength training', '1 day a week', '2 days a week', '3+ days a week']
- *    • Q3 medical quick replies: ['No conditions or symptoms', 'High blood pressure', 'Prediabetes or diabetes', 'Heart condition', 'Dizziness or chest pain when active']
- *    • Q4 barriers quick replies: ['Lack of time', 'Too expensive', 'Too far away', 'I prefer hospitals over community', 'Unsure what is available', 'No barriers for me']
- *    • Q5 social quick replies: ['I have several people I can rely on', 'I have one or two close people', 'I mostly manage on my own', 'I feel quite isolated']
- *    • Q6 wellbeing quick replies: ['Feeling good overall', 'Some stress but managing', 'Feeling quite stressed or low', 'Overwhelmed — caregiving or financial pressure']
- *    • Q7 demographics: age groups + gender
- *    • Q8 postal_code: first 2 digits
- *    • Q9 previous_id: NEXUS record linkage
- *    • parseClinicalData() regex thresholds → replicated as Set membership
- *    • selectCTA() tier hierarchy → identical function
- *
- * ─── HOW PARITY IS MAINTAINED ───────────────────────────────────────────────
- *  • Form stores English option values (AURA quick-reply strings) in state.
- *    Translation is display-only. Parsing is locale-independent.
- *  • PAVS midpoints are IDENTICAL to AURA parseClinicalData():
- *    Days: 0/1.5/3.5/6 × Mins: 15/25/37/52/65 → same pavsScore
- *  • Flag thresholds are derived from the exact AURA regex targets:
- *    medFlag: blood pressure | prediabetes | diabetes | heart
- *    symptomFlag: dizziness | chest pain
- *    sdohFinancial: expensive | too far (+ income inadequate from PDF)
- *    sdohSocial: on my own | isolated
- *    sdohPsychological: stress | low | overwhelmed
- *  • selectCTA() is the identical function — same tier string output
- *  • Navigation state shape is identical to AuraChatbot → identical ResultPage render
- *
- * ─── FORM-ONLY ENRICHMENT (not in AURA, grounded in PDFs) ──────────────────
- *  • Lien Centre food insufficiency (Q_food) — SDOH PDF p.10
- *  • Duke-NUS income adequacy (Q_income) — SDOH PDF p.9
- *  • Housing type / BPS-RS II geographic risk (Q_housing) — SDOH PDF p.11
- *  • Ethnicity / race (demographic enrichment)
- *  • Community perception questions (Step 3)
- */
-
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { calculateRiskScore } from '../utils/scoring';
@@ -66,7 +13,6 @@ import {
 // Translations apply to display labels only, never to stored values
 // ─────────────────────────────────────────────────────────────────────────────
 
-// AURA Q0 — exact quick replies from AuraChatbot.jsx line 265
 const PAVS_DAYS = [
   { value: '0 days',    en: '0 days',    ms: '0 hari',    zh: '0 天',    ta: '0 நாட்கள்'    },
   { value: '1–2 days',  en: '1–2 days',  ms: '1–2 hari',  zh: '1–2 天',  ta: '1–2 நாட்கள்'  },
@@ -74,7 +20,6 @@ const PAVS_DAYS = [
   { value: '5–7 days',  en: '5–7 days',  ms: '5–7 hari',  zh: '5–7 天',  ta: '5–7 நாட்கள்'  },
 ];
 
-// AURA Q1 — exact quick replies from AuraChatbot.jsx line 266
 const PAVS_MINS = [
   { value: 'Less than 20 mins', en: 'Less than 20 mins', ms: 'Kurang 20 minit',    zh: '少于 20 分钟',  ta: '20 நிமிடங்களுக்கும் குறைவு' },
   { value: '20–30 mins',        en: '20–30 mins',        ms: '20–30 minit',        zh: '20–30 分钟',    ta: '20–30 நிமிடங்கள்'           },
@@ -83,7 +28,6 @@ const PAVS_MINS = [
   { value: '60+ mins',          en: '60+ mins',          ms: '60+ minit',          zh: '60 分钟以上',   ta: '60+ நிமிடங்கள்'             },
 ];
 
-// AURA Q2 — exact quick replies from AuraChatbot.jsx line 267
 const STRENGTH_DAYS = [
   { value: 'No strength training', en: 'No strength training', ms: 'Tiada latihan kekuatan', zh: '没有力量训练', ta: 'தசை பயிற்சி இல்லை'   },
   { value: '1 day a week',         en: '1 day a week',         ms: '1 hari seminggu',         zh: '每周 1 天',   ta: 'வாரத்தில் 1 நாள்'    },
@@ -91,9 +35,6 @@ const STRENGTH_DAYS = [
   { value: '3+ days a week',       en: '3+ days a week',       ms: '3+ hari seminggu',        zh: '每周 3 天以上', ta: 'வாரத்தில் 3+ நாட்கள்' },
 ];
 
-// AURA Q3 — exact quick replies from AuraChatbot.jsx line 268
-// medFlag fires on options 2,3,4 | symptomFlag fires on option 5
-// "No conditions or symptoms" = exclusive — clears all flags
 const MEDICAL_OPTIONS = [
   { value: 'No conditions or symptoms',        en: 'No conditions or symptoms',        ms: 'Tiada penyakit atau gejala',       zh: '没有慢性病或症状',    ta: 'நோய் அல்லது அறிகுறிகள் இல்லை'          },
   { value: 'High blood pressure',              en: 'High blood pressure',              ms: 'Darah tinggi',                     zh: '高血压',             ta: 'உயர் இரத்த அழுத்தம்'                    },
@@ -103,8 +44,6 @@ const MEDICAL_OPTIONS = [
 ];
 const MEDICAL_EXCLUSIVE = 'No conditions or symptoms';
 
-// AURA Q4 — exact quick replies from AuraChatbot.jsx line 269
-// sdohFinancial fires on 'Too expensive' (regex: expensive) + 'Too far away' (regex: too far)
 const BARRIERS = [
   { value: 'Lack of time',                      en: 'Lack of time',                     ms: 'Kekurangan masa',           zh: '没时间',        ta: 'நேரமின்மை'                    },
   { value: 'Too expensive',                      en: 'Too expensive',                    ms: 'Terlalu mahal',             zh: '太贵了',        ta: 'அதிக செலவு'                   },
@@ -114,10 +53,6 @@ const BARRIERS = [
   { value: 'No barriers for me',                 en: 'No barriers for me',               ms: 'Tiada halangan',           zh: '没有障碍',      ta: 'தடைகள் இல்லை'                 },
 ];
 
-// AURA Q5 — exact quick replies from AuraChatbot.jsx line 270
-// sdohSocial fires on 'I mostly manage on my own' (regex: on my own)
-//                and 'I feel quite isolated'       (regex: isolated)
-// Grounded in LSNS-6 social network scale (SDOH PDF)
 const SOCIAL_OPTIONS = [
   { value: 'I have several people I can rely on', en: 'I have several people I can rely on', ms: 'Ada beberapa orang yang boleh saya hubungi', zh: '有几个可以依靠的人', ta: 'நம்பகமான பல நபர்கள் உள்ளனர்'         },
   { value: 'I have one or two close people',      en: 'I have one or two close people',      ms: 'Ada satu atau dua orang rapat',             zh: '有一两个亲近的人',  ta: 'ஒன்று அல்லது இரண்டு நெருங்கிய நபர்கள்' },
@@ -125,12 +60,6 @@ const SOCIAL_OPTIONS = [
   { value: 'I feel quite isolated',               en: 'I feel quite isolated',               ms: 'Saya rasa agak keseorangan',               zh: '感到相当孤立',      ta: 'மிகவும் தனிமையாக உணர்கிறேன்'           },
 ];
 
-// AURA Q6 — exact quick replies from AuraChatbot.jsx line 271
-// sdohPsychological fires on options 2,3,4:
-//   'Some stress but managing'                      → regex matches 'stress'
-//   'Feeling quite stressed or low'                 → regex matches 'stressed', 'low'
-//   'Overwhelmed — caregiving or financial pressure'→ regex matches 'overwhelmed'
-// Grounded in BPS-RS II P22 (2-week timeframe, PHQ-2 aligned)
 const WELLBEING_OPTIONS = [
   { value: 'Feeling good overall',                           en: 'Feeling good overall',                           ms: 'Perasaan baik secara keseluruhannya',        zh: '整体感觉不错',            ta: 'ஒட்டுமொத்தமாக நல்லாக உணர்கிறேன்'        },
   { value: 'Some stress but managing',                       en: 'Some stress, but managing',                      ms: 'Ada sedikit tekanan tapi boleh kawal',       zh: '有些压力但能应对',        ta: 'சில மன அழுத்தம் ஆனால் சமாளிக்கிறேன்'    },
@@ -138,22 +67,18 @@ const WELLBEING_OPTIONS = [
   { value: 'Overwhelmed — caregiving or financial pressure', en: 'Overwhelmed — caregiving or financial pressure', ms: 'Terbeban — penjagaan atau tekanan kewangan', zh: '不知所措 — 照顾或经济压力', ta: 'அதிக சுமை — பராமரிப்பு அல்லது நிதி அழுத்தம்' },
 ];
 
-// PDF: Duke-NUS perceived income adequacy (SDOH PDF p.9) — form-only enrichment
 const INCOME_OPTIONS = [
   { value: 'More than adequate', en: 'More than adequate (money left over)', ms: 'Lebih daripada mencukupi', zh: '绰绰有余',       ta: 'மிகவும் போதுமானது'  },
   { value: 'Adequate',           en: 'Adequate (just enough, no difficulty)', ms: 'Mencukupi',              zh: '足够',           ta: 'போதுமானது'           },
   { value: 'Inadequate',         en: 'Inadequate (some or much difficulty)',  ms: 'Tidak mencukupi',         zh: '不足（有困难）',  ta: 'போதாது (சிரமம்)'    },
 ];
 
-// PDF: BPS-RS II housing schema (SDOH PDF p.11) — form-only enrichment
 const HOUSING_OPTIONS = [
   { value: 'HDB 1-2 Room',    en: 'HDB 1 to 2 Room (rental)',          ms: 'HDB 1–2 Bilik (sewa)',      zh: '组屋 1–2 房（租赁）', ta: 'HDB 1–2 அறைகள் (வாடகை)' },
   { value: 'HDB 3-5 Room',    en: 'HDB 3 to 5 Room',                   ms: 'HDB 3–5 Bilik',             zh: '组屋 3–5 房',         ta: 'HDB 3–5 அறைகள்'          },
   { value: 'Private Property', en: 'Private Property (condo / landed)', ms: 'Hartanah Persendirian',    zh: '私人房产',            ta: 'தனியார் சொத்து'          },
 ];
 
-// AURA Q7 demographics — age groups matching AURA parser output
-// AURA parses: '60+' → '60+', '41-60' → '41-60', else '21-40'
 const AGE_OPTIONS = [
   { value: 'Under 21', en: 'Under 21', ms: 'Bawah 21',  zh: '21岁以下', ta: '21க்கு கீழ்' },
   { value: '21-40',    en: '21–40',    ms: '21–40',     zh: '21–40岁',  ta: '21–40'        },
@@ -177,10 +102,9 @@ const RACE_OPTIONS = [
 // PARSING — mirrors AuraChatbot.jsx parseClinicalData() exactly
 // ─────────────────────────────────────────────────────────────────────────────
 
-// Midpoints identical to AURA parseClinicalData()
 const DAYS_MIDPOINT = {
   '0 days': 0,
-  '1–2 days': 1.5,  // en dash — matches AURA quick reply value
+  '1–2 days': 1.5,
   '3–4 days': 3.5,
   '5–7 days': 6,
 };
@@ -198,20 +122,12 @@ const STR_MIDPOINT = {
   '3+ days a week': 3,
 };
 
-// Flag trigger sets — derived from AURA parseClinicalData() regex targets
-// medFlag regex:   /(blood pressure|prediabetes|diabetes|heart)/
 const MED_FLAG_VALUES     = new Set(['High blood pressure', 'Prediabetes or diabetes', 'Heart condition']);
-// symptomFlag regex: /(dizziness|chest pain)/
 const SYMPTOM_FLAG_VALUE  = 'Dizziness or chest pain when active';
-// sdohFinancial regex: /(expensive|cost|afford|too far)/
 const FINANCIAL_BARR_VALS = new Set(['Too expensive', 'Too far away']);
-// sdohSocial regex: /(on my own|isolated)/
 const SOCIAL_FLAG_VALS    = new Set(['I mostly manage on my own', 'I feel quite isolated']);
-// sdohPsychological regex: /(stressed|stress|low|overwhelmed)/
 const PSYCHO_FLAG_VALS    = new Set(['Some stress but managing', 'Feeling quite stressed or low', 'Overwhelmed — caregiving or financial pressure']);
 
-// ─── CTA TIER SELECTOR — identical to AuraChatbot.jsx selectCTA() ─────────
-// Returns string key matching §5.7 CTA matrix (Ecosystem Report)
 const selectCTA = ({ symptomFlag, medFlag, age, sdohPsychological, sdohFinancial, sdohSocial, pavsScore }) => {
   if (symptomFlag)                      return 'URGENT';
   if (medFlag)                          return 'CLINICAL';
@@ -224,31 +140,24 @@ const selectCTA = ({ symptomFlag, medFlag, age, sdohPsychological, sdohFinancial
   return 'ADVANCED';
 };
 
-// ─── FLAG DERIVATION — locale-independent, mirrors parseClinicalData() ──────
 const deriveFlags = (f) => {
-  // PAVS — same midpoints as AURA (Days × Mins = weekly total)
   const pavsDays    = DAYS_MIDPOINT[f.pavsDays]  ?? 0;
   const pavsMinutes = MINS_MIDPOINT[f.pavsMins]  ?? 0;
   const pavsScore   = Math.round(pavsDays * pavsMinutes);
   const strengthDays = STR_MIDPOINT[f.strength]  ?? 0;
 
-  // Clinical flags — match AURA Q3 regex logic via Set membership
   const noConditions = f.medical.includes(MEDICAL_EXCLUSIVE);
   const medFlag      = !noConditions && f.medical.some(v => MED_FLAG_VALUES.has(v));
   const symptomFlag  = !noConditions && f.medical.includes(SYMPTOM_FLAG_VALUE);
 
-  // SDOH flags — match AURA Q4/Q5/Q6 regex logic via Set membership
   const sdohFinancial     = f.barriers.some(v => FINANCIAL_BARR_VALS.has(v))
-                          || f.incomeAdequacy === 'Inadequate'; // PDF: Duke-NUS enrichment
+                          || f.incomeAdequacy === 'Inadequate';
   const sdohSocial        = SOCIAL_FLAG_VALS.has(f.social);
   const sdohPsychological = PSYCHO_FLAG_VALS.has(f.wellbeing);
 
-  // PDF-only flags (form enrichment — not in AURA)
   const sdohFoodInsecure = f.foodInsecure === true;
   const sdohHousing      = f.housing === 'HDB 1-2 Room';
 
-  // Age — normalised to match AURA Q7 parser output
-  // AURA: demoStr.includes('60+') → '60+' | demoStr.match(/41.60/) → '41-60' | else '21-40'
   const age    = f.ageGroup === '60+' ? '60+'
                : f.ageGroup === '41-60' ? '41-60'
                : f.ageGroup === '21-40' ? '21-40'
@@ -259,7 +168,7 @@ const deriveFlags = (f) => {
     pavsScore, pavsDays, pavsMinutes, strengthDays,
     medFlag, symptomFlag,
     sdohFinancial, sdohSocial, sdohPsychological,
-    psychoFlag: sdohPsychological,   // ResultPage compat alias
+    psychoFlag: sdohPsychological, 
     sdohFoodInsecure, sdohHousing,
     age, gender,
     previousId: f.previousId?.trim().toUpperCase() || null,
@@ -274,7 +183,6 @@ const D = {
     subs:  ['ACSM PAVS · SPAG Strength · Clinical Safety Screen', 'SDOH 5-Domain Screen · PDF Validated', 'Community Perception', 'Demographics · Location · Record Linkage'],
     back: 'Back', yes: 'Yes', no: 'No', sel: '— Select —',
     btnNext: 'Next', btnPrev: 'Previous', btnSubmit: 'Get My Results',
-    // Step 1
     pavsQ1: 'On a typical week, how many days do you do moderate or vigorous exercise? (e.g. brisk walking, cycling, swimming, gym)',
     pavsQ2: 'On those active days, roughly how many minutes do you usually exercise each time?',
     pavsLive: 'Estimated weekly PAVS score', pavsUnit: 'mins / week',
@@ -287,20 +195,18 @@ const D = {
     wellHead: 'SDOH · Psychological Wellbeing',
     wellQ: 'Over the past two weeks, how have you been feeling overall? Have you felt stressed, low in mood, or overwhelmed — for example, due to work, caregiving, or financial pressure?',
     wellNote: 'Aligned with BPS-RS II P22 (PHQ-2 based, 2-week timeframe)',
-    // Step 2
     sdohHead: 'Social Determinants of Health',
-    sdohIntro: 'These questions are grounded in validated SDOH screening tools used across Singapore's Regional Health Systems. Your responses are confidential.',
+    sdohIntro: "These questions are grounded in validated SDOH screening tools used across Singapore's Regional Health Systems. Your responses are confidential.",
     barrQ: 'What is the main thing that makes it difficult to access health or fitness services in your community? Select all that apply.',
     socialQ: 'Roughly how many people — family or friends — could you call on for support if you needed help? And would you say you have people you can talk to openly?',
     socialNote: 'Grounded in LSNS-6 (Lubben Social Network Scale)',
-    foodQ: 'In the past 12 months, were you ever hungry but didn't eat because you could not afford enough food?',
+    foodQ: "In the past 12 months, were you ever hungry but didn't eat because you could not afford enough food?",
     foodNote: 'Lien Centre food insufficiency screen (Question 1 of 2)',
     incomeQ: 'Do you feel you have adequate income to meet your monthly expenses?',
     incomeNote: 'Duke-NUS validated perceived income adequacy scale',
     housingQ: 'What type of housing do you currently reside in?',
     housingNote: 'BPS-RS II housing schema — geographic risk indicator',
     housingAlert: '1–2 room HDB rental residents face elevated multi-domain social stress. Your plan will prioritise free and community-based resources (SDOH PDF §Housing).',
-    // Step 3
     perHead: 'Community Health Experience',
     awareQ: 'Have you heard about the health and wellness services available in your neighbourhood? (e.g. Active Health Labs, Start2Move, Active Ageing Centres)',
     referQ: 'Has a doctor or allied health professional ever referred you to a community health programme or Active Health Lab?',
@@ -309,7 +215,6 @@ const D = {
     trustQ: 'How comfortable and safe do you feel receiving health care in the community?',
     trustScale: '1 = Not at all comfortable   ·   5 = Very comfortable',
     improveQ: 'If you could change one thing about healthcare in your neighbourhood, what would it be? (Optional)',
-    // Step 4
     demoHead: 'About You',
     demoIntro: 'These details help us ensure resources reach every community equitably. All responses are de-identified.',
     ageQ: 'Age Group', genderQ: 'Gender', raceQ: 'Ethnicity',
@@ -562,7 +467,6 @@ export default function ConventionalForm() {
   const set    = useCallback((k, v) => setF(p => ({ ...p, [k]: v })), []);
   const togArr = useCallback((k, v) => setF(p => ({ ...p, [k]: p[k].includes(v) ? p[k].filter(x => x !== v) : [...p[k], v] })), []);
 
-  // Toggle medical option — handles exclusive 'No conditions or symptoms'
   const toggleMedical = (val) => {
     if (val === MEDICAL_EXCLUSIVE) {
       set('medical', f.medical.includes(MEDICAL_EXCLUSIVE) ? [] : [MEDICAL_EXCLUSIVE]);
@@ -576,7 +480,6 @@ export default function ConventionalForm() {
     }
   };
 
-  // nexus-theme (hyphen) — consistent with AuraChatbot.jsx + ResultPage.jsx
   useEffect(() => {
     const stored = localStorage.getItem('nexus-theme');
     const dark   = stored === 'dark' || (!stored && window.matchMedia('(prefers-color-scheme: dark)').matches);
@@ -614,7 +517,6 @@ export default function ConventionalForm() {
       demographics: { age: f.ageGroup, gender: f.gender, race: f.race, sector },
     });
 
-    // Navigation state — identical shape to AuraChatbot finalise block
     navigate('/individuals/result', {
       state: { score, data: flags, postalSector: sector, sessionId, previousSessionId: flags.previousId, ctaTier },
     });
@@ -623,8 +525,6 @@ export default function ConventionalForm() {
   // ── STEP 1: PHYSICAL ACTIVITY + CLINICAL SAFETY ───────────────────────────
   const Step1 = () => (
     <div className="space-y-5 animate-in fade-in slide-in-from-right-4 duration-400">
-
-      {/* PAVS — AURA Q0 + Q1 (Ecosystem Report §2.3 exact two-question wording) */}
       <Card>
         <Badge icon={Activity} label="ACSM PAVS · SPAG Strength Screen" />
         <div className="grid md:grid-cols-2 gap-5">
@@ -643,10 +543,8 @@ export default function ConventionalForm() {
             </select>
           </div>
         </div>
-        {/* Live PAVS preview — same midpoints as AURA parseClinicalData */}
         <PavsLive days={f.pavsDays} mins={f.pavsMins} t={t} />
 
-        {/* Strength — AURA Q2 */}
         <div className="mt-5 pt-5 border-t border-slate-100 dark:border-slate-800">
           <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-2 leading-snug">{t.strengthQ}</label>
           <select value={f.strength} onChange={e => set('strength', e.target.value)} className={`${selCls} md:w-2/3`}>
@@ -656,7 +554,6 @@ export default function ConventionalForm() {
         </div>
       </Card>
 
-      {/* Clinical Safety — AURA Q3 (exact 5 options as checkboxes) */}
       <Card>
         <Badge icon={ShieldAlert} label={t.clinHead} />
         <p className="text-sm font-bold text-slate-700 dark:text-slate-300 mb-3 leading-snug">{t.medQ}</p>
@@ -674,7 +571,6 @@ export default function ConventionalForm() {
         </div>
       </Card>
 
-      {/* Wellbeing — AURA Q6 (exact 4 quick-reply options, 2-week timeframe per BPS-RS II P22) */}
       <Card tinted>
         <div className="flex items-start gap-3 mb-4">
           <Brain size={18} className="text-teal-600 dark:text-teal-400 shrink-0 mt-0.5" />
@@ -701,7 +597,6 @@ export default function ConventionalForm() {
         <p className="text-sm text-slate-500 dark:text-slate-400 font-medium mb-6 leading-relaxed">{t.sdohIntro}</p>
         <div className="space-y-6">
 
-          {/* Barriers — AURA Q4 exact options, multi-select */}
           <div>
             <p className="text-sm font-bold text-slate-700 dark:text-slate-300 mb-3 leading-snug">{t.barrQ}</p>
             <div className="bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-2xl p-4 grid grid-cols-1 md:grid-cols-2 gap-1">
@@ -711,7 +606,6 @@ export default function ConventionalForm() {
             </div>
           </div>
 
-          {/* Social — AURA Q5 exact options, radio */}
           <div>
             <p className="text-sm font-bold text-slate-700 dark:text-slate-300 mb-1 leading-snug">{t.socialQ}</p>
             <Note text={t.socialNote} />
@@ -722,7 +616,6 @@ export default function ConventionalForm() {
             </div>
           </div>
 
-          {/* Food insecurity — PDF: Lien Centre Q1 exact wording */}
           <div className="border-t border-slate-100 dark:border-slate-800 pt-5">
             <p className="text-sm font-bold text-slate-700 dark:text-slate-300 mb-1 leading-snug">{t.foodQ}</p>
             <Note text={t.foodNote} />
@@ -736,7 +629,6 @@ export default function ConventionalForm() {
             </div>
           </div>
 
-          {/* Income adequacy — PDF: Duke-NUS 3-level validated scale */}
           <div>
             <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-1 leading-snug">{t.incomeQ}</label>
             <Note text={t.incomeNote} />
@@ -746,7 +638,6 @@ export default function ConventionalForm() {
             </select>
           </div>
 
-          {/* Housing — PDF: BPS-RS II housing schema */}
           <div>
             <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-1 leading-snug">{t.housingQ}</label>
             <Note text={t.housingNote} />
@@ -824,7 +715,6 @@ export default function ConventionalForm() {
           <Badge icon={Home} label={t.demoHead} />
           <p className="text-sm text-slate-500 dark:text-slate-400 font-medium mb-6 leading-relaxed">{t.demoIntro}</p>
           <div className="grid md:grid-cols-2 gap-5">
-            {/* Age — AURA Q7, normalised to AURA parser output */}
             <div>
               <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-2">{t.ageQ}</label>
               <select value={f.ageGroup} onChange={e => set('ageGroup', e.target.value)} className={selCls}>
@@ -832,7 +722,6 @@ export default function ConventionalForm() {
                 {AGE_OPTIONS.map(o => <option key={o.value} value={o.value}>{o[lang] || o.en}</option>)}
               </select>
             </div>
-            {/* Gender — AURA Q7 */}
             <div>
               <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-2">{t.genderQ}</label>
               <select value={f.gender} onChange={e => set('gender', e.target.value)} className={selCls}>
@@ -840,7 +729,6 @@ export default function ConventionalForm() {
                 {GENDER_OPTIONS.map(o => <option key={o.value} value={o.value}>{o[lang] || o.en}</option>)}
               </select>
             </div>
-            {/* Ethnicity — form enrichment */}
             <div>
               <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-2">{t.raceQ}</label>
               <select value={f.race} onChange={e => set('race', e.target.value)} className={selCls}>
@@ -848,13 +736,11 @@ export default function ConventionalForm() {
                 {RACE_OPTIONS.map(o => <option key={o.value} value={o.value}>{o[lang] || o.en}</option>)}
               </select>
             </div>
-            {/* Postal code — AURA Q8 */}
             <div>
               <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-2">{t.postalQ}</label>
               <input type="text" maxLength={2} value={f.postalCode} onChange={e => set('postalCode', e.target.value.replace(/\D/g, ''))} className={inputCls} placeholder="e.g. 73" />
               <Note text={t.postalHint} />
             </div>
-            {/* Previous NEXUS ID — AURA Q9 */}
             <div className="md:col-span-2 pt-2 border-t border-slate-100 dark:border-slate-800">
               <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-2">{t.prevIdQ}</label>
               <input type="text" value={f.previousId} onChange={e => set('previousId', e.target.value)} className={inputCls} placeholder="NX-XXXXXXXXX" />
@@ -862,7 +748,6 @@ export default function ConventionalForm() {
             </div>
           </div>
 
-          {/* Pre-submit summary preview */}
           {liveScore > 0 && (
             <div className="mt-6 pt-6 border-t border-slate-100 dark:border-slate-800">
               <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3 flex items-center gap-1.5">
