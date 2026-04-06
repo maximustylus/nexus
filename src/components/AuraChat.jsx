@@ -2,7 +2,8 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { recordTelemetry } from '../utils/telemetry';
 import { calculateRiskScore } from '../utils/scoring';
-import { ChevronLeft, Send, Sparkles } from 'lucide-react';
+// ADDED SUN AND MOON ICONS
+import { ChevronLeft, Send, Sparkles, Sun, Moon } from 'lucide-react';
 
 const DICTIONARY = {
   en: {
@@ -166,34 +167,10 @@ const DICTIONARY = {
     ]
   }
 };
-  
+
+const AuraChatbot = () => {
+  // 1. ALL HOOKS SAFELY MOVED INSIDE THE COMPONENT
   const [isDark, setIsDark] = useState(false);
-
-  useEffect(() => {
-      const storedTheme = localStorage.getItem('nexus-theme');
-      const systemPrefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-      if (storedTheme === 'dark' || (!storedTheme && systemPrefersDark)) {
-          setIsDark(true);
-          document.documentElement.classList.add('dark');
-      } else {
-          setIsDark(false);
-          document.documentElement.classList.remove('dark');
-      }
-  }, []);
-
-  const toggleTheme = () => {
-      const newTheme = !isDark;
-      setIsDark(newTheme);
-      if (newTheme) {
-          document.documentElement.classList.add('dark');
-          localStorage.setItem('nexus-theme', 'dark');
-      } else {
-          document.documentElement.classList.remove('dark');
-          localStorage.setItem('nexus-theme', 'light');
-      }
-  };
-
-  const AuraChatbot = () => {
   const navigate = useNavigate();
   const chatEndRef = useRef(null);
   
@@ -206,6 +183,32 @@ const DICTIONARY = {
   const [userInput, setUserInput] = useState('');
   const [isTyping, setIsTyping] = useState(false);
   const [collectedData, setCollectedData] = useState({});
+
+  // 2. THEME INITIALIZER MOVED INSIDE THE COMPONENT
+  useEffect(() => {
+      const storedTheme = localStorage.getItem('nexus-theme');
+      const systemPrefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+      if (storedTheme === 'dark' || (!storedTheme && systemPrefersDark)) {
+          setIsDark(true);
+          document.documentElement.classList.add('dark');
+      } else {
+          setIsDark(false);
+          document.documentElement.classList.remove('dark');
+      }
+  }, []);
+
+  // 3. TOGGLE FUNCTION MOVED INSIDE THE COMPONENT
+  const toggleTheme = () => {
+      const newTheme = !isDark;
+      setIsDark(newTheme);
+      if (newTheme) {
+          document.documentElement.classList.add('dark');
+          localStorage.setItem('nexus-theme', 'dark');
+      } else {
+          document.documentElement.classList.remove('dark');
+          localStorage.setItem('nexus-theme', 'light');
+      }
+  };
 
   useEffect(() => {
     if (messages.length === 0) {
@@ -225,7 +228,6 @@ const DICTIONARY = {
     }, 800);
   };
 
-  // Upgraded Granular NLP Parser
   const parseClinicalData = (rawTextData) => {
     const aerobicStr = (rawTextData.aerobic || '').toLowerCase();
     const strengthStr = (rawTextData.strength || '').toLowerCase();
@@ -275,7 +277,6 @@ const DICTIONARY = {
     setMessages(prev => [...prev, { sender: 'user', text }]);
     setUserInput('');
 
-    // Granular 7-step mapping
     const stepKeys = ['aerobic', 'strength', 'medical', 'barriers', 'demographics', 'postal_code', 'previous_id'];
     const currentKey = stepKeys[currentStep];
     const updatedData = { ...collectedData, [currentKey]: text };
@@ -286,7 +287,6 @@ const DICTIONARY = {
     setTimeout(() => {
       let combinedBotResponse = "";
 
-      // Append Reflection (if it exists)
       if (currentStep < langData.reflections.length) {
         combinedBotResponse += langData.reflections[currentStep](text) + " ";
       }
@@ -294,19 +294,17 @@ const DICTIONARY = {
       const nextStep = currentStep + 1;
       
       if (nextStep < langData.prompts.length) {
-        // Concatenate Prompt to Reflection for a single chat bubble
         combinedBotResponse += langData.prompts[nextStep];
         setCurrentStep(nextStep);
         setMessages(prev => [...prev, { sender: 'bot', text: combinedBotResponse }]);
         setIsTyping(false);
       } else {
-        // Conclude the Triage
         combinedBotResponse += langData.conclusion;
         setMessages(prev => [...prev, { sender: 'bot', text: combinedBotResponse }]);
         setIsTyping(false);
         concludeTriage(updatedData);
       }
-    }, 1000); // 1s processing delay to feel natural
+    }, 1000); 
   };
 
   const handleFormSubmit = (e) => {
@@ -327,7 +325,6 @@ const DICTIONARY = {
         computedRisk: riskScore
       });
 
-      // Navigate after a delay to let the user read the final message
       setTimeout(() => {
           navigate('/individuals/result', { 
               state: { 
