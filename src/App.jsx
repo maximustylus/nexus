@@ -12,7 +12,7 @@ import { BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid,
   Tooltip, ResponsiveContainer, Cell, PieChart, Pie, Legend, ReferenceLine } from 'recharts';
 import { Sun, Moon, LayoutDashboard, History, Filter, ShieldAlert, Bell } from 'lucide-react'; 
 
-// CONTEXT & DATA STRATEGY (Provider is in main.jsx now)
+// CONTEXT & DATA STRATEGY (Provider is strictly in main.jsx now)
 import { useNexus } from './context/NexusContext';
 import { MOCK_STAFF_NAMES, MOCK_TEAM_DATA, MOCK_STAFF_LOADS } from './data/mockData';
 
@@ -83,7 +83,6 @@ const CustomBarTooltip = ({ active, payload, label }) => {
 export default function App() {
   const { isDemo, toggleDemo } = useNexus(); 
   const location = useLocation();
-  const isPublicPathway = location.pathname.startsWith('/individuals');
   
   const [currentView, setCurrentView] = useState(() => {
       if (typeof window !== 'undefined') {
@@ -238,7 +237,7 @@ export default function App() {
     if (!isDemo && !user) return;
 
     if (isDemo) {
-      console.log("🧪 [NEXUS] Loading Marvel Universe...");
+      console.log("🧪 [NEXUS] Loading Sandbox...");
     } else {
       const targetCollection = dataYear === '2026' ? 'cep_team' : `archive_${dataYear}`;
 
@@ -398,7 +397,7 @@ export default function App() {
     setUser(null); 
     setNotifications([]);
     setIsAdminOpen(false); 
-    setCurrentView('pulse');
+    setCurrentView('pulse'); 
   };
   
   const renderCustomizedLabel = ({ cx, cy, midAngle, innerRadius, outerRadius, percent }) => {
@@ -604,7 +603,6 @@ export default function App() {
 
   return (
     <>
-      
       <Routes>
         <Route path="/individuals/language" element={<LanguageGate />} />
         <Route path="/individuals/pathway" element={<PathwaySelection />} />
