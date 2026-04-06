@@ -594,7 +594,7 @@ export default function ResultPage() {
           {/* PDF Header */}
           <div style={{ background: '#0f172a', padding: '28px 40px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-              <img src={`${baseUrl}/nexus.png`} alt="NEXUS" crossOrigin="anonymous" style={{ width: 50, height: 50, objectFit: 'contain' }} />
+              <img src={`${baseUrl}/nexus.png`} alt="NEXUS" crossOrigin="anonymous" style={{ width: 60, height: 60, objectFit: 'contain' }} />
               <div>
                 <div style={{ color: 'white', fontWeight: 900, fontSize: 22, letterSpacing: 6 }}>NEXUS</div>
                 <div style={{ color: '#94a3b8', fontWeight: 700, fontSize: 10, letterSpacing: 4, marginTop: 2 }}>{t.reportTitle}</div>
@@ -773,7 +773,7 @@ export default function ResultPage() {
             {/* Footer */}
             <div className="pt-4 border-t border-slate-100 dark:border-slate-800 flex justify-between items-center">
               <div className="flex items-center gap-3">
-                <img src={`${baseUrl}/nexus.png`} alt="NEXUS" crossOrigin="anonymous" className="w-15 h-15 object-contain" />
+                <img src={`${baseUrl}/nexus.png`} alt="NEXUS" crossOrigin="anonymous" className="w-10 h-10 object-contain" />
                 <div>
                   <p className="font-black text-slate-800 dark:text-slate-200 tracking-widest text-xs uppercase leading-none">NEXUS</p>
                   <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">{t.reportTitle}</p>
