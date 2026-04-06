@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Routes, Route, useLocation } from 'react-router-dom';
 import { getMessaging, onMessage } from "firebase/messaging";
-import { NexusProvider, useNexus } from './context/NexusContext';
 
 // FIREBASE
 import { db, auth } from './firebase';
