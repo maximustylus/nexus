@@ -1,306 +1,705 @@
+/**
+ * AuraChatbot.jsx — Enhanced v2.0
+ *
+ * Clinical grounding:
+ * • ACSM Physical Activity Vital Sign (PAVS): 2-question split → Days × Minutes = score
+ * Thresholds: <150 min/wk = Insufficiently Active | 150–300 = Meets SPAG | >300 = Active
+ * • SingHealth SDOH 5-Domain Framework: Financial, Food Security, Housing, Social, Psychological
+ * • BPS-RS II: Psychological domain items (P20–P25) inform Q6 wellbeing screen
+ * • LSNS-6: Social network items inform Q5 social isolation screen
+ * • Northern Singapore Health Ecosystem Report (March 2026): 8-tier CTA matrix (Section 5.7)
+ *
+ * UX/Biodesign improvements:
+ * • 10-step flow with proper PAVS split (Q0 = Days, Q1 = Minutes)
+ * • SDOH expanded to cover Social + Psychological domains (Q5, Q6)
+ * • Domain badge per AURA message (transparency of clinical purpose)
+ * • Segmented progress bar with step counter
+ * • AURA avatar in every bot bubble (Minimalist BrainCircuit styling)
+ * • Tiered CTA card rendered as structured output (not raw text)
+ * • isTyping guard prevents quick reply render confusion
+ * • Session ID visible in header for clinical trust
+ * • Teal/emerald design system (biodesign health palette)
+ *
+ * Source: Northern SG Health Ecosystem Report + Singapore SDOH Validated Questionnaires (2026)
+ */
+
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { recordTelemetry } from '../utils/telemetry';
 import { calculateRiskScore } from '../utils/scoring';
-import { ChevronLeft, Send, Sun, Moon } from 'lucide-react';
+import { ChevronLeft, Send, Sun, Moon, ExternalLink, CheckCircle, BrainCircuit } from 'lucide-react';
 
+// ─── DOMAIN CONFIGURATION ─────────────────────────────────────────────────────
+// Each step declares its clinical domain for badge display and progress colouring.
+// Domains map to: PAVS (0–2) | Clinical Safety (3) | SDOH Financial (4) |
+//                 SDOH Social (5) | SDOH Psychological (6) | Admin (7–9)
+
+const DOMAIN_CONFIG = [
+  { key: 'pavs_days',    badge: '🏃 ACSM PAVS · Q1 of 2',       group: 'pavs'     },
+  { key: 'pavs_mins',    badge: '⏱️ ACSM PAVS · Q2 of 2',       group: 'pavs'     },
+  { key: 'strength',     badge: '💪 SPAG Strength Screen',        group: 'pavs'     },
+  { key: 'medical',      badge: '🩺 Clinical Safety Screen',      group: 'clinical' },
+  { key: 'barriers',     badge: '🔑 SDOH · Financial & Access',  group: 'sdoh'     },
+  { key: 'social',       badge: '🤝 SDOH · Social Support',      group: 'sdoh'     },
+  { key: 'wellbeing',    badge: '🧠 SDOH · Psychological',       group: 'sdoh'     },
+  { key: 'demographics', badge: '👤 Your Profile',               group: 'admin'    },
+  { key: 'postal_code',  badge: '📍 Resource Mapping',           group: 'admin'    },
+  { key: 'previous_id',  badge: '🔗 NEXUS Record Linkage',       group: 'admin'    },
+];
+
+const TOTAL_STEPS = DOMAIN_CONFIG.length; // 10
+
+// Progress segment colour by group
+const GROUP_COLOURS = {
+  pavs:     'bg-emerald-500',
+  clinical: 'bg-amber-500',
+  sdoh:     'bg-violet-500',
+  admin:    'bg-slate-400',
+};
+
+// ─── TIERED CTA LIBRARY ───────────────────────────────────────────────────────
+// Source: Northern Singapore Health Ecosystem Report, Section 5.7
+// Priority order: Safety → Chronic → Senior+Low → Psychological SDOH →
+//                 Financial SDOH → Social SDOH → PAVS tiers
+
+const CTA = {
+  symptoms_present: {
+    tier: 'URGENT',
+    emoji: '⚠️',
+    primaryStep:
+      'Please see your GP or visit a polyclinic before starting any new exercise. Chest pain or dizziness during activity requires medical clearance first.',
+    healthierSG:
+      'Your Healthier SG GP can assess your symptoms and update your Health Plan. Book via HealthHub → My Appointments.',
+    resources: [
+      '📞 Polyclinic appointment booking: healthhub.sg/appointments',
+      '🏥 If symptoms are severe or sudden: call 995',
+    ],
+  },
+  chronic_metabolic: {
+    tier: 'CLINICAL',
+    emoji: '🩺',
+    primaryStep:
+      'Enrol in the "Manage Metabolic Health" programme at Woodlands Active Health Lab — 7 structured sessions, from SGD 48, with healthcare professional supervision.',
+    healthierSG:
+      'Book your next Healthier SG annual check-in (FREE) and share your PAVS result. Your GP can issue a direct referral to the Active Health Lab.',
+    resources: [
+      '📱 Book Active Health Lab: activesg.gov.sg → Woodlands Sport Centre',
+      '💳 CHAS subsidies may apply: chas.sg to check eligibility',
+      '🩺 Healthier SG check-in: FREE via HealthHub app',
+    ],
+  },
+  senior_low_activity: {
+    tier: 'COMMUNITY',
+    emoji: '🏠',
+    primaryStep:
+      'Visit your nearest Active Ageing Centre (AAC) — walk in, no appointment needed. Activities are largely free for residents aged 60 and above.',
+    healthierSG:
+      'Your Healthier SG Health Plan includes a formal AAC referral pathway. Ask your GP at your next FREE check-in to document this.',
+    resources: [
+      '🔍 Find nearest AAC: aic.sg/care-services/active-ageing-centres',
+      '📞 AIC Hotline: 1800-650-6060',
+      '📺 Seniors workout library on HealthHub: free, chair and low-mobility options available',
+    ],
+  },
+  mental_health_first: {
+    tier: 'WELLBEING',
+    emoji: '🌿',
+    primaryStep:
+      'Your wellbeing matters most. Connect with your polyclinic\'s counselling or mental health support service — this is your most important first step before any exercise programme.',
+    healthierSG:
+      'The Healthier SG mental health pathway includes polyclinic counselling and AAC social connector support. Raise this at your next Health Plan check-in.',
+    resources: [
+      '🤝 AAC Social Connector service: visit or call your nearest AAC',
+      '📞 Samaritans of Singapore: 1767 (24 hours, 7 days)',
+      '💬 Mental health resources: mindline.sg',
+    ],
+  },
+  financial_low_activity: {
+    tier: 'FREE_FIRST',
+    emoji: '🆓',
+    primaryStep:
+      'Register for "Start2Move" — a completely FREE 6-session beginner exercise programme. Download the Healthy 365 app and search "Start2Move" under Explore → Events.',
+    healthierSG:
+      'Your first Healthier SG Health Plan consultation is FULLY SUBSIDISED. If not yet enrolled, book at any PHPC clinic — free for all Singapore residents.',
+    resources: [
+      '🆓 Start2Move: free via Healthy 365 app (App Store / Google Play)',
+      '🧘 Free PA interest groups: onepa.gov.sg → search "healthiersg"',
+      '💳 CHAS Blue/Orange subsidies available: chas.sg to check eligibility',
+    ],
+  },
+  social_low_activity: {
+    tier: 'COMMUNITY',
+    emoji: '👥',
+    primaryStep:
+      'Join Start2Move in a cohort group format — you will exercise alongside the same group of peers across 6 sessions, building both fitness and new friendships.',
+    healthierSG:
+      'Enrol in a HealthierSG-tagged People\'s Association interest group (Tai Chi, Brisk Walking, Qigong — many are free) and mention participation to your GP.',
+    resources: [
+      '🤝 PA interest groups: onepa.gov.sg → search "healthiersg" → filter by your area',
+      '🏠 If aged 60+: visit nearest AAC for befriending and active ageing programmes',
+      '📱 Healthy 365 Step Challenges: stay motivated with community leaderboards',
+    ],
+  },
+  start2move: {
+    tier: 'START',
+    emoji: '🚀',
+    primaryStep:
+      'Download the Healthy 365 app and search "Start2Move" under Explore → Events. Register for the free 6-session beginner programme — the most appropriate first step for your current activity level.',
+    healthierSG:
+      'Tell your Healthier SG doctor about your Start2Move enrolment at your next check-in. It counts directly toward your exercise health goals on your Health Plan.',
+    resources: [
+      '📱 Healthy 365: free on App Store and Google Play',
+      '🏋️ Active Health Lab, Woodlands: Balance & Muscular Fitness from SGD 6 per session',
+      '📋 Print or screenshot your PAVS result and bring it to your next GP visit as your activity baseline',
+    ],
+  },
+  active_health_lab: {
+    tier: 'LEVEL_UP',
+    emoji: '💪',
+    primaryStep:
+      'You meet Singapore\'s minimum activity guidelines — now build on this. Book a "Strength 2.0 Foundation" or "Balance & Muscular Fitness" session at Woodlands Active Health Lab, from SGD 6.',
+    healthierSG:
+      'Active Health Lab programmes are formally recognised within the Healthier SG Health Plan community pathway. Mention your programme at your next annual check-in.',
+    resources: [
+      '🏋️ Book at activesg.gov.sg → Active Health Lab → Woodlands Sport Centre',
+      '📊 Body Composition Assessment available: from SGD 7 (Tue/Thu/Sat/Fri)',
+      '📱 Track sessions with the ActiveSG+ app',
+    ],
+  },
+  perform: {
+    tier: 'ADVANCED',
+    emoji: '⚡',
+    primaryStep:
+      'You are well above minimum guidelines — outstanding. Try the "Perform 2.0 AMRAP" or "ENGINE Workout" at Woodlands Active Health Lab, from SGD 6, for structured high-intensity programming.',
+    healthierSG:
+      'Share your high activity level with your Healthier SG GP. You may be eligible for performance programme referrals and advanced tracking within your Health Plan.',
+    resources: [
+      '⚡ Free HIIT Workout Library (Adults 19–49, Workouts #1–12): HealthHub → Move It',
+      '🏆 Perform 2.0 sessions: multiple weekly slots available April 2026',
+      '📊 Consider a Body Composition Assessment to establish a performance baseline',
+    ],
+  },
+};
+
+// ─── CTA SELECTION LOGIC ──────────────────────────────────────────────────────
+// Implements the 8-tier hierarchy from the Ecosystem Report, Section 5.7
+const selectCTA = (parsed) => {
+  const {
+    pavsScore, symptomFlag, medFlag, age,
+    sdohPsychological, sdohFinancial, sdohSocial,
+  } = parsed;
+
+  if (symptomFlag)                              return CTA.symptoms_present;
+  if (medFlag)                                  return CTA.chronic_metabolic;
+  if (age === '60+' && pavsScore < 150)         return CTA.senior_low_activity;
+  if (sdohPsychological)                        return CTA.mental_health_first;
+  if (sdohFinancial && pavsScore < 150)         return CTA.financial_low_activity;
+  if (sdohSocial && pavsScore < 150)            return CTA.social_low_activity;
+  if (pavsScore < 150)                          return CTA.start2move;
+  if (pavsScore <= 300)                         return CTA.active_health_lab;
+  return CTA.perform;
+};
+
+// ─── DICTIONARY ───────────────────────────────────────────────────────────────
 const DICTIONARY = {
   en: {
     back: 'Back',
-    typing: 'AURA is typing...',
-    inputPlaceholder: 'Type your message...',
-    hintText: 'Type freely or select an example:',
-    conclusion: ' I have mapped your profile and will now generate your secure clinical report.',
-    error: 'There was a secure connection error while saving your profile. Please try again.',
+    typing: 'AURA is typing\u2026',
+    inputPlaceholder: 'Type your answer or choose below\u2026',
+    hintText: 'Select an option or type freely:',
+    sessionLabel: 'Session',
+    domainLabel: 'Screening Domain',
+    ctaTitle: 'Your Personalised Health Plan',
+    ctaPrimary: 'Your Next Step',
+    ctaHealthierSG: 'Your Healthier SG Connection',
+    ctaResources: 'Additional Resources',
+    error: 'A connection error occurred while saving your profile. Please try again.',
+    progressLabel: (step, total) => `Step ${step + 1} of ${total}`,
+    // 10 prompts — indices match DOMAIN_CONFIG
     prompts: [
-      /* 0 */ "Hi! I'm AURA. Let's find the right community resources for you. Roughly how many days a week do you do aerobic exercise, and for how long each time?",
-      /* 1 */ "Do you do any muscle-strengthening activities? (e.g., weights, resistance bands, or bodyweight exercises)",
-      /* 2 */ "Do you have any chronic conditions (like high blood pressure) or experience chest pain or dizziness when active?",
-      /* 3 */ "What is the main thing stopping you from using community health services? (e.g. cost, distance, lack of time)",
-      /* 4 */ "Almost done! Could you share your age group and gender? (e.g. Male, 41-60)",
-      /* 5 */ "What are the first 2 digits of your postal code so I can find services near you?",
-      /* 6 */ "One final thing! Do you have a previous NEXUS Assessment ID? If yes, paste it below. If not, select 'No'."
+      /* 0 pavs_days    */ 'Hi, I\'m AURA 👋 I\'m here to connect you with the right community health resources. Let\'s start with physical activity. On a typical week, how many days do you do moderate or vigorous exercise? (e.g. brisk walking, cycling, swimming, gym)',
+      /* 1 pavs_mins    */ 'Great — and on those active days, roughly how many minutes do you usually exercise each time?',
+      /* 2 strength     */ 'Do you do any muscle-strengthening activities? (e.g. weights, resistance bands, bodyweight exercises like push-ups or squats)',
+      /* 3 medical      */ 'Do you have any ongoing health conditions — such as high blood pressure, prediabetes, or heart disease? And do you ever feel chest pain or dizziness when you are physically active?',
+      /* 4 barriers     */ 'What is the main thing that makes it difficult to access health or fitness services in your community? Be honest — there are no wrong answers.',
+      /* 5 social       */ 'Roughly how many people — family or friends — could you call on for support if you needed help? And would you say you have people you can talk to openly?',
+      /* 6 wellbeing    */ 'Over the past two weeks, how have you been feeling overall? Have you felt stressed, low in mood, or overwhelmed — for example, due to work, caregiving, or financial pressure?',
+      /* 7 demographics */ 'Almost done! Could you share your age group and gender? This helps me find programmes designed for your profile. (e.g. Female, 41–60)',
+      /* 8 postal_code  */ 'What are the first two digits of your postal code? This lets me map the nearest resources to you.',
+      /* 9 previous_id  */ 'Last question — do you have a previous NEXUS Assessment ID? If yes, paste it below so I can link your records. If not, just select No.',
     ],
+
+    // Reflections — empathic, motivational, clinically appropriate
     reflections: [
-      (input) => {
-        const match = input.match(/\d+/);
-        const days = match ? parseInt(match[0], 10) : null;
-        return days === 0 
-          ? "It can be really tough to find the time or energy to start. Let's build something manageable." 
-          : "That's a great baseline. Any movement is a step in the right direction.";
+      /* 0 */ (input) => {
+        const n = parseInt((input.match(/\d+/) || ['0'])[0], 10);
+        return n === 0
+          ? 'Starting from zero is completely valid — many people are in the same position, and that is exactly why these programmes exist.'
+          : n <= 2
+          ? 'Two days or fewer is a common starting point. Small, consistent steps make a real difference.'
+          : 'A solid base to build on. ';
       },
-      (input) => "Got it. Tracking strength is just as important as cardio.",
-      (input) => "Thank you for sharing that. Safety is our top priority.",
-      (input) => "That is a very real challenge. Identifying these hurdles helps us find better workarounds.",
-      (input) => "Noted, thank you.",
-      (input) => "Perfect, mapping your location now.",
-      (input) => /(no|none|don't)/i.test(input) 
-        ? "No problem, we will start a fresh record today." 
-        : "Great, I will link your previous records to track your progress."
+      /* 1 */ (input) => {
+        const n = parseInt((input.match(/\d+/) || ['0'])[0], 10);
+        return n < 20
+          ? 'Short sessions still count — and they can grow over time. '
+          : n >= 45
+          ? 'Strong session duration. '
+          : 'A healthy session length. ';
+      },
+      /* 2 */ () => 'Strength training is just as important as aerobic activity for long-term health. ',
+      /* 3 */ () => 'Thank you for sharing that — I will use this to make sure your recommendations are safe and appropriate. ',
+      /* 4 */ () => 'That is a very real barrier. Naming it helps us find the right workaround. ',
+      /* 5 */ () => 'Social connection is one of the most powerful protective factors for long-term health. ',
+      /* 6 */ () => 'Your mental wellbeing matters as much as your physical health. ',
+      /* 7 */ () => 'Noted. ',
+      /* 8 */ () => 'Mapping your nearest resources now. ',
+      /* 9 */ (input) =>
+        /(no|none|don'?t)/i.test(input)
+          ? 'No problem — I will start a fresh record for you today. '
+          : 'I will link your previous records to track your progress over time. ',
     ],
+
+    // Quick replies per step
     quickReplies: [
-      ["0 days", "1-2 days, 30 mins", "3-4 days, 45 mins", "5+ days, 60 mins"],
-      ["No strength training", "1 day a week", "2+ days a week"],
-      ["No medical conditions", "High blood pressure", "Occasional dizziness", "Chest pain"],
-      ["Lack of time", "Too expensive", "Too far away", "Prefer hospitals", "No barriers"],
-      ["Male, 21-40", "Female, 21-40", "Male, 41-60", "Female, 41-60", "60+"],
-      ["Sector 73", "Sector 54", "Sector 18", "Not sure"],
-      ["No previous ID"]
-    ]
+      /* 0 pavs_days    */ ['0 days', '1–2 days', '3–4 days', '5–7 days'],
+      /* 1 pavs_mins    */ ['Less than 20 mins', '20–30 mins', '30–45 mins', '45–60 mins', '60+ mins'],
+      /* 2 strength     */ ['No strength training', '1 day a week', '2 days a week', '3+ days a week'],
+      /* 3 medical      */ ['No conditions or symptoms', 'High blood pressure', 'Prediabetes or diabetes', 'Heart condition', 'Dizziness or chest pain when active'],
+      /* 4 barriers     */ ['Lack of time', 'Too expensive', 'Too far away', 'I prefer hospitals over community', 'Unsure what is available', 'No barriers for me'],
+      /* 5 social       */ ['I have several people I can rely on', 'I have one or two close people', 'I mostly manage on my own', 'I feel quite isolated'],
+      /* 6 wellbeing    */ ['Feeling good overall', 'Some stress but managing', 'Feeling quite stressed or low', 'Overwhelmed — caregiving or financial pressure'],
+      /* 7 demographics */ ['Male, 21–40', 'Female, 21–40', 'Male, 41–60', 'Female, 41–60', 'Male, 60+', 'Female, 60+'],
+      /* 8 postal_code  */ ['73 (Woodlands)', '75–76 (Yishun)', '75 (Sembawang)', '68 (Admiralty/Canberra)', 'Other / Not sure'],
+      /* 9 previous_id  */ ['No previous ID'],
+    ],
   },
+
+  // ── Malay ──────────────────────────────────────────────────────────────────
   ms: {
     back: 'Kembali',
-    typing: 'AURA sedang menaip...',
-    inputPlaceholder: 'Taip mesej anda...',
-    hintText: 'Taip secara bebas atau pilih contoh:',
-    conclusion: ' Saya telah memetakan profil anda dan kini akan menjana laporan klinikal anda.',
-    error: 'Terdapat ralat sambungan. Sila cuba lagi.',
+    typing: 'AURA sedang menaip\u2026',
+    inputPlaceholder: 'Taip jawapan anda atau pilih di bawah\u2026',
+    hintText: 'Pilih pilihan atau taip sendiri:',
+    sessionLabel: 'Sesi',
+    domainLabel: 'Domain Saringan',
+    ctaTitle: 'Pelan Kesihatan Peribadi Anda',
+    ctaPrimary: 'Langkah Seterusnya',
+    ctaHealthierSG: 'Sambungan Healthier SG Anda',
+    ctaResources: 'Sumber Tambahan',
+    error: 'Ralat sambungan berlaku. Sila cuba lagi.',
+    progressLabel: (step, total) => `Langkah ${step + 1} daripada ${total}`,
     prompts: [
-      "Hai! Saya AURA. Agak-agak berapa hari seminggu anda bersenam aerobik, dan berapa lama setiap sesi?",
-      "Adakah anda melakukan aktiviti menguatkan otot? (cth: angkat berat atau senaman berat badan)",
-      "Ada sebarang penyakit kronik (macam darah tinggi) atau rasa sakit dada/pening bila aktif?",
-      "Apa yang paling menghalang anda daripada guna servis komuniti ni? (cth: kos, jauh, takde masa)",
-      "Hampir siap! Boleh kongsi kumpulan umur dan jantina anda? (cth: Lelaki, 41-60)",
-      "Apakah 2 digit pertama poskod anda supaya saya boleh cari servis berdekatan?",
-      "Adakah anda mempunyai ID Penilaian NEXUS yang lepas? Jika ya, sila masukkan di bawah. Jika tiada, pilih 'Tiada'."
+      'Hai, saya AURA 👋 Pada minggu biasa, berapa hari anda melakukan senaman sederhana atau kuat? (cth. berjalan pantas, berbasikal, berenang)',
+      'Berapa minit biasanya anda bersenam pada setiap sesi aktif tersebut?',
+      'Adakah anda melakukan aktiviti menguatkan otot? (cth. angkat berat, band rintangan, senaman berat badan)',
+      'Adakah anda mempunyai sebarang penyakit kronik seperti darah tinggi, pradiabetes, atau penyakit jantung? Adakah anda pernah rasa sakit dada atau pening ketika aktif?',
+      'Apakah cabaran utama anda untuk menggunakan perkhidmatan kesihatan komuniti?',
+      'Lebih kurang berapa ramai orang — keluarga atau rakan — yang boleh anda hubungi jika memerlukan bantuan? Adakah anda mempunyai seseorang untuk bercerita?',
+      'Dalam dua minggu lalu, bagaimana perasaan anda secara keseluruhan? Adakah anda berasa tertekan, murung, atau terbeban?',
+      'Hampir siap! Boleh kongsi kumpulan umur dan jantina anda? (cth. Perempuan, 41–60)',
+      'Apakah dua digit pertama poskod anda supaya saya boleh mencari sumber berdekatan?',
+      'Soalan terakhir — adakah anda mempunyai ID Penilaian NEXUS yang sebelumnya? Jika ya, tampal di bawah. Jika tidak, pilih Tiada.',
     ],
     reflections: [
-      (input) => {
-        const match = input.match(/\d+/);
-        const days = match ? parseInt(match[0], 10) : null;
-        return days === 0 ? "Memang susah nak mula. Kita cuba cari jalan yang paling sesuai." : "Permulaan yang bagus.";
-      },
-      (input) => "Faham. Kekuatan otot juga sangat penting.",
-      (input) => "Terima kasih kerana sudi kongsi. Keselamatan anda adalah keutamaan kami.",
-      (input) => "Itu memang cabaran yang nyata. Mengetahui hal ini bantu kami cari jalan penyelesaian.",
-      (input) => "Faham. Terima kasih.",
-      (input) => "Sempurna, memetakan lokasi anda sekarang.",
-      (input) => /(tidak|tiada|no)/i.test(input) ? "Tak apa, kita mula rekod baharu hari ini." : "Bagus, saya akan hubungkan rekod lama anda."
+      (input) => { const n = parseInt((input.match(/\d+/) || ['0'])[0], 10); return n === 0 ? 'Memulakan dari sifar adalah normal. ' : 'Permulaan yang baik. '; },
+      () => 'Tempoh sesi anda direkodkan. ',
+      () => 'Latihan kekuatan sama pentingnya dengan senaman aerobik. ',
+      () => 'Terima kasih kerana berkongsi. Saya akan pastikan cadangan anda selamat. ',
+      () => 'Itu satu cabaran yang nyata. ',
+      () => 'Sokongan sosial adalah faktor perlindungan yang penting. ',
+      () => 'Kesejahteraan mental anda sama pentingnya dengan kesihatan fizikal. ',
+      () => 'Direkodkan. ',
+      () => 'Memetakan sumber berdekatan sekarang. ',
+      (input) => /(tidak|tiada|no)/i.test(input) ? 'Baik, rekod baharu akan dimulakan. ' : 'Saya akan menghubungkan rekod lama anda. ',
     ],
     quickReplies: [
-      ["0 hari", "1-2 hari, 30 minit", "3-4 hari, 45 minit", "5+ hari, 60 minit"],
-      ["Tiada senaman otot", "1 hari seminggu", "2+ hari seminggu"],
-      ["Tiada penyakit", "Darah tinggi", "Kadang-kadang pening", "Sakit dada"],
-      ["Takde masa", "Terlalu mahal", "Terlalu jauh", "Lebih suka hospital", "Tiada halangan"],
-      ["Lelaki, 21-40", "Perempuan, 21-40", "Lelaki, 41-60", "Perempuan, 41-60", "60+"],
-      ["Sektor 73", "Sektor 54", "Sektor 18", "Tidak pasti"],
-      ["Tiada ID lepas"]
-    ]
+      ['0 hari', '1–2 hari', '3–4 hari', '5–7 hari'],
+      ['Kurang 20 minit', '20–30 minit', '30–45 minit', '45–60 minit', '60+ minit'],
+      ['Tiada latihan kekuatan', '1 hari seminggu', '2 hari seminggu', '3+ hari seminggu'],
+      ['Tiada penyakit atau simptom', 'Darah tinggi', 'Pradiabetes atau diabetes', 'Penyakit jantung', 'Pening atau sakit dada semasa aktif'],
+      ['Kekurangan masa', 'Terlalu mahal', 'Terlalu jauh', 'Lebih suka hospital', 'Tidak pasti apa yang ada', 'Tiada halangan'],
+      ['Ada beberapa orang yang boleh saya hubungi', 'Ada satu atau dua orang rapat', 'Saya mostly uruskan sendiri', 'Saya rasa agak keseorangan'],
+      ['Perasaan baik secara keseluruhannya', 'Ada sedikit tekanan tapi boleh kawal', 'Rasa sangat tertekan atau sedih', 'Terbeban — tanggungjawab penjagaan atau tekanan kewangan'],
+      ['Lelaki, 21–40', 'Perempuan, 21–40', 'Lelaki, 41–60', 'Perempuan, 41–60', 'Lelaki, 60+', 'Perempuan, 60+'],
+      ['73 (Woodlands)', '75–76 (Yishun)', '75 (Sembawang)', '68 (Admiralty/Canberra)', 'Lain-lain / Tidak pasti'],
+      ['Tiada ID'],
+    ],
   },
+
+  // ── Mandarin ───────────────────────────────────────────────────────────────
   zh: {
     back: '返回',
-    typing: 'AURA 正在输入...',
-    inputPlaceholder: '输入您的消息...',
-    hintText: '自由输入，或选择一个示例：',
-    conclusion: ' 我已经记录了您的个人资料，现在将为您生成临床报告。',
-    error: '发生连接错误。请重试。',
+    typing: 'AURA 正在输入\u2026',
+    inputPlaceholder: '请输入您的回答或选择以下选项\u2026',
+    hintText: '请选择或自由输入：',
+    sessionLabel: '会话',
+    domainLabel: '筛查领域',
+    ctaTitle: '您的个性化健康计划',
+    ctaPrimary: '您的下一步行动',
+    ctaHealthierSG: '您与 Healthier SG 的联系',
+    ctaResources: '其他资源',
+    error: '保存时发生连接错误，请重试。',
+    progressLabel: (step, total) => `第 ${step + 1} 步，共 ${total} 步`,
     prompts: [
-      "你好！我是 AURA。你通常每个星期做几天有氧运动？每次大概多久？",
-      "你有做一些强化肌肉的运动吗？（例如：举重或自身体重训练）",
-      "您有没有慢性病（比如高血压），或者在活动时觉得胸痛或头晕？",
-      "最主要是什么原因阻止你使用社区服务呢？（比如：费用、距离、没时间）",
-      "快完成了！能分享一下您的年龄段和性别吗？（例如：男，41-60）",
-      "您的邮政编码前两位数是多少，以便我查找您附近的资源？",
-      "最后一步！您有之前的 NEXUS 评估 ID 吗？如果有，请在下面输入。如果没有，请选择'没有'。"
+      '你好，我是 AURA 👋 在典型的一周里，您通常有几天进行中等或剧烈强度的运动？（例如快走、骑车、游泳）',
+      '在这些运动的日子里，您每次通常运动多少分钟？',
+      '您有进行任何肌肉力量训练吗？（例如举重、弹力带、俯卧撑或深蹲）',
+      '您是否有任何慢性病，例如高血压、糖尿病前期或心脏病？运动时是否曾感到胸痛或头晕？',
+      '什么是您使用社区健康服务的主要障碍？',
+      '大概有多少家人或朋友可以在您需要时提供帮助？您是否有可以倾心交谈的人？',
+      '在过去两周里，您的整体感觉如何？是否感到压力大、情绪低落或不知所措？',
+      '快完成了！能告诉我您的年龄段和性别吗？（例如：女，41–60）',
+      '您的邮政编码前两位数是什么？这样我可以为您找到附近的资源。',
+      '最后一个问题 — 您是否有之前的 NEXUS 评估 ID？如有，请粘贴在下方；如没有，请选择"没有"。',
     ],
     reflections: [
-      (input) => {
-        const match = input.match(/\d+/);
-        const days = match ? parseInt(match[0], 10) : null;
-        return days === 0 ? "万事开头难。让我们看看如何制定一个轻松的计划。" : "很好的开始。";
-      },
-      (input) => "明白了。记录力量训练也很重要。",
-      (input) => "谢谢您的分享。安全是我们的首要任务。",
-      (input) => "这是一个很现实的挑战。了解这些能帮我们找到更好的解决办法。",
-      (input) => "明白，谢谢您。",
-      (input) => "完美，现在正在定位您的位置。",
-      (input) => /(没|无|不|no)/i.test(input) ? "没问题，我们今天建立一个新的记录。" : "太好了，我将链接您的历史记录。"
+      (input) => { const n = parseInt((input.match(/\d+/) || ['0'])[0], 10); return n === 0 ? '从零开始完全正常。' : '这是一个很好的起点。'; },
+      () => '运动时长已记录。',
+      () => '力量训练和有氧运动同样重要。',
+      () => '感谢您的分享，我会确保建议对您安全适合。',
+      () => '这是一个很现实的障碍。',
+      () => '社会连接是保护长期健康的重要因素。',
+      () => '您的心理健康与身体健康同样重要。',
+      () => '已记录，谢谢。',
+      () => '正在为您定位附近的资源。',
+      (input) => /(没|无|不|no)/i.test(input) ? '没问题，今天将为您建立新记录。' : '很好，我将链接您的历史记录。',
     ],
     quickReplies: [
-      ["0 天", "1-2天, 30分钟", "3-4天, 45分钟", "5天以上, 60分钟"],
-      ["没有力量训练", "每周 1 天", "每周 2 天以上"],
-      ["没有疾病", "高血压", "偶尔头晕", "胸痛"],
-      ["没时间", "太贵了", "太远了", "更喜欢去医院", "没有障碍"],
-      ["男, 21-40", "女, 21-40", "男, 41-60", "女, 41-60", "60岁以上"],
-      ["邮区 73", "邮区 54", "邮区 18", "不确定"],
-      ["没有之前的 ID"]
-    ]
+      ['0 天', '1–2 天', '3–4 天', '5–7 天'],
+      ['少于 20 分钟', '20–30 分钟', '30–45 分钟', '45–60 分钟', '60 分钟以上'],
+      ['没有力量训练', '每周 1 天', '每周 2 天', '每周 3 天以上'],
+      ['没有疾病或症状', '高血压', '糖尿病前期或糖尿病', '心脏病', '运动时头晕或胸痛'],
+      ['没时间', '太贵了', '太远了', '更喜欢去医院', '不确定有哪些资源', '没有障碍'],
+      ['有几个可以依靠的人', '有一两个亲近的人', '大多数情况自己处理', '感到相当孤立'],
+      ['整体感觉不错', '有些压力但能应对', '感到很压抑或情绪低落', '感到不知所措 — 照顾或经济压力'],
+      ['男, 21–40', '女, 21–40', '男, 41–60', '女, 41–60', '男, 60+', '女, 60+'],
+      ['73 (Woodlands)', '75–76 (义顺)', '75 (三巴旺)', '68 (海军部/甘巴)', '其他 / 不确定'],
+      ['没有之前的 ID'],
+    ],
   },
+
+  // ── Tamil ──────────────────────────────────────────────────────────────────
   ta: {
     back: 'பின்செல்',
-    typing: 'AURA தட்டச்சு செய்கிறார்...',
-    inputPlaceholder: 'உங்கள் செய்தியை உள்ளிடவும்...',
-    hintText: 'சுயமாக தட்டச்சு செய்யவும் அல்லது உதாரணத்தைத் தேர்ந்தெடுக்கவும்:',
-    conclusion: ' நான் உங்கள் சுயவிவரத்தை வரைபடமாக்கியுள்ளேன், இப்போது உங்கள் மருத்துவ அறிக்கையை உருவாக்குவேன்.',
-    error: 'தொடர்பு பிழை ஏற்பட்டது. தயவுசெய்து மீண்டும் முயற்சிக்கவும்.',
+    typing: 'AURA தட்டச்சு செய்கிறார்\u2026',
+    inputPlaceholder: 'உங்கள் பதிலை உள்ளிடவும் அல்லது கீழே தேர்வு செய்யவும்\u2026',
+    hintText: 'ஒரு விருப்பத்தைத் தேர்ந்தெடுக்கவும் அல்லது சுயமாக தட்டச்சு செய்யவும்:',
+    sessionLabel: 'அமர்வு',
+    domainLabel: 'திரையிடல் களம்',
+    ctaTitle: 'உங்கள் தனிப்பட்ட சுகாதார திட்டம்',
+    ctaPrimary: 'உங்கள் அடுத்த படி',
+    ctaHealthierSG: 'Healthier SG இணைப்பு',
+    ctaResources: 'கூடுதல் வளங்கள்',
+    error: 'சேமிக்கும் போது இணைப்பு பிழை ஏற்பட்டது. மீண்டும் முயற்சிக்கவும்.',
+    progressLabel: (step, total) => `படி ${step + 1} / ${total}`,
     prompts: [
-      "வணக்கம்! நான் AURA. வாரத்திற்கு எத்தனை நாட்கள் ஏரோபிக் உடற்பயிற்சி செய்கிறீர்கள், ஒவ்வொரு முறையும் எவ்வளவு நேரம்?",
-      "நீங்கள் தசை வலுப்படுத்தும் பயிற்சிகளைச் செய்கிறீர்களா? (எ.கா. எடை தூக்குதல்)",
-      "உங்களுக்கு நாள்பட்ட நோய்கள் (உயர் ரத்த அழுத்தம்) உள்ளதா, அல்லது சுறுசுறுப்பாக இருக்கும்போது நெஞ்சு வலி/தலைச்சுற்றல் வருமா?",
-      "சமூக சேவைகளைப் பயன்படுத்துவதை எது தடுக்கிறது? (எ.கா. செலவு, தூரம், நேரமின்மை)",
-      "கிட்டத்தட்ட முடிந்துவிட்டது! உங்கள் வயது மற்றும் பாலினத்தைப் பகிர முடியுமா? (எ.கா. ஆண், 41-60)",
-      "உங்களுக்கு அருகிலுள்ள சேவைகளைக் கண்டறிய உங்கள் அஞ்சல் குறியீட்டின் முதல் 2 இலக்கங்கள் என்ன?",
-      "இறுதியாக! உங்களிடம் முந்தைய NEXUS மதிப்பீட்டு ஐடி உள்ளதா? இருந்தால், அதை கீழே உள்ளிடவும். இல்லையெனில், 'இல்லை' என்பதைத் தேர்ந்தெடுக்கவும்."
+      'வணக்கம், நான் AURA 👋 வழக்கமான வாரத்தில், நீங்கள் எத்தனை நாட்கள் மிதமான அல்லது தீவிரமான உடற்பயிற்சி செய்கிறீர்கள்? (எ.கா. வேகமாக நடைபயிற்சி, சைக்கிள், நீச்சல்)',
+      'அந்த தீவிர நாட்களில் நீங்கள் வழக்கமாக எவ்வளவு நேரம் உடற்பயிற்சி செய்கிறீர்கள்?',
+      'நீங்கள் தசை வலிமைப் பயிற்சிகளை செய்கிறீர்களா? (எ.கா. எடை தூக்குதல், ரெசிஸ்டன்ஸ் பேண்ட், புஷ்-அப்ஸ்)',
+      'உங்களுக்கு உயர் இரத்த அழுத்தம், நீரிழிவு முன்நிலை, அல்லது இதய நோய் போன்ற நாட்பட்ட நோய்கள் உள்ளதா? செயலில் இருக்கும்போது நெஞ்சு வலி அல்லது தலைச்சுற்றல் ஏற்படுகிறதா?',
+      'சமூக சுகாதார சேவைகளை அணுகுவதில் உங்களின் முக்கிய தடை என்ன?',
+      'தோராயமாக எத்தனை குடும்பத்தினர் அல்லது நண்பர்கள் உங்களுக்கு உதவ முடியும்? நெருங்கி பேச யாரேனும் இருக்கிறார்களா?',
+      'கடந்த இரண்டு வாரங்களில் நீங்கள் எப்படி உணர்ந்தீர்கள்? மன அழுத்தம், மனச்சோர்வு, அல்லது அதிக சுமையாக உணர்ந்தீர்களா?',
+      'கிட்டத்தட்ட முடிந்துவிட்டது! உங்கள் வயது மற்றும் பாலினம் என்ன? (எ.கா. பெண், 41–60)',
+      'உங்கள் தபால் குறியீட்டின் முதல் இரண்டு இலக்கங்கள் என்ன?',
+      'கடைசி கேள்வி — உங்களிடம் ஏற்கனவே NEXUS மதிப்பீட்டு ID உள்ளதா? இருந்தால் கீழே ஒட்டவும்; இல்லையெனில் "இல்லை" என்பதைத் தேர்ந்தெடுக்கவும்.',
     ],
     reflections: [
-      (input) => {
-        const match = input.match(/\d+/);
-        const days = match ? parseInt(match[0], 10) : null;
-        return days === 0 ? "தொடங்குவது கடினமாக இருக்கலாம். எளிதான வழியைக் கண்டுபிடிப்போம்." : "இது ஒரு சிறந்த தொடக்கம்.";
-      },
-      (input) => "புரிந்தது. வலிமைப் பயிற்சியைக் கண்காணிப்பது முக்கியம்.",
-      (input) => "பகிர்ந்ததற்கு நன்றி. பாதுகாப்பு எங்கள் முதன்மை முன்னுரிமை.",
-      (input) => "இது உண்மையான சவால். இதை அறிவது சிறந்த தீர்வுகளைக் கண்டறிய உதவுகிறது.",
-      (input) => "புரிந்தது, நன்றி.",
-      (input) => "சரியானது, உங்கள் இருப்பிடத்தை வரைபடமாக்குகிறது.",
-      (input) => /(இல்லை|no)/i.test(input) ? "பரவாயில்லை, இன்று புதிய பதிவை தொடங்குவோம்." : "நன்று, உங்கள் முந்தைய பதிவுகளை இணைக்கிறேன்."
+      (input) => { const n = parseInt((input.match(/\d+/) || ['0'])[0], 10); return n === 0 ? 'சூன்யத்திலிருந்து தொடங்குவது முற்றிலும் சாதாரணமானது. ' : 'இது ஒரு சிறந்த தொடக்கம். '; },
+      () => 'சேஷன் நேரம் பதிவு செய்யப்பட்டது. ',
+      () => 'வலிமைப் பயிற்சி ஏரோபிக் பயிற்சியைப் போலவே முக்கியமானது. ',
+      () => 'பகிர்ந்ததற்கு நன்றி. பரிந்துரைகள் உங்களுக்கு பாதுகாப்பானவை என்பதை உறுதிப்படுத்துவேன். ',
+      () => 'இது மிகவும் உண்மையான சவால். ',
+      () => 'சமூக இணைப்பு ஆரோக்கியத்திற்கான முக்கியமான பாதுகாப்பு காரணி. ',
+      () => 'உங்கள் மனநல நலன் உடல் ஆரோக்கியம் போலவே முக்கியமானது. ',
+      () => 'பதிவு செய்யப்பட்டது. ',
+      () => 'அருகிலுள்ள வளங்களை இப்போது வரைபடமாக்குகிறேன். ',
+      (input) => /(இல்லை|no)/i.test(input) ? 'பரவாயில்லை, புதிய பதிவை தொடங்குவோம். ' : 'முந்தைய பதிவுகளை இணைக்கிறேன். ',
     ],
     quickReplies: [
-      ["0 நாட்கள்", "1-2 நாட்கள், 30 நிமிடம்", "3-4 நாட்கள், 45 நிமிடம்", "5+ நாட்கள், 60 நிமிடம்"],
-      ["தசை பயிற்சி இல்லை", "வாரத்தில் 1 நாள்", "வாரத்தில் 2+ நாட்கள்"],
-      ["மருத்துவ நிலைமைகள் இல்லை", "உயர் இரத்த அழுத்தம்", "தலைச்சுற்றல்", "நெஞ்சு வலி"],
-      ["நேரமின்மை", "அதிக செலவு", "மிகவும் தூரம்", "மருத்துவமனைகளை விரும்புகிறேன்", "தடைகள் இல்லை"],
-      ["ஆண், 21-40", "பெண், 21-40", "ஆண், 41-60", "பெண், 41-60", "60+"],
-      ["பிரிவு 73", "பிரிவு 54", "பிரிவு 18", "தெரியாது"],
-      ["முந்தைய ஐடி இல்லை"]
-    ]
-  }
+      ['0 நாட்கள்', '1–2 நாட்கள்', '3–4 நாட்கள்', '5–7 நாட்கள்'],
+      ['20 நிமிடங்களுக்கும் குறைவு', '20–30 நிமிடங்கள்', '30–45 நிமிடங்கள்', '45–60 நிமிடங்கள்', '60+ நிமிடங்கள்'],
+      ['தசை பயிற்சி இல்லை', 'வாரத்தில் 1 நாள்', 'வாரத்தில் 2 நாட்கள்', 'வாரத்தில் 3+ நாட்கள்'],
+      ['நோய் அல்லது அறிகுறிகள் இல்லை', 'உயர் இரத்த அழுத்தம்', 'நீரிழிவு முன்நிலை அல்லது நீரிழிவு', 'இதய நோய்', 'செயலில் இருக்கும்போது தலைச்சுற்றல் அல்லது நெஞ்சு வலி'],
+      ['நேரமின்மை', 'மிகவும் விலை அதிகம்', 'மிகவும் தூரம்', 'மருத்துவமனைகளை விரும்புகிறேன்', 'என்ன கிடைக்கும் என்று தெரியாது', 'தடைகள் இல்லை'],
+      ['பல நம்பகமான நபர்கள் உள்ளனர்', 'ஒன்று அல்லது இரண்டு நெருங்கிய நபர்கள்', 'பெரும்பாலும் சுயமாக சமாளிக்கிறேன்', 'மிகவும் தனிமையாக உணர்கிறேன்'],
+      ['ஒட்டுமொத்தமாக நல்லாக உணர்கிறேன்', 'சில மன அழுத்தம் ஆனால் சமாளிக்கிறேன்', 'மிகவும் மன அழுத்தம் அல்லது மனச்சோர்வு', 'அதிக சுமை — பராமரிப்பு அல்லது நிதி அழுத்தம்'],
+      ['ஆண், 21–40', 'பெண், 21–40', 'ஆண், 41–60', 'பெண், 41–60', 'ஆண், 60+', 'பெண், 60+'],
+      ['73 (Woodlands)', '75–76 (Yishun)', '75 (Sembawang)', '68 (Admiralty/Canberra)', 'மற்றவை / தெரியாது'],
+      ['முந்தைய ID இல்லை'],
+    ],
+  },
 };
 
-const AuraChatbot = () => {
-  const [isDark, setIsDark] = useState(false);
-  const navigate = useNavigate();
-  const chatEndRef = useRef(null);
-  
-  const [lang] = useState(() => localStorage.getItem('nexus_language') || 'en');
-  const langData = DICTIONARY[lang] || DICTIONARY['en'];
-  const [sessionId] = useState(() => 'NX-' + Math.random().toString(36).substr(2, 9).toUpperCase());
-  
-  const [currentStep, setCurrentStep] = useState(0);
-  const [messages, setMessages] = useState([]);
-  const [userInput, setUserInput] = useState('');
-  const [isTyping, setIsTyping] = useState(false);
-  const [collectedData, setCollectedData] = useState({});
+// ─── CLINICAL DATA PARSER ─────────────────────────────────────────────────────
+// Now correctly parses PAVS as Days × Minutes for a validated composite score.
+// Also captures 5 SDOH domains from the expanded question set.
+const parseClinicalData = (raw) => {
+  // PAVS — Q0 days, Q1 minutes
+  const daysStr  = (raw.pavs_days || '').toLowerCase();
+  const minsStr  = (raw.pavs_mins  || '').toLowerCase();
 
+  const daysN = daysStr.includes('0 day') || daysStr === '0' ? 0
+              : daysStr.match(/5.?7|5\+|every day/i)         ? 6
+              : daysStr.match(/3.?4/i)                       ? 3.5
+              : daysStr.match(/1.?2/i)                       ? 1.5
+              : parseInt((daysStr.match(/\d+/) || ['0'])[0], 10);
+
+  const minsN = minsStr.includes('60+') || minsStr.includes('60 min') ? 65
+              : minsStr.match(/45.?60|45–60/i)                         ? 52
+              : minsStr.match(/30.?45|30–45/i)                         ? 37
+              : minsStr.match(/20.?30|20–30/i)                         ? 25
+              : minsStr.includes('less') || minsStr.includes('20')     ? 15
+              : parseInt((minsStr.match(/\d+/) || ['0'])[0], 10);
+
+  const pavsScore    = Math.round(daysN * minsN * 7 / 7); // weekly total = days × mins
+  const pavsDays     = daysN;
+  const pavsMinutes  = minsN;
+
+  // Strength
+  const strStr      = (raw.strength || '').toLowerCase();
+  const strengthDays = strStr.includes('3+') ? 3
+                     : strStr.includes('2')   ? 2
+                     : strStr.includes('1')   ? 1
+                     : 0;
+
+  // Medical safety
+  const medStr      = (raw.medical || '').toLowerCase();
+  const symptomFlag = /(dizziness|chest pain|pening|dada|头晕|胸痛|தலைச்சுற்றல்|நெஞ்சு வலி)/.test(medStr);
+  const medFlag     = /(blood pressure|prediabetes|diabetes|heart|darah tinggi|高血压|糖尿病|心脏|உயர் இரத்த|நீரிழிவு|இதய)/.test(medStr);
+
+  // SDOH — Financial
+  const barrStr      = (raw.barriers || '').toLowerCase();
+  const sdohFinancial = /(expensive|cost|afford|mahal|kos|贵|செலவு|too far|jauh|太远)/.test(barrStr);
+
+  // SDOH — Social (LSNS-6 inspired)
+  const socialStr    = (raw.social || '').toLowerCase();
+  const sdohSocial   = /(isolated|alone|on my own|keseorangan|孤立|தனிமை)/.test(socialStr);
+
+  // SDOH — Psychological (BPS-RS II P-domain inspired)
+  const wellStr      = (raw.wellbeing || '').toLowerCase();
+  const sdohPsychological = /(stressed|stress|low|overwhelmed|tertekan|murung|terbeban|压抑|不知所措|மன அழுத்தம்|மனச்சோர்வு|அதிக சுமை)/.test(wellStr);
+
+  // Demographics
+  const demoStr = (raw.demographics || '').toLowerCase();
+  let gender = 'Unknown';
+  if (/(female|perempuan|女|பெண்)/.test(demoStr))        gender = 'Female';
+  else if (/(male|lelaki|男|ஆண்)/.test(demoStr))          gender = 'Male';
+
+  let age = 'Unknown';
+  if (demoStr.includes('60+'))                           age = '60+';
+  else if (demoStr.includes('41'))                       age = '41-60';
+  else if (demoStr.includes('21'))                       age = '21-40';
+
+  // Location
+  const locStr       = (raw.postal_code || '');
+  const sectorMatch  = locStr.match(/\d{2}/);
+  const postalSector = sectorMatch ? sectorMatch[0] : '00';
+
+  // Continuity
+  const prevStr    = (raw.previous_id || '');
+  const isNoId     = /(no|none|tidak|tiada|没|无|不|இல்லை)/i.test(prevStr) || prevStr.trim() === '';
+  const previousId = isNoId ? null : prevStr.trim().toUpperCase();
+
+  return {
+    pavsScore, pavsDays, pavsMinutes, strengthDays,
+    symptomFlag, medFlag,
+    sdohFinancial, sdohSocial, sdohPsychological,
+    gender, age, postalSector, previousId,
+    // Legacy compat for calculateRiskScore util
+    psychoFlag: sdohPsychological,
+  };
+};
+
+// ─── AURA AVATAR ──────────────────────────────────────────────────────────────
+// FIX: Replaced the gradient 'A' circle with the minimalist BrainCircuit icon
+const AuraAvatar = ({ size = 'sm' }) => (
+  <BrainCircuit 
+    className="text-teal-600 dark:text-teal-500 flex-shrink-0" 
+    size={size === 'sm' ? 24 : 28} 
+  />
+);
+
+// ─── PROGRESS BAR ─────────────────────────────────────────────────────────────
+const ProgressBar = ({ currentStep, total, langData }) => {
+  const pct = Math.round(((currentStep) / total) * 100);
+  const domain = DOMAIN_CONFIG[currentStep] || DOMAIN_CONFIG[total - 1];
+  const colour = GROUP_COLOURS[domain?.group] || 'bg-slate-400';
+
+  return (
+    <div className="px-4 pt-2 pb-1 bg-white dark:bg-[#111827]">
+      <div className="flex items-center justify-between mb-1">
+        <span className="text-xs font-medium text-slate-500 dark:text-slate-400">
+          {langData.progressLabel(currentStep, total)}
+        </span>
+        <span className="text-xs text-slate-400 dark:text-slate-500">{pct}%</span>
+      </div>
+      <div className="h-1.5 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
+        <div
+          className={`h-full rounded-full transition-all duration-500 ease-out ${colour}`}
+          style={{ width: `${pct}%` }}
+        />
+      </div>
+    </div>
+  );
+};
+
+// ─── CTA CARD ─────────────────────────────────────────────────────────────────
+const CtaCard = ({ ctaData, langData }) => (
+  <div className="mt-3 rounded-2xl border border-teal-100 dark:border-teal-900 bg-teal-50 dark:bg-teal-950/40 overflow-hidden shadow-sm">
+    <div className="px-4 py-3 bg-teal-600 dark:bg-teal-700 flex items-center gap-2">
+      <span className="text-lg">{ctaData.emoji}</span>
+      <h3 className="text-sm font-semibold text-white">{langData.ctaTitle}</h3>
+    </div>
+
+    <div className="p-4 space-y-4">
+      {/* Primary step */}
+      <div>
+        <div className="flex items-center gap-1.5 mb-1.5">
+          <CheckCircle size={13} className="text-teal-600 dark:text-teal-400 flex-shrink-0" />
+          <p className="text-xs font-bold text-teal-700 dark:text-teal-400 uppercase tracking-wide">
+            {langData.ctaPrimary}
+          </p>
+        </div>
+        <p className="text-sm text-slate-700 dark:text-slate-200 leading-relaxed">
+          {ctaData.primaryStep}
+        </p>
+      </div>
+
+      {/* HealthierSG connection */}
+      <div className="border-t border-teal-100 dark:border-teal-900 pt-3">
+        <div className="flex items-center gap-1.5 mb-1.5">
+          <ExternalLink size={13} className="text-emerald-600 dark:text-emerald-400 flex-shrink-0" />
+          <p className="text-xs font-bold text-emerald-700 dark:text-emerald-400 uppercase tracking-wide">
+            {langData.ctaHealthierSG}
+          </p>
+        </div>
+        <p className="text-sm text-slate-600 dark:text-slate-300 leading-relaxed">
+          {ctaData.healthierSG}
+        </p>
+      </div>
+
+      {/* Additional resources */}
+      <div className="border-t border-teal-100 dark:border-teal-900 pt-3">
+        <p className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-2">
+          {langData.ctaResources}
+        </p>
+        <ul className="space-y-1.5">
+          {ctaData.resources.map((r, i) => (
+            <li key={i} className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed">{r}</li>
+          ))}
+        </ul>
+      </div>
+    </div>
+  </div>
+);
+
+// ─── DOMAIN BADGE ─────────────────────────────────────────────────────────────
+const DomainBadge = ({ step }) => {
+  const domain = DOMAIN_CONFIG[step];
+  if (!domain) return null;
+  const colourMap = {
+    pavs:     'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-800',
+    clinical: 'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/40 dark:text-amber-300 dark:border-amber-800',
+    sdoh:     'bg-violet-50 text-violet-700 border-violet-200 dark:bg-violet-950/40 dark:text-violet-300 dark:border-violet-800',
+    admin:    'bg-slate-50 text-slate-600 border-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700',
+  };
+  return (
+    <span className={`inline-block px-2 py-0.5 rounded-full text-[10px] font-medium border mb-1.5 ${colourMap[domain.group]}`}>
+      {domain.badge}
+    </span>
+  );
+};
+
+// ─── MAIN COMPONENT ───────────────────────────────────────────────────────────
+const AuraChatbot = () => {
+  const [isDark, setIsDark]         = useState(false);
+  const navigate                    = useNavigate();
+  const chatEndRef                  = useRef(null);
+  const inputRef                    = useRef(null);
+
+  const [lang]      = useState(() => localStorage.getItem('nexus_language') || 'en');
+  const langData    = DICTIONARY[lang] || DICTIONARY.en;
+  const [sessionId] = useState(() => 'NX-' + Math.random().toString(36).substr(2, 9).toUpperCase());
+
+  const [currentStep,   setCurrentStep]   = useState(0);
+  const [messages,      setMessages]      = useState([]);
+  const [userInput,     setUserInput]     = useState('');
+  const [isTyping,      setIsTyping]      = useState(false);
+  const [collectedData, setCollectedData] = useState({});
+  const [isComplete,    setIsComplete]    = useState(false);
+
+  // ── Theme initialisation
   useEffect(() => {
-      const storedTheme = localStorage.getItem('nexus-theme');
-      const systemPrefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-      if (storedTheme === 'dark' || (!storedTheme && systemPrefersDark)) {
-          setIsDark(true);
-          document.documentElement.classList.add('dark');
-      } else {
-          setIsDark(false);
-          document.documentElement.classList.remove('dark');
-      }
+    const stored = localStorage.getItem('nexus-theme');
+    const sysDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+    const dark = stored === 'dark' || (!stored && sysDark);
+    setIsDark(dark);
+    document.documentElement.classList.toggle('dark', dark);
   }, []);
 
   const toggleTheme = () => {
-      const newTheme = !isDark;
-      setIsDark(newTheme);
-      if (newTheme) {
-          document.documentElement.classList.add('dark');
-          localStorage.setItem('nexus-theme', 'dark');
-      } else {
-          document.documentElement.classList.remove('dark');
-          localStorage.setItem('nexus-theme', 'light');
-      }
+    const next = !isDark;
+    setIsDark(next);
+    document.documentElement.classList.toggle('dark', next);
+    localStorage.setItem('nexus-theme', next ? 'dark' : 'light');
   };
 
+  // ── First prompt
   useEffect(() => {
-    if (messages.length === 0) {
-      appendBotMessage(langData.prompts[0]);
-    }
-  }, []);
+    if (messages.length === 0) appendBotMessage(langData.prompts[0], 0);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // ── Auto-scroll
   useEffect(() => {
-    chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, isTyping]);
 
-  const appendBotMessage = (text) => {
+  // ── Focus input after bot finishes typing
+  useEffect(() => {
+    if (!isTyping) inputRef.current?.focus();
+  }, [isTyping]);
+
+  // ── Append a bot message with domain step context
+  const appendBotMessage = (text, step, ctaData = null) => {
     setIsTyping(true);
     setTimeout(() => {
-      setMessages(prev => [...prev, { sender: 'bot', text }]);
+      setMessages(prev => [...prev, { sender: 'bot', text, step, ctaData }]);
       setIsTyping(false);
-    }, 800);
+    }, 850);
   };
 
-  const parseClinicalData = (rawTextData) => {
-    const aerobicStr = (rawTextData.aerobic || '').toLowerCase();
-    const strengthStr = (rawTextData.strength || '').toLowerCase();
-    const medicalStr = (rawTextData.medical || '').toLowerCase();
-    const barrStr = (rawTextData.barriers || '').toLowerCase();
-    const demoStr = (rawTextData.demographics || '').toLowerCase();
-    const locStr = (rawTextData.postal_code || '');
-    const prevIdStr = (rawTextData.previous_id || '');
-
-    const minMatch = aerobicStr.match(/(\d+)\s*(min|分钟|நிமிடம்)/);
-    const pavsMinutes = minMatch ? parseInt(minMatch[1], 10) : 0;
-    const daysMatch = aerobicStr.match(/(\d+)\s*(day|hari|天|நாட்கள்)/);
-    const pavsDays = daysMatch ? parseInt(daysMatch[1], 10) : 0;
-
-    const strDaysMatch = strengthStr.match(/(\d+)/);
-    const strengthDays = strDaysMatch ? parseInt(strDaysMatch[1], 10) : 0;
-
-    const symptomFlag = /(dizziness|chest|pening|dada|头晕|胸痛|தலைச்சுற்றல்|நெஞ்சு வலி)/.test(medicalStr);
-    const medFlag = /(blood pressure|darah tinggi|高血压|உயர் இரத்த அழுத்தம்)/.test(medicalStr);
-
-    const sdohFinancial = /(cost|expensive|mahal|kos|贵|செலவு)/.test(barrStr);
-    const sdohSocial = /(caregiving|menjaga|照顾|கவனிப்பு)/.test(barrStr);
-
-    let gender = 'Unknown';
-    if (/(female|perempuan|女|பெண்)/.test(demoStr)) gender = 'Female';
-    else if (/(male|lelaki|男|ஆண்)/.test(demoStr)) gender = 'Male';
-
-    let age = 'Unknown';
-    if (demoStr.includes('41-60')) age = '41-60';
-    else if (demoStr.includes('60+')) age = '60+';
-
-    const sectorMatch = locStr.match(/\d{2}/);
-    const postalSector = sectorMatch ? sectorMatch[0] : '00';
-
-    const isNoId = /(no|none|tidak|tiada|没|无|不|இல்லை)/i.test(prevIdStr);
-    const previousId = isNoId || prevIdStr.trim() === '' ? null : prevIdStr.trim().toUpperCase();
-
-    return {
-        pavsMinutes, pavsDays, strengthDays, symptomFlag, medFlag, psychoFlag: false,
-        sdohFinancial, sdohSocial, gender, age, postalSector, previousId
-    };
-  };
-
-    const handleUserSubmission = (text) => {
-    if (!text.trim()) return;
+  // ── Handle submission (quick reply or typed)
+  const handleUserSubmission = (text) => {
+    if (!text.trim() || isTyping || isComplete) return;
 
     setMessages(prev => [...prev, { sender: 'user', text }]);
     setUserInput('');
 
-    const stepKeys = ['aerobic', 'strength', 'medical', 'barriers', 'demographics', 'postal_code', 'previous_id'];
-    const currentKey = stepKeys[currentStep];
-    const updatedData = { ...collectedData, [currentKey]: text };
+    const stepKey    = DOMAIN_CONFIG[currentStep]?.key || `step_${currentStep}`;
+    const updatedData = { ...collectedData, [stepKey]: text };
     setCollectedData(updatedData);
 
     setIsTyping(true);
-    
+
     setTimeout(() => {
-      let combinedBotResponse = "";
+      const reflection = langData.reflections[currentStep]?.(text) ?? '';
+      const nextStep   = currentStep + 1;
 
-      if (currentStep < langData.reflections.length) {
-        combinedBotResponse += langData.reflections[currentStep](text) + " ";
-      }
-
-      const nextStep = currentStep + 1;
-      
-      if (nextStep < langData.prompts.length) {
-        combinedBotResponse += langData.prompts[nextStep];
+      if (nextStep < TOTAL_STEPS) {
+        const combined = reflection + langData.prompts[nextStep];
         setCurrentStep(nextStep);
-        setMessages(prev => [...prev, { sender: 'bot', text: combinedBotResponse }]);
+        setMessages(prev => [...prev, { sender: 'bot', text: combined, step: nextStep }]);
         setIsTyping(false);
       } else {
-        combinedBotResponse += langData.conclusion;
-        setMessages(prev => [...prev, { sender: 'bot', text: combinedBotResponse }]);
+        // Final step — generate CTA
+        const closing = reflection + ' I have mapped your full profile. Generating your personalised plan now\u2026';
+        setMessages(prev => [...prev, { sender: 'bot', text: closing, step: currentStep }]);
         setIsTyping(false);
         concludeTriage(updatedData);
       }
-    }, 1000); 
+    }, 1000);
   };
 
   const handleFormSubmit = (e) => {
@@ -308,94 +707,147 @@ const AuraChatbot = () => {
     handleUserSubmission(userInput);
   };
 
+  // ── Triage conclusion
   const concludeTriage = async (finalData) => {
-    const parsedClinicalData = parseClinicalData(finalData);
-    const riskScore = calculateRiskScore(parsedClinicalData);
-    
+    const parsed    = parseClinicalData(finalData);
+    const riskScore = calculateRiskScore(parsed);
+    const ctaData   = selectCTA(parsed);
+
     try {
-      await recordTelemetry(parsedClinicalData.postalSector, {
-        event: 'aura_triage_complete',
-        sessionId: sessionId,
-        previousSessionId: parsedClinicalData.previousId,
-        payload: parsedClinicalData,
-        computedRisk: riskScore
+      await recordTelemetry(parsed.postalSector, {
+        event: 'aura_triage_complete_v2',
+        sessionId,
+        previousSessionId: parsed.previousId,
+        payload: parsed,
+        computedRisk: riskScore,
+        ctaTier: ctaData.tier,
       });
 
+      // Render the CTA card inside the chat before navigating
       setTimeout(() => {
-          navigate('/individuals/result', { 
-              state: { 
-                  score: riskScore, 
-                  data: parsedClinicalData, 
-                  postalSector: parsedClinicalData.postalSector,
-                  sessionId: sessionId,
-                  previousSessionId: parsedClinicalData.previousId
-              } 
+        setIsComplete(true);
+        setMessages(prev => [...prev, {
+          sender: 'bot',
+          text: 'Here is your personalised community health plan based on your PAVS score and health profile. Save or screenshot this screen, then tap anywhere to continue.',
+          step: TOTAL_STEPS - 1,
+          ctaData,
+        }]);
+
+        // Navigate after user has had time to read the card
+        setTimeout(() => {
+          navigate('/individuals/result', {
+            state: {
+              score: riskScore,
+              data: parsed,
+              postalSector: parsed.postalSector,
+              sessionId,
+              previousSessionId: parsed.previousId,
+              ctaTier: ctaData.tier,
+            },
           });
-      }, 1500); 
-      
-    } catch (error) {
+        }, 5000);
+      }, 1200);
+
+    } catch {
       setTimeout(() => {
-        setMessages(prev => [...prev, { sender: 'bot', text: langData.error }]);
+        setMessages(prev => [...prev, { sender: 'bot', text: langData.error, step: TOTAL_STEPS - 1 }]);
       }, 1000);
     }
   };
 
+  // ── Quick replies — only show when bot is not typing and step has replies
+  const showQuickReplies = !isTyping && !isComplete && currentStep < langData.quickReplies.length;
+
   return (
-    <div className="flex flex-col h-screen max-w-md mx-auto bg-slate-50 dark:bg-slate-950 font-sans transition-colors duration-500">
-      
-    <header className="flex items-center justify-between p-4 bg-white dark:bg-[#111827] shadow-sm border-b border-slate-200 dark:border-slate-800 transition-colors duration-500">
-        <div className="flex items-center">
-            <button onClick={() => navigate(-1)} className="p-2 mr-2 text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-full transition-colors">
-              <ChevronLeft size={24} />
-            </button>
-            <div className="flex items-center gap-2">
-              {/* REPLACED SPARKLES WITH DETAILED 3D LOGO */}
-              <img 
-                  src="/logo.png" 
-                  alt="AURA 3D Logo" 
-                  className="w-8 h-8 object-contain drop-shadow-sm" 
-                  onError={(e) => { e.target.style.display = 'none'; }} 
-              />
-              <h1 className="font-semibold text-lg text-slate-900 dark:text-white tracking-tight">AURA</h1>
+    <div className="flex flex-col h-screen max-w-md mx-auto bg-stone-50 dark:bg-slate-950 font-sans transition-colors duration-500">
+
+      {/* ── HEADER ── */}
+      <header className="flex items-center justify-between px-4 pt-4 pb-2 bg-white dark:bg-[#111827] shadow-sm border-b border-slate-100 dark:border-slate-800">
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => navigate(-1)}
+            className="p-2 text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-full transition-colors"
+            aria-label={langData.back}
+          >
+            <ChevronLeft size={22} />
+          </button>
+          <div className="flex items-center gap-2.5">
+            <AuraAvatar size="md" />
+            <div>
+              <h1 className="font-semibold text-base text-slate-900 dark:text-white leading-tight">AURA</h1>
+              <p className="text-[10px] text-teal-600 dark:text-teal-400 font-medium leading-none">
+                {langData.sessionLabel}: {sessionId}
+              </p>
             </div>
+          </div>
         </div>
-        
-        {/* NEW TOP-RIGHT TOGGLE */}
-        <button 
-            onClick={toggleTheme} 
-            className="p-2 rounded-full bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-400 shadow-sm hover:scale-105 active:scale-95 transition-all"
+        <button
+          onClick={toggleTheme}
+          className="p-2 rounded-full bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-400 shadow-sm hover:scale-105 active:scale-95 transition-all"
+          aria-label="Toggle theme"
         >
-            {isDark ? <Sun size={18} className="text-amber-400" /> : <Moon size={18} />}
+          {isDark
+            ? <Sun size={17} className="text-amber-400" />
+            : <Moon size={17} />}
         </button>
       </header>
 
-      <div className="flex-1 overflow-y-auto p-4 space-y-4">
+      {/* ── PROGRESS BAR ── */}
+      <ProgressBar currentStep={currentStep} total={TOTAL_STEPS} langData={langData} />
+
+      {/* ── CHAT AREA ── */}
+      <div className="flex-1 overflow-y-auto px-4 py-4 space-y-4">
         {messages.map((msg, idx) => (
-          <div key={idx} className={`flex ${msg.sender === 'user' ? 'justify-end' : 'justify-start'}`}>
-            <div className={`max-w-[80%] p-3 rounded-2xl shadow-sm ${
-              msg.sender === 'user' 
-                ? 'bg-indigo-600 dark:bg-indigo-500 text-white rounded-br-none' 
-                : 'bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-200 rounded-bl-none'
-            }`}>
-              {msg.text}
+          <div key={idx} className={`flex gap-2 ${msg.sender === 'user' ? 'justify-end' : 'justify-start'}`}>
+
+            {/* Bot avatar — left of bot bubbles */}
+            {msg.sender === 'bot' && <AuraAvatar size="sm" />}
+
+            <div className={`max-w-[82%] ${msg.sender === 'user' ? '' : ''}`}>
+              {/* Domain badge — only on bot messages where step is defined */}
+              {msg.sender === 'bot' && msg.step !== undefined && (
+                <DomainBadge step={msg.step} />
+              )}
+
+              {/* Message bubble */}
+              <div className={`px-4 py-3 rounded-2xl shadow-sm text-sm leading-relaxed ${
+                msg.sender === 'user'
+                  ? 'bg-teal-600 dark:bg-teal-500 text-white rounded-br-none'
+                  : 'bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-100 rounded-bl-none'
+              }`}>
+                {msg.text}
+              </div>
+
+              {/* CTA card — rendered inside the chat for immediate visibility */}
+              {msg.ctaData && <CtaCard ctaData={msg.ctaData} langData={langData} />}
             </div>
           </div>
         ))}
+
+        {/* Typing indicator */}
         {isTyping && (
-          <div className="flex justify-start">
-            <div className="bg-slate-200 dark:bg-slate-800 text-slate-500 dark:text-slate-400 text-sm px-4 py-2 rounded-2xl rounded-bl-none animate-pulse">
-              {langData.typing}
+          <div className="flex gap-2 items-end justify-start">
+            <AuraAvatar size="sm" />
+            <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 px-4 py-3 rounded-2xl rounded-bl-none shadow-sm">
+              <div className="flex items-center gap-1.5">
+                <span className="w-1.5 h-1.5 bg-teal-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
+                <span className="w-1.5 h-1.5 bg-teal-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
+                <span className="w-1.5 h-1.5 bg-teal-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
+              </div>
             </div>
           </div>
         )}
+
         <div ref={chatEndRef} />
       </div>
 
-      <div className="p-4 bg-white dark:bg-[#111827] border-t border-slate-200 dark:border-slate-800 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)] transition-colors duration-500">
-        
-        {!isTyping && currentStep < langData.quickReplies.length && (
-          <div className="mb-4 animate-in fade-in slide-in-from-bottom-2 duration-300">
-            <p className="text-xs font-bold text-slate-500 dark:text-slate-400 mb-2 px-1">
+      {/* ── INPUT AREA ── */}
+      <div className="px-4 pt-3 pb-4 bg-white dark:bg-[#111827] border-t border-slate-100 dark:border-slate-800 shadow-[0_-4px_8px_-2px_rgba(0,0,0,0.04)]">
+
+        {/* Quick replies — only when not typing and not complete */}
+        {showQuickReplies && (
+          <div className="mb-3 animate-in fade-in slide-in-from-bottom-2 duration-300">
+            <p className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-2 px-0.5">
               {langData.hintText}
             </p>
             <div className="flex flex-wrap gap-2">
@@ -403,7 +855,7 @@ const AuraChatbot = () => {
                 <button
                   key={idx}
                   onClick={() => handleUserSubmission(reply)}
-                  className="px-3 py-1.5 text-sm bg-indigo-50 dark:bg-indigo-500/10 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-500/30 rounded-full hover:bg-indigo-100 dark:hover:bg-indigo-500/20 transition-colors text-left"
+                  className="px-3 py-1.5 text-xs font-medium bg-teal-50 dark:bg-teal-500/10 text-teal-700 dark:text-teal-300 border border-teal-200 dark:border-teal-500/30 rounded-full hover:bg-teal-100 dark:hover:bg-teal-500/20 active:scale-95 transition-all text-left"
                 >
                   {reply}
                 </button>
@@ -412,23 +864,29 @@ const AuraChatbot = () => {
           </div>
         )}
 
-        <form onSubmit={handleFormSubmit} className="flex items-center gap-2">
-          <input
-            type="text"
-            value={userInput}
-            onChange={(e) => setUserInput(e.target.value)}
-            placeholder={langData.inputPlaceholder}
-            className="flex-1 p-3 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 text-slate-900 dark:text-white rounded-full focus:outline-none focus:border-indigo-500 dark:focus:border-indigo-400 focus:ring-1 focus:ring-indigo-500 dark:focus:ring-indigo-400 transition-shadow placeholder-slate-400 dark:placeholder-slate-500"
-            disabled={isTyping}
-          />
-          <button 
-            type="submit"
-            disabled={!userInput.trim() || isTyping}
-            className="p-3 bg-indigo-600 dark:bg-indigo-500 text-white rounded-full disabled:opacity-50 disabled:cursor-not-allowed hover:bg-indigo-700 dark:hover:bg-indigo-600 transition-colors shadow-sm"
-          >
-            <Send size={20} />
-          </button>
-        </form>
+        {/* Text input */}
+        {!isComplete && (
+          <form onSubmit={handleFormSubmit} className="flex items-center gap-2">
+            <input
+              ref={inputRef}
+              type="text"
+              value={userInput}
+              onChange={(e) => setUserInput(e.target.value)}
+              placeholder={langData.inputPlaceholder}
+              disabled={isTyping}
+              aria-label="Your message"
+              className="flex-1 px-4 py-2.5 bg-stone-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white rounded-full text-sm focus:outline-none focus:border-teal-500 dark:focus:border-teal-400 focus:ring-2 focus:ring-teal-500/20 dark:focus:ring-teal-400/20 transition-all placeholder-slate-400 dark:placeholder-slate-500 disabled:opacity-60"
+            />
+            <button
+              type="submit"
+              disabled={!userInput.trim() || isTyping}
+              aria-label="Send message"
+              className="p-2.5 bg-teal-600 dark:bg-teal-500 text-white rounded-full disabled:opacity-40 disabled:cursor-not-allowed hover:bg-teal-700 dark:hover:bg-teal-600 active:scale-95 transition-all shadow-sm"
+            >
+              <Send size={18} />
+            </button>
+          </form>
+        )}
       </div>
     </div>
   );
