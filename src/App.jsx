@@ -19,6 +19,7 @@ import { useNexus } from './context/NexusContext';
 import { MOCK_STAFF_NAMES, MOCK_TEAM_DATA, MOCK_STAFF_LOADS } from './data/mockData';
 
 // COMPONENT IMPORTS
+import AppGuide from './components/AppGuide';
 import AdminPanel from './components/AdminPanel';
 import ResponsiveLayout from './components/ResponsiveLayout'; 
 import SmartReportView from './components/SmartReportView';
