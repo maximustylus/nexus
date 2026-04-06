@@ -5,9 +5,9 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
     
     <title>NEXUS Smart Dashboard</title>
-    <meta name="description" content="Smart and Interactive Dashboard for Healthcare Professionals" />
+    <meta name="description" content="Smart and Interactive Dashboard for Individuals and Professionals" />
     
-    <link rel="manifest" href="manifest.json" />
+    <link rel="manifest" href="/manifest.json" />
     
     <link rel="icon" href="nexus-n-light-icon.png" type="image/png" media="(prefers-color-scheme: light)">
     <link rel="icon" href="nexus-n-dark-icon.png" type="image/png" media="(prefers-color-scheme: dark)">    
@@ -109,7 +109,6 @@
     
     <script>
       window.addEventListener('load', () => {
-        // 1500ms gives the logo time to assemble fully before flying up
         setTimeout(() => {
           document.body.classList.add('app-ready');
         }, 1500); 
