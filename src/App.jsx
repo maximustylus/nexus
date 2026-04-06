@@ -12,7 +12,7 @@ import { BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid,
   Tooltip, ResponsiveContainer, Cell, PieChart, Pie, Legend, ReferenceLine } from 'recharts';
 import { Sun, Moon, LayoutDashboard, History, Filter, ShieldAlert, Bell } from 'lucide-react'; 
 
-// CONTEXT & DATA STRATEGY (Only the hook is needed here now!)
+// CONTEXT & DATA STRATEGY (Provider is in main.jsx now)
 import { useNexus } from './context/NexusContext';
 import { MOCK_STAFF_NAMES, MOCK_TEAM_DATA, MOCK_STAFF_LOADS } from './data/mockData';
 
@@ -398,7 +398,7 @@ export default function App() {
     setUser(null); 
     setNotifications([]);
     setIsAdminOpen(false); 
-    setCurrentView('pulse'); 
+    setCurrentView('pulse');
   };
   
   const renderCustomizedLabel = ({ cx, cy, midAngle, innerRadius, outerRadius, percent }) => {
