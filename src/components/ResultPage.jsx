@@ -1,3 +1,30 @@
+/**
+ * ResultPage.jsx
+ *
+ * CHANGELOG vs submitted version:
+ *
+ * FIX 1 — 2-page PDF (main request)
+ *   Added printRef2 for Page 2. handleDownloadPDF now captures both
+ *   refs sequentially, calls pdf.addPage(), and embeds Page 2 containing
+ *   the Clinical Governance section, Medical Disclaimer, Academic/Clinical
+ *   Grounding references, and the M3 Network community nodes block.
+ *
+ * FIX 2 — Language selector UI
+ *   Added compact EN / BM / 中文 / தமிழ் toggle to the top nav bar,
+ *   persisting to nexus_language localStorage. Matches ConventionalForm.
+ *
+ * FIX 3 — hasState cleanup
+ *   Simplified to `location.state?.score != null` — correctly handles
+ *   score === 0 (legitimately inactive) without double-negation confusion.
+ *
+ * FIX 4 — Loading bar animation
+ *   Replaced animate-[progress_…] (requires custom Tailwind keyframe in
+ *   tailwind.config.js) with animate-pulse on the bar — works out of the box.
+ *
+ * UNCHANGED: All clinical logic, CTA_BANNER, resource library, PAVS panel,
+ * SDOH flags, risk tier theming, and PDF Page 1 template.
+ */
+
 import React, { useEffect, useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import {
@@ -715,75 +742,83 @@ export default function ResultPage() {
           {/* Padded content area — padding applied here, not on outer wrapper */}
           <div style={{ padding: '32px 40px', display: 'flex', flexDirection: 'column', gap: '24px', flex: 1 }}>
 
-          {/* Medical Disclaimer */}
-          <div style={{ background: '#fff1f2', border: '1px solid #fecdd3', borderRadius: '8px', padding: '20px' }}>
-            <div style={{ fontWeight: 900, fontSize: 12, color: '#be123c', marginBottom: '8px', textTransform: 'uppercase', letterSpacing: 1 }}>
+          {/* ── CARD 1: Medical Disclaimer — rose callout, same borderRadius as P1 ── */}
+          <div style={{ background: '#fff1f2', border: '1px solid #fecdd3', borderRadius: 12, padding: '20px 28px' }}>
+            <div style={{ fontWeight: 900, fontSize: 11, color: '#be123c', marginBottom: '10px', textTransform: 'uppercase', letterSpacing: 3 }}>
               Important Medical Disclaimer
             </div>
-            <div style={{ fontSize: 11, color: '#4c0519', lineHeight: 1.7 }}>
-              This NEXUS AURA report is an initial community health navigation tool and <strong>does not constitute medical advice, diagnosis, or a treatment plan</strong>. The risk stratification and physical activity recommendations are algorithmically generated for educational and community triage purposes only. Always consult a qualified healthcare professional or your Healthier SG GP before making significant changes to your lifestyle, diet, or exercise routine. If you are experiencing chest pain, dizziness, or any acute symptoms, please seek immediate medical attention.
+            <div style={{ fontSize: 11, color: '#4c0519', lineHeight: 1.75 }}>
+              This NEXUS AURA report is an initial community health navigation tool and <strong>does not constitute medical advice, diagnosis, or a treatment plan</strong>. The physical activity recommendations are generated for educational and community navigation purposes only. Always consult a qualified healthcare professional or your Healthier SG GP before making significant changes to your lifestyle, diet, or exercise routine. If you are experiencing chest pain, dizziness, or any acute symptoms, please seek immediate medical attention.
             </div>
           </div>
 
-          {/* Academic & Evidence Grounding */}
-          <div>
-            <div style={{ fontWeight: 900, fontSize: 12, color: '#0f172a', marginBottom: '14px', textTransform: 'uppercase', letterSpacing: 1, borderBottom: '1px solid #e2e8f0', paddingBottom: '8px' }}>
+          {/* ── CARD 2: Academic & Evidence Grounding — wrapped in same #f8fafc card as PAVS ── */}
+          <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 12, padding: '20px 28px' }}>
+            <div style={{ fontWeight: 900, fontSize: 11, color: '#64748b', marginBottom: '14px', textTransform: 'uppercase', letterSpacing: 3 }}>
               Academic and Evidence Grounding
             </div>
-            <ul style={{ fontSize: 11, color: '#475569', lineHeight: 1.9, paddingLeft: '20px', margin: 0 }}>
-              <li><strong>Physical Activity Screening:</strong> American College of Sports Medicine (ACSM) Physical Activity Vital Sign (PAVS) — validated 2-question screening tool for point-of-care PA assessment.</li>
-              <li><strong>National Activity Targets:</strong> Sport Singapore Physical Activity Guidelines (SPAG) — 150–300 mins/week moderate-intensity aerobic activity for adults.</li>
-              <li><strong>Psychological Wellbeing:</strong> BioPsychoSocial Risk Screener Version II (BPS-RS II), Psychological Domain Item P22 — PHQ-2 aligned, 2-week timeframe.</li>
-              <li><strong>Social Isolation:</strong> Adapted from the Lubben Social Network Scale (LSNS-6) — validated for community-dwelling adults in Singapore (alpha 0.80–0.89).</li>
-              <li><strong>Food Insecurity:</strong> Lien Centre for Social Innovation Food Insufficiency Screen — validated 2-question instrument for Singapore context.</li>
-              <li><strong>Financial Adequacy:</strong> Duke-NUS Medical School Perceived Income Adequacy Scale — 3-level validated screen for subjective financial stability.</li>
-              <li><strong>Housing Risk:</strong> BPS-RS II Housing Schema — 1–2 Room HDB rental as geographic social risk indicator aligned with SingHealth population health mapping.</li>
-              <li><strong>Community Navigation:</strong> Northern Singapore Health Ecosystem Report (March 2026) — §5.7 8-Tier Community Call-to-Action Matrix.</li>
-            </ul>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              {[
+                ['Physical Activity', 'ACSM Physical Activity Vital Sign (PAVS) — validated 2-question screening tool.'],
+                ['National Targets', 'Sport Singapore Physical Activity Guidelines (SPAG) — 150–300 mins/week moderate-intensity aerobic activity.'],
+                ['Psychological Wellbeing', 'BioPsychoSocial Risk Screener II (BPS-RS II), Domain P22 — PHQ-2 aligned, 2-week timeframe.'],
+                ['Social Isolation', 'Lubben Social Network Scale (LSNS-6) — validated for community-dwelling adults in Singapore (alpha 0.80–0.89).'],
+                ['Food Insecurity', 'Lien Centre for Social Innovation Food Insufficiency Screen — validated 2-question instrument.'],
+                ['Financial Adequacy', 'Duke-NUS Medical School Perceived Income Adequacy Scale — 3-level validated screen.'],
+                ['Housing Risk', 'BPS-RS II Housing Schema — 1–2 Room HDB rental as geographic social risk indicator.'],
+                ['Community Navigation', 'Northern Singapore Health Ecosystem Report (March 2026) — §5.7 8-Tier Community Call-to-Action Matrix.'],
+              ].map(([label, text], i) => (
+                <div key={i} style={{ display: 'flex', gap: 10, paddingBottom: 6, borderBottom: i < 7 ? '1px solid #f1f5f9' : 'none' }}>
+                  <div style={{ fontWeight: 800, fontSize: 10, color: '#0d9488', minWidth: 110, paddingTop: 1, textTransform: 'uppercase', letterSpacing: 0.5, flexShrink: 0 }}>{label}</div>
+                  <div style={{ fontSize: 10, color: '#475569', lineHeight: 1.65 }}>{text}</div>
+                </div>
+              ))}
+            </div>
           </div>
 
-          {/* Data Governance */}
-          <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '8px', padding: '18px 20px' }}>
-            <div style={{ fontWeight: 900, fontSize: 11, color: '#0f172a', marginBottom: '8px', textTransform: 'uppercase', letterSpacing: 1 }}>
+          {/* ── CARD 3: Data Governance — same card treatment ── */}
+          <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 12, padding: '20px 28px' }}>
+            <div style={{ fontWeight: 900, fontSize: 11, color: '#64748b', marginBottom: '10px', textTransform: 'uppercase', letterSpacing: 3 }}>
               Data Governance and Privacy
             </div>
-            <div style={{ fontSize: 11, color: '#475569', lineHeight: 1.7 }}>
+            <div style={{ fontSize: 11, color: '#475569', lineHeight: 1.75 }}>
               All data collected through the NEXUS AURA system is de-identified at the point of capture. Postal sector data is used solely for geographic resource mapping and is not linked to any identifiable personal information. This assessment does not collect, store, or transmit NRIC, name, contact, or financial account information. Aggregated, anonymised data may be used to improve community health programming in Northern Singapore.
             </div>
           </div>
 
-          {/* M3 Network — pushed to bottom */}
-          <div style={{ marginTop: 'auto', background: 'linear-gradient(135deg, #f0fdfa 0%, #ecfdf5 100%)', borderRadius: '12px', padding: '28px 32px', textAlign: 'center', border: '1px solid #99f6e4' }}>
-            <div style={{ fontWeight: 900, fontSize: 16, color: '#0f766e', marginBottom: '10px', letterSpacing: 1 }}>
+          {/* ── CARD 4: M3 Network — teal brand card, same borderRadius ── */}
+          <div style={{ marginTop: 'auto', background: 'linear-gradient(135deg, #f0fdfa 0%, #ecfdf5 100%)', borderRadius: 12, padding: '24px 32px', textAlign: 'center', border: '1px solid #99f6e4' }}>
+            <div style={{ fontWeight: 900, fontSize: 15, color: '#0f766e', marginBottom: '8px', letterSpacing: 1 }}>
               Join the Northern Community Nodes — M<sup style={{ fontSize: '0.65em', verticalAlign: 'super' }}>3</sup> Network
             </div>
-            <div style={{ fontSize: 12, color: '#475569', marginBottom: '20px', lineHeight: 1.6, maxWidth: '580px', margin: '0 auto 20px' }}>
-              This initiative is proudly piloted in conjunction with the <strong style={{ color: '#0f766e' }}>M<sup style={{ fontSize: '0.65em', verticalAlign: 'super' }}>3</sup> Network</strong>. Stay connected with your local community nodes in the North for programmes, events, and peer support.
+            <div style={{ fontSize: 11, color: '#475569', marginBottom: '16px', lineHeight: 1.6, maxWidth: '540px', margin: '0 auto 16px' }}>
+              This initiative is proudly piloted in conjunction with the{' '}
+              <strong style={{ color: '#0f766e' }}>M<sup style={{ fontSize: '0.65em', verticalAlign: 'super' }}>3</sup> Network</strong>.
+              {' '}Stay connected with your local community nodes in the North for programmes, events, and peer support.
             </div>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px 24px', maxWidth: '560px', margin: '0 auto', textAlign: 'left' }}>
-              {/* Web link with M3 logo */}
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', gridColumn: '1 / -1' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px 32px', maxWidth: '560px', margin: '0 auto', textAlign: 'left' }}>
+              {/* M3 web link — spanning full width with m3.png logo */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, gridColumn: '1 / -1', paddingBottom: 8, borderBottom: '1px solid #99f6e4' }}>
                 <img
                   src={baseUrl + '/logos/m3.png'}
                   alt="M3"
                   crossOrigin="anonymous"
                   style={{ width: 22, height: 22, objectFit: 'contain', flexShrink: 0 }}
-                  onError={(e) => { e.target.style.display = 'none'; e.target.insertAdjacentHTML('afterend', '<span style="fontWeight:900;fontSize:11px;color:#0d9488">M<sup>3</sup></span>'); }}
                 />
-                <span style={{ fontWeight: 600, fontSize: 11, color: '#0f766e' }}>m3.gov.sg/m3-towns/north</span>
+                <span style={{ fontWeight: 700, fontSize: 11, color: '#0f766e' }}>m3.gov.sg/m3-towns/north</span>
               </div>
-              {/* Facebook links with fb.png logo */}
+              {/* Facebook community pages */}
               {[
                 'facebook.com/M3atWoodlands',
                 'facebook.com/M3atMarsilingYewTee',
                 'facebook.com/p/M3-at-Nee-Soon-100068636709214',
               ].map((url, i) => (
-                <div key={i} style={{ display: 'flex', alignItems: 'flex-start', gap: '8px' }}>
+                <div key={i} style={{ display: 'flex', alignItems: 'flex-start', gap: 8 }}>
                   <img
                     src={baseUrl + '/logos/fb.png'}
                     alt="Facebook"
                     crossOrigin="anonymous"
-                    style={{ width: 16, height: 16, objectFit: 'contain', flexShrink: 0, marginTop: 1 }}
+                    style={{ width: 15, height: 15, objectFit: 'contain', flexShrink: 0, marginTop: 1 }}
                   />
                   <span style={{ fontWeight: 600, fontSize: 10, color: '#0f766e', wordBreak: 'break-all', lineHeight: 1.5 }}>{url}</span>
                 </div>
@@ -811,14 +846,22 @@ export default function ResultPage() {
 
         {/* Top nav */}
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-8 gap-3 px-1 flex-wrap">
-          <button onClick={() => navigate('/')}
-            className="flex items-center gap-2 px-4 py-2 bg-white/70 dark:bg-slate-800/70 backdrop-blur-md text-slate-500 dark:text-slate-400 hover:text-teal-600 dark:hover:text-teal-400 font-bold text-xs uppercase tracking-widest rounded-full border border-slate-200 dark:border-slate-700 shadow-sm transition-all group">
-            <ArrowLeft size={14} className="group-hover:-translate-x-1 transition-transform" /> {t.back}
-          </button>
+          {/* Left cluster — Back + theme toggle at the far edges */}
+          <div className="flex items-center gap-2">
+            <button onClick={() => navigate('/')}
+              className="flex items-center gap-2 px-4 py-2 bg-white/70 dark:bg-slate-800/70 backdrop-blur-md text-slate-500 dark:text-slate-400 hover:text-teal-600 dark:hover:text-teal-400 font-bold text-xs uppercase tracking-widest rounded-full border border-slate-200 dark:border-slate-700 shadow-sm transition-all group">
+              <ArrowLeft size={14} className="group-hover:-translate-x-1 transition-transform" /> {t.back}
+            </button>
+            <button onClick={toggleTheme}
+              className="p-2.5 bg-white/70 dark:bg-slate-800/70 backdrop-blur-md border border-slate-200 dark:border-slate-700 rounded-full shadow-sm hover:-translate-y-0.5 transition-all">
+              {isDark ? <Sun size={14} className="text-amber-400" /> : <Moon size={14} className="text-slate-500" />}
+            </button>
+          </div>
 
+          {/* Right cluster — language, share, download */}
           <div className="flex items-center gap-2 flex-wrap self-end sm:self-auto">
 
-            {/* FIX 2: Language selector — matches ConventionalForm style */}
+            {/* Language selector */}
             <div className="flex items-center gap-1 bg-white/70 dark:bg-slate-800/70 backdrop-blur-md border border-slate-200 dark:border-slate-700 rounded-full px-1.5 py-1 shadow-sm">
               <Globe size={11} className="text-slate-400 ml-1" />
               {LANGS.map(l => (
@@ -829,10 +872,6 @@ export default function ResultPage() {
               ))}
             </div>
 
-            <button onClick={toggleTheme}
-              className="p-2.5 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-full shadow-sm hover:-translate-y-0.5 transition-all">
-              {isDark ? <Sun size={14} className="text-amber-400" /> : <Moon size={14} className="text-slate-500" />}
-            </button>
             <button onClick={handleShare}
               className="flex items-center gap-2 px-4 py-2 bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 font-bold text-xs uppercase tracking-widest rounded-full border border-slate-200 dark:border-slate-700 shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all">
               <Share2 size={13} /> {t.share}
