@@ -1,44 +1,10 @@
-/**
- * AuraChatbot.jsx — Enhanced v2.0
- *
- * Clinical grounding:
- * • ACSM Physical Activity Vital Sign (PAVS): 2-question split → Days × Minutes = score
- * Thresholds: <150 min/wk = Insufficiently Active | 150–300 = Meets SPAG | >300 = Active
- * • SingHealth SDOH 5-Domain Framework: Financial, Food Security, Housing, Social, Psychological
- * • BPS-RS II: Psychological domain items (P20–P25) inform Q6 wellbeing screen
- * • LSNS-6: Social network items inform Q5 social isolation screen
- * • Northern Singapore Health Ecosystem Report (March 2026): 8-tier CTA matrix (Section 5.7)
- *
- * UX/Biodesign improvements:
- * • 10-step flow with proper PAVS split (Q0 = Days, Q1 = Minutes)
- * • SDOH expanded to cover Social + Psychological domains (Q5, Q6)
- * • Domain badge per AURA message (transparency of clinical purpose)
- * • Segmented progress bar with step counter
- * • AURA avatar in every bot bubble
- * • Tiered CTA card rendered as structured output (not raw text)
- * • isTyping guard prevents quick reply render confusion
- * • Session ID visible in header for clinical trust
- * • Teal/emerald design system (biodesign health palette)
- *
- * Source: Northern SG Health Ecosystem Report + Singapore SDOH Validated Questionnaires (2026)
- */
-
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { recordTelemetry } from '../utils/telemetry';
 import { calculateRiskScore } from '../utils/scoring';
-import { ChevronLeft, Send, Sun, Moon, ExternalLink, CheckCircle } from 'lucide-react';
-import { getFunctions, httpsCallable } from 'firebase/functions';
-
-// ── Cloud Function — same pattern as AuraPulseBot.jsx ────────────────────────
-// Gemini API key is secured in Firebase Cloud Functions (never client-side)
-const functions = getFunctions(undefined, 'us-central1');
-const secureChatWithAura = httpsCallable(functions, 'chatWithAura');
+import { ChevronLeft, Send, Sun, Moon, ExternalLink, CheckCircle, BrainCircuit } from 'lucide-react';
 
 // ── Well Well persona system prompt for community health triage ───────────────
-// Used as the `prompt` param passed to the Cloud Function, same as personas
-// in AuraPulseBot. Well Well uses Motivational Interviewing (OARS) and is
-// calibrated for Singapore community members, not clinical staff.
 const WELL_WELL_PROMPT = `You are Well Well, a warm and professionally trained community health navigator within Singapore's NEXUS health programme. You use Motivational Interviewing (MI) techniques — specifically OARS: Open questions, Affirmations, Reflective listening, and Summaries.
 
 You are currently guiding a community member through the NEXUS structured health assessment. After each answer, you will receive the question domain, the user's answer, and all prior answers collected so far. Your job is to write a brief, natural acknowledgement (1–2 sentences, under 40 words) that:
@@ -71,7 +37,7 @@ const DOMAIN_CONFIG = [
   { key: 'previous_id',     badge: '🔗 NEXUS Record Linkage',       group: 'admin'    },
 ];
 
-const TOTAL_STEPS = DOMAIN_CONFIG.length; // 11
+const TOTAL_STEPS = DOMAIN_CONFIG.length; 
 
 const GROUP_COLOURS = {
   pavs:     'bg-emerald-500',
@@ -83,64 +49,55 @@ const GROUP_COLOURS = {
 // ─── TIERED CTA LIBRARY ───────────────────────────────────────────────────────
 const CTA = {
   symptoms_present: {
-    tier: 'URGENT',
-    emoji: '⚠️',
+    tier: 'URGENT', emoji: '⚠️',
     primaryStep: 'Please see your GP or visit a polyclinic before starting any new exercise. Chest pain or dizziness during activity requires medical clearance first.',
     healthierSG: 'Your Healthier SG GP can assess your symptoms and update your Health Plan. Book via HealthHub → My Appointments.',
     resources: ['📞 Polyclinic appointment booking: healthhub.sg/appointments', '🏥 If symptoms are severe or sudden: call 995'],
   },
   chronic_metabolic: {
-    tier: 'CLINICAL',
-    emoji: '🩺',
+    tier: 'CLINICAL', emoji: '🩺',
     primaryStep: 'Enrol in the "Manage Metabolic Health" programme at Woodlands Active Health Lab — 7 structured sessions, from SGD 48, with healthcare professional supervision.',
     healthierSG: 'Book your next Healthier SG annual check-in (FREE) and share your PAVS result. Your GP can issue a direct referral to the Active Health Lab.',
     resources: ['📱 Book Active Health Lab: activesg.gov.sg → Woodlands Sport Centre', '💳 CHAS subsidies may apply: chas.sg to check eligibility', '🩺 Healthier SG check-in: FREE via HealthHub app'],
   },
   senior_low_activity: {
-    tier: 'COMMUNITY',
-    emoji: '🏠',
+    tier: 'COMMUNITY', emoji: '🏠',
     primaryStep: 'Visit your nearest Active Ageing Centre (AAC) — walk in, no appointment needed. Activities are largely free for residents aged 60 and above.',
     healthierSG: 'Your Healthier SG Health Plan includes a formal AAC referral pathway. Ask your GP at your next FREE check-in to document this.',
     resources: ['🔍 Find nearest AAC: aic.sg/care-services/active-ageing-centres', '📞 AIC Hotline: 1800-650-6060', '📺 Seniors workout library on HealthHub: free, chair and low-mobility options available'],
   },
   mental_health_first: {
-    tier: 'WELLBEING',
-    emoji: '🌿',
+    tier: 'WELLBEING', emoji: '🌿',
     primaryStep: 'Your wellbeing matters most. Connect with your polyclinic\'s counselling or mental health support service — this is your most important first step before any exercise programme.',
     healthierSG: 'The Healthier SG mental health pathway includes polyclinic counselling and AAC social connector support. Raise this at your next Health Plan check-in.',
     resources: ['🤝 AAC Social Connector service: visit or call your nearest AAC', '📞 Samaritans of Singapore: 1767 (24 hours, 7 days)', '💬 Mental health resources: mindline.sg'],
   },
   financial_low_activity: {
-    tier: 'FREE_FIRST',
-    emoji: '🆓',
+    tier: 'FREE_FIRST', emoji: '🆓',
     primaryStep: 'Register for "Start2Move" — a completely FREE 6-session beginner exercise programme. Download the Healthy 365 app and search "Start2Move" under Explore → Events.',
     healthierSG: 'Your first Healthier SG Health Plan consultation is FULLY SUBSIDISED. If not yet enrolled, book at any PHPC clinic — free for all Singapore residents.',
     resources: ['🆓 Start2Move: free via Healthy 365 app (App Store / Google Play)', '🧘 Free PA interest groups: onepa.gov.sg → search "healthiersg"', '💳 CHAS Blue/Orange subsidies available: chas.sg to check eligibility'],
   },
   social_low_activity: {
-    tier: 'COMMUNITY',
-    emoji: '👥',
+    tier: 'COMMUNITY', emoji: '👥',
     primaryStep: 'Join Start2Move in a cohort group format — you will exercise alongside the same group of peers across 6 sessions, building both fitness and new friendships.',
     healthierSG: 'Enrol in a HealthierSG-tagged People\'s Association interest group (Tai Chi, Brisk Walking, Qigong — many are free) and mention participation to your GP.',
     resources: ['🤝 PA interest groups: onepa.gov.sg → search "healthiersg" → filter by your area', '🏠 If aged 60+: visit nearest AAC for befriending and active ageing programmes', '📱 Healthy 365 Step Challenges: stay motivated with community leaderboards'],
   },
   start2move: {
-    tier: 'START',
-    emoji: '🚀',
+    tier: 'START', emoji: '🚀',
     primaryStep: 'Download the Healthy 365 app and search "Start2Move" under Explore → Events. Register for the free 6-session beginner programme — the most appropriate first step for your current activity level.',
     healthierSG: 'Tell your Healthier SG doctor about your Start2Move enrolment at your next check-in. It counts directly toward your exercise health goals on your Health Plan.',
     resources: ['📱 Healthy 365: free on App Store and Google Play', '🏋️ Active Health Lab, Woodlands: Balance & Muscular Fitness from SGD 6 per session', '📋 Print or screenshot your PAVS result and bring it to your next GP visit as your activity baseline'],
   },
   active_health_lab: {
-    tier: 'LEVEL_UP',
-    emoji: '💪',
+    tier: 'LEVEL_UP', emoji: '💪',
     primaryStep: 'You meet Singapore\'s minimum activity guidelines — now build on this. Book a "Strength 2.0 Foundation" or "Balance & Muscular Fitness" session at Woodlands Active Health Lab, from SGD 6.',
     healthierSG: 'Active Health Lab programmes are formally recognised within the Healthier SG Health Plan community pathway. Mention your programme at your next annual check-in.',
     resources: ['🏋️ Book at activesg.gov.sg → Active Health Lab → Woodlands Sport Centre', '📊 Body Composition Assessment available: from SGD 7 (Tue/Thu/Sat/Fri)', '📱 Track sessions with the ActiveSG+ app'],
   },
   perform: {
-    tier: 'ADVANCED',
-    emoji: '⚡',
+    tier: 'ADVANCED', emoji: '⚡',
     primaryStep: 'You are well above minimum guidelines — outstanding. Try the "Perform 2.0 AMRAP" or "ENGINE Workout" at Woodlands Active Health Lab, from SGD 6, for structured high-intensity programming.',
     healthierSG: 'Share your high activity level with your Healthier SG GP. You may be eligible for performance programme referrals and advanced tracking within your Health Plan.',
     resources: ['⚡ Free HIIT Workout Library (Adults 19–49, Workouts #1–12): HealthHub → Move It', '🏆 Perform 2.0 sessions: multiple weekly slots available April 2026', '📊 Consider a Body Composition Assessment to establish a performance baseline'],
@@ -415,14 +372,12 @@ const parseClinicalData = (raw) => {
   };
 };
 
+// ─── AURA AVATAR FIX (Using BrainCircuit) ─────────────────────────────────────
 const AuraAvatar = ({ size = 'sm' }) => (
-  <div className={`
-    ${size === 'sm' ? 'w-7 h-7 text-xs' : 'w-9 h-9 text-sm'}
-    rounded-full flex items-center justify-center font-bold text-white flex-shrink-0
-    bg-gradient-to-br from-teal-400 to-emerald-600 shadow-sm ring-2 ring-teal-100 dark:ring-teal-900
-  `}>
-    A
-  </div>
+  <BrainCircuit 
+    className="text-teal-600 dark:text-teal-400 flex-shrink-0 mt-0.5" 
+    size={size === 'sm' ? 24 : 28} 
+  />
 );
 
 const ProgressBar = ({ currentStep, total, langData }) => {
@@ -528,7 +483,7 @@ const AuraChatbot = () => {
   const [isComplete,    setIsComplete]    = useState(false);
 
   useEffect(() => {
-    const stored = localStorage.getItem('nexus-theme');
+    const stored = localStorage.getItem('nexus_theme');
     const sysDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
     const dark = stored === 'dark' || (!stored && sysDark);
     setIsDark(dark);
@@ -539,7 +494,7 @@ const AuraChatbot = () => {
     const next = !isDark;
     setIsDark(next);
     document.documentElement.classList.toggle('dark', next);
-    localStorage.setItem('nexus-theme', next ? 'dark' : 'light');
+    localStorage.setItem('nexus_theme', next ? 'dark' : 'light');
   };
 
   useEffect(() => {
@@ -559,9 +514,10 @@ const AuraChatbot = () => {
     setTimeout(() => {
       setMessages(prev => [...prev, { sender: 'bot', text, step, ctaData }]);
       setIsTyping(false);
-    }, 850);
+    }, 400); // Reduced artificial delay for snappier feel
   };
 
+  // ── SPEED FIX: Direct Gemini API Call bypassing Cloud Functions ──────────────
   const handleUserSubmission = async (text) => {
     if (!text.trim() || isTyping || isComplete) return;
 
@@ -580,31 +536,37 @@ const AuraChatbot = () => {
         parts: [{ text: m.text }],
       }));
 
-    const contextPrompt = [
-      WELL_WELL_PROMPT,
-      `\n\nAssessment domain: ${stepKey} (step ${currentStep + 1} of ${TOTAL_STEPS})`,
-      `User just answered: "${text}"`,
-      `All answers collected so far:\n${Object.entries(updatedData).map(([k, v]) => `  ${k}: ${v}`).join('\n')}`,
-    ].join('\n');
-
     let aiAck = '';
     try {
-      const result = await secureChatWithAura({
-        userText:  text,
-        history,
-        role:      'Community Member — Well Well',
-        prompt:    contextPrompt,
-        isDemo:    false,
+      const API_KEY = import.meta.env.VITE_GEMINI_API_KEY;
+      if (!API_KEY) throw new Error("Missing API Key");
+
+      const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${API_KEY}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          systemInstruction: { 
+            parts: [{ text: WELL_WELL_PROMPT + '\n\nCRITICAL INSTRUCTION: You MUST return ONLY a raw JSON object containing your 1-2 sentence acknowledgement. Format: { "reply": "Your response here." }' }] 
+          },
+          contents: [
+            ...history,
+            { role: 'user', parts: [{ text: `Domain: ${stepKey} (step ${currentStep + 1} of ${TOTAL_STEPS}). User answered: "${text}". All collected so far: ${JSON.stringify(updatedData)}` }] }
+          ],
+          generationConfig: { 
+            temperature: 0.3,
+            responseMimeType: "application/json" // Native JSON mode for maximum speed
+          } 
+        })
       });
-      const raw      = result.data?.text ?? '';
-      const stripped = raw.replace(/```json|```/g, '').trim();
-      try {
-        const parsed = JSON.parse(stripped.substring(stripped.indexOf('{'), stripped.lastIndexOf('}') + 1));
-        aiAck = parsed.reply?.trim() ?? stripped;
-      } catch {
-        aiAck = stripped;
-      }
-    } catch {
+
+      if (!response.ok) throw new Error('API Error');
+      const data = await response.json();
+      const parsed = JSON.parse(data.candidates[0].content.parts[0].text);
+      aiAck = parsed.reply?.trim() || '';
+      
+    } catch (err) {
+      console.warn("LLM Fallback triggered:", err.message);
+      // Instant fallback to local logic if API fails or key is missing
       aiAck = langData.reflections[currentStep]?.(text) ?? '';
     }
 
@@ -664,8 +626,8 @@ const AuraChatbot = () => {
               ctaTier: ctaData.tier,
             },
           });
-        }, 5000);
-      }, 1200);
+        }, 4000); // Reduced delay for faster navigation
+      }, 800); // Reduced delay
 
     } catch {
       setTimeout(() => {
@@ -718,16 +680,13 @@ const AuraChatbot = () => {
         {messages.map((msg, idx) => (
           <div key={idx} className={`flex gap-2 ${msg.sender === 'user' ? 'justify-end' : 'justify-start'}`}>
 
-            {/* Bot avatar — left of bot bubbles */}
             {msg.sender === 'bot' && <AuraAvatar size="sm" />}
 
             <div className={`max-w-[82%] ${msg.sender === 'user' ? '' : ''}`}>
-              {/* Domain badge — only on bot messages where step is defined */}
               {msg.sender === 'bot' && msg.step !== undefined && (
                 <DomainBadge step={msg.step} />
               )}
 
-              {/* Message bubble */}
               <div className={`px-4 py-3 rounded-2xl shadow-sm text-sm leading-relaxed ${
                 msg.sender === 'user'
                   ? 'bg-teal-600 dark:bg-teal-500 text-white rounded-br-none'
@@ -736,13 +695,11 @@ const AuraChatbot = () => {
                 {msg.text}
               </div>
 
-              {/* CTA card — rendered inside the chat for immediate visibility */}
               {msg.ctaData && <CtaCard ctaData={msg.ctaData} langData={langData} />}
             </div>
           </div>
         ))}
 
-        {/* Typing indicator */}
         {isTyping && (
           <div className="flex gap-2 items-end justify-start">
             <AuraAvatar size="sm" />
@@ -762,7 +719,6 @@ const AuraChatbot = () => {
       {/* ── INPUT AREA ── */}
       <div className="px-4 pt-3 pb-4 bg-white dark:bg-[#111827] border-t border-slate-100 dark:border-slate-800 shadow-[0_-4px_8px_-2px_rgba(0,0,0,0.04)]">
 
-        {/* Quick replies — only when not typing and not complete */}
         {showQuickReplies && (
           <div className="mb-3 animate-in fade-in slide-in-from-bottom-2 duration-300">
             <p className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-2 px-0.5">
@@ -782,7 +738,6 @@ const AuraChatbot = () => {
           </div>
         )}
 
-        {/* Text input */}
         {!isComplete && (
           <form onSubmit={handleFormSubmit} className="flex items-center gap-2">
             <input
