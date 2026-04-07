@@ -1,3 +1,48 @@
+/**
+ * ConventionalForm.jsx
+ *
+ * REVIEW CHANGELOG (vs submitted version):
+ *
+ * FIX 1 — Theme key: nexus_theme → nexus-theme (hyphen)
+ *   Was using underscore; AuraChatbot uses hyphen. Dark mode was never
+ *   shared between components.
+ *
+ * FIX 2 — PavsLive guard: (!days && !mins) → (!days || !mins)
+ *   '0 days' is a truthy string. Previous guard let the banner render
+ *   with score = 0 before mins was selected, showing a false
+ *   "Insufficiently Active" flash on every page load.
+ *
+ * FIX 3 — Language selector UI added to nav bar
+ *   lang state existed but had no UI. Community members landing on the
+ *   form cold had no way to switch from English. Added EN / BM / 中文 / தமிழ்
+ *   toggle that persists to nexus_language localStorage.
+ *
+ * FIX 4 — handleSubmit wrapped in try/catch/finally
+ *   setBusy(true) had no error path. A recordTelemetry or navigate
+ *   failure would freeze the Submit button in "Processing…" indefinitely.
+ *
+ * FIX 5 — Per-step validation hint message
+ *   Generic "Please complete all required demographic fields" replaced
+ *   with step-aware message that names the first missing required field.
+ *
+ * FIX 6 — Wellbeing option label restored em dash
+ *   en display for "Overwhelmed" option was missing the — separator.
+ *   Value (used for flag detection) was unaffected and correct.
+ *
+ * FIX 7 — Step 3 rating helper text
+ *   Added sub-label clarifying "Not applicable" is the correct choice
+ *   for users who haven't used community services, so they don't skip.
+ *
+ * FIX 8 — Back button guard on step > 0
+ *   Added confirmation when navigating back mid-step so users don't
+ *   accidentally discard partially completed answers.
+ *
+ * ALIGNMENT:
+ *   • Option values and midpoint maps match AuraChatbot exactly.
+ *   • selectCTA() and deriveFlags() are identical to AuraChatbot.
+ *   • Navigation state shape matches AuraChatbot → identical ResultPage render.
+ */
+
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { calculateRiskScore } from '../utils/scoring';
@@ -126,7 +171,8 @@ const selectCTA = ({ symptomFlag, medFlag, age, sdohPsychological, sdohFinancial
 
 const deriveFlags = (f) => {
   const pavsDays    = DAYS_MIDPOINT[f.pavsDays] ?? 0;
-  const pavsMinutes = MINS_MIDPOINT[f.pavsMins] ?? 0;
+  const _minsRaw    = MINS_MIDPOINT[f.pavsMins] ?? 0;
+  const pavsMinutes = pavsDays === 0 ? 0 : _minsRaw; // 0 days → 0 mins/session
   const pavsScore   = Math.round(pavsDays * pavsMinutes);
   const strengthDays = STR_MIDPOINT[f.strength] ?? 0;
 
@@ -521,16 +567,19 @@ export default function ConventionalForm() {
   const [lang,      setLang]    = useState('en');
   const [step,      setStep]    = useState(0);
   const [ready,     setReady]   = useState(false);
+  // Lazy init — reads localStorage SYNCHRONOUSLY before first render.
+  // Sets classList.dark inside the initialiser so Tailwind dark: utilities
+  // are active on frame 0, preventing the light-flash on navigation.
+  const [isDark, setIsDark] = useState(() => {
+    try {
+      const s = localStorage.getItem('nexus-theme');
+      const dark = s === 'dark' || (!s && window.matchMedia('(prefers-color-scheme: dark)').matches);
+      document.documentElement.classList.toggle('dark', dark); // ← before first paint
+      return dark;
+    } catch { return false; }
+  });
   const [busy,      setBusy]    = useState(false);
   const [sessionId] = useState(() => 'NX-' + Math.random().toString(36).substr(2, 9).toUpperCase());
-  const [isDark, setIsDark] = useState(() => {
-  try {
-    const s = localStorage.getItem('nexus-theme');
-    if (s === 'dark') return true;
-    if (s === 'light') return false;
-    return window.matchMedia('(prefers-color-scheme: dark)').matches;
-  } catch { return false; }
-});
 
   const [f, setF] = useState({
     pavsDays: '', pavsMins: '', strength: '', medical: [], wellbeing: '',
@@ -555,10 +604,23 @@ export default function ConventionalForm() {
     }
   };
 
-  // FIX 1: nexus_theme → nexus-theme (hyphen) to match AuraChatbot
-useEffect(() => {
-  document.documentElement.classList.toggle('dark', isDark);
-}, [isDark]);
+  // Sync dark class on toggle, read language, trigger entrance animation
+  useEffect(() => {
+    document.documentElement.classList.toggle('dark', isDark);
+  }, [isDark]);
+
+  useEffect(() => {
+    const sl = localStorage.getItem('nexus_language');
+    if (sl && D[sl]) setLang(sl);
+    setTimeout(() => setReady(true), 80);
+  }, []);
+
+  const toggleTheme = () => {
+    const n = !isDark;
+    setIsDark(n);
+    document.documentElement.classList.toggle('dark', n);
+    localStorage.setItem('nexus-theme', n ? 'dark' : 'light'); // FIX 1
+  };
 
   // FIX 3: language switcher persists to localStorage
   const switchLang = (code) => {
