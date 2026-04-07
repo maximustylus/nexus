@@ -1,510 +1,404 @@
-import React, { useState, useEffect, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { calculateRiskScore } from '../utils/scoring';
-import { recordTelemetry } from '../utils/telemetry';
+import React, { useEffect, useRef, useState } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import {
-  ChevronLeft, ChevronRight, Activity, ShieldAlert,
-  Users, MapPin, Send, Sun, Moon, Brain, Home, Info, Zap, Globe,
+  Download, Share2, ArrowLeft, ExternalLink,
+  ShieldAlert, Activity, CheckCircle2, Loader2,
+  TrendingUp, Sun, Moon, Zap, Users, Brain,
+  DollarSign, Target, Globe,
 } from 'lucide-react';
+import { jsPDF } from 'jspdf';
+import html2canvas from 'html2canvas';
+import { recordTelemetry } from '../utils/telemetry';
 
-// ─────────────────────────────────────────────────────────────────────────────
-// OPTION TABLES — values match AuraChatbot quick-reply strings exactly
-// ─────────────────────────────────────────────────────────────────────────────
-
-const PAVS_DAYS = [
-  { value: '0 days',   en: '0 days',   ms: '0 hari',   zh: '0 天',   ta: '0 நாட்கள்'   },
-  { value: '1–2 days', en: '1–2 days', ms: '1–2 hari', zh: '1–2 天', ta: '1–2 நாட்கள்' },
-  { value: '3–4 days', en: '3–4 days', ms: '3–4 hari', zh: '3–4 天', ta: '3–4 நாட்கள்' },
-  { value: '5–7 days', en: '5–7 days', ms: '5–7 hari', zh: '5–7 天', ta: '5–7 நாட்கள்' },
-];
-
-const PAVS_MINS = [
-  { value: 'Less than 20 mins', en: 'Less than 20 mins', ms: 'Kurang 20 minit', zh: '少于 20 分钟', ta: '20 நிமிடங்களுக்கும் குறைவு' },
-  { value: '20–30 mins',        en: '20–30 mins',        ms: '20–30 minit',    zh: '20–30 分钟',  ta: '20–30 நிமிடங்கள்'          },
-  { value: '30–45 mins',        en: '30–45 mins',        ms: '30–45 minit',    zh: '30–45 分钟',  ta: '30–45 நிமிடங்கள்'          },
-  { value: '45–60 mins',        en: '45–60 mins',        ms: '45–60 minit',    zh: '45–60 分钟',  ta: '45–60 நிமிடங்கள்'          },
-  { value: '60+ mins',          en: '60+ mins',          ms: '60+ minit',      zh: '60 分钟以上', ta: '60+ நிமிடங்கள்'            },
-];
-
-const STRENGTH_DAYS = [
-  { value: 'No strength training', en: 'No strength training', ms: 'Tiada latihan kekuatan', zh: '没有力量训练',   ta: 'தசை பயிற்சி இல்லை'    },
-  { value: '1 day a week',         en: '1 day a week',         ms: '1 hari seminggu',        zh: '每周 1 天',      ta: 'வாரத்தில் 1 நாள்'     },
-  { value: '2 days a week',        en: '2 days a week',        ms: '2 hari seminggu',        zh: '每周 2 天',      ta: 'வாரத்தில் 2 நாட்கள்'  },
-  { value: '3+ days a week',       en: '3+ days a week',       ms: '3+ hari seminggu',       zh: '每周 3 天以上',  ta: 'வாரத்தில் 3+ நாட்கள்' },
-];
-
-const MEDICAL_OPTIONS = [
-  { value: 'No conditions or symptoms',           en: 'No conditions or symptoms',              ms: 'Tiada penyakit atau gejala',          zh: '没有慢性病或症状',    ta: 'நோய் அல்லது அறிகுறிகள் இல்லை'                  },
-  { value: 'High blood pressure',                 en: 'High blood pressure',                    ms: 'Darah tinggi',                        zh: '高血压',             ta: 'உயர் இரத்த அழுத்தம்'                            },
-  { value: 'Prediabetes or diabetes',             en: 'Prediabetes or diabetes',                ms: 'Pradiabetes / diabetes',              zh: '糖尿病前期或糖尿病',  ta: 'நீரிழிவு முன்நிலை'                                },
-  { value: 'Heart condition',                     en: 'Heart condition',                        ms: 'Penyakit jantung',                    zh: '心脏病',             ta: 'இதய நோய்'                                        },
-  { value: 'Dizziness or chest pain when active', en: 'Dizziness or chest pain when active',   ms: 'Pening atau sakit dada semasa aktif', zh: '活动时头晕或胸痛',   ta: 'செயல்படும்போது தலைசுற்றல் அல்லது நெஞ்சு வலி'   },
-];
-const MEDICAL_EXCLUSIVE = 'No conditions or symptoms';
-
-const BARRIERS = [
-  { value: 'Lack of time',                     en: 'Lack of time',                     ms: 'Kekurangan masa',      zh: '没时间',      ta: 'நேரமின்மை'                    },
-  { value: 'Too expensive',                     en: 'Too expensive',                    ms: 'Terlalu mahal',        zh: '太贵了',      ta: 'அதிக செலவு'                   },
-  { value: 'Too far away',                      en: 'Too far away',                     ms: 'Terlalu jauh',         zh: '太远了',      ta: 'மிகவும் தூரம்'                },
-  { value: 'I prefer hospitals over community', en: 'I prefer hospitals over community', ms: 'Lebih suka hospital',  zh: '更喜欢去医院', ta: 'மருத்துவமனையை விரும்புகிறேன்' },
-  { value: 'Unsure what is available',          en: 'Unsure what is available',          ms: 'Tidak pasti apa ada',  zh: '不确定有哪些', ta: 'என்ன உள்ளது என்று தெரியாது'  },
-  { value: 'No barriers for me',                en: 'No barriers for me',               ms: 'Tiada halangan',       zh: '没有障碍',    ta: 'தடைகள் இல்லை'                 },
-];
-
-const SOCIAL_OPTIONS = [
-  { value: 'I have several people I can rely on', en: 'I have several people I can rely on', ms: 'Ada beberapa orang yang boleh saya hubungi', zh: '有几个可以依靠的人', ta: 'நம்பகமான பல நபர்கள் உள்ளனர்'         },
-  { value: 'I have one or two close people',      en: 'I have one or two close people',      ms: 'Ada satu atau dua orang rapat',             zh: '有一两个亲近的人',  ta: 'ஒன்று அல்லது இரண்டு நெருங்கிய நபர்கள்' },
-  { value: 'I mostly manage on my own',           en: 'I mostly manage on my own',           ms: 'Saya mostly uruskan sendiri',               zh: '大多数情况自己处理', ta: 'பெரும்பாலும் சுயமாக சமாளிக்கிறேன்'      },
-  { value: 'I feel quite isolated',               en: 'I feel quite isolated',               ms: 'Saya rasa agak keseorangan',               zh: '感到相当孤立',      ta: 'மிகவும் தனிமையாக உணர்கிறேன்'           },
-];
-
-// FIX 6: restored em dash in en display label for last option
-const WELLBEING_OPTIONS = [
-  { value: 'Feeling good overall',                           en: 'Feeling good overall',                             ms: 'Perasaan baik secara keseluruhannya',        zh: '整体感觉不错',            ta: 'ஒட்டுமொத்தமாக நல்லாக உணர்கிறேன்'        },
-  { value: 'Some stress but managing',                       en: 'Some stress, but managing',                        ms: 'Ada sedikit tekanan tapi boleh kawal',       zh: '有些压力但能应对',        ta: 'சில மன அழுத்தம் ஆனால் சமாளிக்கிறேன்'    },
-  { value: 'Feeling quite stressed or low',                  en: 'Feeling quite stressed or low in mood',            ms: 'Rasa sangat tertekan atau sedih',            zh: '感到很压抑或情绪低落',    ta: 'மிகவும் மன அழுத்தம் அல்லது மனச்சோர்வு'  },
-  { value: 'Overwhelmed — caregiving or financial pressure', en: 'Overwhelmed — caregiving or financial pressure',   ms: 'Terbeban — penjagaan atau tekanan kewangan', zh: '不知所措 — 照顾或经济压力', ta: 'அதிக சுமை — பராமரிப்பு அல்லது நிதி அழுத்தம்' },
-];
-
-const INCOME_OPTIONS = [
-  { value: 'More than adequate', en: 'More than adequate (money left over)', ms: 'Lebih daripada mencukupi', zh: '绰绰有余',      ta: 'மிகவும் போதுமானது' },
-  { value: 'Adequate',           en: 'Adequate (just enough, no difficulty)', ms: 'Mencukupi',              zh: '足够',          ta: 'போதுமானது'          },
-  { value: 'Inadequate',         en: 'Inadequate (some or much difficulty)',  ms: 'Tidak mencukupi',        zh: '不足（有困难）',  ta: 'போதாது (சிரமம்)'   },
-];
-
-const HOUSING_OPTIONS = [
-  { value: 'HDB 1-2 Room',    en: 'HDB 1 to 2 Room (rental)',         ms: 'HDB 1–2 Bilik (sewa)',   zh: '组屋 1–2 房（租赁）', ta: 'HDB 1–2 அறைகள் (வாடகை)' },
-  { value: 'HDB 3-5 Room',    en: 'HDB 3 to 5 Room',                  ms: 'HDB 3–5 Bilik',          zh: '组屋 3–5 房',         ta: 'HDB 3–5 அறைகள்'          },
-  { value: 'Private Property', en: 'Private Property (condo / landed)', ms: 'Hartanah Persendirian', zh: '私人房产',            ta: 'தனியார் சொத்து'          },
-];
-
-const AGE_OPTIONS = [
-  { value: 'Under 21', en: 'Under 21', ms: 'Bawah 21', zh: '21岁以下', ta: '21க்கு கீழ்' },
-  { value: '21-40',    en: '21–40',    ms: '21–40',    zh: '21–40岁',  ta: '21–40'        },
-  { value: '41-60',    en: '41–60',    ms: '41–60',    zh: '41–60岁',  ta: '41–60'        },
-  { value: '60+',      en: '60+',      ms: '60+',      zh: '60岁以上', ta: '60+'          },
-];
-
-const GENDER_OPTIONS = [
-  { value: 'Male',   en: 'Male',   ms: 'Lelaki',    zh: '男', ta: 'ஆண்'  },
-  { value: 'Female', en: 'Female', ms: 'Perempuan', zh: '女', ta: 'பெண்' },
-];
-
-const RACE_OPTIONS = [
-  { value: 'Chinese', en: 'Chinese', ms: 'Cina',      zh: '华人',  ta: 'சீனர்கள்'  },
-  { value: 'Malay',   en: 'Malay',   ms: 'Melayu',    zh: '马来人', ta: 'மலாய்'    },
-  { value: 'Indian',  en: 'Indian',  ms: 'India',     zh: '印度人', ta: 'இந்தியர்'  },
-  { value: 'Others',  en: 'Others',  ms: 'Lain-lain', zh: '其他',  ta: 'மற்றவர்கள்' },
-];
-
-// ─────────────────────────────────────────────────────────────────────────────
-// PARSING — mirrors AuraChatbot parseClinicalData() exactly
-// ─────────────────────────────────────────────────────────────────────────────
-
-const DAYS_MIDPOINT = { '0 days': 0, '1–2 days': 1.5, '3–4 days': 3.5, '5–7 days': 6 };
-const MINS_MIDPOINT = { 'Less than 20 mins': 15, '20–30 mins': 25, '30–45 mins': 37, '45–60 mins': 52, '60+ mins': 65 };
-const STR_MIDPOINT  = { 'No strength training': 0, '1 day a week': 1, '2 days a week': 2, '3+ days a week': 3 };
-
-const MED_FLAG_VALUES     = new Set(['High blood pressure', 'Prediabetes or diabetes', 'Heart condition']);
-const SYMPTOM_FLAG_VALUE  = 'Dizziness or chest pain when active';
-const FINANCIAL_BARR_VALS = new Set(['Too expensive', 'Too far away']);
-const SOCIAL_FLAG_VALS    = new Set(['I mostly manage on my own', 'I feel quite isolated']);
-const PSYCHO_FLAG_VALS    = new Set(['Some stress but managing', 'Feeling quite stressed or low', 'Overwhelmed — caregiving or financial pressure']);
-
-// Identical to AuraChatbot selectCTA()
-const selectCTA = ({ symptomFlag, medFlag, age, sdohPsychological, sdohFinancial, sdohSocial, pavsScore }) => {
-  if (symptomFlag)                      return 'URGENT';
-  if (medFlag)                          return 'CLINICAL';
-  if (age === '60+' && pavsScore < 150) return 'COMMUNITY';
-  if (sdohPsychological)                return 'WELLBEING';
-  if (sdohFinancial && pavsScore < 150) return 'FREE_FIRST';
-  if (sdohSocial && pavsScore < 150)    return 'COMMUNITY';
-  if (pavsScore < 150)                  return 'START';
-  if (pavsScore <= 300)                 return 'LEVEL_UP';
-  return 'ADVANCED';
-};
-
-const deriveFlags = (f) => {
-  const pavsDays    = DAYS_MIDPOINT[f.pavsDays] ?? 0;
-  const pavsMinutes = MINS_MIDPOINT[f.pavsMins] ?? 0;
-  const pavsScore   = Math.round(pavsDays * pavsMinutes);
-  const strengthDays = STR_MIDPOINT[f.strength] ?? 0;
-
-  const noConditions  = f.medical.includes(MEDICAL_EXCLUSIVE);
-  const medFlag       = !noConditions && f.medical.some(v => MED_FLAG_VALUES.has(v));
-  const symptomFlag   = !noConditions && f.medical.includes(SYMPTOM_FLAG_VALUE);
-
-  const sdohFinancial     = f.barriers.some(v => FINANCIAL_BARR_VALS.has(v)) || f.incomeAdequacy === 'Inadequate';
-  const sdohSocial        = SOCIAL_FLAG_VALS.has(f.social);
-  const sdohPsychological = PSYCHO_FLAG_VALS.has(f.wellbeing);
-  const sdohFoodInsecure  = f.foodInsecure === true;
-  const sdohHousing       = f.housing === 'HDB 1-2 Room';
-
-  const age    = f.ageGroup === '60+' ? '60+' : f.ageGroup === '41-60' ? '41-60' : f.ageGroup === '21-40' ? '21-40' : 'Unknown';
-  const gender = f.gender || 'Unknown';
-
-  return {
-    pavsScore, pavsDays, pavsMinutes, strengthDays,
-    medFlag, symptomFlag,
-    sdohFinancial, sdohSocial, sdohPsychological,
-    psychoFlag: sdohPsychological,
-    sdohFoodInsecure, sdohHousing,
-    age, gender,
-    previousId: f.previousId?.trim().toUpperCase() || null,
-  };
-};
-
-// ─────────────────────────────────────────────────────────────────────────────
-// DICTIONARY
-// ─────────────────────────────────────────────────────────────────────────────
-
-const D = {
+// ─── DICTIONARY ───────────────────────────────────────────────────────────────
+const DICTIONARY = {
   en: {
-    title: 'Health & Community Assessment',
-    steps: ['Physical Activity', 'Social Determinants', 'Community Experience', 'About You'],
-    subs:  ['ACSM PAVS · SPAG Strength · Clinical Safety', 'SDOH 5-Domain · PDF Validated', 'Community Perception', 'Demographics · Location · Record Linkage'],
-    back: 'Back', yes: 'Yes', no: 'No', sel: 'Select —',
-    btnNext: 'Next', btnPrev: 'Previous', btnSubmit: 'Get My Results',
-    pavsQ1: 'On a typical week, how many days do you do moderate or vigorous exercise? (e.g. brisk walking, cycling, swimming, gym)',
-    pavsQ2: 'On those active days, roughly how many minutes do you usually exercise each time?',
-    pavsLive: 'Estimated weekly PAVS score', pavsUnit: 'mins / week',
-    pavsBelow: 'Insufficiently Active — below SPAG minimum (150 mins/week)',
-    pavsMeets: 'Meets SPAG guidelines (150–300 mins/week)',
-    pavsActive: 'Active — exceeds SPAG recommendation (300+ mins/week)',
-    strengthQ: 'Do you do any muscle-strengthening activities? (e.g. weights, resistance bands, bodyweight exercises like push-ups or squats)',
-    clinHead: 'Clinical Safety Screen',
-    medQ: 'Do you have any ongoing health conditions such as high blood pressure, prediabetes, or heart disease? And do you ever feel chest pain or dizziness when physically active? Select all that apply.',
-    wellHead: 'SDOH · Psychological Wellbeing',
-    wellQ: 'Over the past two weeks, how have you been feeling overall? Have you felt stressed, low in mood, or overwhelmed — for example, due to work, caregiving, or financial pressure?',
-    wellNote: 'Aligned with BPS-RS II P22 (PHQ-2 based, 2-week timeframe)',
-    sdohHead: 'Social Determinants of Health',
-    sdohIntro: "These questions are grounded in validated SDOH screening tools used across Singapore's Regional Health Systems. Your responses are confidential.",
-    barrQ: 'What is the main thing that makes it difficult to access health or fitness services in your community? Select all that apply.',
-    socialQ: 'Roughly how many people — family or friends — could you call on for support if you needed help? And would you say you have people you can talk to openly?',
-    socialNote: 'Grounded in LSNS-6 (Lubben Social Network Scale)',
-    foodQ: "In the past 12 months, were you ever hungry but didn't eat because you could not afford enough food?",
-    foodNote: 'Lien Centre food insufficiency screen (Question 1 of 2)',
-    incomeQ: 'Do you feel you have adequate income to meet your monthly expenses?',
-    incomeNote: 'Duke-NUS validated perceived income adequacy scale',
-    housingQ: 'What type of housing do you currently reside in?',
-    housingNote: 'BPS-RS II housing schema — geographic risk indicator',
-    housingAlert: '1–2 room HDB rental residents face elevated multi-domain social stress. Your plan will prioritise free and community-based resources.',
-    perHead: 'Community Health Experience',
-    awareQ: 'Have you heard about the health and wellness services available in your neighbourhood? (e.g. Active Health Labs, Start2Move, Active Ageing Centres)',
-    referQ: 'Has a doctor or allied health professional ever referred you to a community health programme or Active Health Lab?',
-    ratingQ: 'If you have used community health services, how was your experience compared to a hospital?',
-    ratingHint: "Haven't used community services? Select 'Not applicable'.",
-    ratingOpts: ['Better than hospital', 'About the same', 'Needs improvement', 'Not applicable — have not used community services'],
-    trustQ: 'How comfortable and safe do you feel receiving health care in the community?',
-    trustScale: '1 = Not at all comfortable   ·   5 = Very comfortable',
-    improveQ: 'If you could change one thing about healthcare in your neighbourhood, what would it be?',
-    demoHead: 'About You',
-    demoIntro: 'These details help us ensure resources reach every community equitably. All responses are de-identified.',
-    ageQ: 'Age Group', genderQ: 'Gender', raceQ: 'Ethnicity',
-    postalQ: 'First 2 digits of your Postal Code',
-    postalHint: 'e.g. 73 (Woodlands) · 75–76 (Yishun) · 75 (Sembawang) · 68 (Admiralty / Canberra)',
-    prevIdQ: 'Previous NEXUS Assessment ID',
-    prevIdHint: 'If you completed a previous AURA or NEXUS assessment, paste your ID here to link records and track progress. Leave blank if this is your first assessment.',
-    summaryHead: 'Assessment Summary',
-    optional: 'Optional',
-    // FIX 5: per-step validation hints
-    missing: {
-      pavsDays: 'Please select how many days you exercise per week.',
-      pavsMins: 'Please select your typical exercise duration.',
-      strength: 'Please select your strength training frequency.',
-      medical:  'Please select at least one option (or "No conditions").',
-      wellbeing:'Please select how you have been feeling.',
-      barriers: 'Please select at least one barrier (or "No barriers").',
-      social:   'Please select your social support level.',
-      foodInsecure: 'Please answer the food security question.',
-      incomeAdequacy: 'Please select your income adequacy level.',
-      housing:  'Please select your housing type.',
-      aware:    'Please answer the community awareness question.',
-      referred: 'Please answer the referral question.',
-      rating:   "Please select a rating (choose 'Not applicable' if you haven't used community services).",
-      ageGroup: 'Please select your age group.',
-      gender:   'Please select your gender.',
-      race:     'Please select your ethnicity.',
-      postalCode: 'Please enter the first 2 digits of your postal code.',
-    },
+    loading: 'AURA is mapping community resources to your profile\u2026',
+    title: 'Your Assessment Result',
+    red: 'High Needs (Red)',
+    amber: 'Moderate Needs (Amber)',
+    green: 'Low Needs (Green)',
+    redDesc: 'Your risk profile indicates a need for supervised care. We strongly recommend consulting a healthcare professional before starting any new exercise programme.',
+    amberDesc: 'You have moderate needs. Consider gradually increasing your activity levels and exploring the structured community resources below.',
+    greenDesc: "You meet the physical activity guidelines. Maintain your routine and consider levelling up with structured programmes.",
+    sdohFinText: 'Cost flagged as a barrier — we have prioritised free and fully subsidised options below.',
+    sdohSocText: 'Social connection flagged — community group and befriending resources have been included.',
+    sdohPsychoText: 'Mental wellbeing flagged — emotional wellness and counselling resources have been added.',
+    trendActive: 'Longitudinal Tracking Active',
+    trendDesc: 'Your results have been linked to your previous assessment to monitor clinical progress over time.',
+    pavsTitle: 'ACSM Physical Activity Vital Sign',
+    pavsWeekly: 'mins / week',
+    pavsDays: 'days / week',
+    pavsMins: 'mins / session',
+    pavsBelow: 'Insufficiently Active',
+    pavsMeets: 'Meets Guidelines',
+    pavsActive: 'Active',
+    pavsBelowDesc: 'Below 150 mins/week — the Singapore Physical Activity Guidelines recommend at least 150 mins of moderate activity per week.',
+    pavsMeetsDesc: 'You meet the SPAG minimum of 150 mins/week. Consider building toward 300 mins for greater health benefit.',
+    pavsActiveDesc: 'Excellent — you exceed the SPAG recommendation of 300 mins/week. Focus on maintaining quality and adding variety.',
+    pavsThreshold: 'SPAG: 150–300 mins / week',
+    primaryAction: 'Your Primary Action',
+    resources: 'Recommended Community Resources',
+    download: 'Download PDF',
+    share: 'Share Result',
+    back: 'Back to Gateway',
+    cta: 'Take Action Today',
+    reportTitle: 'SMART DASHBOARD',
+    date: 'Date',
+    assessmentId: 'Assessment ID',
+    prevId: 'Previous ID',
+    postalSector: 'Postal Sector',
+    pavsLabel: 'PAVS Score',
+    scanQR: 'Scan to access digital portal',
+    webLink: 'Website: ',
+    sharePrefix: 'My NEXUS AURA result:',
+    shareTopRec: 'Primary Action:',
+    sharePathway: 'Discover your community health pathway at NEXUS:',
   },
-
   ms: {
-    title: 'Penilaian Kesihatan & Komuniti',
-    steps: ['Aktiviti Fizikal', 'Penentu Sosial', 'Pengalaman Komuniti', 'Mengenai Anda'],
-    subs:  ['ACSM PAVS · SPAG Kekuatan · Saringan Klinikal', 'Saringan SDOH 5 Domain · Disahkan PDF', 'Persepsi Komuniti', 'Demografi · Lokasi · Pautan Rekod'],
-    back: 'Kembali', yes: 'Ya', no: 'Tidak', sel: 'Pilih —',
-    btnNext: 'Seterusnya', btnPrev: 'Sebelumnya', btnSubmit: 'Dapatkan Keputusan',
-    pavsQ1: 'Dalam minggu biasa, berapa hari anda melakukan senaman sederhana atau berat? (cth. berjalan pantas, berbasikal, berenang)',
-    pavsQ2: 'Pada hari aktif tersebut, kira-kira berapa minit anda bersenam setiap kali?',
-    pavsLive: 'Anggaran skor PAVS mingguan', pavsUnit: 'minit / minggu',
-    pavsBelow: 'Kurang Aktif — di bawah minimum SPAG (150 minit/minggu)',
-    pavsMeets: 'Memenuhi garis panduan SPAG (150–300 minit/minggu)',
-    pavsActive: 'Aktif — melebihi cadangan SPAG (300+ minit/minggu)',
-    strengthQ: 'Adakah anda melakukan aktiviti menguatkan otot? (cth. angkat berat, band rintangan, senaman berat badan)',
-    clinHead: 'Saringan Keselamatan Klinikal',
-    medQ: 'Adakah anda mempunyai sebarang penyakit kronik seperti darah tinggi, pradiabetes, atau penyakit jantung? Dan adakah anda pernah merasa sakit dada atau pening semasa aktif? Pilih semua yang berkenaan.',
-    wellHead: 'SDOH · Kesejahteraan Psikologi',
-    wellQ: 'Dalam dua minggu yang lalu, bagaimana perasaan anda secara keseluruhan? Adakah anda rasa tertekan, sedih, atau terbeban — misalnya akibat kerja, penjagaan, atau tekanan kewangan?',
-    wellNote: 'Dijajarkan dengan BPS-RS II P22 (berasaskan PHQ-2, tempoh 2 minggu)',
-    sdohHead: 'Penentu Sosial Kesihatan',
-    sdohIntro: 'Soalan-soalan ini berpandukan alat saringan SDOH yang disahkan. Jawapan anda adalah sulit.',
-    barrQ: 'Apakah yang paling menyukarkan anda untuk mengakses perkhidmatan kesihatan komuniti? Pilih semua yang berkenaan.',
-    socialQ: 'Kira-kira berapa ramai orang — keluarga atau rakan — yang boleh anda hubungi untuk sokongan jika perlu? Dan adakah anda mempunyai seseorang untuk bercerita?',
-    socialNote: 'Berpandukan LSNS-6 (Skala Rangkaian Sosial Lubben)',
-    foodQ: 'Dalam 12 bulan yang lalu, pernahkah anda lapar tetapi tidak makan kerana tidak mampu membeli makanan yang cukup?',
-    foodNote: 'Saringan kekurangan makanan Lien Centre (Soalan 1 daripada 2)',
-    incomeQ: 'Adakah anda rasa pendapatan anda mencukupi untuk perbelanjaan bulanan?',
-    incomeNote: 'Skala kecukupan pendapatan yang disahkan oleh Duke-NUS',
-    housingQ: 'Apakah jenis perumahan yang anda diami sekarang?',
-    housingNote: 'Skema perumahan BPS-RS II — penunjuk risiko geografi',
-    housingAlert: 'Penghuni flat sewa HDB 1–2 bilik menghadapi tekanan sosial pelbagai domain yang tinggi. Pelan anda akan mengutamakan sumber percuma dan berasaskan komuniti.',
-    perHead: 'Pengalaman Kesihatan Komuniti',
-    awareQ: 'Pernahkah anda mendengar tentang perkhidmatan kesihatan di kawasan kejiranan anda? (cth. Active Health Labs, Start2Move, AAC)',
-    referQ: 'Pernahkah doktor atau profesional kesihatan merujuk anda ke program kesihatan komuniti atau Active Health Lab?',
-    ratingQ: 'Jika anda pernah menggunakan perkhidmatan komuniti, bagaimana pengalaman berbanding hospital?',
-    ratingHint: "Belum pernah menggunakan? Pilih 'Tidak berkenaan'.",
-    ratingOpts: ['Lebih baik daripada hospital', 'Lebih kurang sama', 'Perlu diperbaiki', 'Tidak berkenaan — belum pernah menggunakan'],
-    trustQ: 'Sejauh mana anda berasa selesa menerima penjagaan dalam komuniti?',
-    trustScale: '1 = Tidak selesa langsung   ·   5 = Sangat selesa',
-    improveQ: 'Jika anda boleh mengubah satu perkara tentang penjagaan kesihatan di kejiranan anda, apakah itu?',
-    demoHead: 'Mengenai Anda',
-    demoIntro: 'Maklumat ini membantu kami memastikan sumber sampai ke semua komuniti secara saksama. Semua jawapan tidak dapat dikenal pasti.',
-    ageQ: 'Kumpulan Umur', genderQ: 'Jantina', raceQ: 'Etnik',
-    postalQ: '2 digit pertama Poskod anda',
-    postalHint: 'cth. 73 (Woodlands) · 75–76 (Yishun) · 68 (Canberra)',
-    prevIdQ: 'ID Penilaian NEXUS Sebelumnya',
-    prevIdHint: 'Jika anda pernah menjalani penilaian AURA atau NEXUS, tampal ID anda di sini. Biarkan kosong jika ini penilaian pertama anda.',
-    summaryHead: 'Ringkasan Penilaian',
-    optional: 'Pilihan',
-    missing: {
-      pavsDays: 'Sila pilih berapa hari anda bersenam seminggu.',
-      pavsMins: 'Sila pilih tempoh senaman biasa anda.',
-      strength: 'Sila pilih kekerapan latihan kekuatan anda.',
-      medical:  'Sila pilih sekurang-kurangnya satu pilihan.',
-      wellbeing:'Sila pilih bagaimana perasaan anda.',
-      barriers: 'Sila pilih sekurang-kurangnya satu halangan.',
-      social:   'Sila pilih tahap sokongan sosial anda.',
-      foodInsecure: 'Sila jawab soalan keselamatan makanan.',
-      incomeAdequacy: 'Sila pilih tahap kecukupan pendapatan anda.',
-      housing:  'Sila pilih jenis perumahan anda.',
-      aware:    'Sila jawab soalan kesedaran komuniti.',
-      referred: 'Sila jawab soalan rujukan.',
-      rating:   "Sila pilih penilaian (pilih 'Tidak berkenaan' jika belum menggunakan).",
-      ageGroup: 'Sila pilih kumpulan umur anda.',
-      gender:   'Sila pilih jantina anda.',
-      race:     'Sila pilih etnik anda.',
-      postalCode: 'Sila masukkan 2 digit pertama poskod anda.',
-    },
+    loading: 'AURA sedang memetakan sumber komuniti ke profil anda\u2026',
+    title: 'Keputusan Penilaian Anda',
+    red: 'Keperluan Tinggi (Merah)',
+    amber: 'Keperluan Sederhana (Kuning)',
+    green: 'Keperluan Rendah (Hijau)',
+    redDesc: 'Profil risiko anda memerlukan penjagaan yang diawasi. Sila berunding dengan profesional kesihatan sebelum memulakan program senaman baharu.',
+    amberDesc: 'Anda mempunyai keperluan sederhana. Pertimbangkan untuk meningkatkan aktiviti anda secara beransur-ansur dan erkoka sumber komuniti di bawah.',
+    greenDesc: 'Anda memenuhi garis panduan aktiviti fizikal. Teruskan dan pertimbangkan untuk meningkatkan tahap dengan program berstruktur.',
+    sdohFinText: 'Kos dikenal pasti sebagai halangan — pilihan percuma dan bersubsidi diutamakan di bawah.',
+    sdohSocText: 'Hubungan sosial dikenal pasti — sumber kumpulan komuniti dan rakan disertakan.',
+    sdohPsychoText: 'Kesejahteraan mental dikenal pasti — sumber sokongan emosi dan kaunseling ditambah.',
+    trendActive: 'Penjejakan Membujur Aktif',
+    trendDesc: 'Keputusan anda dipautkan ke penilaian lepas untuk memantau kemajuan klinikal.',
+    pavsTitle: 'Tanda Vital Aktiviti Fizikal ACSM',
+    pavsWeekly: 'minit / minggu',
+    pavsDays: 'hari / minggu',
+    pavsMins: 'minit / sesi',
+    pavsBelow: 'Kurang Aktif',
+    pavsMeets: 'Memenuhi Garis Panduan',
+    pavsActive: 'Aktif',
+    pavsBelowDesc: 'Di bawah 150 minit/minggu — Garis Panduan Aktiviti Fizikal Singapura mengesyorkan sekurang-kurangnya 150 minit seminggu.',
+    pavsMeetsDesc: 'Anda memenuhi minimum SPAG 150 minit/minggu. Pertimbangkan untuk mencapai 300 minit untuk manfaat kesihatan yang lebih besar.',
+    pavsActiveDesc: 'Cemerlang — anda melebihi cadangan SPAG 300 minit/minggu.',
+    pavsThreshold: 'SPAG: 150–300 minit / minggu',
+    primaryAction: 'Tindakan Utama Anda',
+    resources: 'Sumber Komuniti yang Disyorkan',
+    download: 'Muat Turun PDF',
+    share: 'Kongsi Keputusan',
+    back: 'Kembali ke Pintu Utama',
+    cta: 'Ambil Tindakan Hari Ini',
+    reportTitle: 'SMART DASHBOARD',
+    date: 'Tarikh',
+    assessmentId: 'ID Penilaian',
+    prevId: 'ID Lepas',
+    postalSector: 'Sektor Pos',
+    pavsLabel: 'Skor PAVS',
+    scanQR: 'Imbas untuk akses portal digital',
+    webLink: 'Laman Web: ',
+    sharePrefix: 'Keputusan NEXUS AURA saya:',
+    shareTopRec: 'Tindakan Utama:',
+    sharePathway: 'Terokai laluan kesihatan komuniti anda di NEXUS:',
   },
-
   zh: {
-    title: '健康与社区评估',
-    steps: ['体力活动', '社会决定因素', '社区体验', '关于您'],
-    subs:  ['ACSM PAVS · SPAG 力量 · 临床安全筛查', 'SDOH 5 领域筛查 · PDF 验证', '社区认知', '人口统计 · 位置 · 记录关联'],
-    back: '返回', yes: '是', no: '否', sel: '请选择 —',
-    btnNext: '下一步', btnPrev: '上一步', btnSubmit: '获取结果',
-    pavsQ1: '在通常的一周内，您有几天进行中度或剧烈运动？（例如快走、骑车、游泳、健身房）',
-    pavsQ2: '在这些活动的天里，您每次通常运动多少分钟？',
-    pavsLive: '估计每周 PAVS 得分', pavsUnit: '分钟 / 周',
-    pavsBelow: '运动不足 — 低于 SPAG 最低标准（150 分钟/周）',
-    pavsMeets: '达到 SPAG 指南（150–300 分钟/周）',
-    pavsActive: '活跃 — 超过 SPAG 建议（300+ 分钟/周）',
-    strengthQ: '您是否进行肌肉强化活动？（例如举重、弹力带、俯卧撑或深蹲）',
-    clinHead: '临床安全筛查',
-    medQ: '您是否患有任何慢性病如高血压、糖尿病前期或心脏病？您在进行体力活动时是否有胸痛或头晕？选择所有适用项。',
-    wellHead: 'SDOH · 心理健康',
-    wellQ: '在过去两周里，您整体感觉如何？您是否感到压力、情绪低落或不知所措 — 例如由于工作、护理或经济压力？',
-    wellNote: '与 BPS-RS II P22（基于 PHQ-2，2 周时间框架）一致',
-    sdohHead: '健康的社会决定因素',
-    sdohIntro: '这些问题基于经过验证的 SDOH 筛查工具。您的回答是保密的。',
-    barrQ: '是什么让您最难以使用社区健康服务？选择所有适用项。',
-    socialQ: '大约有多少家人或朋友可以在您需要时提供支持，您是否有可以坦诚交谈的人？',
-    socialNote: '基于 LSNS-6（卢本社会网络量表）',
-    foodQ: '在过去12个月里，您是否曾因为买不起足够的食物而挨饿？',
-    foodNote: '廉洁中心食物不足筛查（第 1 题，共 2 题）',
-    incomeQ: '您觉得您的收入足以支付每月开销吗？',
-    incomeNote: 'Duke-NUS 验证的感知收入充足性量表',
-    housingQ: '您目前居住的房屋类型是什么？',
-    housingNote: 'BPS-RS II 住房模式 — 地理风险指标',
-    housingAlert: '1–2 房组屋租赁居民面临较高的多领域社会压力。您的计划将优先考虑免费和基于社区的资源。',
-    perHead: '社区卫生体验',
-    awareQ: '您听说过您社区提供的健康和保健服务吗？（例如 Active Health Labs、Start2Move、活跃乐龄中心）',
-    referQ: '医生或专职医疗专业人员是否曾转介您参加社区健康计划？',
-    ratingQ: '如果您使用过社区服务，与医院相比体验如何？',
-    ratingHint: '未曾使用过社区服务？请选择"不适用"。',
-    ratingOpts: ['比医院好', '差不多', '需要改进', '不适用 — 未使用过社区服务'],
-    trustQ: '您在社区接受护理感到多舒适？',
-    trustScale: '1 = 完全不舒适   ·   5 = 非常舒适',
-    improveQ: '如果您能改变社区医疗的一件事，那会是什么？',
-    demoHead: '关于您',
-    demoIntro: '这些信息帮助我们确保资源公平地覆盖每个社区。所有信息均已去识别化。',
-    ageQ: '年龄组', genderQ: '性别', raceQ: '族裔',
-    postalQ: '邮政编码前2位',
-    postalHint: '例如 73（兀兰）· 75–76（义顺）· 68（甘巴旺）',
-    prevIdQ: '之前的 NEXUS 评估 ID',
-    prevIdHint: '如果您之前完成了 AURA 或 NEXUS 评估，请粘贴您的 ID 以关联记录。如这是第一次，请留空。',
-    summaryHead: '评估摘要',
-    optional: '可选',
-    missing: {
-      pavsDays: '请选择您每周运动的天数。',
-      pavsMins: '请选择您通常的运动时长。',
-      strength: '请选择您的力量训练频率。',
-      medical:  '请至少选择一个选项。',
-      wellbeing:'请选择您的整体感受。',
-      barriers: '请至少选择一个障碍。',
-      social:   '请选择您的社会支持程度。',
-      foodInsecure: '请回答食品安全问题。',
-      incomeAdequacy: '请选择您的收入充足程度。',
-      housing:  '请选择您的住房类型。',
-      aware:    '请回答社区认知问题。',
-      referred: '请回答转介问题。',
-      rating:   '请选择评分（如未使用过社区服务，请选"不适用"）。',
-      ageGroup: '请选择您的年龄组。',
-      gender:   '请选择您的性别。',
-      race:     '请选择您的族裔。',
-      postalCode: '请输入您邮政编码的前2位数字。',
-    },
+    loading: 'AURA 正在将社区资源匹配到您的个人资料\u2026',
+    title: '您的评估结果',
+    red: '高需求 (红色)',
+    amber: '中等需求 (琥珀色)',
+    green: '低需求 (绿色)',
+    redDesc: '您的风险状况表明需要有监督的护理。我们强烈建议您在开始新的锻炼计划之前咨询医生。',
+    amberDesc: '您有中等需求。建议逐步增加您的活动量，并探索下面的社区资源。',
+    greenDesc: '您符合体力活动指南。请继续保持并考虑通过结构化课程进一步提升。',
+    sdohFinText: '费用被标记为障碍 — 免费和全额补贴选项已优先列出。',
+    sdohSocText: '社会联系被标记 — 已包含社区团体和交友资源。',
+    sdohPsychoText: '心理健康被标记 — 已添加情感支持和心理辅导资源。',
+    trendActive: '纵向跟踪已激活',
+    trendDesc: '您的结果已链接到之前的评估，以监测临床进展。',
+    pavsTitle: 'ACSM 体力活动关键指标',
+    pavsWeekly: '分钟 / 周',
+    pavsDays: '天 / 周',
+    pavsMins: '分钟 / 次',
+    pavsBelow: '运动不足',
+    pavsMeets: '达到指南要求',
+    pavsActive: '活跃',
+    pavsBelowDesc: '低于 150 分钟/周 — 新加坡体力活动指南建议每周至少进行 150 分钟的中等强度活动。',
+    pavsMeetsDesc: '您达到了 SPAG 最低要求 150 分钟/周。考虑向 300 分钟迈进以获得更大的健康益处。',
+    pavsActiveDesc: '优秀 — 您超过了 SPAG 建议的 300 分钟/周。',
+    pavsThreshold: 'SPAG: 150–300 分钟 / 周',
+    primaryAction: '您的首要行动',
+    resources: '推荐的社区资源',
+    download: '下载 PDF',
+    share: '分享结果',
+    back: '返回主页',
+    cta: '今天就采取行动',
+    reportTitle: 'SMART DASHBOARD',
+    date: '日期',
+    assessmentId: '评估 ID',
+    prevId: '之前的 ID',
+    postalSector: '邮政区域',
+    pavsLabel: 'PAVS 评分',
+    scanQR: '扫描以访问数字门户',
+    webLink: '网址: ',
+    sharePrefix: '我的 NEXUS AURA 结果：',
+    shareTopRec: '首要行动：',
+    sharePathway: '在 NEXUS 探索您的社区健康路径：',
   },
-
   ta: {
-    title: 'உடல்நலம் மற்றும் சமூக மதிப்பீடு',
-    steps: ['உடல் செயல்பாடு', 'சமூக காரணிகள்', 'சமூக அனுபவம்', 'உங்களை பற்றி'],
-    subs:  ['ACSM PAVS · SPAG தசை · மருத்துவ திரையிடல்', 'SDOH 5-களம் · PDF சரிபார்க்கப்பட்டது', 'சமூக உணர்வு', 'மக்கள் தொகை · இடம் · பதிவு இணைப்பு'],
-    back: 'பின்செல்', yes: 'ஆம்', no: 'இல்லை', sel: 'தேர்ந்தெடுக்கவும் —',
-    btnNext: 'அடுத்தது', btnPrev: 'முந்தையது', btnSubmit: 'முடிவுகளைப் பெறுக',
-    pavsQ1: 'வழக்கமான வாரத்தில், மிதமான அல்லது கடுமையான உடல் செயல்பாடுகளை எத்தனை நாட்கள் செய்கிறீர்கள்? (எ.கா. வேகமாக நடைபயிற்சி, சைக்கிள், நீச்சல்)',
-    pavsQ2: 'அந்த செயலில் நாட்களில், வழக்கமாக எத்தனை நிமிடங்கள் உடற்பயிற்சி செய்கிறீர்கள்?',
-    pavsLive: 'வாராந்திர PAVS மதிப்பெண் (மதிப்பீடு)', pavsUnit: 'நிமிடங்கள் / வாரம்',
-    pavsBelow: 'போதுமான செயல்பாட்டிற்கு குறைவு — SPAG குறைந்தபட்சத்திற்கு கீழ் (150)',
-    pavsMeets: 'SPAG வழிகாட்டுதல்களை பூர்த்தி செய்கிறது (150–300)',
-    pavsActive: 'செயலில் — SPAG பரிந்துரையை தாண்டுகிறது (300+)',
-    strengthQ: 'தசைகளை வலுப்படுத்தும் செயல்களை செய்கிறீர்களா? (எ.கா. எடை தூக்குதல், ரெசிஸ்டன்ஸ் பேண்ட், புஷ்-அப்)',
-    clinHead: 'மருத்துவ பாதுகாப்பு திரையிடல்',
-    medQ: 'உயர் இரத்த அழுத்தம், நீரிழிவு முன்நிலை, அல்லது இதய நோய் போன்ற நாள்பட்ட நோய்கள் உள்ளதா? உடல் செயல்பாட்டின் போது நெஞ்சு வலி அல்லது தலைசுற்றல் அனுபவிக்கிறீர்களா? பொருந்தும் அனைத்தையும் தேர்ந்தெடுக்கவும்.',
-    wellHead: 'SDOH · உளவியல் நலன்',
-    wellQ: 'கடந்த இரண்டு வாரங்களில், நீங்கள் ஒட்டுமொத்தமாக எப்படி உணர்ந்தீர்கள்? வேலை, பராமரிப்பு, அல்லது நிதி அழுத்தம் காரணமாக மன அழுத்தம், மனச்சோர்வு அல்லது அதிக சுமை உணர்ந்தீர்களா?',
-    wellNote: 'BPS-RS II P22 உடன் இணைக்கப்பட்டது (PHQ-2 அடிப்படை, 2 வார காலம்)',
-    sdohHead: 'சுகாதாரத்தின் சமூக தீர்மானங்கள்',
-    sdohIntro: 'இந்த கேள்விகள் சரிபார்க்கப்பட்ட SDOH திரையிடல் கருவிகளை அடிப்படையாக கொண்டவை. உங்கள் பதில்கள் ரகசியமானவை.',
-    barrQ: 'சமூக சுகாதார சேவைகளை அணுகுவதை மிகவும் கடினமாக்குவது எது? பொருந்தும் அனைத்தையும் தேர்ந்தெடுக்கவும்.',
-    socialQ: 'தோராயமாக எத்தனை குடும்பத்தினர் அல்லது நண்பர்கள் உங்களுக்கு உதவ முடியும்? நீங்கள் திறந்து பேசக்கூடிய நபர்கள் இருக்கிறார்களா?',
-    socialNote: 'LSNS-6 (லுப்பன் சமூக நெட்வொர்க் அளவீட்டு) அடிப்படை',
-    foodQ: 'கடந்த 12 மாதங்களில், உணவு வாங்க முடியாததால் பசியுடன் இருந்தீர்களா?',
-    foodNote: 'Lien Centre உணவு பற்றாக்குறை திரையிடல் (கேள்வி 1 இல் 2)',
-    incomeQ: 'மாதாந்திர செலவுகளை ஈடுகட்ட போதுமான வருமானம் இருப்பதாக நினைக்கிறீர்களா?',
-    incomeNote: 'Duke-NUS சரிபார்க்கப்பட்ட வருமான போதுமையான அளவீட்டு',
-    housingQ: 'தற்போது எந்த வகையான வீட்டில் வசிக்கிறீர்கள்?',
-    housingNote: 'BPS-RS II வீட்டு வரைபடம் — புவியியல் ஆபத்து குறிகாட்டி',
-    housingAlert: 'HDB 1–2 அறை வாடகை குடியிருப்பாளர்கள் உயர்ந்த சமூக அழுத்தத்தை எதிர்கொள்கிறார்கள். உங்கள் திட்டம் இலவச சமூக வளங்களுக்கு முன்னுரிமை அளிக்கும்.',
-    perHead: 'சமூக சுகாதார அனுபவம்',
-    awareQ: 'உங்கள் பகுதியில் உள்ள சுகாதார சேவைகளைப் பற்றி கேள்விப்பட்டிருக்கிறீர்களா?',
-    referQ: 'சமூக சுகாதார திட்டத்திற்கு மருத்துவர் பரிந்துரைத்தாரா?',
-    ratingQ: 'சமூக சேவைகளை பயன்படுத்தியிருந்தால், மருத்துவமனையுடன் ஒப்பிடும்போது எவ்வாறு இருந்தது?',
-    ratingHint: "பயன்படுத்தவில்லையா? 'பொருந்தாது' என்று தேர்ந்தெடுக்கவும்.",
-    ratingOpts: ['மருத்துவமனையை விட சிறந்தது', 'சுமார் அதே', 'மேம்பாடு தேவை', 'பொருந்தாது — சமூக சேவைகளை பயன்படுத்தவில்லை'],
-    trustQ: 'சமூகத்தில் சுகாதார கவனிப்பு பெறுவது எவ்வளவு வசதியாக உணர்கிறீர்கள்?',
-    trustScale: '1 = இல்லவே இல்லை   ·   5 = மிகவும் வசதியானது',
-    improveQ: 'சுகாதார சேவையில் ஒன்றை மாற்ற முடிந்தால், அது என்னவாக இருக்கும்?',
-    demoHead: 'உங்களை பற்றி',
-    demoIntro: 'இந்த தகவல் ஒவ்வொரு சமூகத்திற்கும் வளங்கள் நியாயமாக சேர உதவுகிறது.',
-    ageQ: 'வயது குழு', genderQ: 'பாலினம்', raceQ: 'இனம்',
-    postalQ: 'அஞ்சல் குறியீட்டின் முதல் 2 இலக்கங்கள்',
-    postalHint: 'எ.கா. 73 (Woodlands) · 75–76 (Yishun) · 68 (Canberra)',
-    prevIdQ: 'முந்தைய NEXUS மதிப்பீட்டு ID',
-    prevIdHint: 'முன்பு AURA அல்லது NEXUS மதிப்பீட்டை முடித்திருந்தால், ID ஐ ஒட்டவும்.',
-    summaryHead: 'மதிப்பீட்டு சுருக்கம்',
-    optional: 'விருப்பமானது',
-    missing: {
-      pavsDays: 'வாரத்தில் எத்தனை நாட்கள் உடற்பயிற்சி செய்கிறீர்கள் என்று தேர்ந்தெடுக்கவும்.',
-      pavsMins: 'வழக்கமான உடற்பயிற்சி நேரத்தை தேர்ந்தெடுக்கவும்.',
-      strength: 'தசை பயிற்சி அதிர்வெண்ணை தேர்ந்தெடுக்கவும்.',
-      medical:  'குறைந்தது ஒரு விருப்பத்தை தேர்ந்தெடுக்கவும்.',
-      wellbeing:'நீங்கள் எப்படி உணர்கிறீர்கள் என்று தேர்ந்தெடுக்கவும்.',
-      barriers: 'குறைந்தது ஒரு தடையை தேர்ந்தெடுக்கவும்.',
-      social:   'சமூக ஆதரவு அளவை தேர்ந்தெடுக்கவும்.',
-      foodInsecure: 'உணவு பாதுகாப்பு கேள்விக்கு பதிலளிக்கவும்.',
-      incomeAdequacy: 'வருமான போதுமையான அளவை தேர்ந்தெடுக்கவும்.',
-      housing:  'வீட்டு வகையை தேர்ந்தெடுக்கவும்.',
-      aware:    'சமூக விழிப்புணர்வு கேள்விக்கு பதிலளிக்கவும்.',
-      referred: 'பரிந்துரை கேள்விக்கு பதிலளிக்கவும்.',
-      rating:   'மதிப்பீட்டை தேர்ந்தெடுக்கவும்.',
-      ageGroup: 'உங்கள் வயது குழுவை தேர்ந்தெடுக்கவும்.',
-      gender:   'உங்கள் பாலினத்தை தேர்ந்தெடுக்கவும்.',
-      race:     'உங்கள் இனத்தை தேர்ந்தெடுக்கவும்.',
-      postalCode: 'அஞ்சல் குறியீட்டின் முதல் 2 இலக்கங்களை உள்ளிடவும்.',
-    },
+    loading: 'AURA உங்கள் சுயவிவரத்திற்கு சமூக வளங்களை வரைபடமாக்குகிறது\u2026',
+    title: 'உங்கள் மதிப்பீட்டு முடிவு',
+    red: 'அதிக தேவை (சிவப்பு)',
+    amber: 'மிதமான தேவை (ஆம்பர்)',
+    green: 'குறைந்த தேவை (பச்சை)',
+    redDesc: 'உங்கள் ஆபத்து விவரக்குறிப்பு மேற்பார்வையிடப்பட்ட கவனிப்பின் அவசியத்தைக் குறிக்கிறது. மருத்துவரை முதலில் அணுகவும்.',
+    amberDesc: 'உங்களுக்கு மிதமான தேவைகள் உள்ளன. படிப்படியாக செயல்பாட்டை அதிகரித்து கீழ்கண்ட வளங்களை ஆராயவும்.',
+    greenDesc: 'நீங்கள் உடல் செயல்பாட்டு வழிகாட்டுதல்களை பூர்த்தி செய்கிறீர்கள். தொடரவும், கூடுதல் திட்டங்களை முயற்சிக்கவும்.',
+    sdohFinText: 'செலவு தடையாக கண்டறியப்பட்டது — இலவச மற்றும் மானிய விருப்பங்கள் முன்னுரிமை அளிக்கப்பட்டுள்ளன.',
+    sdohSocText: 'சமூக தொடர்பு கண்டறியப்பட்டது — சமூக குழு மற்றும் நட்பு வளங்கள் சேர்க்கப்பட்டுள்ளன.',
+    sdohPsychoText: 'மன நலன் கண்டறியப்பட்டது — உணர்ச்சி ஆதரவு வளங்கள் சேர்க்கப்பட்டுள்ளன.',
+    trendActive: 'நீண்டகால கண்காணிப்பு செயலில் உள்ளது',
+    trendDesc: 'மருத்துவ முன்னேற்றத்தைக் கண்காணிக்க முந்தைய மதிப்பீட்டுடன் இணைக்கப்பட்டுள்ளது.',
+    pavsTitle: 'ACSM உடல் செயல்பாட்டு உயிர் அறிகுறி',
+    pavsWeekly: 'நிமிடங்கள் / வாரம்',
+    pavsDays: 'நாட்கள் / வாரம்',
+    pavsMins: 'நிமிடங்கள் / சேஷன்',
+    pavsBelow: 'போதுமான செயல்பாட்டிற்கு குறைவு',
+    pavsMeets: 'வழிகாட்டுதல்களை பூர்த்தி செய்கிறது',
+    pavsActive: 'செயலில் உள்ளது',
+    pavsBelowDesc: '150 நிமிடங்களுக்கும் குறைவு/வாரம் — SPAG குறைந்தது 150 நிமிடங்கள் பரிந்துரைக்கிறது.',
+    pavsMeetsDesc: 'SPAG குறைந்தபட்சம் 150 நிமிடங்கள்/வாரத்தை பூர்த்தி செய்கிறீர்கள். 300 நிமிடங்களை இலக்காக கொள்ளுங்கள்.',
+    pavsActiveDesc: 'சிறப்பு — SPAG 300 நிமிடங்கள்/வாரத்தை தாண்டுகிறீர்கள்.',
+    pavsThreshold: 'SPAG: 150–300 நிமிடங்கள் / வாரம்',
+    primaryAction: 'உங்கள் முதல் நடவடிக்கை',
+    resources: 'பரிந்துரைக்கப்பட்ட சமூக வளங்கள்',
+    download: 'PDF பதிவிறக்குக',
+    share: 'முடிவைப் பகிர்க',
+    back: 'முகப்பிற்குத் திரும்பு',
+    cta: 'இன்றே நடவடிக்கை எடுங்கள்',
+    reportTitle: 'SMART DASHBOARD',
+    date: 'தேதி',
+    assessmentId: 'மதிப்பீட்டு ID',
+    prevId: 'முந்தைய ID',
+    postalSector: 'அஞ்சல் பிரிவு',
+    pavsLabel: 'PAVS மதிப்பெண்',
+    scanQR: 'டிஜிட்டல் போர்ட்டலை அணுக ஸ்கேன் செய்யவும்',
+    webLink: 'இணையதளம்: ',
+    sharePrefix: 'எனது NEXUS AURA முடிவு:',
+    shareTopRec: 'முதல் நடவடிக்கை:',
+    sharePathway: 'NEXUS இல் உங்கள் சமூக சுகாதார வழியைக் கண்டறியவும்:',
   },
 };
 
-// ─────────────────────────────────────────────────────────────────────────────
-// STYLE CONSTANTS
-// ─────────────────────────────────────────────────────────────────────────────
+// ─── RESOURCE LIBRARY ─────────────────────────────────────────────────────────
+const ALL_RESOURCES = {
+  ssmc_kkh:          { id: 'ssmc_kkh',          url: 'https://for.sg/exercise',                                          logo: '/logos/ssmckkh.png',      en: { title: 'SSMC@KKH Exercise Resources',          desc: 'Expert clinical exercise prescriptions and safety resources for the community.' },                          ms: { title: 'Sumber Senaman SSMC@KKH',              desc: 'Preskripsi senaman klinikal pakar untuk komuniti.' },                                               zh: { title: 'SSMC@KKH 运动资源',                    desc: '为社区提供的专家临床运动处方和安全资源。' },                                                        ta: { title: 'SSMC@KKH உடற்பயிற்சி வளங்கள்',        desc: 'சமூகத்திற்கான நிபுணர் மருத்துவ உடற்பயிற்சி வளங்கள்.' } },
+  spag:              { id: 'spag',               url: 'https://for.sg/spag',                                              logo: '/logos/sportsg.png',      en: { title: 'Singapore Physical Activity Guidelines', desc: 'National guidelines for physical activity and sedentary behaviour.' },                                     ms: { title: 'Garis Panduan Aktiviti Fizikal SG',    desc: 'Garis panduan kebangsaan untuk aktiviti fizikal.' },                                                zh: { title: '新加坡体力活动指南',                    desc: '国家体力活动指南。' },                                                                                ta: { title: 'சிங்கப்பூர் உடல் செயல்பாட்டு வழிகாட்டுதல்கள்', desc: 'தேசிய உடல் செயல்பாட்டு வழிகாட்டுதல்கள்.' } },
+  healthier_sg:      { id: 'healthier_sg',       url: 'https://www.healthiersg.gov.sg/',                                  logo: '/logos/healthiersg.png',  en: { title: 'Healthier SG GP Check-In',             desc: 'Schedule a fully subsidised annual check-in with your enrolled GP.' },                                     ms: { title: 'Semakan GP Healthier SG',              desc: 'Jadualkan pemeriksaan tahunan bersubsidi penuh dengan doktor anda.' },                                      zh: { title: 'Healthier SG 全科医生复查',              desc: '安排全额补贴的年度检查。' },                                                                        ta: { title: 'Healthier SG GP சோதனை',                desc: 'மருத்துவரிடம் முழு மானியத்துடன் கூடிய பரிசோதனையை திட்டமிடுங்கள்.' } },
+  start2move:        { id: 'start2move',         url: 'https://www.healthhub.sg/programmes/letsmoveit/start2move',        logo: '/logos/hpb.png',          en: { title: 'HPB Start2Move (Free)',                desc: 'A free 6-session beginner programme to help you start exercising safely.' },                               ms: { title: 'Program Start2Move HPB (Percuma)',     desc: 'Program percuma 6 sesi untuk pemula.' },                                                              zh: { title: 'HPB Start2Move（免费）',               desc: '免费的6节初学者计划，帮助您安全锻炼。' },                                                             ta: { title: 'HPB Start2Move (இலவசம்)',               desc: 'இலவச 6 அமர்வு தொடக்க திட்டம்.' } },
+  active_health:     { id: 'active_health',      url: 'https://www.myactivesg.com/active-health',                         logo: '/logos/activehealth.png', en: { title: 'Active Health Labs',                  desc: 'Supervised clinical exercise and metabolic health programmes by SportSG.' },                              ms: { title: 'Makmal Active Health',                desc: 'Program senaman klinikal yang diawasi oleh SportSG.' },                                               zh: { title: 'Active Health 实验室',                 desc: 'SportSG 提供的有监督临床锻炼计划。' },                                                               ta: { title: 'Active Health ஆய்வகங்கள்',              desc: 'SportSG-ன் மருத்துவ உடற்பயிற்சி திட்டங்கள்.' } },
+  activesg_gym:      { id: 'activesg_gym',       url: 'https://www.myactivesg.com/',                                      logo: '/logos/activesg.png',     en: { title: 'ActiveSG Facilities',                 desc: 'Affordable fitness gyms, pools, and group workout classes near you.' },                                   ms: { title: 'Fasiliti ActiveSG',                   desc: 'Gim, kolam renang dan kelas senaman berpatutan berhampiran anda.' },                                        zh: { title: 'ActiveSG 设施',                        desc: '附近价格实惠的健身房和团体锻炼课程。' },                                                             ta: { title: 'ActiveSG வசதிகள்',                      desc: 'மலிவு விலையில் உடற்பயிற்சி நிலையங்கள்.' } },
+  pa_courses:        { id: 'pa_courses',         url: 'https://www.onepa.gov.sg/',                                        logo: '/logos/pa.png',           en: { title: 'PA Community Interest Groups',        desc: 'Free or low-cost Tai Chi, Yoga, Brisk Walking groups at your nearest Community Club.' },                  ms: { title: 'Kumpulan Minat Komuniti PA',           desc: 'Kumpulan Tai Chi, Yoga, Berjalan Pantas percuma atau murah di CC terdekat.' },                               zh: { title: 'PA 社区兴趣小组',                       desc: '在最近的社区俱乐部参加太极拳、瑜伽等免费或低价活动。' },                                             ta: { title: 'PA சமூக ஆர்வக் குழுக்கள்',              desc: 'தாய்ச்சி, யோகா, விரைவு நடை குழுக்கள்.' } },
+  singhealth_healthup: { id: 'singhealth_healthup', url: 'https://www.singhealth.com.sg/community-care/level-up-with-healthup', logo: '/logos/singhealth.png', en: { title: 'SingHealth Health UP!',           desc: 'Community wellness programmes with guidance from SingHealth Wellbeing Coordinators.' },                    ms: { title: 'SingHealth Health UP!',               desc: 'Program kesejahteraan komuniti dengan bimbingan SingHealth.' },                                             zh: { title: 'SingHealth Health UP!',               desc: '在 SingHealth 健康协调员指导下的社区健康计划。' },                                                   ta: { title: 'SingHealth Health UP!',                desc: 'SingHealth நலன்புரி ஒருங்கிணைப்பாளர்களுடன் சமூக திட்டங்கள்.' } },
+  nuhs_chp:          { id: 'nuhs_chp',           url: 'https://www.nuhs.edu.sg/care-in-the-community',                    logo: '/logos/nuhs.png',         en: { title: 'NUHS Community Health Post',          desc: 'Health screenings and lifestyle coaching in your neighbourhood.' },                                        ms: { title: 'Pos Kesihatan Komuniti NUHS',          desc: 'Saringan kesihatan dan bimbingan gaya hidup di kejiranan anda.' },                                          zh: { title: 'NUHS 社区卫生站',                       desc: '社区健康筛查和生活方式辅导。' },                                                                     ta: { title: 'NUHS சமூக சுகாதார நிலையம்',             desc: 'உங்கள் பகுதியில் சுகாதார பரிசோதனைகள்.' } },
+  nhg_coaches:       { id: 'nhg_coaches',        url: 'https://form.gov.sg/663c452b463eff5b7438b117',                     logo: '/logos/nhg.png',          en: { title: 'NHG Health Coaches',                  desc: 'Connect with a Health Coach to set personalised goals for a healthier lifestyle.' },                      ms: { title: 'Jurulatih Kesihatan NHG',              desc: 'Berhubung dengan Jurulatih Kesihatan untuk menetapkan matlamat peribadi.' },                                zh: { title: 'NHG 健康教练',                          desc: '与健康教练联系，设定个性化健康目标。' },                                                             ta: { title: 'NHG சுகாதார பயிற்சியாளர்கள்',           desc: 'தனிப்பட்ட இலக்குகளை அமைக்க பயிற்சியாளருடன் இணையுங்கள்.' } },
+  aic_aac:           { id: 'aic_aac',            url: 'https://www.aic.sg/care-services/active-ageing-centres',          logo: '/logos/aic.png',          en: { title: 'Active Ageing Centres (AAC)',          desc: 'Neighbourhood hubs for residents 60+ offering active programmes and social networks. Walk in — no appointment needed.' }, ms: { title: 'Pusat Penuaan Aktif (AAC)', desc: 'Hab kejiranan untuk warga 60+ menawarkan program aktif. Jalan masuk — tiada temujanji diperlukan.' }, zh: { title: '活跃乐龄中心 (AAC)', desc: '为 60 岁以上居民提供活跃计划的社区中心。直接上门，无需预约。' }, ta: { title: 'சுறுசுறுப்பான முதுமை மையங்கள் (AAC)', desc: '60+ வயதினருக்கான நேரடி முன்-பதிவு தேவையில்லாத சமூக மையங்கள்.' } },
+  touch_community:   { id: 'touch_community',    url: 'https://www.touch.org.sg/',                                        logo: '/logos/touch.png',        en: { title: 'TOUCH Community Services',            desc: 'Holistic social support, befriending, and caregiving resources.' },                                       ms: { title: 'Perkhidmatan Komuniti TOUCH',          desc: 'Sokongan sosial holistik dan sumber penjagaan.' },                                                          zh: { title: 'TOUCH 社区服务',                       desc: '全方位的社会支持和护理资源。' },                                                                     ta: { title: 'TOUCH சமூக சேவைகள்',                   desc: 'முழுமையான சமூக ஆதரவு வளங்கள்.' } },
+  society_wings:     { id: 'society_wings',      url: 'https://www.wings.sg/',                                            logo: '/logos/wings.png',        en: { title: 'Society for WINGS',                   desc: 'Empowering women aged 40+ with health, wealth, and happiness programmes.' },                              ms: { title: 'Persatuan untuk WINGS',                desc: 'Memperkasakan wanita 40+ dengan program kesihatan dan kebahagiaan.' },                                      zh: { title: 'WINGS 协会',                           desc: '为 40 岁以上女性提供健康计划。' },                                                                   ta: { title: 'WINGS சங்கம்',                          desc: '40+ வயது பெண்களுக்கான திட்டங்கள்.' } },
+  singhealth_careline: { id: 'singhealth_careline', url: 'https://www.singhealth.com.sg/community-care/careline',        logo: '/logos/careline.png',     en: { title: 'SingHealth CareLine (24/7)',           desc: 'Personal tele-befriending service providing round-the-clock social support for seniors.' },               ms: { title: 'SingHealth CareLine (24/7)',            desc: 'Perkhidmatan tele-rakan 24/7 untuk warga emas.' },                                                          zh: { title: 'SingHealth CareLine（24/7）',           desc: '为老年人提供全天候电话交友服务。' },                                                                 ta: { title: 'SingHealth CareLine (24/7)',            desc: 'முதியோர்களுக்கான 24/7 தொலைபேசி நட்பு சேவை.' } },
+  financial_chas:    { id: 'financial_chas',     url: 'https://www.chas.sg/',                                             logo: '/logos/chas.png',         en: { title: 'CHAS & Medical Subsidies',            desc: 'Financial support schemes for community healthcare — Blue, Orange, and Merdeka Generation.' },             ms: { title: 'CHAS & Subsidi Perubatan',             desc: 'Skim sokongan kewangan untuk penjagaan kesihatan komuniti.' },                                              zh: { title: 'CHAS 与医疗补贴',                       desc: '社区医疗财务支持计划。' },                                                                           ta: { title: 'CHAS & மருத்துவ மானியங்கள்',             desc: 'சமூக சுகாதாரத்திற்கான நிதி ஆதரவு திட்டங்கள்.' } },
+  mental_wellness:   { id: 'mental_wellness',    url: 'https://www.mindline.sg/',                                         logo: '/logos/mindline.png',     en: { title: 'Mindline.sg Support',                 desc: 'Free, confidential emotional support tools and mental wellness resources.' },                               ms: { title: 'Sokongan Mindline.sg',                 desc: 'Sokongan emosi percuma dan sulit.' },                                                                       zh: { title: 'Mindline.sg 支持',                     desc: '免费保密的情感支持工具。' },                                                                         ta: { title: 'Mindline.sg ஆதரவு',                     desc: 'இலவச, ரகசிய உணர்ச்சி ஆதரவு கருவிகள்.' } },
+};
 
-const inputCls = 'w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-3 text-sm font-bold outline-none focus:ring-2 focus:ring-teal-500 transition-shadow text-slate-900 dark:text-white';
-const selCls   = inputCls + ' appearance-none cursor-pointer';
+// ─── CTA BANNER CONFIG ────────────────────────────────────────────────────────
+const CTA_BANNER = {
+  URGENT:    { emoji: '⚠️', bg: 'bg-rose-50 dark:bg-rose-950/40 border-rose-200 dark:border-rose-800',       label: 'bg-rose-600',    text: 'text-rose-800 dark:text-rose-200',     action: { en: 'Consult your GP before starting any exercise. Mention your PAVS result at your visit.', ms: 'Sila berjumpa doktor sebelum memulakan sebarang senaman.', zh: '在开始任何运动前，请先咨询您的全科医生。', ta: 'எந்தவொரு உடற்பயிற்சியையும் தொடங்கும் முன் உங்கள் மருத்துவரை அணுகவும்.' }, url: 'https://www.healthiersg.gov.sg/', urlLabel: { en: 'Book via HealthHub', ms: 'Tempah via HealthHub', zh: '通过 HealthHub 预约', ta: 'HealthHub மூலம் பதிவு செய்க' } },
+  CLINICAL:  { emoji: '🩺', bg: 'bg-amber-50 dark:bg-amber-950/40 border-amber-200 dark:border-amber-800',   label: 'bg-amber-500',   text: 'text-amber-800 dark:text-amber-200',   action: { en: 'Enrol in Manage Metabolic Health at Woodlands Active Health Lab — 7 sessions, from SGD 48.', ms: 'Daftar dalam program Urus Kesihatan Metabolik di Makmal Active Health Woodlands — 7 sesi, dari SGD 48.', zh: '报名参加 Woodlands Active Health 实验室的"管理代谢健康"课程 — 7 节课，SGD 48 起。', ta: 'Woodlands Active Health ஆய்வகத்தில் வளர்சிதை மாற்ற சுகாதார திட்டத்தில் பதிவு செய்யவும் — 7 அமர்வுகள், SGD 48 முதல்.' }, url: 'https://www.myactivesg.com/active-health', urlLabel: { en: 'Book at activesg.gov.sg', ms: 'Tempah di activesg.gov.sg', zh: '在 activesg.gov.sg 预约', ta: 'activesg.gov.sg இல் பதிவு செய்க' } },
+  COMMUNITY: { emoji: '🏠', bg: 'bg-teal-50 dark:bg-teal-950/40 border-teal-200 dark:border-teal-800',       label: 'bg-teal-600',    text: 'text-teal-800 dark:text-teal-200',     action: { en: 'Visit your nearest Active Ageing Centre — walk in, no appointment, activities largely free for residents 60+.', ms: 'Kunjungi Pusat Penuaan Aktif (AAC) terdekat — hadir terus, aktiviti percuma untuk warga 60+.', zh: '访问离您最近的活跃乐龄中心 (AAC) — 无需预约，60岁以上居民活动大多免费。', ta: 'உங்களுக்கு அருகிலுள்ள Active Ageing மையத்தைப் பார்வையிடவும் — முன்பதிவு தேவையில்லை, 60+ வயதினருக்கு இலவசம்.' }, url: 'https://www.aic.sg/care-services/active-ageing-centres', urlLabel: { en: 'Find nearest AAC', ms: 'Cari AAC terdekat', zh: '查找最近的 AAC', ta: 'அருகிலுள்ள AAC ஐக் கண்டறிக' } },
+  WELLBEING: { emoji: '🌿', bg: 'bg-violet-50 dark:bg-violet-950/40 border-violet-200 dark:border-violet-800', label: 'bg-violet-600', text: 'text-violet-800 dark:text-violet-200', action: { en: "Connect with your polyclinic's mental health support service — this is your most important first step.", ms: 'Dapatkan perkhidmatan sokongan kesihatan mental poliklinik anda — ini adalah langkah pertama yang paling penting.', zh: '联系您综合诊所的心理健康支持服务 — 这是您最重要的一步。', ta: 'உங்கள் பாலிகிளினிக்கின் மனநல ஆதரவு சேவையுடன் இணையுங்கள் — இது உங்கள் மிக முக்கியமான முதல் படியாகும்.' }, url: 'https://www.mindline.sg/', urlLabel: { en: 'mindline.sg', ms: 'mindline.sg', zh: 'mindline.sg', ta: 'mindline.sg' } },
+  FREE_FIRST: { emoji: '🆓', bg: 'bg-emerald-50 dark:bg-emerald-950/40 border-emerald-200 dark:border-emerald-800', label: 'bg-emerald-600', text: 'text-emerald-800 dark:text-emerald-200', action: { en: 'Register for Start2Move — a completely free 6-session beginner programme via the Healthy 365 app.', ms: 'Daftar untuk Start2Move — program pemula 6 sesi percuma melalui aplikasi Healthy 365.', zh: '注册 Start2Move — 通过 Healthy 365 应用程序免费参加的 6 节初学者课程。', ta: 'Start2Move-க்கு பதிவு செய்யவும் — Healthy 365 ஆப் மூலம் முற்றிலும் இலவச 6-அமர்வு தொடக்க திட்டம்.' }, url: 'https://www.healthhub.sg/programmes/letsmoveit/start2move', urlLabel: { en: 'Register via Healthy 365', ms: 'Daftar via Healthy 365', zh: '通过 Healthy 365 注册', ta: 'Healthy 365 மூலம் பதிவு செய்க' } },
+  START:     { emoji: '🚀', bg: 'bg-teal-50 dark:bg-teal-950/40 border-teal-200 dark:border-teal-800',        label: 'bg-teal-600',    text: 'text-teal-800 dark:text-teal-200',     action: { en: 'Download the Healthy 365 app and search "Start2Move" to register for the free 6-session beginner programme.', ms: 'Muat turun aplikasi Healthy 365 dan cari "Start2Move" untuk mendaftar program pemula 6 sesi percuma.', zh: '下载 Healthy 365 应用程序并搜索"Start2Move"以注册免费的 6 节初学者课程。', ta: 'Healthy 365 ஆப்பை பதிவிறக்கம் செய்து இலவச 6-அமர்வு தொடக்க திட்டத்திற்கு பதிவு செய்ய "Start2Move" ஐ தேடவும்.' }, url: 'https://www.healthhub.sg/programmes/letsmoveit/start2move', urlLabel: { en: 'Register via Healthy 365', ms: 'Daftar via Healthy 365', zh: '通过 Healthy 365 注册', ta: 'Healthy 365 மூலம் பதிவு செய்க' } },
+  LEVEL_UP:  { emoji: '💪', bg: 'bg-teal-50 dark:bg-teal-950/40 border-teal-200 dark:border-teal-800',        label: 'bg-teal-600',    text: 'text-teal-800 dark:text-teal-200',     action: { en: 'Book a Strength 2.0 or Balance & Muscular Fitness session at Woodlands Active Health Lab, from SGD 6.', ms: 'Tempah sesi Kekuatan 2.0 atau Keseimbangan di Makmal Active Health Woodlands, dari SGD 6.', zh: '在 Woodlands Active Health 实验室预约力量 2.0 或平衡与肌肉健身课程，SGD 6 起。', ta: 'Woodlands Active Health ஆய்வகத்தில் வலிமை 2.0 அல்லது தசை உடற்பயிற்சி அமர்வை பதிவு செய்யவும், SGD 6 முதல்.' }, url: 'https://www.myactivesg.com/active-health', urlLabel: { en: 'Book at activesg.gov.sg', ms: 'Tempah di activesg.gov.sg', zh: '在 activesg.gov.sg 预约', ta: 'activesg.gov.sg இல் பதிவு செய்க' } },
+  ADVANCED:  { emoji: '⚡', bg: 'bg-emerald-50 dark:bg-emerald-950/40 border-emerald-200 dark:border-emerald-800', label: 'bg-emerald-600', text: 'text-emerald-800 dark:text-emerald-200', action: { en: 'Try the free HIIT Workout Library on HealthHub, or book a Perform 2.0 session at Woodlands Active Health Lab.', ms: 'Cuba senaman HIIT percuma di HealthHub, atau tempah sesi Perform 2.0 di Makmal Active Health Woodlands.', zh: '尝试 HealthHub 上免费的 HIIT 锻炼库，或在 Woodlands Active Health 实验室预约 Perform 2.0 课程。', ta: 'HealthHub-இல் இலவச HIIT உடற்பயிற்சிகளை முயற்சிக்கவும் அல்லது Perform 2.0 அமர்வை பதிவு செய்யவும்.' }, url: 'https://www.healthhub.sg/programmes/letsmoveit', urlLabel: { en: 'HealthHub Move It', ms: 'HealthHub Move It', zh: 'HealthHub Move It', ta: 'HealthHub Move It' } },
+};
 
-// ─────────────────────────────────────────────────────────────────────────────
-// UI ATOMS
-// ─────────────────────────────────────────────────────────────────────────────
+// ─── HELPERS ──────────────────────────────────────────────────────────────────
+const getRegionalHealthSystem = (sector) => {
+  const s = parseInt(sector, 10);
+  if (isNaN(s)) return 'NHG';
+  if (s >= 58 && s <= 71) return 'NUHS';
+  if ((s >= 1 && s <= 27) || (s >= 31 && s <= 52) || s === 81) return 'SingHealth';
+  return 'NHG';
+};
 
-const Badge = ({ icon: Icon, label }) => (
-  <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-teal-50 dark:bg-teal-500/10 border border-teal-100 dark:border-teal-500/30 text-teal-700 dark:text-teal-400 mb-5">
-    <Icon size={13} /><span className="text-[10px] font-black uppercase tracking-widest">{label}</span>
-  </div>
-);
+const getRiskTier  = (n) => n >= 5 ? 'Red' : n >= 2 ? 'Amber' : 'Green';
+const getPavsTier  = (s) => s >= 300 ? 'active' : s >= 150 ? 'meets' : 'below';
 
-const Card = ({ children, tinted = false }) => (
-  <div className={`border rounded-3xl p-6 md:p-8 shadow-sm ${tinted ? 'bg-teal-50 dark:bg-teal-900/15 border-teal-100 dark:border-teal-800/40' : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800'}`}>
-    {children}
-  </div>
-);
+const generateActionPlan = (riskTier, ctaTier, data, postalSector) => {
+  const rhs  = getRegionalHealthSystem(postalSector);
+  const plan = [ALL_RESOURCES.ssmc_kkh, ALL_RESOURCES.spag];
 
-const Note = ({ text }) => <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mt-1.5 ml-1">{text}</p>;
-const Req  = () => <span className="text-teal-500 ml-0.5" title="Required">*</span>;
-
-const RadioRow = ({ opt, selected, onSelect, lang }) => (
-  <label className={`flex items-center gap-3 cursor-pointer p-3 rounded-xl border transition-all ${selected ? 'bg-teal-50 dark:bg-teal-900/30 border-teal-300 dark:border-teal-600' : 'bg-slate-50 dark:bg-slate-950 border-slate-200 dark:border-slate-800 hover:border-teal-200 dark:hover:border-teal-700'}`}>
-    <input type="radio" checked={selected} onChange={onSelect} className="w-4 h-4 text-teal-600 focus:ring-teal-500" />
-    <span className="text-sm font-bold text-slate-700 dark:text-slate-300">{opt[lang] || opt.en}</span>
-  </label>
-);
-
-const CheckRow = ({ opt, checked, onChange, disabled, lang }) => (
-  <label className={`flex items-center gap-3 cursor-pointer group p-2.5 rounded-xl hover:bg-white dark:hover:bg-slate-900 transition-colors ${disabled ? 'opacity-40' : ''}`}>
-    <input type="checkbox" checked={checked} onChange={onChange} disabled={disabled} className="w-5 h-5 text-teal-500 border-slate-300 rounded focus:ring-teal-500" />
-    <span className="text-sm font-bold text-slate-600 dark:text-slate-400 group-hover:text-slate-900 dark:group-hover:text-white transition-colors">
-      {opt[lang] || opt.en}
-    </span>
-  </label>
-);
-
-// FIX 2: guard is now (!days || !mins) — prevents false "0 score" banner
-const PavsLive = ({ days, mins, t }) => {
-  const score = Math.round((DAYS_MIDPOINT[days] ?? 0) * (MINS_MIDPOINT[mins] ?? 0));
-  if (!days || !mins) return null;
-  const tier = score >= 300 ? 'active' : score >= 150 ? 'meets' : 'below';
-  const cfg = {
-    below:  { label: t.pavsBelow,  cls: 'bg-amber-50 dark:bg-amber-900/20 border-amber-200 dark:border-amber-700 text-amber-700 dark:text-amber-300',           bar: 'bg-amber-400'    },
-    meets:  { label: t.pavsMeets,  cls: 'bg-teal-50 dark:bg-teal-900/20 border-teal-200 dark:border-teal-700 text-teal-700 dark:text-teal-300',                 bar: 'bg-teal-500'     },
-    active: { label: t.pavsActive, cls: 'bg-emerald-50 dark:bg-emerald-900/20 border-emerald-200 dark:border-emerald-700 text-emerald-700 dark:text-emerald-300', bar: 'bg-emerald-500'  },
+  const tierPrimaries = {
+    URGENT:     [ALL_RESOURCES.healthier_sg, ALL_RESOURCES.active_health],
+    CLINICAL:   [ALL_RESOURCES.active_health, ALL_RESOURCES.healthier_sg],
+    COMMUNITY:  [ALL_RESOURCES.aic_aac, ALL_RESOURCES.pa_courses],
+    WELLBEING:  [ALL_RESOURCES.mental_wellness, ALL_RESOURCES.touch_community],
+    FREE_FIRST: [ALL_RESOURCES.start2move, ALL_RESOURCES.financial_chas, ALL_RESOURCES.pa_courses],
+    START:      [ALL_RESOURCES.start2move, ALL_RESOURCES.pa_courses],
+    LEVEL_UP:   [ALL_RESOURCES.active_health, ALL_RESOURCES.activesg_gym],
+    ADVANCED:   [ALL_RESOURCES.activesg_gym, ALL_RESOURCES.active_health],
   };
-  const { label, cls, bar } = cfg[tier];
+
+  if (ctaTier && tierPrimaries[ctaTier]) plan.push(...tierPrimaries[ctaTier]);
+  else if (riskTier === 'Red')           plan.push(ALL_RESOURCES.healthier_sg, ALL_RESOURCES.active_health);
+  else if (riskTier === 'Amber')         plan.push(ALL_RESOURCES.start2move, ALL_RESOURCES.pa_courses);
+  else                                   plan.push(ALL_RESOURCES.activesg_gym, ALL_RESOURCES.pa_courses);
+
+  if (rhs === 'SingHealth') plan.push(ALL_RESOURCES.singhealth_healthup);
+  else if (rhs === 'NUHS')  plan.push(ALL_RESOURCES.nuhs_chp);
+  else                      plan.push(ALL_RESOURCES.nhg_coaches);
+
+  const hasPsycho = data.psychoFlag || data.sdohPsychological;
+  if (hasPsycho)          plan.push(ALL_RESOURCES.mental_wellness);
+  if (data.sdohFinancial) plan.push(ALL_RESOURCES.financial_chas, ALL_RESOURCES.touch_community);
+  if (data.sdohSocial) {
+    if (rhs === 'SingHealth') plan.push(ALL_RESOURCES.singhealth_careline);
+    plan.push(ALL_RESOURCES.aic_aac, ALL_RESOURCES.touch_community);
+  }
+  if (data.gender === 'Female' && (data.age === '41-60' || data.age === '60+')) {
+    plan.push(ALL_RESOURCES.society_wings);
+  }
+
+  const seen = new Set();
+  return plan.filter(r => { if (seen.has(r.id)) return false; seen.add(r.id); return true; }).slice(0, 6);
+};
+
+// ─── PAVS PANEL ───────────────────────────────────────────────────────────────
+const PavsPanel = ({ data, t }) => {
+  const score = data?.pavsScore;
+  if (score == null) return null;
+
+  const tier = getPavsTier(score);
+  const tierConfig = {
+    below:  { label: t.pavsBelow,  desc: t.pavsBelowDesc,  cls: 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300' },
+    meets:  { label: t.pavsMeets,  desc: t.pavsMeetsDesc,  cls: 'bg-teal-100 dark:bg-teal-900/30 text-teal-700 dark:text-teal-300' },
+    active: { label: t.pavsActive, desc: t.pavsActiveDesc, cls: 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300' },
+  };
+  const tc = tierConfig[tier];
+  const pct       = (Math.min(score, 400) / 400) * 100;
+  const marker150 = (150 / 400) * 100;
+  const marker300 = (300 / 400) * 100;
+  const barColour = tier === 'active' ? 'bg-emerald-500' : tier === 'meets' ? 'bg-teal-500' : 'bg-amber-400';
+
   return (
-    <div className={`mt-5 p-4 rounded-2xl border transition-all duration-500 ${cls}`}>
-      <div className="flex items-end justify-between mb-2">
-        <p className="text-[10px] font-black uppercase tracking-widest opacity-70">{t.pavsLive}</p>
-        <p className="text-2xl font-black tabular-nums leading-none">{score} <span className="text-xs font-bold opacity-60">{t.pavsUnit}</span></p>
+    <div className="p-6 rounded-2xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800">
+      <div className="flex items-center gap-2 mb-5">
+        <Activity size={15} className="text-teal-600 dark:text-teal-400" />
+        <h2 className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest">{t.pavsTitle}</h2>
       </div>
-      <div className="h-1.5 bg-black/10 dark:bg-white/10 rounded-full overflow-hidden mb-2">
-        <div className={`h-full rounded-full transition-all duration-700 ${bar}`} style={{ width: `${Math.min((score / 400) * 100, 100)}%` }} />
+      <div className="grid grid-cols-3 gap-3 mb-5">
+        {[
+          { value: score,                    label: t.pavsWeekly },
+          { value: data.pavsDays    ?? '–',  label: t.pavsDays   },
+          { value: data.pavsMinutes ?? '–',  label: t.pavsMins   },
+        ].map(({ value, label }, i) => (
+          <div key={i} className="text-center py-3 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700">
+            <p className="text-2xl font-black text-slate-900 dark:text-white leading-none">{value}</p>
+            <p className="text-[10px] text-slate-400 dark:text-slate-500 mt-1 font-medium">{label}</p>
+          </div>
+        ))}
       </div>
-      <p className="text-xs font-semibold opacity-80 leading-snug">{label}</p>
+      <div className="mb-4">
+        <div className="relative h-3 bg-slate-200 dark:bg-slate-700 rounded-full overflow-visible">
+          <div className={`h-full rounded-full transition-all duration-700 ${barColour}`} style={{ width: `${pct}%` }} />
+          <div className="absolute top-0 bottom-0 w-0.5 bg-slate-400 dark:bg-slate-500" style={{ left: `${marker150}%` }} />
+          <div className="absolute top-0 bottom-0 w-0.5 bg-slate-400 dark:bg-slate-500" style={{ left: `${marker300}%` }} />
+        </div>
+        <div className="flex justify-between mt-1.5">
+          <span className="text-[10px] text-slate-400">0</span>
+          <span className="text-[10px] text-slate-400" style={{ marginLeft: `${marker150 - 5}%` }}>150</span>
+          <span className="text-[10px] text-slate-400" style={{ marginLeft: `${marker300 - marker150 - 5}%` }}>300</span>
+          <span className="text-[10px] text-slate-400">400+</span>
+        </div>
+        <p className="text-[10px] text-slate-400 dark:text-slate-500 text-center mt-0.5">{t.pavsThreshold}</p>
+      </div>
+      <div className="flex items-start gap-3">
+        <span className={`px-3 py-1 rounded-full text-xs font-bold shrink-0 ${tc.cls}`}>{tc.label}</span>
+        <p className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed">{tc.desc}</p>
+      </div>
     </div>
   );
 };
 
-// FIX 3: Language toggle button
+// ─── PRIMARY ACTION BANNER ────────────────────────────────────────────────────
+const PrimaryActionBanner = ({ ctaTier, t, lang }) => {
+  const config = CTA_BANNER[ctaTier] || CTA_BANNER.START;
+  return (
+    <div className={`p-5 rounded-2xl border ${config.bg}`}>
+      <div className="flex items-center gap-2 mb-3">
+        <Target size={14} className="text-current opacity-70" />
+        <p className={`text-xs font-bold uppercase tracking-widest ${config.text}`}>{t.primaryAction}</p>
+      </div>
+      <p className={`text-sm font-semibold leading-relaxed mb-3 ${config.text}`}>
+        <span className="text-lg mr-2">{config.emoji}</span>
+        {config.action[lang] || config.action.en}
+      </p>
+      <a href={config.url} target="_blank" rel="noopener noreferrer"
+        className={`inline-flex items-center gap-1.5 px-4 py-2 ${config.label} text-white rounded-full text-xs font-bold shadow-sm hover:opacity-90 transition-opacity`}>
+        {config.urlLabel[lang] || config.urlLabel.en}
+        <ExternalLink size={11} />
+      </a>
+    </div>
+  );
+};
+
+// ─── SDOH FLAGS ───────────────────────────────────────────────────────────────
+const SdohFlags = ({ data, t, previousSessionId }) => {
+  const hasPsycho = data.psychoFlag || data.sdohPsychological;
+  const flags = [
+    previousSessionId  && { icon: <TrendingUp size={16} className="text-teal-500 shrink-0 mt-0.5" />,  text: t.trendDesc,       header: t.trendActive, headerCls: 'text-teal-600 dark:text-teal-400' },
+    data.sdohFinancial && { icon: <DollarSign size={16} className="text-amber-500 shrink-0 mt-0.5" />, text: t.sdohFinText },
+    data.sdohSocial    && { icon: <Users      size={16} className="text-sky-500 shrink-0 mt-0.5" />,   text: t.sdohSocText },
+    hasPsycho          && { icon: <Brain      size={16} className="text-violet-500 shrink-0 mt-0.5" />, text: t.sdohPsychoText },
+  ].filter(Boolean);
+
+  if (!flags.length) return null;
+  return (
+    <div className="space-y-2.5">
+      {flags.map((f, i) => (
+        <div key={i} className="flex items-start gap-3 py-3 px-4 bg-white dark:bg-slate-900 rounded-xl border border-slate-100 dark:border-slate-800">
+          {f.icon}
+          <div>
+            {f.header && <p className={`text-xs font-bold mb-0.5 ${f.headerCls}`}>{f.header}</p>}
+            <p className="text-sm text-slate-600 dark:text-slate-400 font-medium leading-relaxed">{f.text}</p>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+};
+
+// ─── RESOURCE CARD ────────────────────────────────────────────────────────────
+const ResourceCard = ({ resource, lang, baseUrl, onClick }) => {
+  const content = resource[lang] || resource.en;
+  return (
+    <button onClick={onClick}
+      className="flex flex-col sm:flex-row sm:items-center justify-between p-5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-2xl hover:border-teal-400/60 dark:hover:border-teal-500/40 hover:shadow-lg transition-all text-left group w-full gap-4">
+      <div className="flex items-center gap-4 flex-1">
+        <div className="w-14 h-14 shrink-0 bg-slate-50 dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 flex items-center justify-center overflow-hidden shadow-sm">
+          <img src={`${baseUrl}${resource.logo}`} alt="" crossOrigin="anonymous"
+            className="w-full h-full object-cover"
+            onError={(e) => { e.target.style.display = 'none'; e.target.parentElement.innerHTML = '<span class="text-[9px] font-black text-slate-400 text-center px-1 leading-tight">LOGO</span>'; }} />
+        </div>
+        <div>
+          <h3 className="text-sm font-black text-teal-600 dark:text-teal-400 mb-0.5 group-hover:text-teal-700 dark:group-hover:text-teal-300 transition-colors">{content.title}</h3>
+          <p className="text-xs text-slate-500 dark:text-slate-400 font-medium leading-relaxed">{content.desc}</p>
+        </div>
+      </div>
+      <div className="hidden sm:flex w-9 h-9 rounded-full bg-teal-100 dark:bg-teal-500/20 items-center justify-center shrink-0 group-hover:scale-110 transition-transform">
+        <ExternalLink size={15} className="text-teal-600 dark:text-teal-400" />
+      </div>
+    </button>
+  );
+};
+
+// ─── LANGUAGE OPTIONS ─────────────────────────────────────────────────────────
 const LANGS = [
   { code: 'en', label: 'EN' },
   { code: 'ms', label: 'BM' },
@@ -512,418 +406,386 @@ const LANGS = [
   { code: 'ta', label: 'தமிழ்' },
 ];
 
-// ─────────────────────────────────────────────────────────────────────────────
-// MAIN COMPONENT
-// ─────────────────────────────────────────────────────────────────────────────
+// ─── MAIN COMPONENT ───────────────────────────────────────────────────────────
+export default function ResultPage() {
+  const location = useLocation();
+  const navigate  = useNavigate();
 
-export default function ConventionalForm() {
-  const navigate    = useNavigate();
-  const [lang,      setLang]    = useState('en');
-  const [step,      setStep]    = useState(0);
-  const [ready,     setReady]   = useState(false);
-  const [isDark,    setIsDark]  = useState(false);
-  const [busy,      setBusy]    = useState(false);
-  const [sessionId] = useState(() => 'NX-' + Math.random().toString(36).substr(2, 9).toUpperCase());
+  const [lang,               setLang]               = useState('en');
+  const [animate,            setAnimate]            = useState(false);
+  const [isGenerating,       setIsGenerating]       = useState(true);
+  const [suggestedResources, setSuggestedResources] = useState([]);
+  const [isDark,             setIsDark]             = useState(false);
 
-  const [f, setF] = useState({
-    pavsDays: '', pavsMins: '', strength: '', medical: [], wellbeing: '',
-    barriers: [], social: '', foodInsecure: null, incomeAdequacy: '', housing: '',
-    aware: null, referred: null, rating: '', trust: '3', improve: '',
-    ageGroup: '', gender: '', race: '', postalCode: '', previousId: '',
-  });
+  // FIX 1: Two refs — one per PDF page
+  const printRef  = useRef(null); // Page 1: clinical report
+  const printRef2 = useRef(null); // Page 2: governance, disclaimer, references, M3
 
-  const set    = useCallback((k, v) => setF(p => ({ ...p, [k]: v })), []);
-  const togArr = useCallback((k, v) => setF(p => ({ ...p, [k]: p[k].includes(v) ? p[k].filter(x => x !== v) : [...p[k], v] })), []);
+  // FIX 3: clean hasState — handles score === 0 correctly
+  const hasState = location.state?.score != null;
 
-  const toggleMedical = (val) => {
-    if (val === MEDICAL_EXCLUSIVE) {
-      set('medical', f.medical.includes(MEDICAL_EXCLUSIVE) ? [] : [MEDICAL_EXCLUSIVE]);
-    } else {
-      setF(p => ({
-        ...p,
-        medical: p.medical.includes(MEDICAL_EXCLUSIVE)
-          ? [val]
-          : p.medical.includes(val) ? p.medical.filter(v => v !== val) : [...p.medical, val],
-      }));
-    }
-  };
-
-  // FIX 1: nexus_theme → nexus-theme (hyphen) to match AuraChatbot
   useEffect(() => {
-    const stored = localStorage.getItem('nexus-theme');
-    const dark   = stored === 'dark' || (!stored && window.matchMedia('(prefers-color-scheme: dark)').matches);
+    if (!hasState) navigate('/individuals/pathway', { replace: true });
+  }, [hasState, navigate]);
+
+  const safe = location.state || { score: 0, data: {}, postalSector: '00' };
+  const { score, data, postalSector, sessionId, previousSessionId, ctaTier } = safe;
+
+  const riskTier        = getRiskTier(score);
+  const activeSessionId = sessionId || ('NX-' + Math.random().toString(36).substr(2, 9).toUpperCase());
+  const formattedDate   = new Date().toLocaleDateString('en-GB');
+  const nexusUrl        = 'https://for.sg/nexus';
+  const qrCodeUrl       = `https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent(nexusUrl)}`;
+  const baseUrl         = window.location.origin;
+
+  useEffect(() => {
+    const stored  = localStorage.getItem('nexus-theme');
+    const sysDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+    const dark    = stored === 'dark' || (!stored && sysDark);
     setIsDark(dark);
     document.documentElement.classList.toggle('dark', dark);
-    const sl = localStorage.getItem('nexus_language');
-    if (sl && D[sl]) setLang(sl);
-    setTimeout(() => setReady(true), 80);
   }, []);
 
   const toggleTheme = () => {
-    const n = !isDark;
-    setIsDark(n);
-    document.documentElement.classList.toggle('dark', n);
-    localStorage.setItem('nexus-theme', n ? 'dark' : 'light'); // FIX 1
+    const next = !isDark;
+    setIsDark(next);
+    document.documentElement.classList.toggle('dark', next);
+    localStorage.setItem('nexus-theme', next ? 'dark' : 'light');
   };
 
-  // FIX 3: language switcher persists to localStorage
+  // FIX 2: language switcher with persistence
   const switchLang = (code) => {
     setLang(code);
     localStorage.setItem('nexus_language', code);
   };
 
-  const t = D[lang] || D.en;
-  const noMedical = f.medical.includes(MEDICAL_EXCLUSIVE);
+  useEffect(() => {
+    if (!hasState) return;
+    const stored = localStorage.getItem('nexus_language');
+    if (stored && DICTIONARY[stored]) setLang(stored);
+    setTimeout(() => {
+      setSuggestedResources(generateActionPlan(riskTier, ctaTier, data, postalSector));
+      setIsGenerating(false);
+      setTimeout(() => setAnimate(true), 100);
+    }, 1800);
+  }, [riskTier, ctaTier, data, postalSector, hasState]);
 
-  // FIX 5: returns first missing field key for step, or null if valid
-  const firstMissing = () => {
-    if (step === 0) {
-      if (!f.pavsDays)         return 'pavsDays';
-      if (!f.pavsMins)         return 'pavsMins';
-      if (!f.strength)         return 'strength';
-      if (f.medical.length < 1) return 'medical';
-      if (!f.wellbeing)        return 'wellbeing';
-    }
-    if (step === 1) {
-      if (f.barriers.length < 1)   return 'barriers';
-      if (!f.social)               return 'social';
-      if (f.foodInsecure === null)  return 'foodInsecure';
-      if (!f.incomeAdequacy)       return 'incomeAdequacy';
-      if (!f.housing)              return 'housing';
-    }
-    if (step === 2) {
-      if (f.aware === null)    return 'aware';
-      if (f.referred === null) return 'referred';
-      if (!f.rating)           return 'rating';
-    }
-    if (step === 3) {
-      if (!f.ageGroup)               return 'ageGroup';
-      if (!f.gender)                 return 'gender';
-      if (!f.race)                   return 'race';
-      if (f.postalCode.length !== 2) return 'postalCode';
-    }
-    return null;
+  const t         = DICTIONARY[lang] || DICTIONARY.en;
+  const hasPsycho = data?.psychoFlag || data?.sdohPsychological;
+  const ctaBanner = CTA_BANNER[ctaTier] || CTA_BANNER.START;
+
+  const themeMap = {
+    Red:   { gradient: 'from-rose-500 to-red-600',     icon: <ShieldAlert  className="w-11 h-11 text-white mb-3 drop-shadow-md" />, titleColor: 'text-rose-600 dark:text-rose-400',       bgCard: 'bg-rose-50 dark:bg-rose-500/10 border-rose-100 dark:border-rose-500/20',         printBg: '#dc2626' },
+    Amber: { gradient: 'from-amber-400 to-orange-500', icon: <Activity     className="w-11 h-11 text-white mb-3 drop-shadow-md" />, titleColor: 'text-amber-600 dark:text-amber-400',     bgCard: 'bg-amber-50 dark:bg-amber-500/10 border-amber-100 dark:border-amber-500/20',     printBg: '#f59e0b' },
+    Green: { gradient: 'from-emerald-400 to-teal-500', icon: <CheckCircle2 className="w-11 h-11 text-white mb-3 drop-shadow-md" />, titleColor: 'text-emerald-600 dark:text-emerald-400', bgCard: 'bg-emerald-50 dark:bg-emerald-500/10 border-emerald-100 dark:border-emerald-500/20', printBg: '#059669' },
   };
+  const th        = themeMap[riskTier] || themeMap.Green;
+  const tierLabel = riskTier === 'Red' ? t.red : riskTier === 'Amber' ? t.amber : t.green;
+  const tierDesc  = riskTier === 'Red' ? t.redDesc : riskTier === 'Amber' ? t.amberDesc : t.greenDesc;
 
-  const isStepValid = () => firstMissing() === null;
+  // FIX 1: Two-page PDF generation
+  const handleDownloadPDF = async () => {
+    if (!printRef.current || !printRef2.current) return;
+    recordTelemetry(postalSector, { action: 'download_pdf', score, language: lang, ctaTier });
 
-  // FIX 4: try/catch/finally prevents frozen Submit button on error
-  const handleSubmit = async () => {
-    if (busy || !isStepValid()) return;
-    setBusy(true);
+    const captureOpts = {
+      scale: 2, useCORS: true, logging: false, backgroundColor: '#ffffff',
+      onclone: (doc) => {
+        doc.documentElement.classList.remove('dark');
+        doc.querySelectorAll('svg').forEach(svg => {
+          svg.setAttribute('width',  svg.getBoundingClientRect().width);
+          svg.setAttribute('height', svg.getBoundingClientRect().height);
+        });
+      },
+    };
+
     try {
-      const flags   = deriveFlags(f);
-      const ctaTier = selectCTA(flags);
-      const score   = calculateRiskScore(flags);
-      const sector  = f.postalCode || '00';
+      const [canvas1, canvas2] = await Promise.all([
+        html2canvas(printRef.current,  captureOpts),
+        html2canvas(printRef2.current, { ...captureOpts, onclone: (doc) => doc.documentElement.classList.remove('dark') }),
+      ]);
 
-      await recordTelemetry(sector, {
-        sessionId, action: 'conventional_form_v4', language: lang,
-        score, ctaTier, flags,
-        enrichment: { food: f.foodInsecure, income: f.incomeAdequacy, housing: f.housing },
-        perception: { aware: f.aware, referred: f.referred, rating: f.rating, trust: f.trust, barriers: f.barriers, improve: f.improve },
-        demographics: { age: f.ageGroup, gender: f.gender, race: f.race, sector },
-      });
+      const pdf = new jsPDF('p', 'mm', 'a4');
+      const pw  = pdf.internal.pageSize.getWidth();   // 210 mm
+      const ph  = pdf.internal.pageSize.getHeight();  // 297 mm
 
-      navigate('/individuals/result', {
-        state: { score, data: flags, postalSector: sector, sessionId, previousSessionId: flags.previousId, ctaTier },
-      });
-    } catch (err) {
-      console.error('[NEXUS] ConventionalForm submit error:', err);
-    } finally {
-      setBusy(false);
+      const addCanvasPage = (canvas) => {
+        const img = canvas.toDataURL('image/png');
+        let rw = pw, rh = (canvas.height * rw) / canvas.width, mx = 0;
+        if (rh > ph) { rh = ph; rw = (canvas.width * rh) / canvas.height; mx = (pw - rw) / 2; }
+        pdf.addImage(img, 'PNG', mx, 0, rw, rh);
+      };
+
+      addCanvasPage(canvas1);
+      pdf.addPage();
+      addCanvasPage(canvas2);
+
+      pdf.save(`NEXUS_AURA_Result_${riskTier}_${activeSessionId}.pdf`);
+    } catch (err) { console.error('[NEXUS] PDF generation error:', err); }
+  };
+
+  const handleShare = async () => {
+    recordTelemetry(postalSector, { action: 'share_result', score, language: lang });
+    const actionText = ctaBanner.action[lang] || ctaBanner.action.en;
+    const shareText  = `${t.sharePrefix} ${tierLabel}.\n\n${t.shareTopRec} ${actionText}\n\n${t.sharePathway}`;
+    if (navigator.share) {
+      try { await navigator.share({ title: 'NEXUS AURA Analysis', text: shareText, url: nexusUrl }); } catch {}
     }
   };
 
-  // FIX 8: back guard — confirms before discarding partial step
-  const handleBack = () => {
-    if (step === 0) { navigate('/individuals/pathway'); return; }
-    setStep(p => p - 1);
+  const handleResourceClick = (id, url) => {
+    recordTelemetry(postalSector, { action: `click_${id}`, score, language: lang });
+    window.open(url, '_blank');
   };
 
-  // ── STEP COMPONENTS ────────────────────────────────────────────────────────
+  if (!hasState) return null;
 
-  const Step1 = () => (
-    <div className="space-y-5 animate-in fade-in slide-in-from-right-4 duration-400">
-      <Card>
-        <Badge icon={Activity} label="ACSM PAVS · SPAG Strength Screen" />
-        <div className="grid md:grid-cols-2 gap-5">
-          <div>
-            <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-2 leading-snug">{t.pavsQ1}<Req /></label>
-            <select value={f.pavsDays} onChange={e => set('pavsDays', e.target.value)} className={selCls}>
-              <option value="">{t.sel}</option>
-              {PAVS_DAYS.map(o => <option key={o.value} value={o.value}>{o[lang] || o.en}</option>)}
-            </select>
-          </div>
-          <div>
-            <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-2 leading-snug">{t.pavsQ2}<Req /></label>
-            <select value={f.pavsMins} onChange={e => set('pavsMins', e.target.value)} className={selCls}>
-              <option value="">{t.sel}</option>
-              {PAVS_MINS.map(o => <option key={o.value} value={o.value}>{o[lang] || o.en}</option>)}
-            </select>
-          </div>
-        </div>
-        <PavsLive days={f.pavsDays} mins={f.pavsMins} t={t} />
-
-        <div className="mt-5 pt-5 border-t border-slate-100 dark:border-slate-800">
-          <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-2 leading-snug">{t.strengthQ}<Req /></label>
-          <select value={f.strength} onChange={e => set('strength', e.target.value)} className={`${selCls} md:w-2/3`}>
-            <option value="">{t.sel}</option>
-            {STRENGTH_DAYS.map(o => <option key={o.value} value={o.value}>{o[lang] || o.en}</option>)}
-          </select>
-        </div>
-      </Card>
-
-      <Card>
-        <Badge icon={ShieldAlert} label={t.clinHead} />
-        <p className="text-sm font-bold text-slate-700 dark:text-slate-300 mb-3 leading-snug">{t.medQ}<Req /></p>
-        <div className="bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-2xl p-4 space-y-1">
-          {MEDICAL_OPTIONS.map(o => (
-            <CheckRow key={o.value} opt={o} checked={f.medical.includes(o.value)}
-              onChange={() => toggleMedical(o.value)}
-              disabled={o.value !== MEDICAL_EXCLUSIVE && noMedical} lang={lang} />
-          ))}
-        </div>
-      </Card>
-
-      <Card tinted>
-        <div className="flex items-start gap-3 mb-4">
-          <Brain size={18} className="text-teal-600 dark:text-teal-400 shrink-0 mt-0.5" />
-          <div>
-            <p className="text-[10px] font-black text-teal-600 dark:text-teal-400 uppercase tracking-widest mb-0.5">{t.wellHead}</p>
-            <p className="text-sm font-bold text-teal-900 dark:text-teal-100 leading-snug">{t.wellQ}<Req /></p>
-            <Note text={t.wellNote} />
-          </div>
-        </div>
-        <div className="space-y-2">
-          {WELLBEING_OPTIONS.map(o => (
-            <RadioRow key={o.value} opt={o} selected={f.wellbeing === o.value} onSelect={() => set('wellbeing', o.value)} lang={lang} />
-          ))}
-        </div>
-      </Card>
-    </div>
-  );
-
-  const Step2 = () => (
-    <div className="space-y-5 animate-in fade-in slide-in-from-right-4 duration-400">
-      <Card>
-        <Badge icon={Users} label={t.sdohHead} />
-        <p className="text-sm text-slate-500 dark:text-slate-400 font-medium mb-6 leading-relaxed">{t.sdohIntro}</p>
-        <div className="space-y-6">
-
-          <div>
-            <p className="text-sm font-bold text-slate-700 dark:text-slate-300 mb-3 leading-snug">{t.barrQ}<Req /></p>
-            <div className="bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-2xl p-4 grid grid-cols-1 md:grid-cols-2 gap-1">
-              {BARRIERS.map(o => (
-                <CheckRow key={o.value} opt={o} checked={f.barriers.includes(o.value)} onChange={() => togArr('barriers', o.value)} lang={lang} />
-              ))}
-            </div>
-          </div>
-
-          <div>
-            <p className="text-sm font-bold text-slate-700 dark:text-slate-300 mb-1 leading-snug">{t.socialQ}<Req /></p>
-            <Note text={t.socialNote} />
-            <div className="space-y-2 mt-3">
-              {SOCIAL_OPTIONS.map(o => (
-                <RadioRow key={o.value} opt={o} selected={f.social === o.value} onSelect={() => set('social', o.value)} lang={lang} />
-              ))}
-            </div>
-          </div>
-
-          <div className="border-t border-slate-100 dark:border-slate-800 pt-5">
-            <p className="text-sm font-bold text-slate-700 dark:text-slate-300 mb-1 leading-snug">{t.foodQ}<Req /></p>
-            <Note text={t.foodNote} />
-            <div className="flex gap-6 mt-3">
-              {[true, false].map(v => (
-                <label key={String(v)} className="flex items-center gap-2 cursor-pointer group">
-                  <input type="radio" checked={f.foodInsecure === v} onChange={() => set('foodInsecure', v)} className="w-4 h-4 text-teal-500 focus:ring-teal-500" />
-                  <span className="text-sm font-bold text-slate-600 dark:text-slate-400 group-hover:text-teal-600 transition-colors">{v ? t.yes : t.no}</span>
-                </label>
-              ))}
-            </div>
-          </div>
-
-          <div>
-            <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-1 leading-snug">{t.incomeQ}<Req /></label>
-            <Note text={t.incomeNote} />
-            <select value={f.incomeAdequacy} onChange={e => set('incomeAdequacy', e.target.value)} className={`${selCls} mt-2`}>
-              <option value="">{t.sel}</option>
-              {INCOME_OPTIONS.map(o => <option key={o.value} value={o.value}>{o[lang] || o.en}</option>)}
-            </select>
-          </div>
-
-          <div>
-            <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-1 leading-snug">{t.housingQ}<Req /></label>
-            <Note text={t.housingNote} />
-            <select value={f.housing} onChange={e => set('housing', e.target.value)} className={`${selCls} mt-2`}>
-              <option value="">{t.sel}</option>
-              {HOUSING_OPTIONS.map(o => <option key={o.value} value={o.value}>{o[lang] || o.en}</option>)}
-            </select>
-            {f.housing === 'HDB 1-2 Room' && (
-              <div className="mt-3 flex items-start gap-2.5 p-3.5 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700 rounded-xl animate-in fade-in duration-300">
-                <Info size={14} className="text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
-                <p className="text-xs font-medium text-amber-800 dark:text-amber-200 leading-relaxed">{t.housingAlert}</p>
-              </div>
-            )}
-          </div>
-        </div>
-      </Card>
-    </div>
-  );
-
-  const Step3 = () => (
-    <div className="space-y-5 animate-in fade-in slide-in-from-right-4 duration-400">
-      <Card>
-        <Badge icon={MapPin} label={t.perHead} />
-        <div className="space-y-5">
-          {[{ label: t.awareQ, key: 'aware' }, { label: t.referQ, key: 'referred' }].map(({ label, key }) => (
-            <div key={key} className="flex flex-col md:flex-row md:items-center justify-between gap-4 p-4 bg-slate-50 dark:bg-slate-950 rounded-xl border border-slate-200 dark:border-slate-800">
-              <p className="text-sm font-bold text-slate-700 dark:text-slate-300 md:w-2/3 leading-snug">{label}<Req /></p>
-              <div className="flex gap-6">
-                {[true, false].map(v => (
-                  <label key={String(v)} className="flex items-center gap-2 cursor-pointer group">
-                    <input type="radio" checked={f[key] === v} onChange={() => set(key, v)} className="w-4 h-4 text-teal-500 focus:ring-teal-500" />
-                    <span className="text-sm font-bold text-slate-600 dark:text-slate-400 group-hover:text-teal-600 transition-colors">{v ? t.yes : t.no}</span>
-                  </label>
-                ))}
-              </div>
-            </div>
-          ))}
-
-          <div className="grid md:grid-cols-2 gap-5">
-            <div>
-              {/* FIX 7: rating helper text */}
-              <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-1 leading-snug">{t.ratingQ}<Req /></label>
-              <p className="text-[10px] text-slate-400 font-medium mb-2">{t.ratingHint}</p>
-              <select value={f.rating} onChange={e => set('rating', e.target.value)} className={selCls}>
-                <option value="">{t.sel}</option>
-                {t.ratingOpts.map(o => <option key={o} value={o}>{o}</option>)}
-              </select>
-            </div>
-            <div>
-              <p className="text-sm font-bold text-slate-700 dark:text-slate-300 mb-1 leading-snug">{t.trustQ}<Req /></p>
-              <p className="text-[10px] text-slate-400 mb-3">{t.trustScale}</p>
-              <div className="flex gap-2">
-                {[1,2,3,4,5].map(n => (
-                  <button key={n} type="button" onClick={() => set('trust', String(n))}
-                    className={`flex-1 py-3 rounded-xl font-black text-base transition-all border ${f.trust === String(n) ? 'bg-teal-500 text-white border-teal-500 shadow-md scale-105' : 'bg-slate-50 dark:bg-slate-950 text-slate-400 border-slate-200 dark:border-slate-800 hover:border-teal-300 hover:text-teal-600'}`}>{n}
-                  </button>
-                ))}
-              </div>
-            </div>
-          </div>
-
-          <div>
-            <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-2">
-              {t.improveQ} <span className="text-slate-400 font-normal text-xs ml-1">({t.optional})</span>
-            </label>
-            <textarea rows={3} value={f.improve} onChange={e => set('improve', e.target.value)}
-              className={`${inputCls} resize-none rounded-2xl`} placeholder="…" />
-          </div>
-        </div>
-      </Card>
-    </div>
-  );
-
-  const Step4 = () => {
-    const preview   = deriveFlags(f);
-    const liveScore = Math.round((DAYS_MIDPOINT[f.pavsDays] ?? 0) * (MINS_MIDPOINT[f.pavsMins] ?? 0));
+  // ── LOADING ────────────────────────────────────────────────────────────────
+  if (isGenerating) {
     return (
-      <div className="space-y-5 animate-in fade-in slide-in-from-right-4 duration-400">
-        <Card>
-          <Badge icon={Home} label={t.demoHead} />
-          <p className="text-sm text-slate-500 dark:text-slate-400 font-medium mb-6 leading-relaxed">{t.demoIntro}</p>
-          <div className="grid md:grid-cols-2 gap-5">
-            <div>
-              <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-2">{t.ageQ}<Req /></label>
-              <select value={f.ageGroup} onChange={e => set('ageGroup', e.target.value)} className={selCls}>
-                <option value="">{t.sel}</option>
-                {AGE_OPTIONS.map(o => <option key={o.value} value={o.value}>{o[lang] || o.en}</option>)}
-              </select>
-            </div>
-            <div>
-              <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-2">{t.genderQ}<Req /></label>
-              <select value={f.gender} onChange={e => set('gender', e.target.value)} className={selCls}>
-                <option value="">{t.sel}</option>
-                {GENDER_OPTIONS.map(o => <option key={o.value} value={o.value}>{o[lang] || o.en}</option>)}
-              </select>
-            </div>
-            <div>
-              <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-2">{t.raceQ}<Req /></label>
-              <select value={f.race} onChange={e => set('race', e.target.value)} className={selCls}>
-                <option value="">{t.sel}</option>
-                {RACE_OPTIONS.map(o => <option key={o.value} value={o.value}>{o[lang] || o.en}</option>)}
-              </select>
-            </div>
-            <div>
-              <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-2">{t.postalQ}<Req /></label>
-              <input type="text" maxLength={2} value={f.postalCode}
-                onChange={e => set('postalCode', e.target.value.replace(/\D/g, ''))}
-                className={inputCls} placeholder="e.g. 73" />
-              <Note text={t.postalHint} />
-            </div>
-            <div className="md:col-span-2 pt-2 border-t border-slate-100 dark:border-slate-800">
-              <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-2">
-                {t.prevIdQ} <span className="text-slate-400 font-normal text-xs ml-1">({t.optional})</span>
-              </label>
-              <input type="text" value={f.previousId} onChange={e => set('previousId', e.target.value)}
-                className={inputCls} placeholder="NX-XXXXXXXXX" />
-              <p className="text-xs text-slate-400 mt-2 leading-relaxed">{t.prevIdHint}</p>
-            </div>
+      <div className="min-h-screen w-full bg-stone-50 dark:bg-slate-950 flex flex-col items-center justify-center p-6">
+        <div className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-96 h-96 bg-teal-500/15 rounded-full blur-[100px] pointer-events-none animate-pulse" />
+        <div className="relative z-10 flex flex-col items-center text-center space-y-6">
+          <div className="w-16 h-16 bg-white dark:bg-slate-800 rounded-2xl shadow-xl flex items-center justify-center border border-slate-200 dark:border-slate-700">
+            <Loader2 className="w-8 h-8 text-teal-500 animate-spin" />
           </div>
-
-          {liveScore > 0 && (
-            <div className="mt-6 pt-6 border-t border-slate-100 dark:border-slate-800">
-              <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3 flex items-center gap-1.5">
-                <Zap size={11} className="text-teal-500" /> {t.summaryHead}
-              </p>
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                {[
-                  { label: 'PAVS',      value: `${liveScore} min/wk`,  alert: false },
-                  { label: 'Clinical',  value: preview.symptomFlag ? '⚠ Symptom' : preview.medFlag ? '⚠ Condition' : '✓ Clear', alert: preview.symptomFlag || preview.medFlag },
-                  { label: 'Financial', value: preview.sdohFinancial    ? '⚠ Flagged' : '✓ Clear', alert: preview.sdohFinancial },
-                  { label: 'Social',    value: preview.sdohPsychological || preview.sdohSocial ? '⚠ Flagged' : '✓ Clear', alert: preview.sdohPsychological || preview.sdohSocial },
-                ].map(({ label, value, alert }) => (
-                  <div key={label} className={`border rounded-xl p-3 text-center ${alert ? 'bg-amber-50 dark:bg-amber-900/20 border-amber-200 dark:border-amber-700' : 'bg-slate-50 dark:bg-slate-950 border-slate-200 dark:border-slate-800'}`}>
-                    <p className={`text-sm font-black ${alert ? 'text-amber-700 dark:text-amber-300' : 'text-slate-900 dark:text-white'}`}>{value}</p>
-                    <p className="text-[10px] text-slate-400 mt-1 font-medium">{label}</p>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-        </Card>
+          <h2 className="text-lg font-bold text-slate-800 dark:text-white max-w-xs">{t.loading}</h2>
+          {/* FIX 4: animate-pulse replaces custom keyframe that required tailwind.config */}
+          <div className="w-48 h-1.5 bg-slate-200 dark:bg-slate-800 rounded-full overflow-hidden">
+            <div className="h-full w-1/2 bg-teal-500 rounded-full animate-pulse" />
+          </div>
+        </div>
       </div>
     );
-  };
-
-  // Steps are called as functions, NOT rendered as components (<Current />).
-  // Rendering inner functions as components causes React to see a new component
-  // type on every re-render (new function reference), which unmounts and remounts
-  // the entire step — stealing focus from inputs after the first keystroke.
-  // Calling as a function keeps reconciliation inside the parent tree.
-  const STEPS = [Step1, Step2, Step3, Step4];
-  const renderCurrentStep = STEPS[step];
-  const missing  = firstMissing();
-  const valid    = missing === null;
+  }
 
   return (
-    <div className="min-h-screen w-full bg-stone-50 dark:bg-slate-950 transition-colors duration-700 flex flex-col items-center py-6 px-4 md:py-12 md:px-6 relative overflow-x-hidden font-sans">
-      <div className={`fixed top-0 left-0 w-[700px] h-[700px] bg-teal-500/8 rounded-full blur-[120px] pointer-events-none transition-opacity duration-1000 ${ready ? 'opacity-100' : 'opacity-0'}`} />
-      <div className={`fixed bottom-0 right-0 w-[500px] h-[500px] bg-emerald-500/8 rounded-full blur-[100px] pointer-events-none transition-opacity duration-1000 delay-300 ${ready ? 'opacity-100' : 'opacity-0'}`} />
+    <div className="min-h-screen w-full bg-stone-50 dark:bg-slate-950 transition-colors duration-700 flex flex-col items-center py-12 px-4 md:px-6 relative overflow-x-hidden font-sans">
 
-      <div className={`relative z-10 w-full max-w-3xl transition-all duration-700 ${ready ? 'translate-y-0 opacity-100' : 'translate-y-8 opacity-0'}`}>
+      {/* ── HIDDEN PDF TEMPLATES (off-screen) ──────────────────────────────── */}
+      <div style={{ position: 'absolute', top: '-10000px', left: '-10000px' }}>
 
-        {/* Nav bar */}
-        <div className="flex justify-between items-center mb-8 gap-3 flex-wrap">
-          <button onClick={handleBack}
-            className="flex items-center gap-2 px-4 py-2 bg-white/70 dark:bg-slate-800/70 backdrop-blur-md text-slate-500 hover:text-teal-600 font-bold text-xs uppercase tracking-widest rounded-full border border-slate-200 dark:border-slate-700 shadow-sm transition-all group">
-            <ChevronLeft size={14} className="group-hover:-translate-x-1 transition-transform" /> {t.back}
+        {/* ── PAGE 1: Clinical Report ────────────────────────────────────── */}
+        <div ref={printRef} className="w-[794px] bg-white text-black flex flex-col" style={{ fontFamily: 'Arial, sans-serif' }}>
+
+          {/* PDF Header */}
+          <div style={{ background: '#0f172a', padding: '28px 40px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+              <img src={`${baseUrl}/nexus.png`} alt="NEXUS" crossOrigin="anonymous" style={{ width: 40, height: 40, objectFit: 'contain' }} />
+              <div>
+                <div style={{ color: 'white', fontWeight: 900, fontSize: 22, letterSpacing: 6 }}>NEXUS</div>
+                <div style={{ color: '#94a3b8', fontWeight: 700, fontSize: 10, letterSpacing: 4, marginTop: 2 }}>{t.reportTitle}</div>
+              </div>
+            </div>
+            <div style={{ textAlign: 'right', fontSize: 12, color: '#94a3b8', lineHeight: 1.8 }}>
+              <div><strong style={{ color: 'white' }}>{t.date}:</strong> {formattedDate}</div>
+              <div><strong style={{ color: 'white' }}>{t.assessmentId}:</strong> {activeSessionId}</div>
+              {previousSessionId && <div><strong style={{ color: 'white' }}>{t.prevId}:</strong> {previousSessionId}</div>}
+              <div><strong style={{ color: 'white' }}>{t.postalSector}:</strong> Sector {postalSector}</div>
+            </div>
+          </div>
+
+          <div style={{ padding: '32px 40px', display: 'flex', flexDirection: 'column', gap: 24 }}>
+
+            {/* Risk Tier */}
+            <div style={{ background: th.printBg, borderRadius: 12, padding: '28px 32px' }}>
+              <div style={{ color: 'white', fontWeight: 900, fontSize: 26, marginBottom: 10 }}>{tierLabel}</div>
+              <div style={{ color: 'rgba(255,255,255,0.9)', fontWeight: 700, fontSize: 14, lineHeight: 1.6, marginBottom: 14 }}>{tierDesc}</div>
+              {(data.sdohFinancial || data.sdohSocial || hasPsycho) && (
+                <div style={{ borderTop: '1px solid rgba(255,255,255,0.25)', paddingTop: 14, display: 'flex', flexDirection: 'column', gap: 6 }}>
+                  {data.sdohFinancial && <div style={{ color: 'white', fontSize: 12, fontWeight: 700 }}>• {t.sdohFinText}</div>}
+                  {data.sdohSocial    && <div style={{ color: 'white', fontSize: 12, fontWeight: 700 }}>• {t.sdohSocText}</div>}
+                  {hasPsycho          && <div style={{ color: 'white', fontSize: 12, fontWeight: 700 }}>• {t.sdohPsychoText}</div>}
+                </div>
+              )}
+            </div>
+
+            {/* PAVS Metrics */}
+            {data?.pavsScore != null && (
+              <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 12, padding: '20px 28px' }}>
+                <div style={{ fontWeight: 900, fontSize: 11, color: '#64748b', textTransform: 'uppercase', letterSpacing: 3, marginBottom: 14 }}>{t.pavsTitle}</div>
+                <div style={{ display: 'flex', gap: 16, marginBottom: 14 }}>
+                  {[
+                    { value: data.pavsScore,           label: t.pavsWeekly },
+                    { value: data.pavsDays    ?? '–',  label: t.pavsDays   },
+                    { value: data.pavsMinutes ?? '–',  label: t.pavsMins   },
+                  ].map(({ value, label }, i) => (
+                    <div key={i} style={{ flex: 1, background: 'white', border: '1px solid #e2e8f0', borderRadius: 8, padding: '12px 10px', textAlign: 'center' }}>
+                      <div style={{ fontWeight: 900, fontSize: 24, color: '#0f172a' }}>{value}</div>
+                      <div style={{ fontSize: 10, color: '#94a3b8', marginTop: 4, fontWeight: 600 }}>{label}</div>
+                    </div>
+                  ))}
+                  <div style={{ flex: 2, background: 'white', border: '1px solid #e2e8f0', borderRadius: 8, padding: '12px 16px', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
+                    <div style={{ fontWeight: 700, fontSize: 11, color: getPavsTier(data.pavsScore) === 'active' ? '#059669' : getPavsTier(data.pavsScore) === 'meets' ? '#0d9488' : '#d97706', marginBottom: 4 }}>
+                      {getPavsTier(data.pavsScore) === 'active' ? t.pavsActive : getPavsTier(data.pavsScore) === 'meets' ? t.pavsMeets : t.pavsBelow}
+                    </div>
+                    <div style={{ fontSize: 10, color: '#64748b', lineHeight: 1.5 }}>{t.pavsThreshold}</div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Primary Action Banner */}
+            <div style={{ background: '#f0fdfa', border: '1px solid #99f6e4', borderRadius: 12, padding: '20px 28px' }}>
+              <div style={{ fontWeight: 900, fontSize: 11, color: '#0f766e', textTransform: 'uppercase', letterSpacing: 3, marginBottom: 10 }}>{t.primaryAction}</div>
+              <div style={{ fontWeight: 700, fontSize: 13, color: '#134e4a', lineHeight: 1.6 }}>
+                {ctaBanner.emoji} {ctaBanner.action[lang] || ctaBanner.action.en}
+              </div>
+              <div style={{ marginTop: 8, fontSize: 11, color: '#0d9488', fontWeight: 600 }}>{ctaBanner.url}</div>
+            </div>
+
+            {/* Resources Grid */}
+            <div>
+              <div style={{ fontWeight: 900, fontSize: 13, color: '#0f172a', textTransform: 'uppercase', letterSpacing: 3, borderBottom: '2px solid #e2e8f0', paddingBottom: 10, marginBottom: 20 }}>{t.resources}</div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+                {suggestedResources.map((resource) => {
+                  const c = resource[lang] || resource.en;
+                  return (
+                    <div key={resource.id} style={{ border: '1px solid #e2e8f0', borderRadius: 10, padding: '18px 20px', background: '#f8fafc', display: 'flex', flexDirection: 'column', gap: 10 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                        <div style={{ width: 44, height: 44, flexShrink: 0, background: 'white', border: '1px solid #e2e8f0', borderRadius: 8, overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                          <img src={`${baseUrl}${resource.logo}`} alt="" crossOrigin="anonymous" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                        </div>
+                        <div style={{ fontWeight: 900, fontSize: 13, color: '#0f172a', lineHeight: 1.3 }}>{c.title}</div>
+                      </div>
+                      <div style={{ fontSize: 11, color: '#475569', lineHeight: 1.55 }}>{c.desc}</div>
+                      <div style={{ fontSize: 10, color: '#0d9488', fontWeight: 700, background: '#f0fdfa', padding: '6px 10px', borderRadius: 6, border: '1px solid #99f6e4', wordBreak: 'break-all' }}>
+                        <span style={{ color: '#64748b', fontWeight: 600, marginRight: 4 }}>{t.webLink}</span>{resource.url}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* PDF Footer */}
+            <div style={{ borderTop: '1px solid #e2e8f0', paddingTop: 20, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                <img src={qrCodeUrl} alt="QR" crossOrigin="anonymous" style={{ width: 70, height: 70, border: '1px solid #e2e8f0', borderRadius: 6, padding: 4 }} />
+                <div>
+                  <div style={{ fontWeight: 900, fontSize: 10, textTransform: 'uppercase', letterSpacing: 3, color: '#0f172a' }}>{t.scanQR}</div>
+                  <div style={{ color: '#0d9488', fontSize: 11, fontWeight: 700, marginTop: 3 }}>{nexusUrl}</div>
+                </div>
+              </div>
+              <div style={{ textAlign: 'right' }}>
+                <div style={{ fontWeight: 900, fontSize: 10, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: 2 }}>{t.assessmentId}</div>
+                <div style={{ fontFamily: 'monospace', fontWeight: 700, fontSize: 12, color: '#0f172a', marginTop: 2 }}>{activeSessionId}</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* ── PAGE 2: Clinical Governance, Disclaimers, References, M3 ─────── */}
+        <div ref={printRef2}
+          style={{
+            width: '794px',
+            minHeight: '1123px',
+            background: '#ffffff',
+            padding: '40px',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '24px',
+            boxSizing: 'border-box',
+            fontFamily: 'Arial, sans-serif',
+          }}>
+
+          {/* Page 2 Header */}
+          <div style={{ borderBottom: '2px solid #0f172a', paddingBottom: '16px', marginBottom: '4px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end' }}>
+              <div>
+                <div style={{ color: '#0f172a', fontWeight: 900, fontSize: 18, letterSpacing: 2 }}>NEXUS AURA</div>
+                <div style={{ color: '#64748b', fontWeight: 700, fontSize: 10, textTransform: 'uppercase', letterSpacing: 2, marginTop: 2 }}>Clinical Governance and Disclaimers</div>
+              </div>
+              <div style={{ textAlign: 'right', fontSize: 10, color: '#94a3b8', fontWeight: 600 }}>
+                <div>{t.assessmentId}: {activeSessionId}</div>
+                <div>{t.date}: {formattedDate}</div>
+              </div>
+            </div>
+          </div>
+
+          {/* Medical Disclaimer */}
+          <div style={{ background: '#fff1f2', border: '1px solid #fecdd3', borderRadius: '8px', padding: '20px' }}>
+            <div style={{ fontWeight: 900, fontSize: 12, color: '#be123c', marginBottom: '8px', textTransform: 'uppercase', letterSpacing: 1 }}>
+              Important Medical Disclaimer
+            </div>
+            <div style={{ fontSize: 11, color: '#4c0519', lineHeight: 1.7 }}>
+              This NEXUS AURA report is an initial community health navigation tool and <strong>does not constitute medical advice, diagnosis, or a clinical treatment plan</strong>. The risk stratification and physical activity recommendations are algorithmically generated for educational and community triage purposes only. Always consult a qualified healthcare professional or your Healthier SG GP before making significant changes to your lifestyle, diet, or exercise routine. If you are experiencing chest pain, dizziness, or any acute symptoms, please seek immediate medical attention.
+            </div>
+          </div>
+
+          {/* Academic & Clinical Grounding */}
+          <div>
+            <div style={{ fontWeight: 900, fontSize: 12, color: '#0f172a', marginBottom: '14px', textTransform: 'uppercase', letterSpacing: 1, borderBottom: '1px solid #e2e8f0', paddingBottom: '8px' }}>
+              Academic and Clinical Grounding
+            </div>
+            <ul style={{ fontSize: 11, color: '#475569', lineHeight: 1.9, paddingLeft: '20px', margin: 0 }}>
+              <li><strong>Physical Activity Screening:</strong> American College of Sports Medicine (ACSM) Physical Activity Vital Sign (PAVS) — validated 2-question screening tool for point-of-care PA assessment.</li>
+              <li><strong>National Activity Targets:</strong> Sport Singapore Physical Activity Guidelines (SPAG) — 150–300 mins/week moderate-intensity aerobic activity for adults.</li>
+              <li><strong>Psychological Wellbeing:</strong> BioPsychoSocial Risk Screener Version II (BPS-RS II), Psychological Domain Item P22 — PHQ-2 aligned, 2-week timeframe.</li>
+              <li><strong>Social Isolation:</strong> Adapted from the Lubben Social Network Scale (LSNS-6) — validated for community-dwelling adults in Singapore (alpha 0.80–0.89).</li>
+              <li><strong>Food Insecurity:</strong> Lien Centre for Social Innovation Food Insufficiency Screen — validated 2-question instrument for Singapore context.</li>
+              <li><strong>Financial Adequacy:</strong> Duke-NUS Medical School Perceived Income Adequacy Scale — 3-level validated screen for subjective financial stability.</li>
+              <li><strong>Housing Risk:</strong> BPS-RS II Housing Schema — 1–2 Room HDB rental as geographic social risk indicator aligned with SingHealth population health mapping.</li>
+              <li><strong>Community Navigation:</strong> Northern Singapore Health Ecosystem Report (March 2026) — §5.7 8-Tier Community Call-to-Action Matrix.</li>
+            </ul>
+          </div>
+
+          {/* Data Governance */}
+          <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '8px', padding: '18px 20px' }}>
+            <div style={{ fontWeight: 900, fontSize: 11, color: '#0f172a', marginBottom: '8px', textTransform: 'uppercase', letterSpacing: 1 }}>
+              Data Governance and Privacy
+            </div>
+            <div style={{ fontSize: 11, color: '#475569', lineHeight: 1.7 }}>
+              All data collected through the NEXUS AURA system is de-identified at the point of capture. Postal sector data is used solely for geographic resource mapping and is not linked to any identifiable personal information. This assessment does not collect, store, or transmit NRIC, name, contact, or financial account information. Aggregated, anonymised data may be used to improve community health programming in Northern Singapore.
+            </div>
+          </div>
+
+          {/* M3 Network — pushed to bottom */}
+          <div style={{ marginTop: 'auto', background: 'linear-gradient(135deg, #f0fdfa 0%, #ecfdf5 100%)', borderRadius: '12px', padding: '28px 32px', textAlign: 'center', border: '1px solid #99f6e4' }}>
+            <div style={{ fontWeight: 900, fontSize: 16, color: '#0f766e', marginBottom: '10px', letterSpacing: 1 }}>
+              Join the Northern Community Nodes
+            </div>
+            <div style={{ fontSize: 12, color: '#475569', marginBottom: '20px', lineHeight: 1.6, maxWidth: '580px', margin: '0 auto 20px' }}>
+              This initiative is proudly piloted in conjunction with the <strong style={{ color: '#0f766e' }}>M3 Network</strong> on <strong>11 April 2026</strong>. Stay connected with your local community nodes in the North for programmes, events, and peer support.
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px 24px', maxWidth: '560px', margin: '0 auto', textAlign: 'left' }}>
+              {[
+                { label: 'Web',  value: 'm3.gov.sg/m3-towns/north' },
+                { label: 'FB',   value: 'facebook.com/M3atWoodlands' },
+                { label: 'FB',   value: 'facebook.com/M3atMarsilingYewTee' },
+                { label: 'FB',   value: 'facebook.com/p/M3-at-Nee-Soon-100068636709214' },
+              ].map((item, i) => (
+                <div key={i} style={{ display: 'flex', alignItems: 'flex-start', gap: '8px' }}>
+                  <span style={{ fontWeight: 900, fontSize: 10, color: '#0d9488', textTransform: 'uppercase', letterSpacing: 1, minWidth: 24, paddingTop: 2 }}>{item.label}</span>
+                  <span style={{ fontWeight: 600, fontSize: 11, color: '#0f766e', wordBreak: 'break-all', lineHeight: 1.5 }}>{item.value}</span>
+                </div>
+              ))}
+            </div>
+            <div style={{ marginTop: '20px', fontSize: 10, color: '#94a3b8', fontWeight: 600 }}>
+              Scan the QR code on Page 1 to access the NEXUS digital portal
+            </div>
+          </div>
+
+        </div>
+      </div>
+
+      {/* ── BACKGROUND ORBS ─────────────────────────────────────────────────── */}
+      <div className={`fixed top-0 left-0 w-[700px] h-[700px] bg-teal-500/8 rounded-full blur-[120px] pointer-events-none transition-opacity duration-1000 ${animate ? 'opacity-100' : 'opacity-0'}`} />
+      <div className={`fixed bottom-0 right-0 w-[500px] h-[500px] bg-emerald-500/8 rounded-full blur-[100px] pointer-events-none transition-opacity duration-1000 delay-300 ${animate ? 'opacity-100' : 'opacity-0'}`} />
+
+      {/* ── MAIN CONTENT ────────────────────────────────────────────────────── */}
+      <div className={`relative z-10 w-full max-w-2xl transition-all duration-700 ${animate ? 'translate-y-0 opacity-100' : 'translate-y-8 opacity-0'}`}>
+
+        {/* Top nav */}
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-8 gap-3 px-1 flex-wrap">
+          <button onClick={() => navigate('/')}
+            className="flex items-center gap-2 px-4 py-2 bg-white/70 dark:bg-slate-800/70 backdrop-blur-md text-slate-500 dark:text-slate-400 hover:text-teal-600 dark:hover:text-teal-400 font-bold text-xs uppercase tracking-widest rounded-full border border-slate-200 dark:border-slate-700 shadow-sm transition-all group">
+            <ArrowLeft size={14} className="group-hover:-translate-x-1 transition-transform" /> {t.back}
           </button>
 
-          <div className="flex items-center gap-2 flex-wrap">
+          <div className="flex items-center gap-2 flex-wrap self-end sm:self-auto">
 
-            {/* FIX 3: Language selector */}
+            {/* FIX 2: Language selector — matches ConventionalForm style */}
             <div className="flex items-center gap-1 bg-white/70 dark:bg-slate-800/70 backdrop-blur-md border border-slate-200 dark:border-slate-700 rounded-full px-1.5 py-1 shadow-sm">
               <Globe size={11} className="text-slate-400 ml-1" />
               {LANGS.map(l => (
@@ -934,72 +796,79 @@ export default function ConventionalForm() {
               ))}
             </div>
 
-            <button onClick={toggleTheme} className="p-2.5 rounded-full bg-white/70 dark:bg-slate-800/70 backdrop-blur-md border border-slate-200 dark:border-slate-700 shadow-sm hover:-translate-y-0.5 transition-all">
-              {isDark ? <Sun size={14} className="text-amber-400" /> : <Moon size={14} />}
+            <button onClick={toggleTheme}
+              className="p-2.5 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-full shadow-sm hover:-translate-y-0.5 transition-all">
+              {isDark ? <Sun size={14} className="text-amber-400" /> : <Moon size={14} className="text-slate-500" />}
             </button>
-            <div className="text-[10px] font-mono font-bold text-teal-600 dark:text-teal-400 bg-teal-50 dark:bg-teal-500/10 px-3 py-1.5 rounded-lg border border-teal-100 dark:border-teal-500/30">{sessionId}</div>
+            <button onClick={handleShare}
+              className="flex items-center gap-2 px-4 py-2 bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 font-bold text-xs uppercase tracking-widest rounded-full border border-slate-200 dark:border-slate-700 shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all">
+              <Share2 size={13} /> {t.share}
+            </button>
+            <button onClick={handleDownloadPDF}
+              className="flex items-center gap-2 px-4 py-2 bg-teal-600 text-white font-bold text-xs uppercase tracking-widest rounded-full shadow-sm hover:bg-teal-700 hover:-translate-y-0.5 transition-all">
+              <Download size={13} /> {t.download}
+            </button>
           </div>
         </div>
 
-        {/* Title + segmented progress */}
-        <div className="mb-8">
-          <h1 className="text-2xl md:text-3xl font-black text-slate-900 dark:text-white tracking-tight mb-6">{t.title}</h1>
-          <div className="bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm">
-            <div className="flex items-center justify-between mb-3 px-1">
-              <div>
-                <span className="text-xs font-black text-slate-800 dark:text-white uppercase tracking-wider">{t.steps[step]}</span>
-                <span className="text-[10px] text-slate-400 ml-2 hidden md:inline">— {t.subs[step]}</span>
+        {/* Card */}
+        <div className="bg-white dark:bg-[#111827] rounded-3xl shadow-xl border border-slate-200 dark:border-slate-800 overflow-hidden">
+
+          {/* Risk hero header */}
+          <div className={`px-8 py-10 bg-gradient-to-br ${th.gradient} text-center relative overflow-hidden flex flex-col items-center`}>
+            <div className="absolute top-0 right-0 w-48 h-48 bg-white/10 rounded-full blur-2xl -mr-12 -mt-12 pointer-events-none" />
+            <div className="absolute bottom-0 left-0 w-36 h-36 bg-black/10 rounded-full blur-xl -ml-8 -mb-8 pointer-events-none" />
+            <div className="relative z-10 flex flex-col items-center">
+              {th.icon}
+              <p className="text-xs font-bold text-white/80 uppercase tracking-[0.2em] mb-2">{t.title}</p>
+              <div className="px-8 py-3 bg-white/20 rounded-2xl backdrop-blur-md border border-white/30 text-2xl md:text-3xl font-black text-white shadow-lg">
+                {tierLabel}
               </div>
-              <span className="text-xs font-bold text-teal-600 dark:text-teal-400">{Math.round(((step + 1) / 4) * 100)}%</span>
-            </div>
-            <div className="flex gap-2">
-              {t.steps.map((_, i) => (
-                <div key={i} className="flex-1 h-1.5 rounded-full overflow-hidden bg-slate-100 dark:bg-slate-800">
-                  <div className={`h-full w-full origin-left transition-transform duration-500 ${step > i ? 'bg-teal-400 scale-x-100' : step === i ? 'bg-teal-500 scale-x-100' : 'scale-x-0'}`} />
-                </div>
-              ))}
             </div>
           </div>
-        </div>
 
-        {/* Step content */}
-        <div className="mb-8">{renderCurrentStep()}</div>
+          {/* Body */}
+          <div className="p-6 md:p-8 space-y-6">
 
-        {/* Navigation */}
-        <div className="flex flex-col-reverse md:flex-row justify-between items-stretch md:items-center gap-3">
-          <button type="button" onClick={handleBack} disabled={step === 0}
-            className={`flex justify-center items-center gap-2 py-3.5 px-7 rounded-xl font-bold text-xs uppercase tracking-widest transition-all ${step === 0 ? 'opacity-0 pointer-events-none' : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700 hover:text-slate-900 dark:hover:text-white shadow-sm hover:shadow-md active:scale-95'}`}>
-            <ChevronLeft size={15} /> {t.btnPrev}
-          </button>
-
-          {step < 3 ? (
-            <div className="flex flex-col items-end gap-1.5">
-              <button type="button" onClick={() => setStep(p => Math.min(3, p + 1))} disabled={!valid}
-                className={`flex justify-center items-center gap-2 py-3.5 px-8 font-bold text-xs uppercase tracking-widest rounded-xl transition-all active:scale-95 ${valid ? 'bg-teal-600 text-white hover:bg-teal-700 shadow-[0_8px_20px_rgba(13,148,136,0.25)]' : 'bg-slate-200 dark:bg-slate-800 text-slate-400 cursor-not-allowed'}`}>
-                {t.btnNext} <ChevronRight size={15} />
-              </button>
-              {/* FIX 5: specific per-field hint */}
-              {!valid && missing && t.missing[missing] && (
-                <p className="text-amber-500 dark:text-amber-400 text-[10px] font-bold text-right px-1">
-                  {t.missing[missing]}
-                </p>
-              )}
+            {/* AURA analysis */}
+            <div className={`p-5 rounded-2xl border ${th.bgCard}`}>
+              <p className={`text-xs font-bold uppercase tracking-widest mb-2 ${th.titleColor}`}>AURA Smart Analysis</p>
+              <p className="text-sm md:text-base text-slate-700 dark:text-slate-300 leading-relaxed font-medium">{tierDesc}</p>
             </div>
-          ) : (
-            <div className="flex flex-col w-full md:w-auto items-end gap-1.5">
-              <button type="button" onClick={handleSubmit} disabled={busy || !valid}
-                className={`w-full flex justify-center items-center gap-2 py-3.5 px-8 font-bold text-xs uppercase tracking-widest rounded-xl transition-all active:scale-95 ${valid && !busy ? 'bg-slate-900 dark:bg-teal-500 text-white hover:bg-slate-800 dark:hover:bg-teal-400 shadow-[0_8px_20px_rgba(15,23,42,0.2)] dark:shadow-[0_8px_20px_rgba(20,184,166,0.25)]' : 'bg-slate-200 dark:bg-slate-800 text-slate-400 cursor-not-allowed'}`}>
-                {busy
-                  ? <><span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" /> Processing…</>
-                  : <>{t.btnSubmit} <Send size={15} /></>}
-              </button>
-              {!valid && missing && t.missing[missing] && (
-                <p className="text-amber-500 dark:text-amber-400 text-[10px] font-bold text-right px-1">
-                  {t.missing[missing]}
-                </p>
-              )}
+
+            <PavsPanel data={data} t={t} />
+            <PrimaryActionBanner ctaTier={ctaTier} t={t} lang={lang} />
+            <SdohFlags data={data} t={t} previousSessionId={previousSessionId} />
+
+            {/* Resource grid */}
+            <div className="pt-2">
+              <h2 className="text-sm font-black text-slate-900 dark:text-white uppercase tracking-widest mb-4 flex items-center gap-2">
+                <Zap size={14} className="text-teal-500" /> {t.cta}
+              </h2>
+              <div className="space-y-3">
+                {suggestedResources.map(r => (
+                  <ResourceCard key={r.id} resource={r} lang={lang} baseUrl={baseUrl} onClick={() => handleResourceClick(r.id, r.url)} />
+                ))}
+              </div>
             </div>
-          )}
+
+            {/* Footer */}
+            <div className="pt-4 border-t border-slate-100 dark:border-slate-800 flex justify-between items-center">
+              <div className="flex items-center gap-3">
+                <img src={`${baseUrl}/nexus.png`} alt="NEXUS" crossOrigin="anonymous" className="w-10 h-10 object-contain" />
+                <div>
+                  <p className="font-black text-slate-800 dark:text-slate-200 tracking-widest text-xs uppercase leading-none">NEXUS</p>
+                  <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">{t.reportTitle}</p>
+                </div>
+              </div>
+              <div className="text-right">
+                <p className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">{t.assessmentId}</p>
+                <p className="text-xs font-mono font-bold text-slate-600 dark:text-slate-300">{activeSessionId}</p>
+                {previousSessionId && <p className="text-[9px] font-mono text-slate-400 mt-0.5">Prev: {previousSessionId}</p>}
+              </div>
+            </div>
+
+          </div>
         </div>
       </div>
     </div>
