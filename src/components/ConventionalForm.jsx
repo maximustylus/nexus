@@ -521,9 +521,16 @@ export default function ConventionalForm() {
   const [lang,      setLang]    = useState('en');
   const [step,      setStep]    = useState(0);
   const [ready,     setReady]   = useState(false);
-  const [isDark,    setIsDark]  = useState(false);
   const [busy,      setBusy]    = useState(false);
   const [sessionId] = useState(() => 'NX-' + Math.random().toString(36).substr(2, 9).toUpperCase());
+  const [isDark, setIsDark] = useState(() => {
+  try {
+    const s = localStorage.getItem('nexus-theme');
+    if (s === 'dark') return true;
+    if (s === 'light') return false;
+    return window.matchMedia('(prefers-color-scheme: dark)').matches;
+  } catch { return false; }
+});
 
   const [f, setF] = useState({
     pavsDays: '', pavsMins: '', strength: '', medical: [], wellbeing: '',
@@ -549,22 +556,9 @@ export default function ConventionalForm() {
   };
 
   // FIX 1: nexus_theme → nexus-theme (hyphen) to match AuraChatbot
-  useEffect(() => {
-    const stored = localStorage.getItem('nexus-theme');
-    const dark   = stored === 'dark' || (!stored && window.matchMedia('(prefers-color-scheme: dark)').matches);
-    setIsDark(dark);
-    document.documentElement.classList.toggle('dark', dark);
-    const sl = localStorage.getItem('nexus_language');
-    if (sl && D[sl]) setLang(sl);
-    setTimeout(() => setReady(true), 80);
-  }, []);
-
-  const toggleTheme = () => {
-    const n = !isDark;
-    setIsDark(n);
-    document.documentElement.classList.toggle('dark', n);
-    localStorage.setItem('nexus-theme', n ? 'dark' : 'light'); // FIX 1
-  };
+useEffect(() => {
+  document.documentElement.classList.toggle('dark', isDark);
+}, [isDark]);
 
   // FIX 3: language switcher persists to localStorage
   const switchLang = (code) => {
