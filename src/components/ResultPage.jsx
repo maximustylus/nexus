@@ -753,7 +753,7 @@ export default function ResultPage() {
               {/* Web link with M3 logo */}
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px', gridColumn: '1 / -1' }}>
                 <img
-                  src={baseUrl + '/logos/M3.png'}
+                  src={baseUrl + '/logos/m3.png'}
                   alt="M3"
                   crossOrigin="anonymous"
                   style={{ width: 22, height: 22, objectFit: 'contain', flexShrink: 0 }}
