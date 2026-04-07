@@ -471,9 +471,9 @@ const parseClinicalData = (raw) => {
               : minsStr.includes('less') || minsStr.includes('20')     ? 15
               : parseInt((minsStr.match(/\d+/) || ['0'])[0], 10);
 
-  const pavsScore    = Math.round(daysN * minsN * 7 / 7); // weekly total = days × mins
+  const pavsScore    = Math.round(daysN * minsN); // weekly total = days × mins
   const pavsDays     = daysN;
-  const pavsMinutes  = minsN;
+  const pavsMinutes  = daysN === 0 ? 0 : minsN; // 0 days → 0 mins/session, not a midpoint
 
   // Strength
   const strStr      = (raw.strength || '').toLowerCase();
@@ -638,7 +638,18 @@ const DomainBadge = ({ step }) => {
 
 // ─── MAIN COMPONENT ───────────────────────────────────────────────────────────
 const AuraChatbot = () => {
-  const [isDark, setIsDark]         = useState(false);
+  // Lazy init — reads localStorage SYNCHRONOUSLY before first render.
+  // Critically, also sets the <html> dark class inside the initialiser so
+  // Tailwind dark: utilities are already active on frame 0, not after useEffect.
+  // This is the only reliable way to prevent a light-flash on navigation.
+  const [isDark, setIsDark] = useState(() => {
+    try {
+      const s = localStorage.getItem('nexus-theme');
+      const dark = s === 'dark' || (!s && window.matchMedia('(prefers-color-scheme: dark)').matches);
+      document.documentElement.classList.toggle('dark', dark); // ← before first paint
+      return dark;
+    } catch { return false; }
+  });
   const navigate                    = useNavigate();
   const chatEndRef                  = useRef(null);
   const inputRef                    = useRef(null);
@@ -654,14 +665,10 @@ const AuraChatbot = () => {
   const [collectedData, setCollectedData] = useState({});
   const [isComplete,    setIsComplete]    = useState(false);
 
-  // ── Theme initialisation
+  // ── Sync dark class to <html> whenever isDark changes (including on mount)
   useEffect(() => {
-    const stored = localStorage.getItem('nexus-theme');
-    const sysDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-    const dark = stored === 'dark' || (!stored && sysDark);
-    setIsDark(dark);
-    document.documentElement.classList.toggle('dark', dark);
-  }, []);
+    document.documentElement.classList.toggle('dark', isDark);
+  }, [isDark]);
 
   const toggleTheme = () => {
     const next = !isDark;
