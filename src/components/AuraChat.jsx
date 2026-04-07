@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { recordTelemetry } from '../utils/telemetry';
 import { calculateRiskScore } from '../utils/scoring';
-import { ChevronLeft, Send, Sun, Moon, ExternalLink, CheckCircle } from 'lucide-react';
+import { ChevronLeft, Send, Sun, Moon, ExternalLink, CheckCircle, BrainCircuit } from 'lucide-react';
 import { getFunctions, httpsCallable } from 'firebase/functions';
 
 // ── Cloud Function — same pattern as AuraPulseBot.jsx ────────────────────────
@@ -537,11 +537,11 @@ const parseClinicalData = (raw) => {
 // ─── AURA AVATAR ──────────────────────────────────────────────────────────────
 const AuraAvatar = ({ size = 'sm' }) => (
   <div className={`
-    ${size === 'sm' ? 'w-7 h-7 text-xs' : 'w-9 h-9 text-sm'}
-    rounded-full flex items-center justify-center font-bold text-white flex-shrink-0
+    ${size === 'sm' ? 'w-7 h-7' : 'w-9 h-9'}
+    rounded-full flex items-center justify-center text-white flex-shrink-0
     bg-gradient-to-br from-teal-400 to-emerald-600 shadow-sm ring-2 ring-teal-100 dark:ring-teal-900
   `}>
-    A
+    <BrainCircuit size={size === 'sm' ? 14 : 18} strokeWidth={2} />
   </div>
 );
 
@@ -694,100 +694,94 @@ const AuraChatbot = () => {
     }, 850);
   };
 
-  // ── Handle submission (quick reply or typed)
-  const handleUserSubmission = async (text) => {
+  // ── Handle submission — optimistic UI for instant response ──────────────────
+  //
+  // SPEED: static reflection + next question render IMMEDIATELY on tap.
+  // CF call fires in the background (fire-and-forget). If a valid AI response
+  // arrives within AI_UPGRADE_WINDOW_MS it silently upgrades the message text.
+  // If CF is slow or fails the static text stands — the user never waits.
+  //
+  const AI_UPGRADE_WINDOW_MS = 1500;
+
+  const handleUserSubmission = (text) => {
     if (!text.trim() || isTyping || isComplete) return;
 
     setMessages(prev => [...prev, { sender: 'user', text }]);
     setUserInput('');
 
-    const stepKey     = DOMAIN_CONFIG[currentStep]?.key || `step_${currentStep}`;
+    const stepKey     = DOMAIN_CONFIG[currentStep]?.key || ('step_' + currentStep);
     const updatedData = { ...collectedData, [stepKey]: text };
     setCollectedData(updatedData);
     setIsTyping(true);
 
-    // Build conversation history in the same format AuraPulseBot uses
-    // so the Cloud Function receives a consistent payload
-    const history = messages
-      .filter(m => !m.isGreeting)
-      .map(m => ({
-        role:  m.sender === 'bot' ? 'model' : 'user',
-        parts: [{ text: m.text }],
-      }));
+    // Step 1: static acknowledgement — synchronous, instant
+    const staticAck = langData.reflections[currentStep]?.(text) ?? '';
+    const nextStep  = currentStep + 1;
 
-    // Context passed as `prompt` — mirrors AuraPulseBot contextPrompt pattern
-    const answersSoFar = Object.entries(updatedData)
-      .map(function(entry) { return '  ' + entry[0] + ': ' + entry[1]; })
-      .join('\n');
-    const contextPrompt = [
-      WELL_WELL_PROMPT,
-      'Assessment domain: ' + stepKey + ' (step ' + (currentStep + 1) + ' of ' + TOTAL_STEPS + ')',
-      'User just answered: "' + text + '"',
-      'All answers collected so far:\n' + answersSoFar,
-    ].join('\n');
-
-    // Get AI-generated acknowledgement via Cloud Function (Gemini, API key secured in Firebase).
-    // Falls back silently to static reflections if the CF is unavailable or returns an error body.
-    let aiAck = '';
-    try {
-      const result = await secureChatWithAura({
-        userText:  text,
-        history,
-        role:      'Community Member — Well Well',
-        prompt:    contextPrompt,
-        isDemo:    false,
-      });
-
-      const raw      = result.data?.text ?? '';
-      const stripped = raw.replace(/```json|```/g, '').trim();
-
-      // Guard: discard the response if the Cloud Function returned an error/fallback
-      // message rather than a real Gemini reply. Prevents "LLM Fallback triggered:
-      // Missing API Key" (or similar) from appearing as user-facing chat text.
-      const isErrorBody = !stripped
-        || /fallback|missing.api|api.key|error|unauthorized|unavailable/i.test(stripped);
-
-      if (!isErrorBody) {
-        // Cloud Function may return raw text or a JSON envelope { reply: '...' }
-        try {
-          const start  = stripped.indexOf('{');
-          const end    = stripped.lastIndexOf('}') + 1;
-          if (start !== -1 && end > start) {
-            const parsed = JSON.parse(stripped.substring(start, end));
-            aiAck = parsed.reply?.trim() ?? '';
-          }
-        } catch {
-          // Not JSON — use the raw text directly
-        }
-        // If JSON parse yielded nothing, use stripped text as-is
-        if (!aiAck) aiAck = stripped;
-      }
-    } catch {
-      // Network failure or CF threw — stay silent, fall through to static reflection
-    }
-
-    // Always fall back to pre-written static reflection if aiAck is still empty
-    if (!aiAck) {
-      aiAck = langData.reflections[currentStep]?.(text) ?? '';
-    }
-
-    const nextStep = currentStep + 1;
     if (nextStep < TOTAL_STEPS) {
-      // Resolve next question — may be a function of collected data (e.g. Q1 for 0-days case)
       const nextPromptRaw = langData.prompts[nextStep];
       const nextPrompt    = typeof nextPromptRaw === 'function' ? nextPromptRaw(updatedData) : nextPromptRaw;
-      const combined      = (aiAck ? aiAck + ' ' : '') + nextPrompt;
+      const staticText    = (staticAck ? staticAck + ' ' : '') + nextPrompt;
+
+      // Step 2: render immediately — zero wait for the user
+      const msgId = Date.now();
       setCurrentStep(nextStep);
-      setMessages(prev => [...prev, { sender: 'bot', text: combined, step: nextStep }]);
+      setMessages(prev => [...prev, { sender: 'bot', text: staticText, step: nextStep, _id: msgId }]);
       setIsTyping(false);
+
+      // Step 3: fire CF in background — upgrade if better AI response arrives in time
+      const historySnap = messages
+        .filter(m => !m.isGreeting)
+        .map(m => ({ role: m.sender === 'bot' ? 'model' : 'user', parts: [{ text: m.text }] }));
+
+      const answersSoFar = Object.entries(updatedData)
+        .map(function(e) { return '  ' + e[0] + ': ' + e[1]; }).join('\n');
+      const contextPrompt = [
+        WELL_WELL_PROMPT,
+        'Assessment domain: ' + stepKey + ' (step ' + (currentStep + 1) + ' of ' + TOTAL_STEPS + ')',
+        'User just answered: "' + text + '"',
+        'Answers so far:\n' + answersSoFar,
+      ].join('\n');
+
+      var upgradeExpired = false;
+      var upgradeTimer   = setTimeout(function() { upgradeExpired = true; }, AI_UPGRADE_WINDOW_MS);
+
+      secureChatWithAura({
+        userText: text, history: historySnap,
+        role: 'Community Member — Well Well', prompt: contextPrompt, isDemo: false,
+      }).then(function(result) {
+        clearTimeout(upgradeTimer);
+        if (upgradeExpired) return; // window passed — static text stays
+
+        var raw      = (result.data && result.data.text) ? result.data.text : '';
+        var stripped = raw.replace(/```json|```/g, '').trim();
+        var isErr    = !stripped || /fallback|missing.api|api.key|error|unauthorized|unavailable/i.test(stripped);
+        if (isErr) return;
+
+        var aiAck = '';
+        try {
+          var s = stripped.indexOf('{'); var e = stripped.lastIndexOf('}') + 1;
+          if (s !== -1 && e > s) { var p = JSON.parse(stripped.substring(s, e)); aiAck = (p.reply || '').trim(); }
+        } catch(ex) {}
+        if (!aiAck) aiAck = stripped;
+        if (!aiAck) return;
+
+        // Silently upgrade the already-visible message with the AI acknowledgement
+        setMessages(function(prev) {
+          return prev.map(function(m) {
+            return (m._id === msgId) ? Object.assign({}, m, { text: aiAck + ' ' + nextPrompt }) : m;
+          });
+        });
+      }).catch(function() { clearTimeout(upgradeTimer); });
+
     } else {
-      const closing = (aiAck ? aiAck + ' ' : '') + 'I have mapped your full profile. Generating your personalised plan now…';
+      // Final step — show closing immediately, then conclude
+      var closing = (staticAck ? staticAck + ' ' : '') + 'I have mapped your full profile. Generating your personalised plan now…';
       setMessages(prev => [...prev, { sender: 'bot', text: closing, step: currentStep }]);
       setIsTyping(false);
       concludeTriage(updatedData);
     }
   };
-
   const handleFormSubmit = (e) => {
     e.preventDefault();
     handleUserSubmission(userInput);
