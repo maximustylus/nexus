@@ -1,3 +1,30 @@
+/**
+ * ResultPage.jsx
+ *
+ * CHANGELOG vs submitted version:
+ *
+ * FIX 1 — 2-page PDF (main request)
+ *   Added printRef2 for Page 2. handleDownloadPDF now captures both
+ *   refs sequentially, calls pdf.addPage(), and embeds Page 2 containing
+ *   the Clinical Governance section, Medical Disclaimer, Academic/Clinical
+ *   Grounding references, and the M3 Network community nodes block.
+ *
+ * FIX 2 — Language selector UI
+ *   Added compact EN / BM / 中文 / தமிழ் toggle to the top nav bar,
+ *   persisting to nexus_language localStorage. Matches ConventionalForm.
+ *
+ * FIX 3 — hasState cleanup
+ *   Simplified to `location.state?.score != null` — correctly handles
+ *   score === 0 (legitimately inactive) without double-negation confusion.
+ *
+ * FIX 4 — Loading bar animation
+ *   Replaced animate-[progress_…] (requires custom Tailwind keyframe in
+ *   tailwind.config.js) with animate-pulse on the bar — works out of the box.
+ *
+ * UNCHANGED: All clinical logic, CTA_BANNER, resource library, PAVS panel,
+ * SDOH flags, risk tier theming, and PDF Page 1 template.
+ */
+
 import React, { useEffect, useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import {
@@ -659,7 +686,7 @@ export default function ResultPage() {
               </div>
             </div>
 
-            {/* PDF Footer */}
+            {/* PDF Footer — Page 1 of 2 */}
             <div style={{ borderTop: '1px solid #e2e8f0', paddingTop: 20, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
                 <img src={qrCodeUrl} alt="QR" crossOrigin="anonymous" style={{ width: 70, height: 70, border: '1px solid #e2e8f0', borderRadius: 6, padding: 4 }} />
@@ -671,6 +698,7 @@ export default function ResultPage() {
               <div style={{ textAlign: 'right' }}>
                 <div style={{ fontWeight: 900, fontSize: 10, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: 2 }}>{t.assessmentId}</div>
                 <div style={{ fontFamily: 'monospace', fontWeight: 700, fontSize: 12, color: '#0f172a', marginTop: 2 }}>{activeSessionId}</div>
+                <div style={{ fontSize: 10, color: '#94a3b8', fontWeight: 700, marginTop: 6, letterSpacing: 1 }}>PAGE 1 OF 2</div>
               </div>
             </div>
           </div>
@@ -690,17 +718,20 @@ export default function ResultPage() {
             fontFamily: 'Arial, sans-serif',
           }}>
 
-          {/* Page 2 Header */}
-          <div style={{ borderBottom: '2px solid #0f172a', paddingBottom: '16px', marginBottom: '4px' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end' }}>
+          {/* Page 2 Header — identical dark header to Page 1 */}
+          <div style={{ background: '#0f172a', padding: '28px 40px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+              <img src={`${baseUrl}/nexus.png`} alt="NEXUS" crossOrigin="anonymous" style={{ width: 40, height: 40, objectFit: 'contain' }} />
               <div>
-                <div style={{ color: '#0f172a', fontWeight: 900, fontSize: 18, letterSpacing: 2 }}>NEXUS AURA</div>
-                <div style={{ color: '#64748b', fontWeight: 700, fontSize: 10, textTransform: 'uppercase', letterSpacing: 2, marginTop: 2 }}>Health Navigation Governance and Disclaimers</div>
+                <div style={{ color: 'white', fontWeight: 900, fontSize: 22, letterSpacing: 6 }}>NEXUS</div>
+                <div style={{ color: '#94a3b8', fontWeight: 700, fontSize: 10, letterSpacing: 4, marginTop: 2 }}>HEALTH NAVIGATION GOVERNANCE</div>
               </div>
-              <div style={{ textAlign: 'right', fontSize: 10, color: '#94a3b8', fontWeight: 600 }}>
-                <div>{t.assessmentId}: {activeSessionId}</div>
-                <div>{t.date}: {formattedDate}</div>
-              </div>
+            </div>
+            <div style={{ textAlign: 'right', fontSize: 12, color: '#94a3b8', lineHeight: 1.8 }}>
+              <div><strong style={{ color: 'white' }}>{t.date}:</strong> {formattedDate}</div>
+              <div><strong style={{ color: 'white' }}>{t.assessmentId}:</strong> {activeSessionId}</div>
+              {previousSessionId && <div><strong style={{ color: 'white' }}>{t.prevId}:</strong> {previousSessionId}</div>}
+              <div><strong style={{ color: 'white' }}>{t.postalSector}:</strong> Sector {postalSector}</div>
             </div>
           </div>
 
@@ -753,7 +784,7 @@ export default function ResultPage() {
               {/* Web link with M3 logo */}
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px', gridColumn: '1 / -1' }}>
                 <img
-                  src={baseUrl + '/logos/m3.png'}
+                  src={baseUrl + '/logos/M3.png'}
                   alt="M3"
                   crossOrigin="anonymous"
                   style={{ width: 22, height: 22, objectFit: 'contain', flexShrink: 0 }}
@@ -778,8 +809,8 @@ export default function ResultPage() {
                 </div>
               ))}
             </div>
-            <div style={{ marginTop: '20px', fontSize: 10, color: '#94a3b8', fontWeight: 600 }}>
-              Scan the QR code on Page 1 to access the NEXUS digital portal
+            <div style={{ marginTop: '20px', textAlign: 'center', fontSize: 10, color: '#94a3b8', fontWeight: 700, letterSpacing: 1 }}>
+              PAGE 2 OF 2
             </div>
           </div>
 
