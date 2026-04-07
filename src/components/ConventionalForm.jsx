@@ -7,22 +7,18 @@ import {
   Users, MapPin, Send, Sun, Moon, Brain, Home, Info, Zap,
 } from 'lucide-react';
 
-// ─────────────────────────────────────────────────────────────────────────────
-// CANONICAL OPTION ARRAYS
-// ─────────────────────────────────────────────────────────────────────────────
-
 const PAVS_DAYS = [
   { value: '0 days',    en: '0 days',    ms: '0 hari',    zh: '0 天',    ta: '0 நாட்கள்'    },
-  { value: '1–2 days',  en: '1–2 days',  ms: '1–2 hari',  zh: '1–2 天',  ta: '1–2 நாட்கள்'  },
-  { value: '3–4 days',  en: '3–4 days',  ms: '3–4 hari',  zh: '3–4 天',  ta: '3–4 நாட்கள்'  },
-  { value: '5–7 days',  en: '5–7 days',  ms: '5–7 hari',  zh: '5–7 天',  ta: '5–7 நாட்கள்'  },
+  { value: '1–2 days',  en: '1-2 days',  ms: '1-2 hari',  zh: '1-2 天',  ta: '1-2 நாட்கள்'  },
+  { value: '3–4 days',  en: '3-4 days',  ms: '3-4 hari',  zh: '3-4 天',  ta: '3-4 நாட்கள்'  },
+  { value: '5–7 days',  en: '5-7 days',  ms: '5-7 hari',  zh: '5-7 天',  ta: '5-7 நாட்கள்'  },
 ];
 
 const PAVS_MINS = [
   { value: 'Less than 20 mins', en: 'Less than 20 mins', ms: 'Kurang 20 minit',    zh: '少于 20 分钟',  ta: '20 நிமிடங்களுக்கும் குறைவு' },
-  { value: '20–30 mins',        en: '20–30 mins',        ms: '20–30 minit',        zh: '20–30 分钟',    ta: '20–30 நிமிடங்கள்'           },
-  { value: '30–45 mins',        en: '30–45 mins',        ms: '30–45 minit',        zh: '30–45 分钟',    ta: '30–45 நிமிடங்கள்'           },
-  { value: '45–60 mins',        en: '45–60 mins',        ms: '45–60 minit',        zh: '45–60 分钟',    ta: '45–60 நிமிடங்கள்'           },
+  { value: '20–30 mins',        en: '20-30 mins',        ms: '20-30 minit',        zh: '20-30 分钟',    ta: '20-30 நிமிடங்கள்'           },
+  { value: '30–45 mins',        en: '30-45 mins',        ms: '30-45 minit',        zh: '30-45 分钟',    ta: '30-45 நிமிடங்கள்'           },
+  { value: '45–60 mins',        en: '45-60 mins',        ms: '45-60 minit',        zh: '45-60 分钟',    ta: '45-60 நிமிடங்கள்'           },
   { value: '60+ mins',          en: '60+ mins',          ms: '60+ minit',          zh: '60 分钟以上',   ta: '60+ நிமிடங்கள்'             },
 ];
 
@@ -62,7 +58,7 @@ const WELLBEING_OPTIONS = [
   { value: 'Feeling good overall',                           en: 'Feeling good overall',                           ms: 'Perasaan baik secara keseluruhannya',        zh: '整体感觉不错',            ta: 'ஒட்டுமொத்தமாக நல்லாக உணர்கிறேன்'        },
   { value: 'Some stress but managing',                       en: 'Some stress, but managing',                      ms: 'Ada sedikit tekanan tapi boleh kawal',       zh: '有些压力但能应对',        ta: 'சில மன அழுத்தம் ஆனால் சமாளிக்கிறேன்'    },
   { value: 'Feeling quite stressed or low',                  en: 'Feeling quite stressed or low in mood',          ms: 'Rasa sangat tertekan atau sedih',            zh: '感到很压抑或情绪低落',    ta: 'மிகவும் மன அழுத்தம் அல்லது மனச்சோர்வு'  },
-  { value: 'Overwhelmed — caregiving or financial pressure', en: 'Overwhelmed — caregiving or financial pressure', ms: 'Terbeban — penjagaan atau tekanan kewangan', zh: '不知所措 — 照顾或经济压力', ta: 'அதிக சுமை — பராமரிப்பு அல்லது நிதி அழுத்தம்' },
+  { value: 'Overwhelmed — caregiving or financial pressure', en: 'Overwhelmed caregiving or financial pressure', ms: 'Terbeban penjagaan atau tekanan kewangan', zh: '不知所措照顾或经济压力', ta: 'அதிக சுமை பராமரிப்பு அல்லது நிதி அழுத்தம்' },
 ];
 
 const INCOME_OPTIONS = [
@@ -72,15 +68,15 @@ const INCOME_OPTIONS = [
 ];
 
 const HOUSING_OPTIONS = [
-  { value: 'HDB 1-2 Room',    en: 'HDB 1 to 2 Room (rental)',          ms: 'HDB 1–2 Bilik (sewa)',      zh: '组屋 1–2 房（租赁）', ta: 'HDB 1–2 அறைகள் (வாடகை)' },
-  { value: 'HDB 3-5 Room',    en: 'HDB 3 to 5 Room',                   ms: 'HDB 3–5 Bilik',             zh: '组屋 3–5 房',         ta: 'HDB 3–5 அறைகள்'          },
+  { value: 'HDB 1-2 Room',    en: 'HDB 1 to 2 Room (rental)',          ms: 'HDB 1-2 Bilik (sewa)',      zh: '组屋 1-2 房（租赁）', ta: 'HDB 1-2 அறைகள் (வாடகை)' },
+  { value: 'HDB 3-5 Room',    en: 'HDB 3 to 5 Room',                   ms: 'HDB 3-5 Bilik',             zh: '组屋 3-5 房',         ta: 'HDB 3-5 அறைகள்'          },
   { value: 'Private Property', en: 'Private Property (condo / landed)', ms: 'Hartanah Persendirian',    zh: '私人房产',            ta: 'தனியார் சொத்து'          },
 ];
 
 const AGE_OPTIONS = [
   { value: 'Under 21', en: 'Under 21', ms: 'Bawah 21',  zh: '21岁以下', ta: '21க்கு கீழ்' },
-  { value: '21-40',    en: '21–40',    ms: '21–40',     zh: '21–40岁',  ta: '21–40'        },
-  { value: '41-60',    en: '41–60',    ms: '41–60',     zh: '41–60岁',  ta: '41–60'        },
+  { value: '21-40',    en: '21-40',    ms: '21-40',     zh: '21-40岁',  ta: '21-40'        },
+  { value: '41-60',    en: '41-60',    ms: '41-60',     zh: '41-60岁',  ta: '41-60'        },
   { value: '60+',      en: '60+',      ms: '60+',       zh: '60岁以上', ta: '60+'          },
 ];
 
@@ -95,10 +91,6 @@ const RACE_OPTIONS = [
   { value: 'Indian',  en: 'Indian',  ms: 'India',     zh: '印度人',  ta: 'இந்தியர்'  },
   { value: 'Others',  en: 'Others',  ms: 'Lain-lain', zh: '其他',    ta: 'மற்றவர்கள்' },
 ];
-
-// ─────────────────────────────────────────────────────────────────────────────
-// PARSING
-// ─────────────────────────────────────────────────────────────────────────────
 
 const DAYS_MIDPOINT = {
   '0 days': 0, '1–2 days': 1.5, '3–4 days': 3.5, '5–7 days': 6,
@@ -159,51 +151,50 @@ const deriveFlags = (f) => {
   };
 };
 
-// ─── UI DICTIONARY ───────────────────────────────────────────────────────────
 const D = {
   en: {
     title: 'Health & Community Assessment',
     steps: ['Physical Activity', 'Social Determinants', 'Community Experience', 'About You'],
-    subs:  ['ACSM PAVS · SPAG Strength · Clinical Safety Screen', 'SDOH 5-Domain Screen · PDF Validated', 'Community Perception', 'Demographics · Location · Record Linkage'],
-    back: 'Back', yes: 'Yes', no: 'No', sel: '— Select —',
+    subs:  ['ACSM PAVS / SPAG Strength / Clinical Safety Screen', 'SDOH 5-Domain Screen / PDF Validated', 'Community Perception', 'Demographics / Location / Record Linkage'],
+    back: 'Back', yes: 'Yes', no: 'No', sel: 'Select',
     btnNext: 'Next', btnPrev: 'Previous', btnSubmit: 'Get My Results',
     pavsQ1: 'On a typical week, how many days do you do moderate or vigorous exercise? (e.g. brisk walking, cycling, swimming, gym)',
     pavsQ2: 'On those active days, roughly how many minutes do you usually exercise each time?',
     pavsLive: 'Estimated weekly PAVS score', pavsUnit: 'mins / week',
-    pavsBelow: 'Insufficiently Active — below SPAG minimum (150 mins/week)',
-    pavsMeets: 'Meets SPAG guidelines (150–300 mins/week)',
-    pavsActive: 'Active — exceeds SPAG recommendation (300+ mins/week)',
+    pavsBelow: 'Insufficiently Active below SPAG minimum (150 mins/week)',
+    pavsMeets: 'Meets SPAG guidelines (150-300 mins/week)',
+    pavsActive: 'Active exceeds SPAG recommendation (300+ mins/week)',
     strengthQ: 'Do you do any muscle-strengthening activities? (e.g. weights, resistance bands, bodyweight exercises like push-ups or squats)',
     clinHead: 'Clinical Safety Screen',
-    medQ: 'Do you have any ongoing health conditions — such as high blood pressure, prediabetes, or heart disease? And do you ever feel chest pain or dizziness when you are physically active? Select all that apply.',
-    wellHead: 'SDOH · Psychological Wellbeing',
-    wellQ: 'Over the past two weeks, how have you been feeling overall? Have you felt stressed, low in mood, or overwhelmed — for example, due to work, caregiving, or financial pressure?',
+    medQ: 'Do you have any ongoing health conditions such as high blood pressure, prediabetes, or heart disease? And do you ever feel chest pain or dizziness when you are physically active? Select all that apply.',
+    wellHead: 'SDOH Psychological Wellbeing',
+    wellQ: 'Over the past two weeks, how have you been feeling overall? Have you felt stressed, low in mood, or overwhelmed for example, due to work, caregiving, or financial pressure?',
     wellNote: 'Aligned with BPS-RS II P22 (PHQ-2 based, 2-week timeframe)',
     sdohHead: 'Social Determinants of Health',
     sdohIntro: "These questions are grounded in validated SDOH screening tools used across Singapore's Regional Health Systems. Your responses are confidential.",
     barrQ: 'What is the main thing that makes it difficult to access health or fitness services in your community? Select all that apply.',
-    socialQ: 'Roughly how many people — family or friends — could you call on for support if you needed help? And would you say you have people you can talk to openly?',
+    socialQ: 'Roughly how many people family or friends could you call on for support if you needed help? And would you say you have people you can talk to openly?',
     socialNote: 'Grounded in LSNS-6 (Lubben Social Network Scale)',
     foodQ: "In the past 12 months, were you ever hungry but didn't eat because you could not afford enough food?",
     foodNote: 'Lien Centre food insufficiency screen (Question 1 of 2)',
     incomeQ: 'Do you feel you have adequate income to meet your monthly expenses?',
     incomeNote: 'Duke-NUS validated perceived income adequacy scale',
     housingQ: 'What type of housing do you currently reside in?',
-    housingNote: 'BPS-RS II housing schema — geographic risk indicator',
-    housingAlert: '1–2 room HDB rental residents face elevated multi-domain social stress. Your plan will prioritise free and community-based resources (SDOH PDF §Housing).',
+    housingNote: 'BPS-RS II housing schema geographic risk indicator',
+    housingAlert: '1-2 room HDB rental residents face elevated multi-domain social stress. Your plan will prioritise free and community-based resources (SDOH PDF Housing).',
     perHead: 'Community Health Experience',
     awareQ: 'Have you heard about the health and wellness services available in your neighbourhood? (e.g. Active Health Labs, Start2Move, Active Ageing Centres)',
     referQ: 'Has a doctor or allied health professional ever referred you to a community health programme or Active Health Lab?',
     ratingQ: 'If you have used community health services, how was your experience compared to a hospital?',
-    ratingOpts: ['Better than hospital', 'About the same', 'Needs improvement', 'Not applicable — have not used community services'],
+    ratingOpts: ['Better than hospital', 'About the same', 'Needs improvement', 'Not applicable have not used community services'],
     trustQ: 'How comfortable and safe do you feel receiving health care in the community?',
-    trustScale: '1 = Not at all comfortable   ·   5 = Very comfortable',
+    trustScale: '1 = Not at all comfortable / 5 = Very comfortable',
     improveQ: 'If you could change one thing about healthcare in your neighbourhood, what would it be?',
     demoHead: 'About You',
     demoIntro: 'These details help us ensure resources reach every community equitably. All responses are de-identified.',
     ageQ: 'Age Group', genderQ: 'Gender', raceQ: 'Ethnicity',
     postalQ: 'First 2 digits of your Postal Code',
-    postalHint: 'e.g. 73 (Woodlands) · 75–76 (Yishun) · 75 (Sembawang) · 68 (Admiralty / Canberra)',
+    postalHint: 'e.g. 73 (Woodlands) / 75-76 (Yishun) / 75 (Sembawang) / 68 (Admiralty / Canberra)',
     prevIdQ: 'Previous NEXUS Assessment ID',
     prevIdHint: 'If you completed a previous AURA or NEXUS assessment, paste your ID here to link records and track progress. Leave blank if this is your first assessment.',
     summaryHead: 'Assessment Summary',
@@ -211,46 +202,46 @@ const D = {
   ms: {
     title: 'Penilaian Kesihatan & Komuniti',
     steps: ['Aktiviti Fizikal', 'Penentu Sosial', 'Pengalaman Komuniti', 'Mengenai Anda'],
-    subs:  ['ACSM PAVS · SPAG Kekuatan · Saringan Klinikal', 'Saringan SDOH 5 Domain · Disahkan PDF', 'Persepsi Komuniti', 'Demografi · Lokasi · Pautan Rekod'],
-    back: 'Kembali', yes: 'Ya', no: 'Tidak', sel: '— Pilih —',
+    subs:  ['ACSM PAVS / SPAG Kekuatan / Saringan Klinikal', 'Saringan SDOH 5 Domain / Disahkan PDF', 'Persepsi Komuniti', 'Demografi / Lokasi / Pautan Rekod'],
+    back: 'Kembali', yes: 'Ya', no: 'Tidak', sel: 'Pilih',
     btnNext: 'Seterusnya', btnPrev: 'Sebelumnya', btnSubmit: 'Dapatkan Keputusan',
     pavsQ1: 'Dalam minggu biasa, berapa hari anda melakukan senaman sederhana atau berat? (cth. berjalan pantas, berbasikal, berenang)',
     pavsQ2: 'Pada hari aktif tersebut, kira-kira berapa minit anda bersenam setiap kali?',
     pavsLive: 'Anggaran skor PAVS mingguan', pavsUnit: 'minit / minggu',
-    pavsBelow: 'Kurang Aktif — di bawah minimum SPAG (150 minit/minggu)',
-    pavsMeets: 'Memenuhi garis panduan SPAG (150–300 minit/minggu)',
-    pavsActive: 'Aktif — melebihi cadangan SPAG (300+ minit/minggu)',
+    pavsBelow: 'Kurang Aktif di bawah minimum SPAG (150 minit/minggu)',
+    pavsMeets: 'Memenuhi garis panduan SPAG (150-300 minit/minggu)',
+    pavsActive: 'Aktif melebihi cadangan SPAG (300+ minit/minggu)',
     strengthQ: 'Adakah anda melakukan aktiviti menguatkan otot? (cth. angkat berat, band rintangan, senaman berat badan)',
     clinHead: 'Saringan Keselamatan Klinikal',
-    medQ: 'Adakah anda mempunyai sebarang penyakit kronik — seperti darah tinggi, pradiabetes, atau penyakit jantung? Dan adakah anda pernah merasa sakit dada atau pening semasa aktif? Pilih semua yang berkenaan.',
-    wellHead: 'SDOH · Kesejahteraan Psikologi',
-    wellQ: 'Dalam dua minggu yang lalu, bagaimana perasaan anda secara keseluruhan? Adakah anda rasa tertekan, sedih, atau terbeban — misalnya akibat kerja, penjagaan, atau tekanan kewangan?',
+    medQ: 'Adakah anda mempunyai sebarang penyakit kronik seperti darah tinggi, pradiabetes, atau penyakit jantung? Dan adakah anda pernah merasa sakit dada atau pening semasa aktif? Pilih semua yang berkenaan.',
+    wellHead: 'SDOH Kesejahteraan Psikologi',
+    wellQ: 'Dalam dua minggu yang lalu, bagaimana perasaan anda secara keseluruhan? Adakah anda rasa tertekan, sedih, atau terbeban misalnya akibat kerja, penjagaan, atau tekanan kewangan?',
     wellNote: 'Dijajarkan dengan BPS-RS II P22 (berasaskan PHQ-2, tempoh 2 minggu)',
     sdohHead: 'Penentu Sosial Kesihatan',
     sdohIntro: 'Soalan-soalan ini berpandukan alat saringan SDOH yang disahkan. Jawapan anda adalah sulit.',
     barrQ: 'Apakah yang paling menyukarkan anda untuk mengakses perkhidmatan kesihatan komuniti? Pilih semua yang berkenaan.',
-    socialQ: 'Kira-kira berapa ramai orang — keluarga atau rakan — yang boleh anda hubungi untuk sokongan jika perlu? Dan adakah anda mempunyai seseorang untuk bercerita?',
+    socialQ: 'Kira-kira berapa ramai orang keluarga atau rakan yang boleh anda hubungi untuk sokongan jika perlu? Dan adakah anda mempunyai seseorang untuk bercerita?',
     socialNote: 'Berpandukan LSNS-6 (Skala Rangkaian Sosial Lubben)',
     foodQ: 'Dalam 12 bulan yang lalu, pernahkah anda lapar tetapi tidak makan kerana tidak mampu membeli makanan yang cukup?',
     foodNote: 'Saringan kekurangan makanan Lien Centre (Soalan 1 daripada 2)',
     incomeQ: 'Adakah anda rasa pendapatan anda mencukupi untuk perbelanjaan bulanan?',
     incomeNote: 'Skala kecukupan pendapatan yang disahkan oleh Duke-NUS',
     housingQ: 'Apakah jenis perumahan yang anda diami sekarang?',
-    housingNote: 'Skema perumahan BPS-RS II — penunjuk risiko geografi',
-    housingAlert: 'Penghuni flat sewa HDB 1–2 bilik menghadapi tekanan sosial pelbagai domain yang tinggi. Pelan anda akan mengutamakan sumber percuma dan berasaskan komuniti.',
+    housingNote: 'Skema perumahan BPS-RS II penunjuk risiko geografi',
+    housingAlert: 'Penghuni flat sewa HDB 1-2 bilik menghadapi tekanan sosial pelbagai domain yang tinggi. Pelan anda akan mengutamakan sumber percuma dan berasaskan komuniti.',
     perHead: 'Pengalaman Kesihatan Komuniti',
     awareQ: 'Pernahkah anda mendengar tentang perkhidmatan kesihatan di kawasan kejiranan anda? (cth. Active Health Labs, Start2Move, AAC)',
     referQ: 'Pernahkah doktor atau profesional kesihatan merujuk anda ke program kesihatan komuniti atau Active Health Lab?',
     ratingQ: 'Jika anda pernah menggunakan perkhidmatan komuniti, bagaimana pengalaman berbanding hospital?',
     ratingOpts: ['Lebih baik daripada hospital', 'Lebih kurang sama', 'Perlu diperbaiki', 'Tidak berkenaan'],
     trustQ: 'Sejauh mana anda berasa selesa menerima penjagaan dalam komuniti?',
-    trustScale: '1 = Tidak selesa langsung   ·   5 = Sangat selesa',
+    trustScale: '1 = Tidak selesa langsung / 5 = Sangat selesa',
     improveQ: 'Jika anda boleh mengubah satu perkara tentang penjagaan kesihatan di kejiranan anda, apakah itu?',
     demoHead: 'Mengenai Anda',
     demoIntro: 'Maklumat ini membantu kami memastikan sumber sampai ke semua komuniti secara saksama. Semua jawapan tidak dapat dikenal pasti.',
     ageQ: 'Kumpulan Umur', genderQ: 'Jantina', raceQ: 'Etnik',
     postalQ: '2 digit pertama Poskod anda',
-    postalHint: 'cth. 73 (Woodlands) · 75–76 (Yishun) · 68 (Canberra)',
+    postalHint: 'cth. 73 (Woodlands) / 75-76 (Yishun) / 68 (Canberra)',
     prevIdQ: 'ID Penilaian NEXUS Sebelumnya',
     prevIdHint: 'Jika anda pernah menjalani penilaian AURA atau NEXUS, tampal ID anda di sini. Biarkan kosong jika ini penilaian pertama anda.',
     summaryHead: 'Ringkasan Penilaian',
@@ -258,20 +249,20 @@ const D = {
   zh: {
     title: '健康与社区评估',
     steps: ['体力活动', '社会决定因素', '社区体验', '关于您'],
-    subs:  ['ACSM PAVS · SPAG 力量 · 临床安全筛查', 'SDOH 5 领域筛查 · PDF 验证', '社区认知', '人口统计 · 位置 · 记录关联'],
-    back: '返回', yes: '是', no: '否', sel: '— 请选择 —',
+    subs:  ['ACSM PAVS / SPAG 力量 / 临床安全筛查', 'SDOH 5 领域筛查 / PDF 验证', '社区认知', '人口统计 / 位置 / 记录关联'],
+    back: '返回', yes: '是', no: '否', sel: '请选择',
     btnNext: '下一步', btnPrev: '上一步', btnSubmit: '获取结果',
     pavsQ1: '在通常的一周内，您有几天进行中度或剧烈运动？（例如快走、骑车、游泳、健身房）',
     pavsQ2: '在这些活动的天里，您每次通常运动多少分钟？',
     pavsLive: '估计每周 PAVS 得分', pavsUnit: '分钟 / 周',
-    pavsBelow: '运动不足 — 低于 SPAG 最低标准（150 分钟/周）',
-    pavsMeets: '达到 SPAG 指南（150–300 分钟/周）',
-    pavsActive: '活跃 — 超过 SPAG 建议（300+ 分钟/周）',
+    pavsBelow: '运动不足 低于 SPAG 最低标准（150 分钟/周）',
+    pavsMeets: '达到 SPAG 指南（150-300 分钟/周）',
+    pavsActive: '活跃 超过 SPAG 建议（300+ 分钟/周）',
     strengthQ: '您是否进行肌肉强化活动？（例如举重、弹力带、俯卧撑或深蹲）',
     clinHead: '临床安全筛查',
-    medQ: '您是否患有任何慢性病——如高血压、糖尿病前期或心脏病？您在进行体力活动时是否有胸痛或头晕？选择所有适用项。',
-    wellHead: 'SDOH · 心理健康',
-    wellQ: '在过去两周里，您整体感觉如何？您是否感到压力、情绪低落或不知所措——例如由于工作、护理或经济压力？',
+    medQ: '您是否患有任何慢性病如高血压、糖尿病前期或心脏病？您在进行体力活动时是否有胸痛或头晕？选择所有适用项。',
+    wellHead: 'SDOH 心理健康',
+    wellQ: '在过去两周里，您整体感觉如何？您是否感到压力、情绪低落或不知所措例如由于工作、护理或经济压力？',
     wellNote: '与 BPS-RS II P22（基于 PHQ-2，2 周时间框架）一致',
     sdohHead: '健康的社会决定因素',
     sdohIntro: '这些问题基于经过验证的 SDOH 筛查工具。您的回答是保密的。',
@@ -283,21 +274,21 @@ const D = {
     incomeQ: '您觉得您的收入足以支付每月开销吗？',
     incomeNote: 'Duke-NUS 验证的感知收入充足性量表',
     housingQ: '您目前居住的房屋类型是什么？',
-    housingNote: 'BPS-RS II 住房模式 — 地理风险指标',
-    housingAlert: '1–2 房组屋租赁居民面临较高的多领域社会压力。您的计划将优先考虑免费和基于社区的资源。',
+    housingNote: 'BPS-RS II 住房模式 地理风险指标',
+    housingAlert: '1-2 房组屋租赁居民面临较高的多领域社会压力。您的计划将优先考虑免费和基于社区的资源。',
     perHead: '社区卫生体验',
     awareQ: '您听说过您社区提供的健康和保健服务吗？（例如 Active Health Labs、Start2Move、活跃乐龄中心）',
     referQ: '医生或专职医疗专业人员是否曾转介您参加社区健康计划？',
     ratingQ: '如果您使用过社区服务，与医院相比体验如何？',
-    ratingOpts: ['比医院好', '差不多', '需要改进', '不适用 — 未使用过社区服务'],
+    ratingOpts: ['比医院好', '差不多', '需要改进', '不适用 未使用过社区服务'],
     trustQ: '您在社区接受护理感到多舒适？',
-    trustScale: '1 = 完全不舒适   ·   5 = 非常舒适',
+    trustScale: '1 = 完全不舒适 / 5 = 非常舒适',
     improveQ: '如果您能改变社区医疗的一件事，那会是什么？',
     demoHead: '关于您',
     demoIntro: '这些信息帮助我们确保资源公平地覆盖每个社区。所有信息均已去识别化。',
     ageQ: '年龄组', genderQ: '性别', raceQ: '族裔',
     postalQ: '邮政编码前2位',
-    postalHint: '例如 73（兀兰）· 75–76（义顺）· 68（甘巴旺）',
+    postalHint: '例如 73（兀兰）/ 75-76（义顺）/ 68（甘巴旺）',
     prevIdQ: '之前的 NEXUS 评估 ID',
     prevIdHint: '如果您之前完成了 AURA 或 NEXUS 评估，请粘贴您的 ID 以关联记录。如这是第一次，请留空。',
     summaryHead: '评估摘要',
@@ -305,19 +296,19 @@ const D = {
   ta: {
     title: 'உடல்நலம் மற்றும் சமூக மதிப்பீடு',
     steps: ['உடல் செயல்பாடு', 'சமூக காரணிகள்', 'சமூக அனுபவம்', 'உங்களை பற்றி'],
-    subs:  ['ACSM PAVS · SPAG தசை · மருத்துவ திரையிடல்', 'SDOH 5-களம் · PDF சரிபார்க்கப்பட்டது', 'சமூக உணர்வு', 'மக்கள் தொகை · இடம் · பதிவு இணைப்பு'],
-    back: 'பின்செல்', yes: 'ஆம்', no: 'இல்லை', sel: '— தேர்ந்தெடுக்கவும் —',
+    subs:  ['ACSM PAVS / SPAG தசை / மருத்துவ திரையிடல்', 'SDOH 5-களம் / PDF சரிபார்க்கப்பட்டது', 'சமூக உணர்வு', 'மக்கள் தொகை / இடம் / பதிவு இணைப்பு'],
+    back: 'பின்செல்', yes: 'ஆம்', no: 'இல்லை', sel: 'தேர்ந்தெடுக்கவும்',
     btnNext: 'அடுத்தது', btnPrev: 'முந்தையது', btnSubmit: 'முடிவுகளைப் பெறுக',
     pavsQ1: 'வழக்கமான வாரத்தில், மிதமான அல்லது கடுமையான உடல் செயல்பாடுகளை எத்தனை நாட்கள் செய்கிறீர்கள்? (எ.கா. வேகமாக நடைபயிற்சி, சைக்கிள், நீச்சல்)',
     pavsQ2: 'அந்த செயலில் நாட்களில், வழக்கமாக எத்தனை நிமிடங்கள் உடற்பயிற்சி செய்கிறீர்கள்?',
     pavsLive: 'வாராந்திர PAVS மதிப்பெண் (மதிப்பீடு)', pavsUnit: 'நிமிடங்கள் / வாரம்',
-    pavsBelow: 'போதுமான செயல்பாட்டிற்கு குறைவு — SPAG குறைந்தபட்சத்திற்கு கீழ் (150 நிமிடங்கள்/வாரம்)',
-    pavsMeets: 'SPAG வழிகாட்டுதல்களை பூர்த்தி செய்கிறது (150–300)',
-    pavsActive: 'செயலில் — SPAG பரிந்துரையை தாண்டுகிறது (300+)',
+    pavsBelow: 'போதுமான செயல்பாட்டிற்கு குறைவு SPAG குறைந்தபட்சத்திற்கு கீழ் (150 நிமிடங்கள்/வாரம்)',
+    pavsMeets: 'SPAG வழிகாட்டுதல்களை பூர்த்தி செய்கிறது (150-300)',
+    pavsActive: 'செயலில் SPAG பரிந்துரையை தாண்டுகிறது (300+)',
     strengthQ: 'தசைகளை வலுப்படுத்தும் செயல்களை செய்கிறீர்களா? (எ.கா. எடை தூக்குதல், ரெசிஸ்டன்ஸ் பேண்ட், புஷ்-அப்)',
     clinHead: 'மருத்துவ பாதுகாப்பு திரையிடல்',
     medQ: 'உயர் இரத்த அழுத்தம், நீரிழிவு முன்நிலை, அல்லது இதய நோய் போன்ற நாள்பட்ட நோய்கள் உள்ளதா? உடல் செயல்பாட்டின் போது நெஞ்சு வலி அல்லது தலைசுற்றல் அனுபவிக்கிறீர்களா? பொருந்தும் அனைத்தையும் தேர்ந்தெடுக்கவும்.',
-    wellHead: 'SDOH · உளவியல் நலன்',
+    wellHead: 'SDOH உளவியல் நலன்',
     wellQ: 'கடந்த இரண்டு வாரங்களில், நீங்கள் ஒட்டுமொத்தமாக எப்படி உணர்ந்தீர்கள்? வேலை, பராமரிப்பு, அல்லது நிதி அழுத்தம் காரணமாக மன அழுத்தம், மனச்சோர்வு அல்லது அதிக சுமை உணர்ந்தீர்களா?',
     wellNote: 'BPS-RS II P22 உடன் இணைக்கப்பட்டது (PHQ-2 அடிப்படை, 2 வார காலம்)',
     sdohHead: 'சுகாதாரத்தின் சமூக தீர்மானங்கள்',
@@ -330,32 +321,30 @@ const D = {
     incomeQ: 'மாதாந்திர செலவுகளை ஈடுகட்ட போதுமான வருமானம் இருப்பதாக நினைக்கிறீர்களா?',
     incomeNote: 'Duke-NUS சரிபார்க்கப்பட்ட வருமான போதுமையான அளவீட்டு',
     housingQ: 'தற்போது எந்த வகையான வீட்டில் வசிக்கிறீர்கள்?',
-    housingNote: 'BPS-RS II வீட்டு வரைபடம் — புவியியல் ஆபத்து குறிகாட்டி',
-    housingAlert: 'HDB 1–2 அறை வாடகை குடியிருப்பாளர்கள் உயர்ந்த சமூக அழுத்தத்தை எதிர்கொள்கிறார்கள். உங்கள் திட்டம் இலவச சமூக வளங்களுக்கு முன்னுரிமை அளிக்கும்.',
+    housingNote: 'BPS-RS II வீட்டு வரைபடம் புவியியல் ஆபத்து குறிகாட்டி',
+    housingAlert: 'HDB 1-2 அறை வாடகை குடியிருப்பாளர்கள் உயர்ந்த சமூக அழுத்தத்தை எதிர்கொள்கிறார்கள். உங்கள் திட்டம் இலவச சமூக வளங்களுக்கு முன்னுரிமை அளிக்கும்.',
     perHead: 'சமூக சுகாதார அனுபவம்',
     awareQ: 'உங்கள் பகுதியில் உள்ள சுகாதார சேவைகளைப் பற்றி கேள்விப்பட்டிருக்கிறீர்களா?',
     referQ: 'சமூக சுகாதார திட்டத்திற்கு மருத்துவர் பரிந்துரைத்தாரா?',
     ratingQ: 'சமூக சேவைகளை பயன்படுத்தியிருந்தால், மருத்துவமனையுடன் ஒப்பிடும்போது எவ்வாறு இருந்தது?',
     ratingOpts: ['மருத்துவமனையை விட சிறந்தது', 'சுமார் அதே', 'மேம்பாடு தேவை', 'பொருந்தாது'],
     trustQ: 'சமூகத்தில் சுகாதார கவனிப்பு பெறுவது எவ்வளவு வசதியாக உணர்கிறீர்கள்?',
-    trustScale: '1 = இல்லவே இல்லை   ·   5 = மிகவும் வசதியானது',
+    trustScale: '1 = இல்லவே இல்லை / 5 = மிகவும் வசதியானது',
     improveQ: 'சுகாதார சேவையில் ஒன்றை மாற்ற முடிந்தால், அது என்னவாக இருக்கும்?',
     demoHead: 'உங்களை பற்றி',
     demoIntro: 'இந்த தகவல் ஒவ்வொரு சமூகத்திற்கும் வளங்கள் நியாயமாக சேர உதவுகிறது.',
     ageQ: 'வயது குழு', genderQ: 'பாலினம்', raceQ: 'இனம்',
     postalQ: 'அஞ்சல் குறியீட்டின் முதல் 2 இலக்கங்கள்',
-    postalHint: 'எ.கா. 73 (Woodlands) · 75–76 (Yishun) · 68 (Canberra)',
+    postalHint: 'எ.கா. 73 (Woodlands) / 75-76 (Yishun) / 68 (Canberra)',
     prevIdQ: 'முந்தைய NEXUS மதிப்பீட்டு ID',
     prevIdHint: 'முன்பு AURA அல்லது NEXUS மதிப்பீட்டை முடித்திருந்தால், ID ஐ ஒட்டவும்.',
     summaryHead: 'மதிப்பீட்டு சுருக்கம்',
   },
 };
 
-// ─── STYLE CONSTANTS ──────────────────────────────────────────────────────────
 const inputCls  = "w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-3 text-sm font-bold outline-none focus:ring-2 focus:ring-teal-500 transition-shadow text-slate-900 dark:text-white";
 const selCls    = `${inputCls} appearance-none cursor-pointer`;
 
-// ─── UI PRIMITIVES ────────────────────────────────────────────────────────────
 const Badge = ({ icon: Icon, label }) => (
   <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-teal-50 dark:bg-teal-500/10 border border-teal-100 dark:border-teal-500/30 text-teal-700 dark:text-teal-400 mb-5">
     <Icon size={13} /><span className="text-[10px] font-black uppercase tracking-widest">{label}</span>
@@ -408,7 +397,6 @@ const PavsLive = ({ days, mins, t }) => {
   );
 };
 
-// ─── MAIN COMPONENT ───────────────────────────────────────────────────────────
 export default function ConventionalForm() {
   const navigate  = useNavigate();
   const [lang,    setLang]    = useState('en');
@@ -442,7 +430,7 @@ export default function ConventionalForm() {
   };
 
   useEffect(() => {
-    const stored = localStorage.getItem('nexus-theme');
+    const stored = localStorage.getItem('nexus_theme');
     const dark   = stored === 'dark' || (!stored && window.matchMedia('(prefers-color-scheme: dark)').matches);
     setIsDark(dark);
     document.documentElement.classList.toggle('dark', dark);
@@ -455,13 +443,12 @@ export default function ConventionalForm() {
     const n = !isDark;
     setIsDark(n);
     document.documentElement.classList.toggle('dark', n);
-    localStorage.setItem('nexus-theme', n ? 'dark' : 'light');
+    localStorage.setItem('nexus_theme', n ? 'dark' : 'light');
   };
 
   const t = D[lang] || D.en;
   const noMedical = f.medical.includes(MEDICAL_EXCLUSIVE);
 
-  // ── VALIDATION ─────────────────────────────────────────────────────────────
   const isStepValid = () => {
     if (step === 0) {
       return f.pavsDays !== '' && f.pavsMins !== '' && f.strength !== '' && f.medical.length > 0 && f.wellbeing !== '';
@@ -473,13 +460,11 @@ export default function ConventionalForm() {
       return f.aware !== null && f.referred !== null && f.rating !== '' && f.trust !== '';
     }
     if (step === 3) {
-      // REQUIREMENT FIX: Explicitly enforce the postalCode constraint
       return f.ageGroup !== '' && f.gender !== '' && f.race !== '' && f.postalCode.length === 2;
     }
     return true;
   };
 
-  // ── SUBMIT ─────────────────────────────────────────────────────────────────
   const handleSubmit = async () => {
     if (busy || !isStepValid()) return;
     setBusy(true);
@@ -501,7 +486,6 @@ export default function ConventionalForm() {
     });
   };
 
-  // ── STEP 1: PHYSICAL ACTIVITY + CLINICAL SAFETY ───────────────────────────
   const Step1 = () => (
     <div className="space-y-5 animate-in fade-in slide-in-from-right-4 duration-400">
       <Card>
@@ -568,7 +552,6 @@ export default function ConventionalForm() {
     </div>
   );
 
-  // ── STEP 2: SDOH (AURA Q4 + Q5 + PDF enrichment) ─────────────────────────
   const Step2 = () => (
     <div className="space-y-5 animate-in fade-in slide-in-from-right-4 duration-400">
       <Card>
@@ -636,7 +619,6 @@ export default function ConventionalForm() {
     </div>
   );
 
-  // ── STEP 3: COMMUNITY PERCEPTION ─────────────────────────────────────────
   const Step3 = () => (
     <div className="space-y-5 animate-in fade-in slide-in-from-right-4 duration-400">
       <Card>
@@ -686,7 +668,6 @@ export default function ConventionalForm() {
     </div>
   );
 
-  // ── STEP 4: DEMOGRAPHICS + RECORD LINKAGE (AURA Q7–Q9) ───────────────────
   const Step4 = () => {
     const preview = deriveFlags(f);
     const liveScore = Math.round((DAYS_MIDPOINT[f.pavsDays] ?? 0) * (MINS_MIDPOINT[f.pavsMins] ?? 0));
