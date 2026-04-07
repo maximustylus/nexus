@@ -295,8 +295,8 @@ const PavsPanel = ({ data, t }) => {
       <div className="grid grid-cols-3 gap-3 mb-5">
         {[
           { value: score,                    label: t.pavsWeekly },
-          { value: data.pavsDays    ?? '–',  label: t.pavsDays   },
-          { value: data.pavsMinutes ?? '–',  label: t.pavsMins   },
+          { value: data.pavsDays    ?? '–',                                label: t.pavsDays },
+          { value: data.pavsDays === 0 ? 0 : (data.pavsMinutes ?? '–'), label: t.pavsMins },
         ].map(({ value, label }, i) => (
           <div key={i} className="text-center py-3 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700">
             <p className="text-2xl font-black text-slate-900 dark:text-white leading-none">{value}</p>
@@ -608,8 +608,8 @@ export default function ResultPage() {
                 <div style={{ display: 'flex', gap: 16, marginBottom: 14 }}>
                   {[
                     { value: data.pavsScore,           label: t.pavsWeekly },
-                    { value: data.pavsDays    ?? '–',  label: t.pavsDays   },
-                    { value: data.pavsMinutes ?? '–',  label: t.pavsMins   },
+                    { value: data.pavsDays    ?? '–',                                label: t.pavsDays },
+                    { value: data.pavsDays === 0 ? 0 : (data.pavsMinutes ?? '–'), label: t.pavsMins },
                   ].map(({ value, label }, i) => (
                     <div key={i} style={{ flex: 1, background: 'white', border: '1px solid #e2e8f0', borderRadius: 8, padding: '12px 10px', textAlign: 'center' }}>
                       <div style={{ fontWeight: 900, fontSize: 24, color: '#0f172a' }}>{value}</div>
@@ -747,12 +747,18 @@ export default function ResultPage() {
               Join the Northern Community Nodes — M<sup style={{ fontSize: '0.65em', verticalAlign: 'super' }}>3</sup> Network
             </div>
             <div style={{ fontSize: 12, color: '#475569', marginBottom: '20px', lineHeight: 1.6, maxWidth: '580px', margin: '0 auto 20px' }}>
-              This initiative is proudly piloted in conjunction with the <strong style={{ color: '#0f766e' }}>M<sup style={{ fontSize: '0.65em', verticalAlign: 'super' }}>3</sup> Network</strong> on <strong>11 April 2026</strong>. Stay connected with your local community nodes in the North for programmes, events, and peer support.
+              This initiative is proudly piloted in conjunction with the <strong style={{ color: '#0f766e' }}>M<sup style={{ fontSize: '0.65em', verticalAlign: 'super' }}>3</sup> Network</strong>. Stay connected with your local community nodes in the North for programmes, events, and peer support.
             </div>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px 24px', maxWidth: '560px', margin: '0 auto', textAlign: 'left' }}>
-              {/* Web link */}
+              {/* Web link with M3 logo */}
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px', gridColumn: '1 / -1' }}>
-                <span style={{ fontWeight: 900, fontSize: 10, color: '#0d9488', textTransform: 'uppercase', letterSpacing: 1, minWidth: 28 }}>Web</span>
+                <img
+                  src={baseUrl + '/logos/M3.png'}
+                  alt="M3"
+                  crossOrigin="anonymous"
+                  style={{ width: 22, height: 22, objectFit: 'contain', flexShrink: 0 }}
+                  onError={(e) => { e.target.style.display = 'none'; e.target.insertAdjacentHTML('afterend', '<span style="fontWeight:900;fontSize:11px;color:#0d9488">M<sup>3</sup></span>'); }}
+                />
                 <span style={{ fontWeight: 600, fontSize: 11, color: '#0f766e' }}>m3.gov.sg/m3-towns/north</span>
               </div>
               {/* Facebook links with fb.png logo */}
