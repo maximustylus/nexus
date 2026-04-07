@@ -1,3 +1,28 @@
+/**
+ * AuraChatbot.jsx — Enhanced v2.0
+ *
+ * Clinical grounding:
+ * • ACSM Physical Activity Vital Sign (PAVS): 2-question split → Days × Minutes = score
+ * Thresholds: <150 min/wk = Insufficiently Active | 150–300 = Meets SPAG | >300 = Active
+ * • SingHealth SDOH 5-Domain Framework: Financial, Food Security, Housing, Social, Psychological
+ * • BPS-RS II: Psychological domain items (P20–P25) inform Q6 wellbeing screen
+ * • LSNS-6: Social network items inform Q5 social isolation screen
+ * • Northern Singapore Health Ecosystem Report (March 2026): 8-tier CTA matrix (Section 5.7)
+ *
+ * UX/Biodesign improvements:
+ * • 10-step flow with proper PAVS split (Q0 = Days, Q1 = Minutes)
+ * • SDOH expanded to cover Social + Psychological domains (Q5, Q6)
+ * • Domain badge per AURA message (transparency of clinical purpose)
+ * • Segmented progress bar with step counter
+ * • AURA avatar in every bot bubble
+ * • Tiered CTA card rendered as structured output (not raw text)
+ * • isTyping guard prevents quick reply render confusion
+ * • Session ID visible in header for clinical trust
+ * • Teal/emerald design system (biodesign health palette)
+ *
+ * Source: Northern SG Health Ecosystem Report + Singapore SDOH Validated Questionnaires (2026)
+ */
+
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { recordTelemetry } from '../utils/telemetry';
@@ -14,50 +39,40 @@ const secureChatWithAura = httpsCallable(functions, 'chatWithAura');
 // Used as the `prompt` param passed to the Cloud Function, same as personas
 // in AuraPulseBot. Well Well uses Motivational Interviewing (OARS) and is
 // calibrated for Singapore community members, not clinical staff.
-const WELL_WELL_PROMPT =
-  'You are Well Well, a warm and professionally trained community health navigator ' +
-  "within Singapore's NEXUS health programme. You use Motivational Interviewing (MI) " +
-  'techniques — specifically OARS: Open questions, Affirmations, Reflective listening, and Summaries.\n\n' +
-  'You are currently guiding a community member through the NEXUS structured health assessment. ' +
-  'After each answer, you will receive the question domain, the user\'s answer, and all prior ' +
-  'answers collected so far. Your job is to write a brief, natural acknowledgement ' +
-  '(1\u20132 sentences, under 40 words) that:\n' +
-  '- Reflects what the person actually said — specific, never generic\n' +
-  '- Uses an affirming, non-judgmental MI tone\n' +
-  '- Matches emotional register: warm and encouraging for positive behaviours, compassionate ' +
-  'and non-alarming for health concerns, calm and matter-of-fact for neutral answers\n' +
-  '- Naturally bridges to the next question (which will follow automatically — do NOT write the next question yourself)\n\n' +
-  'Hard rules:\n' +
-  '- NEVER say "Great!", "Wonderful!", "Awesome!" — these feel hollow\n' +
-  '- NEVER say "on those active days" or similar if the person answered 0 days of exercise\n' +
-  '- NEVER minimise a health concern (e.g. chest pain, isolation, food insecurity) with cheerful filler\n' +
-  '- NEVER use clinical jargon — speak plainly, as a trusted health coach would\n' +
-  '- Do NOT repeat the question back to the person\n' +
-  '- Do NOT mention AURA, Well Well, NEXUS, or any system names\n' +
-  '- Respond in English unless the person\'s answer is clearly in Malay, Chinese, or Tamil — then mirror their language';
+const WELL_WELL_PROMPT = `You are Well Well, a warm and professionally trained community health navigator within Singapore's NEXUS health programme. You use Motivational Interviewing (MI) techniques — specifically OARS: Open questions, Affirmations, Reflective listening, and Summaries.
+
+You are currently guiding a community member through the NEXUS structured health assessment. After each answer, you will receive the question domain, the user's answer, and all prior answers collected so far. Your job is to write a brief, natural acknowledgement (1–2 sentences, under 40 words) that:
+- Reflects what the person actually said — specific, never generic
+- Uses an affirming, non-judgmental MI tone
+- Matches emotional register: warm and encouraging for positive behaviours, compassionate and non-alarming for health concerns, calm and matter-of-fact for neutral answers
+- Naturally bridges to the next question (which will follow automatically — do NOT write the next question yourself)
+
+Hard rules:
+- NEVER say "Great!", "Wonderful!", "Awesome!" — these feel hollow
+- NEVER say "on those active days" or similar if the person answered 0 days of exercise
+- NEVER minimise a health concern (e.g. chest pain, isolation, food insecurity) with cheerful filler
+- NEVER use clinical jargon — speak plainly, as a trusted health coach would
+- Do NOT repeat the question back to the person
+- Do NOT mention AURA, Well Well, NEXUS, or any system names
+- Respond in English unless the person's answer is clearly in Malay, Chinese, or Tamil — then mirror their language`;
 
 // ─── DOMAIN CONFIGURATION ─────────────────────────────────────────────────────
-// Each step declares its clinical domain for badge display and progress colouring.
-// Domains map to: PAVS (0–2) | Clinical Safety (3) | SDOH Financial (4) |
-//                 SDOH Social (5) | SDOH Psychological (6) | Admin (7–9)
-
 const DOMAIN_CONFIG = [
-  { key: 'pavs_days',    badge: '🏃 ACSM PAVS · Q1 of 2',       group: 'pavs'     },
-  { key: 'pavs_mins',    badge: '⏱️ ACSM PAVS · Q2 of 2',       group: 'pavs'     },
-  { key: 'strength',     badge: '💪 SPAG Strength Screen',        group: 'pavs'     },
-  { key: 'medical',      badge: '🩺 Clinical Safety Screen',      group: 'clinical' },
-  { key: 'barriers',     badge: '🔑 SDOH · Financial & Access',  group: 'sdoh'     },
-  { key: 'social',       badge: '🤝 SDOH · Social Support',      group: 'sdoh'     },
-  { key: 'food_insecurity', badge: '🥗 SDOH · Food Security',      group: 'sdoh'     },
-  { key: 'wellbeing',    badge: '🧠 SDOH · Psychological',       group: 'sdoh'     },
-  { key: 'demographics', badge: '👤 Your Profile',               group: 'admin'    },
-  { key: 'postal_code',  badge: '📍 Resource Mapping',           group: 'admin'    },
-  { key: 'previous_id',  badge: '🔗 NEXUS Record Linkage',       group: 'admin'    },
+  { key: 'pavs_days',       badge: '🏃 ACSM PAVS · Q1 of 2',       group: 'pavs'     },
+  { key: 'pavs_mins',       badge: '⏱️ ACSM PAVS · Q2 of 2',       group: 'pavs'     },
+  { key: 'strength',        badge: '💪 SPAG Strength Screen',        group: 'pavs'     },
+  { key: 'medical',         badge: '🩺 Clinical Safety Screen',      group: 'clinical' },
+  { key: 'barriers',        badge: '🔑 SDOH · Financial & Access',  group: 'sdoh'     },
+  { key: 'social',          badge: '🤝 SDOH · Social Support',      group: 'sdoh'     },
+  { key: 'food_insecurity', badge: '🥗 SDOH · Food Security',       group: 'sdoh'     },
+  { key: 'wellbeing',       badge: '🧠 SDOH · Psychological',       group: 'sdoh'     },
+  { key: 'demographics',    badge: '👤 Your Profile',               group: 'admin'    },
+  { key: 'postal_code',     badge: '📍 Resource Mapping',           group: 'admin'    },
+  { key: 'previous_id',     badge: '🔗 NEXUS Record Linkage',       group: 'admin'    },
 ];
 
 const TOTAL_STEPS = DOMAIN_CONFIG.length; // 11
 
-// Progress segment colour by group
 const GROUP_COLOURS = {
   pavs:     'bg-emerald-500',
   clinical: 'bg-amber-500',
@@ -66,137 +81,74 @@ const GROUP_COLOURS = {
 };
 
 // ─── TIERED CTA LIBRARY ───────────────────────────────────────────────────────
-// Source: Northern Singapore Health Ecosystem Report, Section 5.7
-// Priority order: Safety → Chronic → Senior+Low → Psychological SDOH →
-//                 Financial SDOH → Social SDOH → PAVS tiers
-
 const CTA = {
   symptoms_present: {
     tier: 'URGENT',
     emoji: '⚠️',
-    primaryStep:
-      'Please see your GP or visit a polyclinic before starting any new exercise. Chest pain or dizziness during activity requires medical clearance first.',
-    healthierSG:
-      'Your Healthier SG GP can assess your symptoms and update your Health Plan. Book via HealthHub → My Appointments.',
-    resources: [
-      '📞 Polyclinic appointment booking: healthhub.sg/appointments',
-      '🏥 If symptoms are severe or sudden: call 995',
-    ],
+    primaryStep: 'Please see your GP or visit a polyclinic before starting any new exercise. Chest pain or dizziness during activity requires medical clearance first.',
+    healthierSG: 'Your Healthier SG GP can assess your symptoms and update your Health Plan. Book via HealthHub → My Appointments.',
+    resources: ['📞 Polyclinic appointment booking: healthhub.sg/appointments', '🏥 If symptoms are severe or sudden: call 995'],
   },
   chronic_metabolic: {
     tier: 'CLINICAL',
     emoji: '🩺',
-    primaryStep:
-      'Enrol in the "Manage Metabolic Health" programme at Woodlands Active Health Lab — 7 structured sessions, from SGD 48, with healthcare professional supervision.',
-    healthierSG:
-      'Book your next Healthier SG annual check-in (FREE) and share your PAVS result. Your GP can issue a direct referral to the Active Health Lab.',
-    resources: [
-      '📱 Book Active Health Lab: activesg.gov.sg → Woodlands Sport Centre',
-      '💳 CHAS subsidies may apply: chas.sg to check eligibility',
-      '🩺 Healthier SG check-in: FREE via HealthHub app',
-    ],
+    primaryStep: 'Enrol in the "Manage Metabolic Health" programme at Woodlands Active Health Lab — 7 structured sessions, from SGD 48, with healthcare professional supervision.',
+    healthierSG: 'Book your next Healthier SG annual check-in (FREE) and share your PAVS result. Your GP can issue a direct referral to the Active Health Lab.',
+    resources: ['📱 Book Active Health Lab: activesg.gov.sg → Woodlands Sport Centre', '💳 CHAS subsidies may apply: chas.sg to check eligibility', '🩺 Healthier SG check-in: FREE via HealthHub app'],
   },
   senior_low_activity: {
     tier: 'COMMUNITY',
     emoji: '🏠',
-    primaryStep:
-      'Visit your nearest Active Ageing Centre (AAC) — walk in, no appointment needed. Activities are largely free for residents aged 60 and above.',
-    healthierSG:
-      'Your Healthier SG Health Plan includes a formal AAC referral pathway. Ask your GP at your next FREE check-in to document this.',
-    resources: [
-      '🔍 Find nearest AAC: aic.sg/care-services/active-ageing-centres',
-      '📞 AIC Hotline: 1800-650-6060',
-      '📺 Seniors workout library on HealthHub: free, chair and low-mobility options available',
-    ],
+    primaryStep: 'Visit your nearest Active Ageing Centre (AAC) — walk in, no appointment needed. Activities are largely free for residents aged 60 and above.',
+    healthierSG: 'Your Healthier SG Health Plan includes a formal AAC referral pathway. Ask your GP at your next FREE check-in to document this.',
+    resources: ['🔍 Find nearest AAC: aic.sg/care-services/active-ageing-centres', '📞 AIC Hotline: 1800-650-6060', '📺 Seniors workout library on HealthHub: free, chair and low-mobility options available'],
   },
   mental_health_first: {
     tier: 'WELLBEING',
     emoji: '🌿',
-    primaryStep:
-      'Your wellbeing matters most. Connect with your polyclinic\'s counselling or mental health support service — this is your most important first step before any exercise programme.',
-    healthierSG:
-      'The Healthier SG mental health pathway includes polyclinic counselling and AAC social connector support. Raise this at your next Health Plan check-in.',
-    resources: [
-      '🤝 AAC Social Connector service: visit or call your nearest AAC',
-      '📞 Samaritans of Singapore: 1767 (24 hours, 7 days)',
-      '💬 Mental health resources: mindline.sg',
-    ],
+    primaryStep: 'Your wellbeing matters most. Connect with your polyclinic\'s counselling or mental health support service — this is your most important first step before any exercise programme.',
+    healthierSG: 'The Healthier SG mental health pathway includes polyclinic counselling and AAC social connector support. Raise this at your next Health Plan check-in.',
+    resources: ['🤝 AAC Social Connector service: visit or call your nearest AAC', '📞 Samaritans of Singapore: 1767 (24 hours, 7 days)', '💬 Mental health resources: mindline.sg'],
   },
   financial_low_activity: {
     tier: 'FREE_FIRST',
     emoji: '🆓',
-    primaryStep:
-      'Register for "Start2Move" — a completely FREE 6-session beginner exercise programme. Download the Healthy 365 app and search "Start2Move" under Explore → Events.',
-    healthierSG:
-      'Your first Healthier SG Health Plan consultation is FULLY SUBSIDISED. If not yet enrolled, book at any PHPC clinic — free for all Singapore residents.',
-    resources: [
-      '🆓 Start2Move: free via Healthy 365 app (App Store / Google Play)',
-      '🧘 Free PA interest groups: onepa.gov.sg → search "healthiersg"',
-      '💳 CHAS Blue/Orange subsidies available: chas.sg to check eligibility',
-    ],
+    primaryStep: 'Register for "Start2Move" — a completely FREE 6-session beginner exercise programme. Download the Healthy 365 app and search "Start2Move" under Explore → Events.',
+    healthierSG: 'Your first Healthier SG Health Plan consultation is FULLY SUBSIDISED. If not yet enrolled, book at any PHPC clinic — free for all Singapore residents.',
+    resources: ['🆓 Start2Move: free via Healthy 365 app (App Store / Google Play)', '🧘 Free PA interest groups: onepa.gov.sg → search "healthiersg"', '💳 CHAS Blue/Orange subsidies available: chas.sg to check eligibility'],
   },
   social_low_activity: {
     tier: 'COMMUNITY',
     emoji: '👥',
-    primaryStep:
-      'Join Start2Move in a cohort group format — you will exercise alongside the same group of peers across 6 sessions, building both fitness and new friendships.',
-    healthierSG:
-      'Enrol in a HealthierSG-tagged People\'s Association interest group (Tai Chi, Brisk Walking, Qigong — many are free) and mention participation to your GP.',
-    resources: [
-      '🤝 PA interest groups: onepa.gov.sg → search "healthiersg" → filter by your area',
-      '🏠 If aged 60+: visit nearest AAC for befriending and active ageing programmes',
-      '📱 Healthy 365 Step Challenges: stay motivated with community leaderboards',
-    ],
+    primaryStep: 'Join Start2Move in a cohort group format — you will exercise alongside the same group of peers across 6 sessions, building both fitness and new friendships.',
+    healthierSG: 'Enrol in a HealthierSG-tagged People\'s Association interest group (Tai Chi, Brisk Walking, Qigong — many are free) and mention participation to your GP.',
+    resources: ['🤝 PA interest groups: onepa.gov.sg → search "healthiersg" → filter by your area', '🏠 If aged 60+: visit nearest AAC for befriending and active ageing programmes', '📱 Healthy 365 Step Challenges: stay motivated with community leaderboards'],
   },
   start2move: {
     tier: 'START',
     emoji: '🚀',
-    primaryStep:
-      'Download the Healthy 365 app and search "Start2Move" under Explore → Events. Register for the free 6-session beginner programme — the most appropriate first step for your current activity level.',
-    healthierSG:
-      'Tell your Healthier SG doctor about your Start2Move enrolment at your next check-in. It counts directly toward your exercise health goals on your Health Plan.',
-    resources: [
-      '📱 Healthy 365: free on App Store and Google Play',
-      '🏋️ Active Health Lab, Woodlands: Balance & Muscular Fitness from SGD 6 per session',
-      '📋 Print or screenshot your PAVS result and bring it to your next GP visit as your activity baseline',
-    ],
+    primaryStep: 'Download the Healthy 365 app and search "Start2Move" under Explore → Events. Register for the free 6-session beginner programme — the most appropriate first step for your current activity level.',
+    healthierSG: 'Tell your Healthier SG doctor about your Start2Move enrolment at your next check-in. It counts directly toward your exercise health goals on your Health Plan.',
+    resources: ['📱 Healthy 365: free on App Store and Google Play', '🏋️ Active Health Lab, Woodlands: Balance & Muscular Fitness from SGD 6 per session', '📋 Print or screenshot your PAVS result and bring it to your next GP visit as your activity baseline'],
   },
   active_health_lab: {
     tier: 'LEVEL_UP',
     emoji: '💪',
-    primaryStep:
-      'You meet Singapore\'s minimum activity guidelines — now build on this. Book a "Strength 2.0 Foundation" or "Balance & Muscular Fitness" session at Woodlands Active Health Lab, from SGD 6.',
-    healthierSG:
-      'Active Health Lab programmes are formally recognised within the Healthier SG Health Plan community pathway. Mention your programme at your next annual check-in.',
-    resources: [
-      '🏋️ Book at activesg.gov.sg → Active Health Lab → Woodlands Sport Centre',
-      '📊 Body Composition Assessment available: from SGD 7 (Tue/Thu/Sat/Fri)',
-      '📱 Track sessions with the ActiveSG+ app',
-    ],
+    primaryStep: 'You meet Singapore\'s minimum activity guidelines — now build on this. Book a "Strength 2.0 Foundation" or "Balance & Muscular Fitness" session at Woodlands Active Health Lab, from SGD 6.',
+    healthierSG: 'Active Health Lab programmes are formally recognised within the Healthier SG Health Plan community pathway. Mention your programme at your next annual check-in.',
+    resources: ['🏋️ Book at activesg.gov.sg → Active Health Lab → Woodlands Sport Centre', '📊 Body Composition Assessment available: from SGD 7 (Tue/Thu/Sat/Fri)', '📱 Track sessions with the ActiveSG+ app'],
   },
   perform: {
     tier: 'ADVANCED',
     emoji: '⚡',
-    primaryStep:
-      'You are well above minimum guidelines — outstanding. Try the "Perform 2.0 AMRAP" or "ENGINE Workout" at Woodlands Active Health Lab, from SGD 6, for structured high-intensity programming.',
-    healthierSG:
-      'Share your high activity level with your Healthier SG GP. You may be eligible for performance programme referrals and advanced tracking within your Health Plan.',
-    resources: [
-      '⚡ Free HIIT Workout Library (Adults 19–49, Workouts #1–12): HealthHub → Move It',
-      '🏆 Perform 2.0 sessions: multiple weekly slots available April 2026',
-      '📊 Consider a Body Composition Assessment to establish a performance baseline',
-    ],
+    primaryStep: 'You are well above minimum guidelines — outstanding. Try the "Perform 2.0 AMRAP" or "ENGINE Workout" at Woodlands Active Health Lab, from SGD 6, for structured high-intensity programming.',
+    healthierSG: 'Share your high activity level with your Healthier SG GP. You may be eligible for performance programme referrals and advanced tracking within your Health Plan.',
+    resources: ['⚡ Free HIIT Workout Library (Adults 19–49, Workouts #1–12): HealthHub → Move It', '🏆 Perform 2.0 sessions: multiple weekly slots available April 2026', '📊 Consider a Body Composition Assessment to establish a performance baseline'],
   },
 };
 
-// ─── CTA SELECTION LOGIC ──────────────────────────────────────────────────────
-// Implements the 8-tier hierarchy from the Ecosystem Report, Section 5.7
 const selectCTA = (parsed) => {
-  const {
-    pavsScore, symptomFlag, medFlag, age,
-    sdohPsychological, sdohFinancial, sdohSocial,
-  } = parsed;
-
+  const { pavsScore, symptomFlag, medFlag, age, sdohPsychological, sdohFinancial, sdohSocial } = parsed;
   if (symptomFlag)                              return CTA.symptoms_present;
   if (medFlag)                                  return CTA.chronic_metabolic;
   if (age === '60+' && pavsScore < 150)         return CTA.senior_low_activity;
@@ -211,96 +163,56 @@ const selectCTA = (parsed) => {
 // ─── DICTIONARY ───────────────────────────────────────────────────────────────
 const DICTIONARY = {
   en: {
-    back: 'Back',
-    typing: 'AURA is typing\u2026',
-    inputPlaceholder: 'Type your answer or choose below\u2026',
-    hintText: 'Select an option or type freely:',
-    sessionLabel: 'Session',
-    domainLabel: 'Screening Domain',
-    ctaTitle: 'Your Personalised Health Plan',
-    ctaPrimary: 'Your Next Step',
-    ctaHealthierSG: 'Your Healthier SG Connection',
-    ctaResources: 'Additional Resources',
-    error: 'A connection error occurred while saving your profile. Please try again.',
+    back: 'Back', typing: 'AURA is typing\u2026', inputPlaceholder: 'Type your answer or choose below\u2026',
+    hintText: 'Select an option or type freely:', sessionLabel: 'Session', domainLabel: 'Screening Domain',
+    ctaTitle: 'Your Personalised Health Plan', ctaPrimary: 'Your Next Step', ctaHealthierSG: 'Your Healthier SG Connection',
+    ctaResources: 'Additional Resources', error: 'A connection error occurred while saving your profile. Please try again.',
     progressLabel: (step, total) => `Step ${step + 1} of ${total}`,
-    // 10 prompts — indices match DOMAIN_CONFIG
     prompts: [
-      /* 0  pavs_days       */ 'Hi, I\'m AURA 👋 I\'m here to connect you with the right community health resources. Let\'s start with physical activity. On a typical week, how many days do you do moderate or vigorous exercise? (e.g. brisk walking, cycling, swimming, gym)',
-      /* 1  pavs_mins       */ (data) => data.pavs_days === '0 days'
-        ? 'No problem at all — most people start exactly where you are, and that is why these programmes exist. If you were to start being active, roughly how long do you think you could manage each session?'
-        : 'Great — and on those active days, roughly how many minutes do you usually exercise each time?',
-      /* 2  strength        */ 'Do you do any muscle-strengthening activities? (e.g. weights, resistance bands, bodyweight exercises like push-ups or squats)',
-      /* 3  medical         */ 'Do you have any ongoing health conditions — such as high blood pressure, prediabetes, or heart disease? And do you ever feel chest pain or dizziness when you are physically active?',
-      /* 4  barriers        */ 'What is the main thing that makes it difficult to access health or fitness services in your community? Be honest — there are no wrong answers.',
-      /* 5  social          */ 'Roughly how many people — family or friends — could you call on for support if you needed help? And would you say you have people you can talk to openly?',
-      /* 6  food_insecurity */ 'One more quick question — in the past 12 months, were there times when you were hungry but did not eat because you could not afford enough food?',
-      /* 7  wellbeing       */ 'Over the past two weeks, how have you been feeling overall? Have you felt stressed, low in mood, or overwhelmed — for example, due to work, caregiving, or financial pressure?',
-      /* 8  demographics    */ 'Almost done! Could you share your age group and gender? This helps me find programmes designed for your profile. (e.g. Female, 41–60)',
-      /* 9  postal_code     */ 'What are the first two digits of your postal code? This lets me map the nearest resources to you.',
-      /* 10 previous_id     */ 'Last question — do you have a previous NEXUS Assessment ID? If yes, paste it below so I can link your records. If not, just select No.',
+      'Hi, I\'m AURA 👋 I\'m here to connect you with the right community health resources. Let\'s start with physical activity. On a typical week, how many days do you do moderate or vigorous exercise? (e.g. brisk walking, cycling, swimming, gym)',
+      (data) => data.pavs_days === '0 days' ? 'No problem at all — most people start exactly where you are, and that is why these programmes exist. If you were to start being active, roughly how long do you think you could manage each session?' : 'Great — and on those active days, roughly how many minutes do you usually exercise each time?',
+      'Do you do any muscle-strengthening activities? (e.g. weights, resistance bands, bodyweight exercises like push-ups or squats)',
+      'Do you have any ongoing health conditions — such as high blood pressure, prediabetes, or heart disease? And do you ever feel chest pain or dizziness when you are physically active?',
+      'What is the main thing that makes it difficult to access health or fitness services in your community? Be honest — there are no wrong answers.',
+      'Roughly how many people — family or friends — could you call on for support if you needed help? And would you say you have people you can talk to openly?',
+      'One more quick question — in the past 12 months, were there times when you were hungry but did not eat because you could not afford enough food?',
+      'Over the past two weeks, how have you been feeling overall? Have you felt stressed, low in mood, or overwhelmed — for example, due to work, caregiving, or financial pressure?',
+      'Almost done! Could you share your age group and gender? This helps me find programmes designed for your profile. (e.g. Female, 41–60)',
+      'What are the first two digits of your postal code? This lets me map the nearest resources to you.',
+      'Last question — do you have a previous NEXUS Assessment ID? If yes, paste it below so I can link your records. If not, just select No.',
     ],
-
-    // Reflections — empathic, motivational, clinically appropriate
     reflections: [
-      /* 0 */ (input) => {
-        const n = parseInt((input.match(/\d+/) || ['0'])[0], 10);
-        return n === 0
-          ? 'Starting from zero is completely valid — many people are in the same position, and that is exactly why these programmes exist.'
-          : n <= 2
-          ? 'Two days or fewer is a common starting point. Small, consistent steps make a real difference.'
-          : 'A solid base to build on. ';
-      },
-      /* 1 */ (input) => {
-        const n = parseInt((input.match(/\d+/) || ['0'])[0], 10);
-        return n < 20
-          ? 'Short sessions still count — and they can grow over time. '
-          : n >= 45
-          ? 'Strong session duration. '
-          : 'A healthy session length. ';
-      },
-      /* 2 */ () => 'Strength training is just as important as aerobic activity for long-term health. ',
-      /* 3 */ () => 'Thank you for sharing that — I will use this to make sure your recommendations are safe and appropriate. ',
-      /* 4 */ () => 'That is a very real barrier. Naming it helps us find the right workaround. ',
-      /* 5 */ () => 'Social connection is one of the most powerful protective factors for long-term health. ',
-      /* 6 */ (input) => input.toLowerCase().includes('yes') ? 'Thank you for trusting me with that \u2014 food security is something we will factor directly into your plan. ' : 'Good to know. ',
-      /* 7 */ () => 'Your mental wellbeing matters as much as your physical health. ',
-      /* 8 */ () => 'Noted. ',
-      /* 9 */ () => 'Mapping your nearest resources now. ',
-      /* 10 */ (input) =>
-        /(no|none|don'?t)/i.test(input)
-          ? 'No problem — I will start a fresh record for you today. '
-          : 'I will link your previous records to track your progress over time. ',
+      (input) => { const n = parseInt((input.match(/\d+/) || ['0'])[0], 10); return n === 0 ? 'Starting from zero is completely valid — many people are in the same position, and that is exactly why these programmes exist.' : n <= 2 ? 'Two days or fewer is a common starting point. Small, consistent steps make a real difference.' : 'A solid base to build on. '; },
+      (input) => { const n = parseInt((input.match(/\d+/) || ['0'])[0], 10); return n < 20 ? 'Short sessions still count — and they can grow over time. ' : n >= 45 ? 'Strong session duration. ' : 'A healthy session length. '; },
+      () => 'Strength training is just as important as aerobic activity for long-term health. ',
+      () => 'Thank you for sharing that — I will use this to make sure your recommendations are safe and appropriate. ',
+      () => 'That is a very real barrier. Naming it helps us find the right workaround. ',
+      () => 'Social connection is one of the most powerful protective factors for long-term health. ',
+      (input) => input.toLowerCase().includes('yes') ? 'Thank you for trusting me with that \u2014 food security is something we will factor directly into your plan. ' : 'Good to know. ',
+      () => 'Your mental wellbeing matters as much as your physical health. ',
+      () => 'Noted. ',
+      () => 'Mapping your nearest resources now. ',
+      (input) => /(no|none|don'?t)/i.test(input) ? 'No problem — I will start a fresh record for you today. ' : 'I will link your previous records to track your progress over time. ',
     ],
-
-    // Quick replies per step
     quickReplies: [
-      /* 0 pavs_days    */ ['0 days', '1–2 days', '3–4 days', '5–7 days'],
-      /* 1 pavs_mins    */ ['Less than 20 mins', '20–30 mins', '30–45 mins', '45–60 mins', '60+ mins'],
-      /* 2 strength     */ ['No strength training', '1 day a week', '2 days a week', '3+ days a week'],
-      /* 3 medical      */ ['No conditions or symptoms', 'High blood pressure', 'Prediabetes or diabetes', 'Heart condition', 'Dizziness or chest pain when active'],
-      /* 4 barriers     */ ['Lack of time', 'Too expensive', 'Too far away', 'I prefer hospitals over community', 'Unsure what is available', 'No barriers for me'],
-      /* 5 social       */ ['I have several people I can rely on', 'I have one or two close people', 'I mostly manage on my own', 'I feel quite isolated'],
-      /* 6 food_insecurity */ ['Yes, this has happened', 'No, I have always had enough'],
-      /* 7 wellbeing    */ ['Feeling good overall', 'Some stress but managing', 'Feeling quite stressed or low', 'Overwhelmed — caregiving or financial pressure'],
-      /* 7 demographics */ ['Male, 21–40', 'Female, 21–40', 'Male, 41–60', 'Female, 41–60', 'Male, 60+', 'Female, 60+'],
-      /* 9 postal_code  */ ['73 (Woodlands)', '75–76 (Yishun)', '75 (Sembawang)', '68 (Admiralty/Canberra)', 'Other / Not sure'],
-      /* 10 previous_id  */ ['No previous ID'],
+      ['0 days', '1–2 days', '3–4 days', '5–7 days'],
+      ['Less than 20 mins', '20–30 mins', '30–45 mins', '45–60 mins', '60+ mins'],
+      ['No strength training', '1 day a week', '2 days a week', '3+ days a week'],
+      ['No conditions or symptoms', 'High blood pressure', 'Prediabetes or diabetes', 'Heart condition', 'Dizziness or chest pain when active'],
+      ['Lack of time', 'Too expensive', 'Too far away', 'I prefer hospitals over community', 'Unsure what is available', 'No barriers for me'],
+      ['I have several people I can rely on', 'I have one or two close people', 'I mostly manage on my own', 'I feel quite isolated'],
+      ['Yes, this has happened', 'No, I have always had enough'],
+      ['Feeling good overall', 'Some stress but managing', 'Feeling quite stressed or low', 'Overwhelmed — caregiving or financial pressure'],
+      ['Male, 21–40', 'Female, 21–40', 'Male, 41–60', 'Female, 41–60', 'Male, 60+', 'Female, 60+'],
+      ['73 (Woodlands)', '75–76 (Yishun)', '75 (Sembawang)', '68 (Admiralty/Canberra)', 'Other / Not sure'],
+      ['No previous ID'],
     ],
   },
-
-  // ── Malay ──────────────────────────────────────────────────────────────────
   ms: {
-    back: 'Kembali',
-    typing: 'AURA sedang menaip\u2026',
-    inputPlaceholder: 'Taip jawapan anda atau pilih di bawah\u2026',
-    hintText: 'Pilih pilihan atau taip sendiri:',
-    sessionLabel: 'Sesi',
-    domainLabel: 'Domain Saringan',
-    ctaTitle: 'Pelan Kesihatan Peribadi Anda',
-    ctaPrimary: 'Langkah Seterusnya',
-    ctaHealthierSG: 'Sambungan Healthier SG Anda',
-    ctaResources: 'Sumber Tambahan',
-    error: 'Ralat sambungan berlaku. Sila cuba lagi.',
+    back: 'Kembali', typing: 'AURA sedang menaip\u2026', inputPlaceholder: 'Taip jawapan anda atau pilih di bawah\u2026',
+    hintText: 'Pilih pilihan atau taip sendiri:', sessionLabel: 'Sesi', domainLabel: 'Domain Saringan',
+    ctaTitle: 'Pelan Kesihatan Peribadi Anda', ctaPrimary: 'Langkah Seterusnya', ctaHealthierSG: 'Sambungan Healthier SG Anda',
+    ctaResources: 'Sumber Tambahan', error: 'Ralat sambungan berlaku. Sila cuba lagi.',
     progressLabel: (step, total) => `Langkah ${step + 1} daripada ${total}`,
     prompts: [
       'Hai, saya AURA 👋 Pada minggu biasa, berapa hari anda melakukan senaman sederhana atau kuat? (cth. berjalan pantas, berbasikal, berenang)',
@@ -342,20 +254,11 @@ const DICTIONARY = {
       ['Tiada ID'],
     ],
   },
-
-  // ── Mandarin ───────────────────────────────────────────────────────────────
   zh: {
-    back: '返回',
-    typing: 'AURA 正在输入\u2026',
-    inputPlaceholder: '请输入您的回答或选择以下选项\u2026',
-    hintText: '请选择或自由输入：',
-    sessionLabel: '会话',
-    domainLabel: '筛查领域',
-    ctaTitle: '您的个性化健康计划',
-    ctaPrimary: '您的下一步行动',
-    ctaHealthierSG: '您与 Healthier SG 的联系',
-    ctaResources: '其他资源',
-    error: '保存时发生连接错误，请重试。',
+    back: '返回', typing: 'AURA 正在输入\u2026', inputPlaceholder: '请输入您的回答或选择以下选项\u2026',
+    hintText: '请选择或自由输入：', sessionLabel: '会话', domainLabel: '筛查领域',
+    ctaTitle: '您的个性化健康计划', ctaPrimary: '您的下一步行动', ctaHealthierSG: '您与 Healthier SG 的联系',
+    ctaResources: '其他资源', error: '保存时发生连接错误，请重试。',
     progressLabel: (step, total) => `第 ${step + 1} 步，共 ${total} 步`,
     prompts: [
       '你好，我是 AURA 👋 在典型的一周里，您通常有几天进行中等或剧烈强度的运动？（例如快走、骑车、游泳）',
@@ -390,26 +293,18 @@ const DICTIONARY = {
       ['没有疾病或症状', '高血压', '糖尿病前期或糖尿病', '心脏病', '运动时头晕或胸痛'],
       ['没时间', '太贵了', '太远了', '更喜欢去医院', '不确定有哪些资源', '没有障碍'],
       ['有几个可以依靠的人', '有一两个亲近的人', '大多数情况自己处理', '感到相当孤立'],
+      ['是的，这发生过', '没有，我总是有足够的食物'],
       ['整体感觉不错', '有些压力但能应对', '感到很压抑或情绪低落', '感到不知所措 — 照顾或经济压力'],
       ['男, 21–40', '女, 21–40', '男, 41–60', '女, 41–60', '男, 60+', '女, 60+'],
       ['73 (Woodlands)', '75–76 (义顺)', '75 (三巴旺)', '68 (海军部/甘巴)', '其他 / 不确定'],
       ['没有之前的 ID'],
     ],
   },
-
-  // ── Tamil ──────────────────────────────────────────────────────────────────
   ta: {
-    back: 'பின்செல்',
-    typing: 'AURA தட்டச்சு செய்கிறார்\u2026',
-    inputPlaceholder: 'உங்கள் பதிலை உள்ளிடவும் அல்லது கீழே தேர்வு செய்யவும்\u2026',
-    hintText: 'ஒரு விருப்பத்தைத் தேர்ந்தெடுக்கவும் அல்லது சுயமாக தட்டச்சு செய்யவும்:',
-    sessionLabel: 'அமர்வு',
-    domainLabel: 'திரையிடல் களம்',
-    ctaTitle: 'உங்கள் தனிப்பட்ட சுகாதார திட்டம்',
-    ctaPrimary: 'உங்கள் அடுத்த படி',
-    ctaHealthierSG: 'Healthier SG இணைப்பு',
-    ctaResources: 'கூடுதல் வளங்கள்',
-    error: 'சேமிக்கும் போது இணைப்பு பிழை ஏற்பட்டது. மீண்டும் முயற்சிக்கவும்.',
+    back: 'பின்செல்', typing: 'AURA தட்டச்சு செய்கிறார்\u2026', inputPlaceholder: 'உங்கள் பதிலை உள்ளிடவும் அல்லது கீழே தேர்வு செய்யவும்\u2026',
+    hintText: 'ஒரு விருப்பத்தைத் தேர்ந்தெடுக்கவும் அல்லது சுயமாக தட்டச்சு செய்யவும்:', sessionLabel: 'அமர்வு', domainLabel: 'திரையிடல் களம்',
+    ctaTitle: 'உங்கள் தனிப்பட்ட சுகாதார திட்டம்', ctaPrimary: 'உங்கள் அடுத்த படி', ctaHealthierSG: 'Healthier SG இணைப்பு',
+    ctaResources: 'கூடுதல் வளங்கள்', error: 'சேமிக்கும் போது இணைப்பு பிழை ஏற்பட்டது. மீண்டும் முயற்சிக்கவும்.',
     progressLabel: (step, total) => `படி ${step + 1} / ${total}`,
     prompts: [
       'வணக்கம், நான் AURA 👋 வழக்கமான வாரத்தில், நீங்கள் எத்தனை நாட்கள் மிதமான அல்லது தீவிரமான உடற்பயிற்சி செய்கிறீர்கள்? (எ.கா. வேகமாக நடைபயிற்சி, சைக்கிள், நீச்சல்)',
@@ -418,6 +313,7 @@ const DICTIONARY = {
       'உங்களுக்கு உயர் இரத்த அழுத்தம், நீரிழிவு முன்நிலை, அல்லது இதய நோய் போன்ற நாட்பட்ட நோய்கள் உள்ளதா? செயலில் இருக்கும்போது நெஞ்சு வலி அல்லது தலைச்சுற்றல் ஏற்படுகிறதா?',
       'சமூக சுகாதார சேவைகளை அணுகுவதில் உங்களின் முக்கிய தடை என்ன?',
       'தோராயமாக எத்தனை குடும்பத்தினர் அல்லது நண்பர்கள் உங்களுக்கு உதவ முடியும்? நெருங்கி பேச யாரேனும் இருக்கிறார்களா?',
+      'கடந்த 12 மாதங்களில், உணவு வாங்க முடியாததால் பசியுடன் இருந்தீர்களா?',
       'கடந்த இரண்டு வாரங்களில் நீங்கள் எப்படி உணர்ந்தீர்கள்? மன அழுத்தம், மனச்சோர்வு, அல்லது அதிக சுமையாக உணர்ந்தீர்களா?',
       'கிட்டத்தட்ட முடிந்துவிட்டது! உங்கள் வயது மற்றும் பாலினம் என்ன? (எ.கா. பெண், 41–60)',
       'உங்கள் தபால் குறியீட்டின் முதல் இரண்டு இலக்கங்கள் என்ன?',
@@ -430,6 +326,7 @@ const DICTIONARY = {
       () => 'பகிர்ந்ததற்கு நன்றி. பரிந்துரைகள் உங்களுக்கு பாதுகாப்பானவை என்பதை உறுதிப்படுத்துவேன். ',
       () => 'இது மிகவும் உண்மையான சவால். ',
       () => 'சமூக இணைப்பு ஆரோக்கியத்திற்கான முக்கியமான பாதுகாப்பு காரணி. ',
+      (input) => /(ஆம்|yes)/i.test(input) ? 'பகிர்ந்ததற்கு நன்றி — இது உங்கள் திட்டத்தில் கருத்தில் கொள்ளப்படும். ' : 'நன்று, பதிவு செய்யப்பட்டது. ',
       () => 'உங்கள் மனநல நலன் உடல் ஆரோக்கியம் போலவே முக்கியமானது. ',
       () => 'பதிவு செய்யப்பட்டது. ',
       () => 'அருகிலுள்ள வளங்களை இப்போது வரைபடமாக்குகிறேன். ',
@@ -442,6 +339,7 @@ const DICTIONARY = {
       ['நோய் அல்லது அறிகுறிகள் இல்லை', 'உயர் இரத்த அழுத்தம்', 'நீரிழிவு முன்நிலை அல்லது நீரிழிவு', 'இதய நோய்', 'செயலில் இருக்கும்போது தலைச்சுற்றல் அல்லது நெஞ்சு வலி'],
       ['நேரமின்மை', 'மிகவும் விலை அதிகம்', 'மிகவும் தூரம்', 'மருத்துவமனைகளை விரும்புகிறேன்', 'என்ன கிடைக்கும் என்று தெரியாது', 'தடைகள் இல்லை'],
       ['பல நம்பகமான நபர்கள் உள்ளனர்', 'ஒன்று அல்லது இரண்டு நெருங்கிய நபர்கள்', 'பெரும்பாலும் சுயமாக சமாளிக்கிறேன்', 'மிகவும் தனிமையாக உணர்கிறேன்'],
+      ['ஆம், இது நடந்துள்ளது', 'இல்லை, எப்போதும் போதுமான உணவு இருந்தது'],
       ['ஒட்டுமொத்தமாக நல்லாக உணர்கிறேன்', 'சில மன அழுத்தம் ஆனால் சமாளிக்கிறேன்', 'மிகவும் மன அழுத்தம் அல்லது மனச்சோர்வு', 'அதிக சுமை — பராமரிப்பு அல்லது நிதி அழுத்தம்'],
       ['ஆண், 21–40', 'பெண், 21–40', 'ஆண், 41–60', 'பெண், 41–60', 'ஆண், 60+', 'பெண், 60+'],
       ['73 (Woodlands)', '75–76 (Yishun)', '75 (Sembawang)', '68 (Admiralty/Canberra)', 'மற்றவை / தெரியாது'],
@@ -450,18 +348,14 @@ const DICTIONARY = {
   },
 };
 
-// ─── CLINICAL DATA PARSER ─────────────────────────────────────────────────────
-// Now correctly parses PAVS as Days × Minutes for a validated composite score.
-// Also captures 5 SDOH domains from the expanded question set.
 const parseClinicalData = (raw) => {
-  // PAVS — Q0 days, Q1 minutes
   const daysStr  = (raw.pavs_days || '').toLowerCase();
   const minsStr  = (raw.pavs_mins  || '').toLowerCase();
 
   const daysN = daysStr.includes('0 day') || daysStr === '0' ? 0
               : daysStr.match(/5.?7|5\+|every day/i)         ? 6
-              : daysStr.match(/3.?4/i)                        ? 3.5
-              : daysStr.match(/1.?2/i)                        ? 1.5
+              : daysStr.match(/3.?4/i)                       ? 3.5
+              : daysStr.match(/1.?2/i)                       ? 1.5
               : parseInt((daysStr.match(/\d+/) || ['0'])[0], 10);
 
   const minsN = minsStr.includes('60+') || minsStr.includes('60 min') ? 65
@@ -471,52 +365,40 @@ const parseClinicalData = (raw) => {
               : minsStr.includes('less') || minsStr.includes('20')     ? 15
               : parseInt((minsStr.match(/\d+/) || ['0'])[0], 10);
 
-  const pavsScore    = Math.round(daysN * minsN * 7 / 7); // weekly total = days × mins
+  const pavsScore    = Math.round(daysN * minsN * 7 / 7); 
   const pavsDays     = daysN;
   const pavsMinutes  = minsN;
 
-  // Strength
   const strStr      = (raw.strength || '').toLowerCase();
-  const strengthDays = strStr.includes('3+') ? 3
-                     : strStr.includes('2')   ? 2
-                     : strStr.includes('1')   ? 1
-                     : 0;
+  const strengthDays = strStr.includes('3+') ? 3 : strStr.includes('2') ? 2 : strStr.includes('1') ? 1 : 0;
 
-  // Medical safety
   const medStr      = (raw.medical || '').toLowerCase();
   const symptomFlag = /(dizziness|chest pain|pening|dada|头晕|胸痛|தலைச்சுற்றல்|நெஞ்சு வலி)/.test(medStr);
   const medFlag     = /(blood pressure|prediabetes|diabetes|heart|darah tinggi|高血压|糖尿病|心脏|உயர் இரத்த|நீரிழிவு|இதய)/.test(medStr);
 
-  // SDOH — Financial
-  const barrStr      = (raw.barriers || '').toLowerCase();
+  const barrStr       = (raw.barriers || '').toLowerCase();
   const sdohFinancial = /(expensive|cost|afford|mahal|kos|贵|செலவு|too far|jauh|太远)/.test(barrStr);
 
-  // SDOH — Social (LSNS-6 inspired)
   const socialStr    = (raw.social || '').toLowerCase();
   const sdohSocial   = /(isolated|alone|on my own|keseorangan|孤立|தனிமை)/.test(socialStr);
 
-  // SDOH — Psychological (BPS-RS II P-domain inspired)
   const wellStr      = (raw.wellbeing || '').toLowerCase();
   const sdohPsychological = /(stressed|stress|low|overwhelmed|tertekan|murung|terbeban|压抑|不知所措|மன அழுத்தம்|மனச்சோர்வு|அதிக சுமை)/.test(wellStr);
 
-  // Demographics
   const demoStr = (raw.demographics || '').toLowerCase();
   let gender = 'Unknown';
   if (/(female|perempuan|女|பெண்)/.test(demoStr))        gender = 'Female';
   else if (/(male|lelaki|男|ஆண்)/.test(demoStr))          gender = 'Male';
 
   let age = 'Unknown';
-  if (demoStr.includes('60+'))                             age = '60+';
-  else if (demoStr.includes('41'))                         age = '41-60';
-  else if (demoStr.includes('21'))                         age = '21-40';
+  if (demoStr.includes('60+'))                           age = '60+';
+  else if (demoStr.includes('41'))                       age = '41-60';
+  else if (demoStr.includes('21'))                       age = '21-40';
 
-  // Location
   const locStr       = (raw.postal_code || '');
   const sectorMatch  = locStr.match(/\d{2}/);
   const postalSector = sectorMatch ? sectorMatch[0] : '00';
 
-  // Continuity
-  // Food insecurity — Lien Centre Q1 (SDOH PDF p.10)
   const foodStr        = (raw.food_insecurity || '').toLowerCase();
   const sdohFoodInsecure = /(yes|ya|是|ஆம்)/.test(foodStr);
 
@@ -529,12 +411,10 @@ const parseClinicalData = (raw) => {
     symptomFlag, medFlag,
     sdohFinancial, sdohSocial, sdohPsychological, sdohFoodInsecure,
     gender, age, postalSector, previousId,
-    // Legacy compat for calculateRiskScore util
     psychoFlag: sdohPsychological,
   };
 };
 
-// ─── AURA AVATAR ──────────────────────────────────────────────────────────────
 const AuraAvatar = ({ size = 'sm' }) => (
   <div className={`
     ${size === 'sm' ? 'w-7 h-7 text-xs' : 'w-9 h-9 text-sm'}
@@ -545,7 +425,6 @@ const AuraAvatar = ({ size = 'sm' }) => (
   </div>
 );
 
-// ─── PROGRESS BAR ─────────────────────────────────────────────────────────────
 const ProgressBar = ({ currentStep, total, langData }) => {
   const pct = Math.round(((currentStep) / total) * 100);
   const domain = DOMAIN_CONFIG[currentStep] || DOMAIN_CONFIG[total - 1];
@@ -569,7 +448,6 @@ const ProgressBar = ({ currentStep, total, langData }) => {
   );
 };
 
-// ─── CTA CARD ─────────────────────────────────────────────────────────────────
 const CtaCard = ({ ctaData, langData }) => (
   <div className="mt-3 rounded-2xl border border-teal-100 dark:border-teal-900 bg-teal-50 dark:bg-teal-950/40 overflow-hidden shadow-sm">
     <div className="px-4 py-3 bg-teal-600 dark:bg-teal-700 flex items-center gap-2">
@@ -578,7 +456,6 @@ const CtaCard = ({ ctaData, langData }) => (
     </div>
 
     <div className="p-4 space-y-4">
-      {/* Primary step */}
       <div>
         <div className="flex items-center gap-1.5 mb-1.5">
           <CheckCircle size={13} className="text-teal-600 dark:text-teal-400 flex-shrink-0" />
@@ -591,7 +468,6 @@ const CtaCard = ({ ctaData, langData }) => (
         </p>
       </div>
 
-      {/* HealthierSG connection */}
       <div className="border-t border-teal-100 dark:border-teal-900 pt-3">
         <div className="flex items-center gap-1.5 mb-1.5">
           <ExternalLink size={13} className="text-emerald-600 dark:text-emerald-400 flex-shrink-0" />
@@ -604,7 +480,6 @@ const CtaCard = ({ ctaData, langData }) => (
         </p>
       </div>
 
-      {/* Additional resources */}
       <div className="border-t border-teal-100 dark:border-teal-900 pt-3">
         <p className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-2">
           {langData.ctaResources}
@@ -619,7 +494,6 @@ const CtaCard = ({ ctaData, langData }) => (
   </div>
 );
 
-// ─── DOMAIN BADGE ─────────────────────────────────────────────────────────────
 const DomainBadge = ({ step }) => {
   const domain = DOMAIN_CONFIG[step];
   if (!domain) return null;
@@ -636,7 +510,6 @@ const DomainBadge = ({ step }) => {
   );
 };
 
-// ─── MAIN COMPONENT ───────────────────────────────────────────────────────────
 const AuraChatbot = () => {
   const [isDark, setIsDark]         = useState(false);
   const navigate                    = useNavigate();
@@ -654,7 +527,6 @@ const AuraChatbot = () => {
   const [collectedData, setCollectedData] = useState({});
   const [isComplete,    setIsComplete]    = useState(false);
 
-  // ── Theme initialisation
   useEffect(() => {
     const stored = localStorage.getItem('nexus-theme');
     const sysDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
@@ -670,22 +542,18 @@ const AuraChatbot = () => {
     localStorage.setItem('nexus-theme', next ? 'dark' : 'light');
   };
 
-  // ── First prompt
   useEffect(() => {
     if (messages.length === 0) appendBotMessage(langData.prompts[0], 0);
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  }, []); 
 
-  // ── Auto-scroll
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, isTyping]);
 
-  // ── Focus input after bot finishes typing
   useEffect(() => {
     if (!isTyping) inputRef.current?.focus();
   }, [isTyping]);
 
-  // ── Append a bot message with domain step context
   const appendBotMessage = (text, step, ctaData = null) => {
     setIsTyping(true);
     setTimeout(() => {
@@ -694,7 +562,6 @@ const AuraChatbot = () => {
     }, 850);
   };
 
-  // ── Handle submission (quick reply or typed)
   const handleUserSubmission = async (text) => {
     if (!text.trim() || isTyping || isComplete) return;
 
@@ -706,8 +573,6 @@ const AuraChatbot = () => {
     setCollectedData(updatedData);
     setIsTyping(true);
 
-    // Build conversation history in the same format AuraPulseBot uses
-    // so the Cloud Function receives a consistent payload
     const history = messages
       .filter(m => !m.isGreeting)
       .map(m => ({
@@ -715,20 +580,13 @@ const AuraChatbot = () => {
         parts: [{ text: m.text }],
       }));
 
-    // Context passed as `prompt` — mirrors AuraPulseBot contextPrompt pattern
     const contextPrompt = [
       WELL_WELL_PROMPT,
-      `
-
-Assessment domain: ${stepKey} (step ${currentStep + 1} of ${TOTAL_STEPS})`,
+      `\n\nAssessment domain: ${stepKey} (step ${currentStep + 1} of ${TOTAL_STEPS})`,
       `User just answered: "${text}"`,
-      `All answers collected so far:
-${Object.entries(updatedData).map(([k, v]) => `  ${k}: ${v}`).join('
-')}`,
-    ].join('
-');
+      `All answers collected so far:\n${Object.entries(updatedData).map(([k, v]) => `  ${k}: ${v}`).join('\n')}`,
+    ].join('\n');
 
-    // Get AI-generated acknowledgement via Cloud Function (Gemini, API key secured)
     let aiAck = '';
     try {
       const result = await secureChatWithAura({
@@ -738,10 +596,8 @@ ${Object.entries(updatedData).map(([k, v]) => `  ${k}: ${v}`).join('
         prompt:    contextPrompt,
         isDemo:    false,
       });
-      // Cloud Function returns { data: { text: '...' } }
       const raw      = result.data?.text ?? '';
       const stripped = raw.replace(/```json|```/g, '').trim();
-      // Try to parse as JSON (Cloud Function may return structured response)
       try {
         const parsed = JSON.parse(stripped.substring(stripped.indexOf('{'), stripped.lastIndexOf('}') + 1));
         aiAck = parsed.reply?.trim() ?? stripped;
@@ -749,13 +605,11 @@ ${Object.entries(updatedData).map(([k, v]) => `  ${k}: ${v}`).join('
         aiAck = stripped;
       }
     } catch {
-      // Fallback to static reflection if Cloud Function unavailable
       aiAck = langData.reflections[currentStep]?.(text) ?? '';
     }
 
     const nextStep = currentStep + 1;
     if (nextStep < TOTAL_STEPS) {
-      // Resolve next question — may be a function of collected data (e.g. Q1 for 0-days case)
       const nextPromptRaw = langData.prompts[nextStep];
       const nextPrompt    = typeof nextPromptRaw === 'function' ? nextPromptRaw(updatedData) : nextPromptRaw;
       const combined      = (aiAck ? aiAck + ' ' : '') + nextPrompt;
@@ -775,7 +629,6 @@ ${Object.entries(updatedData).map(([k, v]) => `  ${k}: ${v}`).join('
     handleUserSubmission(userInput);
   };
 
-  // ── Triage conclusion
   const concludeTriage = async (finalData) => {
     const parsed    = parseClinicalData(finalData);
     const riskScore = calculateRiskScore(parsed);
@@ -791,7 +644,6 @@ ${Object.entries(updatedData).map(([k, v]) => `  ${k}: ${v}`).join('
         ctaTier: ctaData.tier,
       });
 
-      // Render the CTA card inside the chat before navigating
       setTimeout(() => {
         setIsComplete(true);
         setMessages(prev => [...prev, {
@@ -801,7 +653,6 @@ ${Object.entries(updatedData).map(([k, v]) => `  ${k}: ${v}`).join('
           ctaData,
         }]);
 
-        // Navigate after user has had time to read the card
         setTimeout(() => {
           navigate('/individuals/result', {
             state: {
@@ -823,7 +674,6 @@ ${Object.entries(updatedData).map(([k, v]) => `  ${k}: ${v}`).join('
     }
   };
 
-  // ── Quick replies — only show when bot is not typing and step has replies
   const showQuickReplies = !isTyping && !isComplete && currentStep < langData.quickReplies.length;
 
   return (
