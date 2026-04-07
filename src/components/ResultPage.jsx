@@ -25,7 +25,7 @@ const DICTIONARY = {
     sdohSocText: 'Social connection flagged — community group and befriending resources have been included.',
     sdohPsychoText: 'Mental wellbeing flagged — emotional wellness and counselling resources have been added.',
     trendActive: 'Longitudinal Tracking Active',
-    trendDesc: 'Your results have been linked to your previous assessment to monitor clinical progress over time.',
+    trendDesc: 'Your results have been linked to your previous assessment so you can track your progress over time.',
     pavsTitle: 'ACSM Physical Activity Vital Sign',
     pavsWeekly: 'mins / week',
     pavsDays: 'days / week',
@@ -188,11 +188,11 @@ const DICTIONARY = {
 
 // ─── RESOURCE LIBRARY ─────────────────────────────────────────────────────────
 const ALL_RESOURCES = {
-  ssmc_kkh:          { id: 'ssmc_kkh',          url: 'https://for.sg/exercise',                                          logo: '/logos/ssmckkh.png',      en: { title: 'SSMC@KKH Exercise Resources',          desc: 'Expert clinical exercise prescriptions and safety resources for the community.' },                          ms: { title: 'Sumber Senaman SSMC@KKH',              desc: 'Preskripsi senaman klinikal pakar untuk komuniti.' },                                               zh: { title: 'SSMC@KKH 运动资源',                    desc: '为社区提供的专家临床运动处方和安全资源。' },                                                        ta: { title: 'SSMC@KKH உடற்பயிற்சி வளங்கள்',        desc: 'சமூகத்திற்கான நிபுணர் மருத்துவ உடற்பயிற்சி வளங்கள்.' } },
+  ssmc_kkh:          { id: 'ssmc_kkh',          url: 'https://for.sg/exercise',                                          logo: '/logos/ssmckkh.png',      en: { title: 'SSMC@KKH Exercise Resources',          desc: 'Expert exercise guidance and safety resources from KKH and SingHealth for the community.' },                          ms: { title: 'Sumber Senaman SSMC@KKH',              desc: 'Panduan senaman pakar dan sumber keselamatan untuk komuniti.' },                                               zh: { title: 'SSMC@KKH 运动资源',                    desc: '为社区提供的专家临床运动处方和安全资源。' },                                                        ta: { title: 'SSMC@KKH உடற்பயிற்சி வளங்கள்',        desc: 'சமூகத்திற்கான நிபுணர் மருத்துவ உடற்பயிற்சி வளங்கள்.' } },
   spag:              { id: 'spag',               url: 'https://for.sg/spag',                                              logo: '/logos/sportsg.png',      en: { title: 'Singapore Physical Activity Guidelines', desc: 'National guidelines for physical activity and sedentary behaviour.' },                                     ms: { title: 'Garis Panduan Aktiviti Fizikal SG',    desc: 'Garis panduan kebangsaan untuk aktiviti fizikal.' },                                                zh: { title: '新加坡体力活动指南',                    desc: '国家体力活动指南。' },                                                                                ta: { title: 'சிங்கப்பூர் உடல் செயல்பாட்டு வழிகாட்டுதல்கள்', desc: 'தேசிய உடல் செயல்பாட்டு வழிகாட்டுதல்கள்.' } },
   healthier_sg:      { id: 'healthier_sg',       url: 'https://www.healthiersg.gov.sg/',                                  logo: '/logos/healthiersg.png',  en: { title: 'Healthier SG GP Check-In',             desc: 'Schedule a fully subsidised annual check-in with your enrolled GP.' },                                     ms: { title: 'Semakan GP Healthier SG',              desc: 'Jadualkan pemeriksaan tahunan bersubsidi penuh dengan doktor anda.' },                                      zh: { title: 'Healthier SG 全科医生复查',              desc: '安排全额补贴的年度检查。' },                                                                        ta: { title: 'Healthier SG GP சோதனை',                desc: 'மருத்துவரிடம் முழு மானியத்துடன் கூடிய பரிசோதனையை திட்டமிடுங்கள்.' } },
   start2move:        { id: 'start2move',         url: 'https://www.healthhub.sg/programmes/letsmoveit/start2move',        logo: '/logos/hpb.png',          en: { title: 'HPB Start2Move (Free)',                desc: 'A free 6-session beginner programme to help you start exercising safely.' },                               ms: { title: 'Program Start2Move HPB (Percuma)',     desc: 'Program percuma 6 sesi untuk pemula.' },                                                              zh: { title: 'HPB Start2Move（免费）',               desc: '免费的6节初学者计划，帮助您安全锻炼。' },                                                             ta: { title: 'HPB Start2Move (இலவசம்)',               desc: 'இலவச 6 அமர்வு தொடக்க திட்டம்.' } },
-  active_health:     { id: 'active_health',      url: 'https://www.myactivesg.com/active-health',                         logo: '/logos/activehealth.png', en: { title: 'Active Health Labs',                  desc: 'Supervised clinical exercise and metabolic health programmes by SportSG.' },                              ms: { title: 'Makmal Active Health',                desc: 'Program senaman klinikal yang diawasi oleh SportSG.' },                                               zh: { title: 'Active Health 实验室',                 desc: 'SportSG 提供的有监督临床锻炼计划。' },                                                               ta: { title: 'Active Health ஆய்வகங்கள்',              desc: 'SportSG-ன் மருத்துவ உடற்பயிற்சி திட்டங்கள்.' } },
+  active_health:     { id: 'active_health',      url: 'https://www.myactivesg.com/active-health',                         logo: '/logos/activehealth.png', en: { title: 'Active Health Labs',                  desc: 'Supervised exercise and metabolic health programmes by SportSG professionals.' },                              ms: { title: 'Makmal Active Health',                desc: 'Program senaman dan kesihatan metabolik yang diawasi oleh SportSG.' },                                               zh: { title: 'Active Health 实验室',                 desc: 'SportSG 提供的有监督临床锻炼计划。' },                                                               ta: { title: 'Active Health ஆய்வகங்கள்',              desc: 'SportSG-ன் மருத்துவ உடற்பயிற்சி திட்டங்கள்.' } },
   activesg_gym:      { id: 'activesg_gym',       url: 'https://www.myactivesg.com/',                                      logo: '/logos/activesg.png',     en: { title: 'ActiveSG Facilities',                 desc: 'Affordable fitness gyms, pools, and group workout classes near you.' },                                   ms: { title: 'Fasiliti ActiveSG',                   desc: 'Gim, kolam renang dan kelas senaman berpatutan berhampiran anda.' },                                        zh: { title: 'ActiveSG 设施',                        desc: '附近价格实惠的健身房和团体锻炼课程。' },                                                             ta: { title: 'ActiveSG வசதிகள்',                      desc: 'மலிவு விலையில் உடற்பயிற்சி நிலையங்கள்.' } },
   pa_courses:        { id: 'pa_courses',         url: 'https://www.onepa.gov.sg/',                                        logo: '/logos/pa.png',           en: { title: 'PA Community Interest Groups',        desc: 'Free or low-cost Tai Chi, Yoga, Brisk Walking groups at your nearest Community Club.' },                  ms: { title: 'Kumpulan Minat Komuniti PA',           desc: 'Kumpulan Tai Chi, Yoga, Berjalan Pantas percuma atau murah di CC terdekat.' },                               zh: { title: 'PA 社区兴趣小组',                       desc: '在最近的社区俱乐部参加太极拳、瑜伽等免费或低价活动。' },                                             ta: { title: 'PA சமூக ஆர்வக் குழுக்கள்',              desc: 'தாய்ச்சி, யோகா, விரைவு நடை குழுக்கள்.' } },
   singhealth_healthup: { id: 'singhealth_healthup', url: 'https://www.singhealth.com.sg/community-care/level-up-with-healthup', logo: '/logos/singhealth.png', en: { title: 'SingHealth Health UP!',           desc: 'Community wellness programmes with guidance from SingHealth Wellbeing Coordinators.' },                    ms: { title: 'SingHealth Health UP!',               desc: 'Program kesejahteraan komuniti dengan bimbingan SingHealth.' },                                             zh: { title: 'SingHealth Health UP!',               desc: '在 SingHealth 健康协调员指导下的社区健康计划。' },                                                   ta: { title: 'SingHealth Health UP!',                desc: 'SingHealth நலன்புரி ஒருங்கிணைப்பாளர்களுடன் சமூக திட்டங்கள்.' } },
@@ -418,7 +418,7 @@ export default function ResultPage() {
   const [isDark,             setIsDark]             = useState(false);
 
   // FIX 1: Two refs — one per PDF page
-  const printRef  = useRef(null); // Page 1: clinical report
+  const printRef  = useRef(null); // Page 1: health report
   const printRef2 = useRef(null); // Page 2: governance, disclaimer, references, M3
 
   // FIX 3: clean hasState — handles score === 0 correctly
@@ -489,7 +489,7 @@ export default function ResultPage() {
     recordTelemetry(postalSector, { action: 'download_pdf', score, language: lang, ctaTier });
 
     const captureOpts = {
-      scale: 2, useCORS: true, logging: false, backgroundColor: '#ffffff',
+      scale: 1.5, useCORS: true, logging: false, backgroundColor: '#ffffff',
       onclone: (doc) => {
         doc.documentElement.classList.remove('dark');
         doc.querySelectorAll('svg').forEach(svg => {
@@ -510,10 +510,11 @@ export default function ResultPage() {
       const ph  = pdf.internal.pageSize.getHeight();  // 297 mm
 
       const addCanvasPage = (canvas) => {
-        const img = canvas.toDataURL('image/png');
+        // JPEG at 0.82 quality + scale 1.5 reduces file size from ~34 MB to ~3–5 MB
+        const img = canvas.toDataURL('image/jpeg', 0.82);
         let rw = pw, rh = (canvas.height * rw) / canvas.width, mx = 0;
         if (rh > ph) { rh = ph; rw = (canvas.width * rh) / canvas.height; mx = (pw - rw) / 2; }
-        pdf.addImage(img, 'PNG', mx, 0, rw, rh);
+        pdf.addImage(img, 'JPEG', mx, 0, rw, rh);
       };
 
       addCanvasPage(canvas1);
@@ -565,7 +566,7 @@ export default function ResultPage() {
       {/* ── HIDDEN PDF TEMPLATES (off-screen) ──────────────────────────────── */}
       <div style={{ position: 'absolute', top: '-10000px', left: '-10000px' }}>
 
-        {/* ── PAGE 1: Clinical Report ────────────────────────────────────── */}
+        {/* ── PAGE 1: Health Report ────────────────────────────────────── */}
         <div ref={printRef} className="w-[794px] bg-white text-black flex flex-col" style={{ fontFamily: 'Arial, sans-serif' }}>
 
           {/* PDF Header */}
@@ -675,7 +676,7 @@ export default function ResultPage() {
           </div>
         </div>
 
-        {/* ── PAGE 2: Clinical Governance, Disclaimers, References, M3 ─────── */}
+        {/* ── PAGE 2: Governance, Disclaimers, References, M3 ─────── */}
         <div ref={printRef2}
           style={{
             width: '794px',
@@ -694,7 +695,7 @@ export default function ResultPage() {
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end' }}>
               <div>
                 <div style={{ color: '#0f172a', fontWeight: 900, fontSize: 18, letterSpacing: 2 }}>NEXUS AURA</div>
-                <div style={{ color: '#64748b', fontWeight: 700, fontSize: 10, textTransform: 'uppercase', letterSpacing: 2, marginTop: 2 }}>Clinical Governance and Disclaimers</div>
+                <div style={{ color: '#64748b', fontWeight: 700, fontSize: 10, textTransform: 'uppercase', letterSpacing: 2, marginTop: 2 }}>Health Navigation Governance and Disclaimers</div>
               </div>
               <div style={{ textAlign: 'right', fontSize: 10, color: '#94a3b8', fontWeight: 600 }}>
                 <div>{t.assessmentId}: {activeSessionId}</div>
@@ -709,14 +710,14 @@ export default function ResultPage() {
               Important Medical Disclaimer
             </div>
             <div style={{ fontSize: 11, color: '#4c0519', lineHeight: 1.7 }}>
-              This NEXUS AURA report is an initial community health navigation tool and <strong>does not constitute medical advice, diagnosis, or a clinical treatment plan</strong>. The risk stratification and physical activity recommendations are algorithmically generated for educational and community triage purposes only. Always consult a qualified healthcare professional or your Healthier SG GP before making significant changes to your lifestyle, diet, or exercise routine. If you are experiencing chest pain, dizziness, or any acute symptoms, please seek immediate medical attention.
+              This NEXUS AURA report is an initial community health navigation tool and <strong>does not constitute medical advice, diagnosis, or a treatment plan</strong>. The risk stratification and physical activity recommendations are algorithmically generated for educational and community triage purposes only. Always consult a qualified healthcare professional or your Healthier SG GP before making significant changes to your lifestyle, diet, or exercise routine. If you are experiencing chest pain, dizziness, or any acute symptoms, please seek immediate medical attention.
             </div>
           </div>
 
-          {/* Academic & Clinical Grounding */}
+          {/* Academic & Evidence Grounding */}
           <div>
             <div style={{ fontWeight: 900, fontSize: 12, color: '#0f172a', marginBottom: '14px', textTransform: 'uppercase', letterSpacing: 1, borderBottom: '1px solid #e2e8f0', paddingBottom: '8px' }}>
-              Academic and Clinical Grounding
+              Academic and Evidence Grounding
             </div>
             <ul style={{ fontSize: 11, color: '#475569', lineHeight: 1.9, paddingLeft: '20px', margin: 0 }}>
               <li><strong>Physical Activity Screening:</strong> American College of Sports Medicine (ACSM) Physical Activity Vital Sign (PAVS) — validated 2-question screening tool for point-of-care PA assessment.</li>
@@ -743,21 +744,31 @@ export default function ResultPage() {
           {/* M3 Network — pushed to bottom */}
           <div style={{ marginTop: 'auto', background: 'linear-gradient(135deg, #f0fdfa 0%, #ecfdf5 100%)', borderRadius: '12px', padding: '28px 32px', textAlign: 'center', border: '1px solid #99f6e4' }}>
             <div style={{ fontWeight: 900, fontSize: 16, color: '#0f766e', marginBottom: '10px', letterSpacing: 1 }}>
-              Join the Northern Community Nodes
+              Join the Northern Community Nodes — M<sup style={{ fontSize: '0.65em', verticalAlign: 'super' }}>3</sup> Network
             </div>
             <div style={{ fontSize: 12, color: '#475569', marginBottom: '20px', lineHeight: 1.6, maxWidth: '580px', margin: '0 auto 20px' }}>
-              This initiative is proudly piloted in conjunction with the <strong style={{ color: '#0f766e' }}>M3 Network</strong> on <strong>11 April 2026</strong>. Stay connected with your local community nodes in the North for programmes, events, and peer support.
+              This initiative is proudly piloted in conjunction with the <strong style={{ color: '#0f766e' }}>M<sup style={{ fontSize: '0.65em', verticalAlign: 'super' }}>3</sup> Network</strong> on <strong>11 April 2026</strong>. Stay connected with your local community nodes in the North for programmes, events, and peer support.
             </div>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px 24px', maxWidth: '560px', margin: '0 auto', textAlign: 'left' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px 24px', maxWidth: '560px', margin: '0 auto', textAlign: 'left' }}>
+              {/* Web link */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', gridColumn: '1 / -1' }}>
+                <span style={{ fontWeight: 900, fontSize: 10, color: '#0d9488', textTransform: 'uppercase', letterSpacing: 1, minWidth: 28 }}>Web</span>
+                <span style={{ fontWeight: 600, fontSize: 11, color: '#0f766e' }}>m3.gov.sg/m3-towns/north</span>
+              </div>
+              {/* Facebook links with fb.png logo */}
               {[
-                { label: 'Web',  value: 'm3.gov.sg/m3-towns/north' },
-                { label: 'FB',   value: 'facebook.com/M3atWoodlands' },
-                { label: 'FB',   value: 'facebook.com/M3atMarsilingYewTee' },
-                { label: 'FB',   value: 'facebook.com/p/M3-at-Nee-Soon-100068636709214' },
-              ].map((item, i) => (
+                'facebook.com/M3atWoodlands',
+                'facebook.com/M3atMarsilingYewTee',
+                'facebook.com/p/M3-at-Nee-Soon-100068636709214',
+              ].map((url, i) => (
                 <div key={i} style={{ display: 'flex', alignItems: 'flex-start', gap: '8px' }}>
-                  <span style={{ fontWeight: 900, fontSize: 10, color: '#0d9488', textTransform: 'uppercase', letterSpacing: 1, minWidth: 24, paddingTop: 2 }}>{item.label}</span>
-                  <span style={{ fontWeight: 600, fontSize: 11, color: '#0f766e', wordBreak: 'break-all', lineHeight: 1.5 }}>{item.value}</span>
+                  <img
+                    src={baseUrl + '/logos/fb.png'}
+                    alt="Facebook"
+                    crossOrigin="anonymous"
+                    style={{ width: 16, height: 16, objectFit: 'contain', flexShrink: 0, marginTop: 1 }}
+                  />
+                  <span style={{ fontWeight: 600, fontSize: 10, color: '#0f766e', wordBreak: 'break-all', lineHeight: 1.5 }}>{url}</span>
                 </div>
               ))}
             </div>
