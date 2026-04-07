@@ -1,30 +1,3 @@
-/**
- * ResultPage.jsx
- *
- * CHANGELOG vs submitted version:
- *
- * FIX 1 — 2-page PDF (main request)
- *   Added printRef2 for Page 2. handleDownloadPDF now captures both
- *   refs sequentially, calls pdf.addPage(), and embeds Page 2 containing
- *   the Clinical Governance section, Medical Disclaimer, Academic/Clinical
- *   Grounding references, and the M3 Network community nodes block.
- *
- * FIX 2 — Language selector UI
- *   Added compact EN / BM / 中文 / தமிழ் toggle to the top nav bar,
- *   persisting to nexus_language localStorage. Matches ConventionalForm.
- *
- * FIX 3 — hasState cleanup
- *   Simplified to `location.state?.score != null` — correctly handles
- *   score === 0 (legitimately inactive) without double-negation confusion.
- *
- * FIX 4 — Loading bar animation
- *   Replaced animate-[progress_…] (requires custom Tailwind keyframe in
- *   tailwind.config.js) with animate-pulse on the bar — works out of the box.
- *
- * UNCHANGED: All clinical logic, CTA_BANNER, resource library, PAVS panel,
- * SDOH flags, risk tier theming, and PDF Page 1 template.
- */
-
 import React, { useEffect, useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import {
@@ -698,9 +671,14 @@ export default function ResultPage() {
               <div style={{ textAlign: 'right' }}>
                 <div style={{ fontWeight: 900, fontSize: 10, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: 2 }}>{t.assessmentId}</div>
                 <div style={{ fontFamily: 'monospace', fontWeight: 700, fontSize: 12, color: '#0f172a', marginTop: 2 }}>{activeSessionId}</div>
-                <div style={{ fontSize: 10, color: '#94a3b8', fontWeight: 700, marginTop: 6, letterSpacing: 1 }}>PAGE 1 OF 2</div>
               </div>
             </div>
+          </div>
+
+          {/* Unified footer strip — same dark style as Page 2 */}
+          <div style={{ background: '#0f172a', padding: '12px 40px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <div style={{ color: '#64748b', fontSize: 10, fontWeight: 700, letterSpacing: 2 }}>NEXUS AURA · SMART DASHBOARD</div>
+            <div style={{ color: '#94a3b8', fontSize: 10, fontWeight: 700, letterSpacing: 2 }}>PAGE 1 OF 2</div>
           </div>
         </div>
 
@@ -710,15 +688,14 @@ export default function ResultPage() {
             width: '794px',
             minHeight: '1123px',
             background: '#ffffff',
-            padding: '40px',
+            padding: 0,
             display: 'flex',
             flexDirection: 'column',
-            gap: '24px',
             boxSizing: 'border-box',
             fontFamily: 'Arial, sans-serif',
           }}>
 
-          {/* Page 2 Header — identical dark header to Page 1 */}
+          {/* Page 2 Header — flush at top, identical structure to Page 1 */}
           <div style={{ background: '#0f172a', padding: '28px 40px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
               <img src={`${baseUrl}/nexus.png`} alt="NEXUS" crossOrigin="anonymous" style={{ width: 40, height: 40, objectFit: 'contain' }} />
@@ -734,6 +711,9 @@ export default function ResultPage() {
               <div><strong style={{ color: 'white' }}>{t.postalSector}:</strong> Sector {postalSector}</div>
             </div>
           </div>
+
+          {/* Padded content area — padding applied here, not on outer wrapper */}
+          <div style={{ padding: '32px 40px', display: 'flex', flexDirection: 'column', gap: '24px', flex: 1 }}>
 
           {/* Medical Disclaimer */}
           <div style={{ background: '#fff1f2', border: '1px solid #fecdd3', borderRadius: '8px', padding: '20px' }}>
@@ -784,7 +764,7 @@ export default function ResultPage() {
               {/* Web link with M3 logo */}
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px', gridColumn: '1 / -1' }}>
                 <img
-                  src={baseUrl + '/logos/M3.png'}
+                  src={baseUrl + '/logos/m3.png'}
                   alt="M3"
                   crossOrigin="anonymous"
                   style={{ width: 22, height: 22, objectFit: 'contain', flexShrink: 0 }}
@@ -809,9 +789,14 @@ export default function ResultPage() {
                 </div>
               ))}
             </div>
-            <div style={{ marginTop: '20px', textAlign: 'center', fontSize: 10, color: '#94a3b8', fontWeight: 700, letterSpacing: 1 }}>
-              PAGE 2 OF 2
-            </div>
+          </div>
+
+          </div>{/* end padded content */}
+
+          {/* Unified footer strip — matches Page 1 position and style */}
+          <div style={{ marginTop: 'auto', background: '#0f172a', padding: '12px 40px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <div style={{ color: '#64748b', fontSize: 10, fontWeight: 700, letterSpacing: 2 }}>NEXUS AURA · HEALTH NAVIGATION GOVERNANCE</div>
+            <div style={{ color: '#94a3b8', fontSize: 10, fontWeight: 700, letterSpacing: 2 }}>PAGE 2 OF 2</div>
           </div>
 
         </div>
