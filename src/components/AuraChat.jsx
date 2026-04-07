@@ -1,28 +1,3 @@
-/**
- * AuraChatbot.jsx — Enhanced v2.0
- *
- * Clinical grounding:
- *   • ACSM Physical Activity Vital Sign (PAVS): 2-question split → Days × Minutes = score
- *     Thresholds: <150 min/wk = Insufficiently Active | 150–300 = Meets SPAG | >300 = Active
- *   • SingHealth SDOH 5-Domain Framework: Financial, Food Security, Housing, Social, Psychological
- *   • BPS-RS II: Psychological domain items (P20–P25) inform Q6 wellbeing screen
- *   • LSNS-6: Social network items inform Q5 social isolation screen
- *   • Northern Singapore Health Ecosystem Report (March 2026): 8-tier CTA matrix (Section 5.7)
- *
- * UX/Biodesign improvements:
- *   • 10-step flow with proper PAVS split (Q0 = Days, Q1 = Minutes)
- *   • SDOH expanded to cover Social + Psychological domains (Q5, Q6)
- *   • Domain badge per AURA message (transparency of clinical purpose)
- *   • Segmented progress bar with step counter
- *   • AURA avatar in every bot bubble
- *   • Tiered CTA card rendered as structured output (not raw text)
- *   • isTyping guard prevents quick reply render confusion
- *   • Session ID visible in header for clinical trust
- *   • Teal/emerald design system (biodesign health palette)
- *
- * Source: Northern SG Health Ecosystem Report + Singapore SDOH Validated Questionnaires (2026)
- */
-
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { recordTelemetry } from '../utils/telemetry';
@@ -741,17 +716,15 @@ const AuraChatbot = () => {
       }));
 
     // Context passed as `prompt` — mirrors AuraPulseBot contextPrompt pattern
+    const answersSoFar = Object.entries(updatedData)
+      .map(function(entry) { return '  ' + entry[0] + ': ' + entry[1]; })
+      .join('\n');
     const contextPrompt = [
       WELL_WELL_PROMPT,
-      `
-
-Assessment domain: ${stepKey} (step ${currentStep + 1} of ${TOTAL_STEPS})`,
-      `User just answered: "${text}"`,
-      `All answers collected so far:
-${Object.entries(updatedData).map(([k, v]) => `  ${k}: ${v}`).join('
-')}`,
-    ].join('
-');
+      'Assessment domain: ' + stepKey + ' (step ' + (currentStep + 1) + ' of ' + TOTAL_STEPS + ')',
+      'User just answered: "' + text + '"',
+      'All answers collected so far:\n' + answersSoFar,
+    ].join('\n');
 
     // Get AI-generated acknowledgement via Cloud Function (Gemini, API key secured in Firebase).
     // Falls back silently to static reflections if the CF is unavailable or returns an error body.
