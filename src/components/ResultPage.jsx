@@ -1,30 +1,3 @@
-/**
- * ResultPage.jsx
- *
- * CHANGELOG vs submitted version:
- *
- * FIX 1 — 2-page PDF (main request)
- *   Added printRef2 for Page 2. handleDownloadPDF now captures both
- *   refs sequentially, calls pdf.addPage(), and embeds Page 2 containing
- *   the Clinical Governance section, Medical Disclaimer, Academic/Clinical
- *   Grounding references, and the M3 Network community nodes block.
- *
- * FIX 2 — Language selector UI
- *   Added compact EN / BM / 中文 / தமிழ் toggle to the top nav bar,
- *   persisting to nexus_language localStorage. Matches ConventionalForm.
- *
- * FIX 3 — hasState cleanup
- *   Simplified to `location.state?.score != null` — correctly handles
- *   score === 0 (legitimately inactive) without double-negation confusion.
- *
- * FIX 4 — Loading bar animation
- *   Replaced animate-[progress_…] (requires custom Tailwind keyframe in
- *   tailwind.config.js) with animate-pulse on the bar — works out of the box.
- *
- * UNCHANGED: All clinical logic, CTA_BANNER, resource library, PAVS panel,
- * SDOH flags, risk tier theming, and PDF Page 1 template.
- */
-
 import React, { useEffect, useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import {
@@ -442,7 +415,14 @@ export default function ResultPage() {
   const [animate,            setAnimate]            = useState(false);
   const [isGenerating,       setIsGenerating]       = useState(true);
   const [suggestedResources, setSuggestedResources] = useState([]);
-  const [isDark,             setIsDark]             = useState(false);
+  const [isDark, setIsDark] = useState(() => {
+  try {
+    const s = localStorage.getItem('nexus-theme');
+    if (s === 'dark') return true;
+    if (s === 'light') return false;
+    return window.matchMedia('(prefers-color-scheme: dark)').matches;
+  } catch { return false; }
+});
 
   // FIX 1: Two refs — one per PDF page
   const printRef  = useRef(null); // Page 1: health report
@@ -465,13 +445,9 @@ export default function ResultPage() {
   const qrCodeUrl       = `https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent(nexusUrl)}`;
   const baseUrl         = window.location.origin;
 
-  useEffect(() => {
-    const stored  = localStorage.getItem('nexus-theme');
-    const sysDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-    const dark    = stored === 'dark' || (!stored && sysDark);
-    setIsDark(dark);
-    document.documentElement.classList.toggle('dark', dark);
-  }, []);
+useEffect(() => {
+  document.documentElement.classList.toggle('dark', isDark);
+}, [isDark]);
 
   const toggleTheme = () => {
     const next = !isDark;
