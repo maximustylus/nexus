@@ -641,13 +641,13 @@ useEffect(() => {
             {/* Resources Grid */}
             <div>
               <div style={{ fontWeight: 900, fontSize: 13, color: '#0f172a', textTransform: 'uppercase', letterSpacing: 3, borderBottom: '2px solid #e2e8f0', paddingBottom: 10, marginBottom: 20 }}>{t.resources}</div>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
                 {suggestedResources.map((resource) => {
                   const c = resource[lang] || resource.en;
                   return (
-                    <div key={resource.id} style={{ border: '1px solid #e2e8f0', borderRadius: 10, padding: '18px 20px', background: '#f8fafc', display: 'flex', flexDirection: 'column', gap: 10 }}>
+                    <div key={resource.id} style={{ border: '1px solid #e2e8f0', borderRadius: 10, padding: '14px 16px', background: '#f8fafc', display: 'flex', flexDirection: 'column', gap: 10 }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                        <div style={{ width: 44, height: 44, flexShrink: 0, background: 'white', border: '1px solid #e2e8f0', borderRadius: 8, overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                        <div style={{ width: 36, height: 36, flexShrink: 0, background: 'white', border: '1px solid #e2e8f0', borderRadius: 8, overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                           <img src={`${baseUrl}${resource.logo}`} alt="" crossOrigin="anonymous" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                         </div>
                         <div style={{ fontWeight: 900, fontSize: 13, color: '#0f172a', lineHeight: 1.3 }}>{c.title}</div>
@@ -758,45 +758,43 @@ useEffect(() => {
               Data Governance and Privacy
             </div>
             <div style={{ fontSize: 11, color: '#475569', lineHeight: 1.75 }}>
-              All data collected through the NEXUS AURA system is de-identified at the point of capture. Postal sector data is used solely for geographic resource mapping and is not linked to any identifiable personal information. This assessment does not collect, store, or transmit NRIC, name, contact, or financial account information. Aggregated, anonymised data may be used to improve community health programming in Northern Singapore.
+              All data collected through the NEXUS AURA system is de-identified at the point of capture. Postal sector data is used solely for geographic resource mapping and is not linked to any identifiable personal information. This assessment does not collect, store, or transmit NRIC, name, contact, or financial account information. Aggregated, anonymised data may be used to improve community health programming across Singapore.
             </div>
           </div>
 
-          {/* ── CARD 4: M3 Network — teal brand card, same borderRadius ── */}
+        {/* ── CARD 4: Healthier SG — teal brand card ── */}
           <div style={{ marginTop: 'auto', background: 'linear-gradient(135deg, #f0fdfa 0%, #ecfdf5 100%)', borderRadius: 12, padding: '24px 32px', textAlign: 'center', border: '1px solid #99f6e4' }}>
             <div style={{ fontWeight: 900, fontSize: 15, color: '#0f766e', marginBottom: '8px', letterSpacing: 1 }}>
-              Join the Northern Community Nodes — M<sup style={{ fontSize: '0.65em', verticalAlign: 'super' }}>3</sup> Network
+              Your Healthier SG Health Plan
             </div>
             <div style={{ fontSize: 11, color: '#475569', marginBottom: '16px', lineHeight: 1.6, maxWidth: '540px', margin: '0 auto 16px' }}>
-              This initiative is proudly piloted in conjunction with the{' '}
-              <strong style={{ color: '#0f766e' }}>M<sup style={{ fontSize: '0.65em', verticalAlign: 'super' }}>3</sup> Network</strong>.
-              {' '}Stay connected with your local community nodes in the North for programmes, events, and peer support.
+              This assessment aligns with the <strong style={{ color: '#0f766e' }}>MOH Healthier SG</strong> framework. 
+              Enrol with a Healthier SG GP to receive a fully subsidised annual Health Plan consultation, personalised screening schedule, and community programme referrals.
             </div>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px 32px', maxWidth: '560px', margin: '0 auto', textAlign: 'left' }}>
-              {/* M3 web link — spanning full width with m3.png logo */}
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, gridColumn: '1 / -1', paddingBottom: 8, borderBottom: '1px solid #99f6e4' }}>
                 <img
-                  src={baseUrl + '/logos/m3.png'}
-                  alt="M3"
+                  src={baseUrl + '/logos/healthiersg.png'}
+                  alt="Healthier SG"
                   crossOrigin="anonymous"
                   style={{ width: 22, height: 22, objectFit: 'contain', flexShrink: 0 }}
                 />
-                <span style={{ fontWeight: 700, fontSize: 11, color: '#0f766e' }}>m3.gov.sg/m3-towns/north</span>
+                <span style={{ fontWeight: 700, fontSize: 11, color: '#0f766e' }}>healthiersg.gov.sg</span>
               </div>
-              {/* Facebook community pages */}
               {[
-                'facebook.com/M3atWoodlands',
-                'facebook.com/M3atMarsilingYewTee',
-                'facebook.com/p/M3-at-Nee-Soon-100068636709214',
-              ].map((url, i) => (
+                { logo: '/logos/hpb.png', text: 'healthhub.sg — Access your Health Plan & book screenings' },
+                { logo: '/logos/activehealth.png', text: 'activesgcircle.gov.sg/activehealth — Find your nearest Active Health Lab' },
+                { logo: '/logos/aic.png', text: 'aic.sg/care-services/active-ageing-centres — Locate AACs for residents 60+' },
+                { logo: '/logos/pa.png', text: 'onepa.gov.sg — Search HealthierSG interest groups near you' },
+              ].map((item, i) => (
                 <div key={i} style={{ display: 'flex', alignItems: 'flex-start', gap: 8 }}>
                   <img
-                    src={baseUrl + '/logos/fb.png'}
-                    alt="Facebook"
+                    src={baseUrl + item.logo}
+                    alt=""
                     crossOrigin="anonymous"
                     style={{ width: 15, height: 15, objectFit: 'contain', flexShrink: 0, marginTop: 1 }}
                   />
-                  <span style={{ fontWeight: 600, fontSize: 10, color: '#0f766e', wordBreak: 'break-all', lineHeight: 1.5 }}>{url}</span>
+                  <span style={{ fontWeight: 600, fontSize: 10, color: '#0f766e', wordBreak: 'break-all', lineHeight: 1.5 }}>{item.text}</span>
                 </div>
               ))}
             </div>
