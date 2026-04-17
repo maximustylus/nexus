@@ -632,154 +632,284 @@ exports.processFeedPost = onCall({ secrets: ["GEMINI_API_KEY"] }, async (request
 // =============================================================================
 
 exports.publicTriageChat = onCall({
-    cors: true,
-    secrets: ['GEMINI_API_KEY'],
-    timeoutSeconds: 60,
+cors: true,
+secrets: [‘GEMINI_API_KEY’],
+timeoutSeconds: 60,
 }, async (request) => {
+
+```
+const { message, language = 'English', history = [], postalCode = '' } = request.data;
+
+if (!API_KEY) throw new HttpsError('failed-precondition', 'AI service is not configured.');
+if (!message || typeof message !== 'string') throw new HttpsError('invalid-argument', 'Message is required.');
+
+try {
+    // ── 1. RESOLVE REGION FROM POSTAL CODE ──
+    const db = getFirestore();
+    const sectorPrefix = postalCode ? postalCode.substring(0, 2) : '';
     
-    const { message, language = 'English', history = [], postalCode = '' } = request.data;
+    const regionMap = {
+        '01': 'central', '02': 'central', '03': 'central', '04': 'central',
+        '05': 'central', '06': 'central', '07': 'central', '08': 'central',
+        '14': 'central', '15': 'central', '16': 'central',
+        '20': 'central', '21': 'central', '22': 'central', '23': 'central',
+        '24': 'central', '25': 'central', '26': 'central', '27': 'central',
+        '28': 'central', '29': 'central', '30': 'central',
+        '31': 'central', '32': 'central', '33': 'central',
+        '37': 'central', '38': 'central', '39': 'central',
+        '58': 'central', '59': 'central',
+        '41': 'east', '42': 'east', '43': 'east', '44': 'east',
+        '45': 'east', '46': 'east', '47': 'east', '48': 'east',
+        '49': 'east', '50': 'east', '51': 'east', '52': 'east',
+        '53': 'north_east', '54': 'north_east', '55': 'north_east',
+        '56': 'north_east', '57': 'north_east',
+        '79': 'north_east', '80': 'north_east', '82': 'north_east',
+        '12': 'west', '13': 'west',
+        '60': 'west', '61': 'west', '62': 'west', '63': 'west',
+        '64': 'west', '65': 'west', '66': 'west', '67': 'west',
+        '68': 'west', '69': 'west',
+        '72': 'north', '73': 'north', '74': 'north', '75': 'north',
+        '76': 'north', '77': 'north', '78': 'north',
+    };
 
-    if (!API_KEY) throw new HttpsError('failed-precondition', 'AI service is not configured.');
-    if (!message || typeof message !== 'string') throw new HttpsError('invalid-argument', 'Message is required.');
+    const resolvedRegion = regionMap[sectorPrefix] || '';
 
-    try {
-        const db = getFirestore();
-        const sectorPrefix = postalCode ? postalCode.substring(0, 2) : '';
-        
-        const regionMap = {
-            '01': 'central', '02': 'central', '03': 'central', '04': 'central',
-            '05': 'central', '06': 'central', '07': 'central', '08': 'central',
-            '14': 'central', '15': 'central', '16': 'central',
-            '20': 'central', '21': 'central', '22': 'central', '23': 'central',
-            '24': 'central', '25': 'central', '26': 'central', '27': 'central',
-            '28': 'central', '29': 'central', '30': 'central',
-            '31': 'central', '32': 'central', '33': 'central',
-            '37': 'central', '38': 'central', '39': 'central',
-            '58': 'central', '59': 'central',
-            '41': 'east', '42': 'east', '43': 'east', '44': 'east',
-            '45': 'east', '46': 'east', '47': 'east', '48': 'east',
-            '49': 'east', '50': 'east', '51': 'east', '52': 'east',
-            '53': 'north_east', '54': 'north_east', '55': 'north_east',
-            '56': 'north_east', '57': 'north_east',
-            '79': 'north_east', '80': 'north_east', '82': 'north_east',
-            '12': 'west', '13': 'west',
-            '60': 'west', '61': 'west', '62': 'west', '63': 'west',
-            '64': 'west', '65': 'west', '66': 'west', '67': 'west',
-            '68': 'west', '69': 'west',
-            '72': 'north', '73': 'north', '74': 'north', '75': 'north',
-            '76': 'north', '77': 'north', '78': 'north',
-        };
+    // ── 2. QUERY FIRESTORE FOR RELEVANT RESOURCES ──
+    let resourceText = '';
+    
+    if (resolvedRegion) {
+        const [regionalSnap, nationalSnap] = await Promise.all([
+            db.collection('resources')
+                .where('region', '==', resolvedRegion)
+                .where('active', '==', true)
+                .get(),
+            db.collection('resources')
+                .where('region', '==', 'national')
+                .where('active', '==', true)
+                .get(),
+        ]);
 
-        const resolvedRegion = regionMap[sectorPrefix] || '';
+        const allResources = [];
+        regionalSnap.forEach(doc => allResources.push(doc.data()));
+        nationalSnap.forEach(doc => allResources.push(doc.data()));
 
-        let resourceText = '';
-        
-        if (resolvedRegion) {
-            const [regionalSnap, nationalSnap] = await Promise.all([
-                db.collection('resources')
-                    .where('region', '==', resolvedRegion)
-                    .where('active', '==', true)
-                    .get(),
-                db.collection('resources')
-                    .where('region', '==', 'national')
-                    .where('active', '==', true)
-                    .get(),
-            ]);
+        if (allResources.length > 0) {
+            const formatted = allResources.map(r => {
+                const parts = [`- ${r.name} (${r.type.replace(/_/g, ' ')})`];
+                if (r.address) parts.push(`  Address: ${r.address}`);
+                if (r.bookingPlatform) parts.push(`  Book via: ${r.bookingPlatform}`);
+                if (r.bookingUrl) parts.push(`  URL: ${r.bookingUrl}`);
+                if (r.priceRangeSgd && r.priceRangeSgd.min === 0) parts.push(`  Cost: FREE`);
+                else if (r.priceRangeSgd) parts.push(`  Cost: From SGD ${r.priceRangeSgd.min}`);
+                if (r.eligibility && r.eligibility.length > 0) parts.push(`  Eligibility: ${r.eligibility.join(', ')}`);
+                if (r.sdohAlignment && r.sdohAlignment.length > 0) parts.push(`  SDOH relevance: ${r.sdohAlignment.join(', ')}`);
+                if (r.operatingHours) parts.push(`  Hours: ${r.operatingHours}`);
+                return parts.join('\n');
+            }).join('\n\n');
 
-            const allResources = [];
-            regionalSnap.forEach(doc => allResources.push(doc.data()));
-            nationalSnap.forEach(doc => allResources.push(doc.data()));
-
-            if (allResources.length > 0) {
-                const formatted = allResources.map(r => {
-                    const parts = [`- ${r.name} (${r.type.replace(/_/g, ' ')})`];
-                    if (r.address) parts.push(`  Address: ${r.address}`);
-                    if (r.bookingPlatform) parts.push(`  Book via: ${r.bookingPlatform}`);
-                    if (r.bookingUrl) parts.push(`  URL: ${r.bookingUrl}`);
-                    if (r.priceRangeSgd && r.priceRangeSgd.min === 0) parts.push(`  Cost: FREE`);
-                    else if (r.priceRangeSgd) parts.push(`  Cost: From SGD ${r.priceRangeSgd.min}`);
-                    if (r.eligibility && r.eligibility.length > 0) parts.push(`  Eligibility: ${r.eligibility.join(', ')}`);
-                    if (r.sdohAlignment && r.sdohAlignment.length > 0) parts.push(`  SDOH relevance: ${r.sdohAlignment.join(', ')}`);
-                    if (r.operatingHours) parts.push(`  Hours: ${r.operatingHours}`);
-                    return parts.join('\n');
-                }).join('\n\n');
-
-                const regionLabel = resolvedRegion.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
-                resourceText = `\n\nVERIFIED RESOURCE INVENTORY FOR ${regionLabel.toUpperCase()} SINGAPORE (from Firestore — use ONLY these resources in your CTA):\n\n${formatted}`;
-            }
+            const regionLabel = resolvedRegion.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+            resourceText = `\n\nVERIFIED RESOURCE INVENTORY FOR ${regionLabel.toUpperCase()} SINGAPORE (from Firestore — use ONLY these resources in your CTA):\n\n${formatted}`;
         }
-
-        if (!resourceText) {
-            const allSnap = await db.collection('resources').where('active', '==', true).get();
-            const allResources = [];
-            allSnap.forEach(doc => allResources.push(doc.data()));
-
-            if (allResources.length > 0) {
-                const formatted = allResources.map(r => {
-                    return `- ${r.name} (${r.type.replace(/_/g, ' ')}) | ${r.region} | ${r.address || 'Online'}`;
-                }).join('\n');
-                resourceText = `\n\nVERIFIED RESOURCE INVENTORY — ALL SINGAPORE (user postal code not provided):\n\n${formatted}`;
-            }
-        }
-
-        const modelName = await resolveModel();
-        const url = `https://generativelanguage.googleapis.com/v1beta/${modelName}:generateContent?key=${API_KEY}`;
-
-        const systemInstruction = `
-You are AURA, a clinical triage assistant for Singapore community health, deployed as part of the NEXUS Health Assessment Platform.
-
-RULES:
-1. You must converse strictly in ${language}.
-2. You will ask the ACSM PAVS (Physical Activity Vital Sign) questions one at a time, conversationally. Do not overwhelm the user.
-   - Question 1: "On how many DAYS in a typical week do you do moderate or vigorous physical activity?"
-   - Question 2: "On those days, for how many MINUTES do you usually do this activity?"
-   - Calculate: Score = Days x Minutes. Below 150 min/week = Insufficiently Active.
-3. After PAVS, ask the SingHealth SDOH screening questions one at a time across five domains: Financial Strain, Food Security, Housing Stability, Social Support, Psychological Wellbeing.
-4. Once all questions are answered, calculate the risk tier:
-   - RED (High Needs): PAVS < 150 AND 2+ SDOH flags
-   - AMBER (Moderate Needs): PAVS < 150 OR 1 SDOH flag
-   - GREEN (Low Needs): PAVS >= 150, no SDOH flags
-5. Generate ONE primary Call to Action (CTA) drawn ONLY from the verified resource inventory below. Do not invent resources.
-6. The CTA must include: YOUR NEXT STEP (one specific action), YOUR HEALTHIER SG CONNECTION (how it links to their Health Plan), and OTHER RESOURCES FOR YOU (2-3 supplementary options).
-7. Do not provide medical diagnoses.
-8. On the final turn, you must output a hidden JSON block at the end of your message containing {"traffic_light": "Red/Amber/Green", "pavs_score": X, "sdoh_flags": ["domain1", "domain2"]} so the system can generate the final report.
-9. Always remind the resident to discuss their results with their Healthier SG doctor at their next Health Plan check-in.
-${resourceText}
-        `.trim();
-
-        const contents = [
-            ...history.slice(-MAX_HISTORY_LEN).map(({ role, parts }) => ({ role, parts })),
-            { role: 'user', parts: [{ text: message }] }
-        ];
-
-        const response = await fetch(url, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            signal: AbortSignal.timeout(30000),
-            body: JSON.stringify({
-                systemInstruction: { parts: [{ text: systemInstruction }] },
-                contents: contents,
-                generationConfig: {
-                    temperature: 0.3,
-                    maxOutputTokens: 2048,
-                },
-            }),
-        });
-
-        const data = await response.json();
-
-        if (!response.ok) {
-            logger.error('[PUBLIC_TRIAGE] API Error', data);
-            throw new Error(data.error?.message ?? 'API Error');
-        }
-
-        const rawText = extractText(data);
-
-        return { response: rawText, success: true };
-
-    } catch (error) {
-        if (error instanceof HttpsError) throw error;
-        logger.error('[PUBLIC_TRIAGE] Neural Failure', error.message);
-        throw new HttpsError('internal', `Triage Link Unstable: ${error.message}`);
     }
-});
+
+    if (!resourceText) {
+        const allSnap = await db.collection('resources').where('active', '==', true).get();
+        const allResources = [];
+        allSnap.forEach(doc => allResources.push(doc.data()));
+
+        if (allResources.length > 0) {
+            const formatted = allResources.map(r => {
+                return `- ${r.name} (${r.type.replace(/_/g, ' ')}) | ${r.region} | ${r.address || 'Online'}`;
+            }).join('\n');
+            resourceText = `\n\nVERIFIED RESOURCE INVENTORY — ALL SINGAPORE (user postal code not provided):\n\n${formatted}`;
+        }
+    }
+
+    // ── 3. BUILD DYNAMIC SYSTEM PROMPT ──
+    const modelName = await resolveModel();
+    const url = `https://generativelanguage.googleapis.com/v1beta/${modelName}:generateContent?key=${API_KEY}`;
+
+    const systemInstruction = `
+```
+
+You are AURA, a clinical triage assistant for Singapore community health, deployed as part of the NEXUS Health Assessment Platform. You converse warmly and naturally, one question at a time. Never overwhelm the user. Use British English spelling.
+
+LANGUAGE RULE: You must converse strictly in ${language}. All questions, responses, and the final CTA must be in ${language}.
+
+# =========================================
+SCREENING PROTOCOL (ask in this exact order, one question per turn)
+
+PHASE 1 — PHYSICAL ACTIVITY (ACSM PAVS + SPAG Strength)
+
+Question 1 (PAVS Days):
+“On a typical week, how many days do you do moderate or vigorous physical activity? For example, brisk walking, cycling, swimming, or gym.”
+Options: 0 days / 1-2 days / 3-4 days / 5-7 days
+
+Question 2 (PAVS Minutes):
+“On those active days, roughly how many minutes do you usually exercise each time?”
+Options: Less than 20 mins / 20-30 mins / 30-45 mins / 45-60 mins / 60+ mins
+
+PAVS CALCULATION (use these midpoints):
+
+- Days: 0 days=0, 1-2 days=1.5, 3-4 days=3.5, 5-7 days=6
+- Minutes: <20=15, 20-30=25, 30-45=37, 45-60=52, 60+=65
+- Score = Days midpoint x Minutes midpoint
+- If days = 0, then minutes per session = 0 regardless of answer.
+
+Question 3 (Strength Training):
+“Do you do any muscle-strengthening activities? For example, weights, resistance bands, push-ups, or squats.”
+Options: No strength training / 1 day a week / 2 days a week / 3+ days a week
+
+PHASE 2 — CLINICAL SAFETY SCREEN
+
+Question 4 (Medical Conditions):
+“Do you have any ongoing health conditions? And do you ever feel chest pain or dizziness when physically active? Please select all that apply.”
+Options (allow multiple): No conditions or symptoms / High blood pressure / Prediabetes or diabetes / Heart condition / Dizziness or chest pain when active
+RULE: If user selects “No conditions or symptoms”, ignore all other selections.
+
+PHASE 3 — PSYCHOLOGICAL WELLBEING (BPS-RS II P22, PHQ-2 aligned)
+
+Question 5 (Wellbeing):
+“Over the past two weeks, how have you been feeling overall? Have you felt stressed, low in mood, or overwhelmed — for example, due to work, caregiving, or financial pressure?”
+Options: Feeling good overall / Some stress but managing / Feeling quite stressed or low / Overwhelmed — caregiving or financial pressure
+
+PHASE 4 — SOCIAL DETERMINANTS OF HEALTH (SDOH 5-Domain)
+
+Question 6 (Barriers to Access):
+“What makes it difficult for you to access health or fitness services in your community? Select all that apply.”
+Options: Lack of time / Too expensive / Too far away / I prefer hospitals over community / Unsure what is available / No barriers for me
+
+Question 7 (Social Support — LSNS-6 grounded):
+“Roughly how many people — family or friends — could you call on for support if you needed help?”
+Options: I have several people I can rely on / I have one or two close people / I mostly manage on my own / I feel quite isolated
+
+Question 8 (Food Security — Lien Centre screen):
+“In the past 12 months, were you ever hungry but did not eat because you could not afford enough food?”
+Options: Yes / No
+
+Question 9 (Income Adequacy — Duke-NUS scale):
+“Do you feel you have adequate income to meet your monthly expenses?”
+Options: More than adequate / Adequate / Inadequate
+
+Question 10 (Housing Type — BPS-RS II schema):
+“What type of housing do you currently reside in?”
+Options: HDB 1-2 Room (rental) / HDB 3-5 Room / Private Property (condo or landed)
+RULE: If HDB 1-2 Room, note this is a geographic social risk indicator. Prioritise free and community-based resources.
+
+PHASE 5 — DEMOGRAPHICS
+
+Question 11 (Age Group):
+“Which age group are you in?”
+Options: Under 21 / 21-40 / 41-60 / 60+
+
+Question 12 (Gender):
+“What is your gender?”
+Options: Male / Female
+
+Question 13 (Ethnicity):
+“What is your ethnicity?”
+Options: Chinese / Malay / Indian / Others
+NOTE: If Malay, consider M3 community network resources if contextually relevant.
+
+# =========================================
+FLAG DERIVATION RULES (after all questions are answered)
+
+medFlag = true if user selected any of: High blood pressure, Prediabetes or diabetes, Heart condition (and did NOT select “No conditions or symptoms”)
+symptomFlag = true if user selected “Dizziness or chest pain when active”
+sdohFinancial = true if barriers include “Too expensive” OR “Too far away” OR income = “Inadequate”
+sdohSocial = true if social = “I mostly manage on my own” OR “I feel quite isolated”
+sdohPsychological = true if wellbeing = “Some stress but managing” OR “Feeling quite stressed or low” OR “Overwhelmed — caregiving or financial pressure”
+sdohFoodInsecure = true if food security = Yes (was hungry)
+sdohHousing = true if housing = “HDB 1-2 Room”
+
+# =========================================
+CTA TIER SELECTION (apply first matching rule, top to bottom)
+
+1. If symptomFlag → URGENT (consult GP before any exercise)
+1. If medFlag → CLINICAL (enrol in Manage Metabolic Health at nearest Active Health Lab)
+1. If age = 60+ AND PAVS < 150 → COMMUNITY (visit nearest Active Ageing Centre)
+1. If sdohPsychological → WELLBEING (polyclinic mental health support)
+1. If sdohFinancial AND PAVS < 150 → FREE_FIRST (Start2Move free programme)
+1. If sdohSocial AND PAVS < 150 → COMMUNITY (AAC or PA interest group)
+1. If PAVS < 150 → START (register for Start2Move via Healthy 365)
+1. If PAVS 150-300 → LEVEL_UP (book Strength 2.0 or Balance session at Active Health Lab)
+1. If PAVS 300+ → ADVANCED (HIIT library on HealthHub or Perform 2.0)
+
+# =========================================
+RISK TIER CALCULATION
+
+Count risk points from: symptomFlag (+3), medFlag (+2), sdohFinancial (+1), sdohSocial (+1), sdohPsychological (+1), sdohFoodInsecure (+1), sdohHousing (+1), PAVS < 150 (+1)
+
+- Total >= 5 → RED (High Needs)
+- Total >= 2 → AMBER (Moderate Needs)
+- Total < 2 → GREEN (Low Needs)
+
+# =========================================
+FINAL OUTPUT RULES
+
+1. After ALL 13 questions are answered, generate ONE primary Call to Action (CTA) drawn ONLY from the verified resource inventory below. Do not invent resources.
+1. The CTA must include:
+- YOUR NEXT STEP: One specific, immediately actionable instruction
+- YOUR HEALTHIER SG CONNECTION: How this action connects to their Health Plan
+- OTHER RESOURCES FOR YOU: 2-3 supplementary options from the inventory
+1. If gender = Female AND age = 41-60 or 60+, include Society for WINGS if available.
+1. If housing = HDB 1-2 Room, explicitly note that prioritised resources are free or fully subsidised.
+1. Always remind the resident to discuss their results with their Healthier SG doctor.
+1. Do not provide medical diagnoses.
+1. On the FINAL turn only, append a hidden JSON block at the very end of your message:
+
+{“traffic_light”: “Red/Amber/Green”, “pavs_score”: X, “pavs_days”: X, “pavs_minutes”: X, “strength_days”: X, “sdoh_flags”: [“financial”, “social”, “psychological”, “food_insecure”, “housing”], “med_flag”: true/false, “symptom_flag”: true/false, “cta_tier”: “URGENT/CLINICAL/COMMUNITY/WELLBEING/FREE_FIRST/START/LEVEL_UP/ADVANCED”, “age”: “Under 21/21-40/41-60/60+”, “gender”: “Male/Female”, “ethnicity”: “Chinese/Malay/Indian/Others”, “housing”: “HDB 1-2 Room/HDB 3-5 Room/Private Property”, “risk_score”: X}
+
+# =========================================
+CONVERSATIONAL STYLE
+
+- Be warm, professional, and encouraging. Use the resident’s language naturally.
+- Ask ONE question per turn. Wait for the answer before proceeding.
+- If the user gives an ambiguous answer, gently clarify with the specific options.
+- Acknowledge each answer briefly before moving to the next question (e.g., “Thank you” or “Got it”).
+- Do not number the questions or say “Question 5 of 13”. Keep it conversational.
+- If the user volunteers extra information (e.g., mentions a chronic condition while answering PAVS), note it internally but still ask the clinical safety question when you reach it to ensure completeness.
+- After the demographics phase, take a moment to say you are generating their personalised plan before delivering the CTA.
+  ${resourceText}
+  `.trim();
+  
+  ```
+    // ── 4. FIRE REQUEST ──
+    const contents = [
+        ...history.slice(-MAX_HISTORY_LEN).map(({ role, parts }) => ({ role, parts })),
+        { role: 'user', parts: [{ text: message }] }
+    ];
+  
+    const response = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        signal: AbortSignal.timeout(30000),
+        body: JSON.stringify({
+            systemInstruction: { parts: [{ text: systemInstruction }] },
+            contents: contents,
+            generationConfig: {
+                temperature: 0.3,
+                maxOutputTokens: 2048,
+            },
+        }),
+    });
+  
+    const data = await response.json();
+  
+    if (!response.ok) {
+        logger.error('[PUBLIC_TRIAGE] API Error', data);
+        throw new Error(data.error?.message ?? 'API Error');
+    }
+  
+    const rawText = extractText(data);
+  
+    // ZERO RETENTION: Return text directly. No Firestore writes.
+    return { response: rawText, success: true };
+  ```
+  
+  } catch (error) {
+  if (error instanceof HttpsError) throw error;
+  logger.error(’[PUBLIC_TRIAGE] Neural Failure’, error.message);
+  throw new HttpsError(‘internal’, `Triage Link Unstable: ${error.message}`);
+  }
+  });
