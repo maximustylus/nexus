@@ -48,8 +48,8 @@ const DOMAIN_CONFIG = [
   { key: 'food_insecurity', badge: '🥗 SDOH · Food Security',      group: 'sdoh'     }, // 6
   { key: 'wellbeing',    badge: '🧠 SDOH · Psychological',       group: 'sdoh'     }, // 7
   { key: 'demographics', badge: '👤 Your Profile',               group: 'admin'    }, // 8
-  { key: 'ethnicity',    badge: '🌍 Cultural Background',        group: 'admin'    }, // 9 (NEW)
-  { key: 'housing_type', badge: '🏢 Housing Environment',        group: 'admin'    }, // 10 (NEW)
+  { key: 'ethnicity',    badge: '🌍 Cultural Background',        group: 'admin'    }, // 9 
+  { key: 'housing_type', badge: '🏢 Housing Environment',        group: 'admin'    }, // 10 
   { key: 'postal_code',  badge: '📍 Resource Mapping',           group: 'admin'    }, // 11
   { key: 'previous_id',  badge: '🔗 NEXUS Record Linkage',       group: 'admin'    }, // 12
 ];
@@ -183,6 +183,19 @@ const CTA = {
       '📊 Consider a Body Composition Assessment to establish a performance baseline',
     ],
   },
+  senior_isolated: {
+    tier: 'SOCIAL_CARE',
+    emoji: '📞',
+    primaryStep:
+      'We strongly recommend connecting with SingHealth CareLine, a 24/7 tele-befriending and social support service. It is completely free for eligible seniors and ensures you always have someone to talk to or call for health advice.',
+    healthierSG:
+      'Your Healthier SG doctor can work alongside CareLine and community partners to ensure your Health Plan includes dedicated social support.',
+    resources: [
+      '📞 SingHealth CareLine: Call 6340 7054 (24/7 Support)',
+      '🏠 Active Ageing Centres: Drop by your nearest centre for daily activities',
+      '💬 Silver Generation Office: Request a home care visit'
+    ],
+  },
 };
 
 const selectCTA = (parsed) => {
@@ -192,6 +205,7 @@ const selectCTA = (parsed) => {
   } = parsed;
 
   if (symptomFlag)                              return CTA.symptoms_present;
+  if (age === '60+' && sdohSocial)              return CTA.senior_isolated;
   if (medFlag)                                  return CTA.chronic_metabolic;
   if (age === '60+' && pavsScore < 150)         return CTA.senior_low_activity;
   if (sdohPsychological)                        return CTA.mental_health_first;
