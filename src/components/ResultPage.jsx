@@ -710,7 +710,7 @@ export default function ResultPage() {
         {/* ── PAGE 2: Governance ──────────────────────────────────────── */}
         <div ref={printRef2} style={PDF_PAGE_STYLE}>
 
-          <PdfHeader subtitle="HEALTH NAVIGATION GOVERNANCE" {...headerProps} />
+          <PdfHeader subtitle="SMART DASHBOARD" {...headerProps} />
 
           <div style={{ padding: '28px 40px', display: 'flex', flexDirection: 'column', gap: 20, flex: 1 }}>
 
@@ -738,7 +738,6 @@ export default function ResultPage() {
                   ['Food Insecurity', 'Lien Centre for Social Innovation Food Insufficiency Screen — validated 2-question instrument.'],
                   ['Financial Adequacy', 'Duke-NUS Medical School Perceived Income Adequacy Scale — 3-level validated screen.'],
                   ['Housing Risk', 'BPS-RS II Housing Schema — 1–2 Room HDB rental as geographic social risk indicator.'],
-                  ['Community Navigation', 'NEXUS National Health Ecosystem Reports (April 2026) — §5.7 8-Tier Community Call-to-Action Matrix across all five URA regions.'],
                 ].map(([label, text], i) => (
                   <div key={i} style={{ display: 'flex', gap: 10, paddingBottom: 5, borderBottom: i < 7 ? '1px solid #f1f5f9' : 'none' }}>
                     <div style={{ fontWeight: 800, fontSize: 9, color: '#0d9488', minWidth: 110, paddingTop: 1, textTransform: 'uppercase', letterSpacing: 0.5, flexShrink: 0 }}>{label}</div>
