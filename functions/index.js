@@ -633,7 +633,7 @@ exports.processFeedPost = onCall({ secrets: ["GEMINI_API_KEY"] }, async (request
 
 exports.publicTriageChat = onCall({
 cors: true,
-secrets: [‘GEMINI_API_KEY’],
+secrets: ['GEMINI_API_KEY'],
 timeoutSeconds: 60,
 }, async (request) => {
 
