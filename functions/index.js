@@ -628,44 +628,130 @@ exports.processFeedPost = onCall({ secrets: ["GEMINI_API_KEY"] }, async (request
 });
 
 // =============================================================================
-// FUNCTION 5: PUBLIC TRIAGE CHAT (NEXUS v152 - Individuals Portal)
+// FUNCTION 5: PUBLIC TRIAGE CHAT (NEXUS v153 - National Community Portal)
 // =============================================================================
 
 exports.publicTriageChat = onCall({
-    cors: true, // Critical: Allows the unauthenticated public React app to call this
+    cors: true,
     secrets: ['GEMINI_API_KEY'],
     timeoutSeconds: 60,
 }, async (request) => {
     
-    // 1. Extract data from the public React frontend
-    const { message, language = 'English', history = [] } = request.data;
+    const { message, language = 'English', history = [], postalCode = '' } = request.data;
 
     if (!API_KEY) throw new HttpsError('failed-precondition', 'AI service is not configured.');
     if (!message || typeof message !== 'string') throw new HttpsError('invalid-argument', 'Message is required.');
 
     try {
-        // 2. Reuse your existing robust model resolver
+        const db = getFirestore();
+        const sectorPrefix = postalCode ? postalCode.substring(0, 2) : '';
+        
+        const regionMap = {
+            '01': 'central', '02': 'central', '03': 'central', '04': 'central',
+            '05': 'central', '06': 'central', '07': 'central', '08': 'central',
+            '14': 'central', '15': 'central', '16': 'central',
+            '20': 'central', '21': 'central', '22': 'central', '23': 'central',
+            '24': 'central', '25': 'central', '26': 'central', '27': 'central',
+            '28': 'central', '29': 'central', '30': 'central',
+            '31': 'central', '32': 'central', '33': 'central',
+            '37': 'central', '38': 'central', '39': 'central',
+            '58': 'central', '59': 'central',
+            '41': 'east', '42': 'east', '43': 'east', '44': 'east',
+            '45': 'east', '46': 'east', '47': 'east', '48': 'east',
+            '49': 'east', '50': 'east', '51': 'east', '52': 'east',
+            '53': 'north_east', '54': 'north_east', '55': 'north_east',
+            '56': 'north_east', '57': 'north_east',
+            '79': 'north_east', '80': 'north_east', '82': 'north_east',
+            '12': 'west', '13': 'west',
+            '60': 'west', '61': 'west', '62': 'west', '63': 'west',
+            '64': 'west', '65': 'west', '66': 'west', '67': 'west',
+            '68': 'west', '69': 'west',
+            '72': 'north', '73': 'north', '74': 'north', '75': 'north',
+            '76': 'north', '77': 'north', '78': 'north',
+        };
+
+        const resolvedRegion = regionMap[sectorPrefix] || '';
+
+        let resourceText = '';
+        
+        if (resolvedRegion) {
+            const [regionalSnap, nationalSnap] = await Promise.all([
+                db.collection('resources')
+                    .where('region', '==', resolvedRegion)
+                    .where('active', '==', true)
+                    .get(),
+                db.collection('resources')
+                    .where('region', '==', 'national')
+                    .where('active', '==', true)
+                    .get(),
+            ]);
+
+            const allResources = [];
+            regionalSnap.forEach(doc => allResources.push(doc.data()));
+            nationalSnap.forEach(doc => allResources.push(doc.data()));
+
+            if (allResources.length > 0) {
+                const formatted = allResources.map(r => {
+                    const parts = [`- ${r.name} (${r.type.replace(/_/g, ' ')})`];
+                    if (r.address) parts.push(`  Address: ${r.address}`);
+                    if (r.bookingPlatform) parts.push(`  Book via: ${r.bookingPlatform}`);
+                    if (r.bookingUrl) parts.push(`  URL: ${r.bookingUrl}`);
+                    if (r.priceRangeSgd && r.priceRangeSgd.min === 0) parts.push(`  Cost: FREE`);
+                    else if (r.priceRangeSgd) parts.push(`  Cost: From SGD ${r.priceRangeSgd.min}`);
+                    if (r.eligibility && r.eligibility.length > 0) parts.push(`  Eligibility: ${r.eligibility.join(', ')}`);
+                    if (r.sdohAlignment && r.sdohAlignment.length > 0) parts.push(`  SDOH relevance: ${r.sdohAlignment.join(', ')}`);
+                    if (r.operatingHours) parts.push(`  Hours: ${r.operatingHours}`);
+                    return parts.join('\n');
+                }).join('\n\n');
+
+                const regionLabel = resolvedRegion.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+                resourceText = `\n\nVERIFIED RESOURCE INVENTORY FOR ${regionLabel.toUpperCase()} SINGAPORE (from Firestore — use ONLY these resources in your CTA):\n\n${formatted}`;
+            }
+        }
+
+        if (!resourceText) {
+            const allSnap = await db.collection('resources').where('active', '==', true).get();
+            const allResources = [];
+            allSnap.forEach(doc => allResources.push(doc.data()));
+
+            if (allResources.length > 0) {
+                const formatted = allResources.map(r => {
+                    return `- ${r.name} (${r.type.replace(/_/g, ' ')}) | ${r.region} | ${r.address || 'Online'}`;
+                }).join('\n');
+                resourceText = `\n\nVERIFIED RESOURCE INVENTORY — ALL SINGAPORE (user postal code not provided):\n\n${formatted}`;
+            }
+        }
+
         const modelName = await resolveModel();
         const url = `https://generativelanguage.googleapis.com/v1beta/${modelName}:generateContent?key=${API_KEY}`;
 
-        // 3. Inject the dynamic language into the System Rules
         const systemInstruction = `
-        You are AURA, a clinical triage assistant for Northern Singapore community health. 
-        Rules: 
-        1. You must converse strictly in ${language}. 
-        2. You will ask the ACSM PAVS and SingHealth SDOH questions one at a time, conversationally. Do not overwhelm the user. 
-        3. Once all questions are answered, calculate the risk score: High Needs (Red), Moderate Needs (Amber), or Low Needs (Green). 
-        4. Do not provide medical diagnoses. 
-        5. On the final turn, you must output a hidden JSON block containing {"traffic_light": "Red/Amber/Green", "pavs_score": X} so the system can generate the final report.
+You are AURA, a clinical triage assistant for Singapore community health, deployed as part of the NEXUS Health Assessment Platform.
+
+RULES:
+1. You must converse strictly in ${language}.
+2. You will ask the ACSM PAVS (Physical Activity Vital Sign) questions one at a time, conversationally. Do not overwhelm the user.
+   - Question 1: "On how many DAYS in a typical week do you do moderate or vigorous physical activity?"
+   - Question 2: "On those days, for how many MINUTES do you usually do this activity?"
+   - Calculate: Score = Days x Minutes. Below 150 min/week = Insufficiently Active.
+3. After PAVS, ask the SingHealth SDOH screening questions one at a time across five domains: Financial Strain, Food Security, Housing Stability, Social Support, Psychological Wellbeing.
+4. Once all questions are answered, calculate the risk tier:
+   - RED (High Needs): PAVS < 150 AND 2+ SDOH flags
+   - AMBER (Moderate Needs): PAVS < 150 OR 1 SDOH flag
+   - GREEN (Low Needs): PAVS >= 150, no SDOH flags
+5. Generate ONE primary Call to Action (CTA) drawn ONLY from the verified resource inventory below. Do not invent resources.
+6. The CTA must include: YOUR NEXT STEP (one specific action), YOUR HEALTHIER SG CONNECTION (how it links to their Health Plan), and OTHER RESOURCES FOR YOU (2-3 supplementary options).
+7. Do not provide medical diagnoses.
+8. On the final turn, you must output a hidden JSON block at the end of your message containing {"traffic_light": "Red/Amber/Green", "pavs_score": X, "sdoh_flags": ["domain1", "domain2"]} so the system can generate the final report.
+9. Always remind the resident to discuss their results with their Healthier SG doctor at their next Health Plan check-in.
+${resourceText}
         `.trim();
 
-        // 4. Format the payload exactly how your other functions do it
         const contents = [
             ...history.slice(-MAX_HISTORY_LEN).map(({ role, parts }) => ({ role, parts })),
             { role: 'user', parts: [{ text: message }] }
         ];
 
-        // 5. Fire the request
         const response = await fetch(url, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -674,7 +760,7 @@ exports.publicTriageChat = onCall({
                 systemInstruction: { parts: [{ text: systemInstruction }] },
                 contents: contents,
                 generationConfig: {
-                    temperature: 0.3, // Slightly lower temp for strict clinical scoring
+                    temperature: 0.3,
                     maxOutputTokens: 2048,
                 },
             }),
@@ -687,11 +773,8 @@ exports.publicTriageChat = onCall({
             throw new Error(data.error?.message ?? 'API Error');
         }
 
-        // 6. Reuse your existing text extractor to safely handle safety blocks
         const rawText = extractText(data);
 
-        // 7. ZERO RETENTION: We return the text directly to the user. 
-        // Notice there are ZERO admin.firestore() calls here.
         return { response: rawText, success: true };
 
     } catch (error) {
