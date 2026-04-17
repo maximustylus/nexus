@@ -209,13 +209,13 @@ const ALL_RESOURCES = {
 // ─── CTA BANNER CONFIG ────────────────────────────────────────────────────────
 const CTA_BANNER = {
   URGENT:    { emoji: '⚠️', bg: 'bg-rose-50 dark:bg-rose-950/40 border-rose-200 dark:border-rose-800',       label: 'bg-rose-600',    text: 'text-rose-800 dark:text-rose-200',     action: { en: 'Consult your GP before starting any exercise. Mention your PAVS result at your visit.', ms: 'Sila berjumpa doktor sebelum memulakan sebarang senaman.', zh: '在开始任何运动前，请先咨询您的全科医生。', ta: 'எந்தவொரு உடற்பயிற்சியையும் தொடங்கும் முன் உங்கள் மருத்துவரை அணுகவும்.' }, url: 'https://www.healthiersg.gov.sg/', urlLabel: { en: 'Book via HealthHub', ms: 'Tempah via HealthHub', zh: '通过 HealthHub 预约', ta: 'HealthHub மூலம் பதிவு செய்க' } },
-  CLINICAL:  { emoji: '🩺', bg: 'bg-amber-50 dark:bg-amber-950/40 border-amber-200 dark:border-amber-800',   label: 'bg-amber-500',   text: 'text-amber-800 dark:text-amber-200',   action: { en: 'Enrol in Manage Metabolic Health at Woodlands Active Health Lab — 7 sessions, from SGD 48.', ms: 'Daftar dalam program Urus Kesihatan Metabolik di Makmal Active Health Woodlands — 7 sesi, dari SGD 48.', zh: '报名参加 Woodlands Active Health 实验室的"管理代谢健康"课程 — 7 节课，SGD 48 起。', ta: 'Woodlands Active Health ஆய்வகத்தில் வளர்சிதை மாற்ற சுகாதார திட்டத்தில் பதிவு செய்யவும் — 7 அமர்வுகள், SGD 48 முதல்.' }, url: 'https://www.myactivesg.com/active-health', urlLabel: { en: 'Book at activesg.gov.sg', ms: 'Tempah di activesg.gov.sg', zh: '在 activesg.gov.sg 预约', ta: 'activesg.gov.sg இல் பதிவு செய்க' } },
+  CLINICAL:  { emoji: '🩺', bg: 'bg-amber-50 dark:bg-amber-950/40 border-amber-200 dark:border-amber-800',   label: 'bg-amber-500',   text: 'text-amber-800 dark:text-amber-200',   action: { en: 'Enrol in Manage Metabolic Health at your nearest Active Health Lab — 7 sessions, from SGD 48.', ms: 'Daftar dalam program Urus Kesihatan Metabolik di Makmal Active Health terdekat — 7 sesi, dari SGD 48.', zh: '报名参加最近的 Active Health 实验室的"管理代谢健康"课程 — 7 节课，SGD 48 起。', ta: 'உங்களுக்கு அருகிலுள்ள Active Health ஆய்வகத்தில் வளர்சிதை மாற்ற சுகாதார திட்டத்தில் பதிவு செய்யவும் — 7 அமர்வுகள், SGD 48 முதல்.' }, url: 'https://www.myactivesg.com/active-health', urlLabel: { en: 'Book at activesg.gov.sg', ms: 'Tempah di activesg.gov.sg', zh: '在 activesg.gov.sg 预约', ta: 'activesg.gov.sg இல் பதிவு செய்க' } },
   COMMUNITY: { emoji: '🏠', bg: 'bg-teal-50 dark:bg-teal-950/40 border-teal-200 dark:border-teal-800',       label: 'bg-teal-600',    text: 'text-teal-800 dark:text-teal-200',     action: { en: 'Visit your nearest Active Ageing Centre — walk in, no appointment, activities largely free for residents 60+.', ms: 'Kunjungi Pusat Penuaan Aktif (AAC) terdekat — hadir terus, aktiviti percuma untuk warga 60+.', zh: '访问离您最近的活跃乐龄中心 (AAC) — 无需预约，60岁以上居民活动大多免费。', ta: 'உங்களுக்கு அருகிலுள்ள Active Ageing மையத்தைப் பார்வையிடவும் — முன்பதிவு தேவையில்லை, 60+ வயதினருக்கு இலவசம்.' }, url: 'https://www.aic.sg/care-services/active-ageing-centres', urlLabel: { en: 'Find nearest AAC', ms: 'Cari AAC terdekat', zh: '查找最近的 AAC', ta: 'அருகிலுள்ள AAC ஐக் கண்டறிக' } },
   WELLBEING: { emoji: '🌿', bg: 'bg-violet-50 dark:bg-violet-950/40 border-violet-200 dark:border-violet-800', label: 'bg-violet-600', text: 'text-violet-800 dark:text-violet-200', action: { en: "Connect with your polyclinic's mental health support service — this is your most important first step.", ms: 'Dapatkan perkhidmatan sokongan kesihatan mental poliklinik anda — ini adalah langkah pertama yang paling penting.', zh: '联系您综合诊所的心理健康支持服务 — 这是您最重要的一步。', ta: 'உங்கள் பாலிகிளினிக்கின் மனநல ஆதரவு சேவையுடன் இணையுங்கள் — இது உங்கள் மிக முக்கியமான முதல் படியாகும்.' }, url: 'https://www.mindline.sg/', urlLabel: { en: 'mindline.sg', ms: 'mindline.sg', zh: 'mindline.sg', ta: 'mindline.sg' } },
   FREE_FIRST: { emoji: '🆓', bg: 'bg-emerald-50 dark:bg-emerald-950/40 border-emerald-200 dark:border-emerald-800', label: 'bg-emerald-600', text: 'text-emerald-800 dark:text-emerald-200', action: { en: 'Register for Start2Move — a completely free 6-session beginner programme via the Healthy 365 app.', ms: 'Daftar untuk Start2Move — program pemula 6 sesi percuma melalui aplikasi Healthy 365.', zh: '注册 Start2Move — 通过 Healthy 365 应用程序免费参加的 6 节初学者课程。', ta: 'Start2Move-க்கு பதிவு செய்யவும் — Healthy 365 ஆப் மூலம் முற்றிலும் இலவச 6-அமர்வு தொடக்க திட்டம்.' }, url: 'https://www.healthhub.sg/programmes/letsmoveit/start2move', urlLabel: { en: 'Register via Healthy 365', ms: 'Daftar via Healthy 365', zh: '通过 Healthy 365 注册', ta: 'Healthy 365 மூலம் பதிவு செய்க' } },
   START:     { emoji: '🚀', bg: 'bg-teal-50 dark:bg-teal-950/40 border-teal-200 dark:border-teal-800',        label: 'bg-teal-600',    text: 'text-teal-800 dark:text-teal-200',     action: { en: 'Download the Healthy 365 app and search "Start2Move" to register for the free 6-session beginner programme.', ms: 'Muat turun aplikasi Healthy 365 dan cari "Start2Move" untuk mendaftar program pemula 6 sesi percuma.', zh: '下载 Healthy 365 应用程序并搜索"Start2Move"以注册免费的 6 节初学者课程。', ta: 'Healthy 365 ஆப்பை பதிவிறக்கம் செய்து இலவச 6-அமர்வு தொடக்க திட்டத்திற்கு பதிவு செய்ய "Start2Move" ஐ தேடவும்.' }, url: 'https://www.healthhub.sg/programmes/letsmoveit/start2move', urlLabel: { en: 'Register via Healthy 365', ms: 'Daftar via Healthy 365', zh: '通过 Healthy 365 注册', ta: 'Healthy 365 மூலம் பதிவு செய்க' } },
-  LEVEL_UP:  { emoji: '💪', bg: 'bg-teal-50 dark:bg-teal-950/40 border-teal-200 dark:border-teal-800',        label: 'bg-teal-600',    text: 'text-teal-800 dark:text-teal-200',     action: { en: 'Book a Strength 2.0 or Balance & Muscular Fitness session at Woodlands Active Health Lab, from SGD 6.', ms: 'Tempah sesi Kekuatan 2.0 atau Keseimbangan di Makmal Active Health Woodlands, dari SGD 6.', zh: '在 Woodlands Active Health 实验室预约力量 2.0 或平衡与肌肉健身课程，SGD 6 起。', ta: 'Woodlands Active Health ஆய்வகத்தில் வலிமை 2.0 அல்லது தசை உடற்பயிற்சி அமர்வை பதிவு செய்யவும், SGD 6 முதல்.' }, url: 'https://www.myactivesg.com/active-health', urlLabel: { en: 'Book at activesg.gov.sg', ms: 'Tempah di activesg.gov.sg', zh: '在 activesg.gov.sg 预约', ta: 'activesg.gov.sg இல் பதிவு செய்க' } },
-  ADVANCED:  { emoji: '⚡', bg: 'bg-emerald-50 dark:bg-emerald-950/40 border-emerald-200 dark:border-emerald-800', label: 'bg-emerald-600', text: 'text-emerald-800 dark:text-emerald-200', action: { en: 'Try the free HIIT Workout Library on HealthHub, or book a Perform 2.0 session at Woodlands Active Health Lab.', ms: 'Cuba senaman HIIT percuma di HealthHub, atau tempah sesi Perform 2.0 di Makmal Active Health Woodlands.', zh: '尝试 HealthHub 上免费的 HIIT 锻炼库，或在 Woodlands Active Health 实验室预约 Perform 2.0 课程。', ta: 'HealthHub-இல் இலவச HIIT உடற்பயிற்சிகளை முயற்சிக்கவும் அல்லது Perform 2.0 அமர்வை பதிவு செய்யவும்.' }, url: 'https://www.healthhub.sg/programmes/letsmoveit', urlLabel: { en: 'HealthHub Move It', ms: 'HealthHub Move It', zh: 'HealthHub Move It', ta: 'HealthHub Move It' } },
+  LEVEL_UP:  { emoji: '💪', bg: 'bg-teal-50 dark:bg-teal-950/40 border-teal-200 dark:border-teal-800',        label: 'bg-teal-600',    text: 'text-teal-800 dark:text-teal-200',     action: { en: 'Book a Strength 2.0 or Balance & Muscular Fitness session at your nearest Active Health Lab, from SGD 6.', ms: 'Tempah sesi Kekuatan 2.0 atau Keseimbangan di Makmal Active Health terdekat, dari SGD 6.', zh: '在最近的 Active Health 实验室预约力量 2.0 或平衡与肌肉健身课程，SGD 6 起。', ta: 'உங்களுக்கு அருகிலுள்ள Active Health ஆய்வகத்தில் வலிமை 2.0 அல்லது தசை உடற்பயிற்சி அமர்வை பதிவு செய்யவும், SGD 6 முதல்.' }, url: 'https://www.myactivesg.com/active-health', urlLabel: { en: 'Book at activesg.gov.sg', ms: 'Tempah di activesg.gov.sg', zh: '在 activesg.gov.sg 预约', ta: 'activesg.gov.sg இல் பதிவு செய்க' } },
+  ADVANCED:  { emoji: '⚡', bg: 'bg-emerald-50 dark:bg-emerald-950/40 border-emerald-200 dark:border-emerald-800', label: 'bg-emerald-600', text: 'text-emerald-800 dark:text-emerald-200', action: { en: 'Try the free HIIT Workout Library on HealthHub, or book a Perform 2.0 session at your nearest Active Health Lab.', ms: 'Cuba senaman HIIT percuma di HealthHub, atau tempah sesi Perform 2.0 di Makmal Active Health terdekat.', zh: '尝试 HealthHub 上免费的 HIIT 锻炼库，或在最近的 Active Health 实验室预约 Perform 2.0 课程。', ta: 'HealthHub-இல் இலவச HIIT உடற்பயிற்சிகளை முயற்சிக்கவும் அல்லது Perform 2.0 அமர்வை பதிவு செய்யவும்.' }, url: 'https://www.healthhub.sg/programmes/letsmoveit', urlLabel: { en: 'HealthHub Move It', ms: 'HealthHub Move It', zh: 'HealthHub Move It', ta: 'HealthHub Move It' } },
 };
 
 // ─── HELPERS ──────────────────────────────────────────────────────────────────
@@ -269,6 +269,33 @@ const generateActionPlan = (riskTier, ctaTier, data, postalSector) => {
   return plan.filter(r => { if (seen.has(r.id)) return false; seen.add(r.id); return true; }).slice(0, 6);
 };
 
+// ─── REUSABLE PDF HEADER BLOCK ────────────────────────────────────────────────
+const PdfHeader = ({ baseUrl, subtitle, t, formattedDate, activeSessionId, previousSessionId, postalSector }) => (
+  <div style={{ background: '#0f172a', padding: '24px 40px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+    <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+      <img src={`${baseUrl}/nexus.png`} alt="NEXUS" crossOrigin="anonymous" style={{ width: 36, height: 36, objectFit: 'contain' }} />
+      <div>
+        <div style={{ color: 'white', fontWeight: 900, fontSize: 20, letterSpacing: 6 }}>NEXUS</div>
+        <div style={{ color: '#94a3b8', fontWeight: 700, fontSize: 9, letterSpacing: 4, marginTop: 2 }}>{subtitle}</div>
+      </div>
+    </div>
+    <div style={{ textAlign: 'right', fontSize: 11, color: '#94a3b8', lineHeight: 1.8 }}>
+      <div><strong style={{ color: 'white' }}>{t.date}:</strong> {formattedDate}</div>
+      <div><strong style={{ color: 'white' }}>{t.assessmentId}:</strong> {activeSessionId}</div>
+      {previousSessionId && <div><strong style={{ color: 'white' }}>{t.prevId}:</strong> {previousSessionId}</div>}
+      <div><strong style={{ color: 'white' }}>{t.postalSector}:</strong> Sector {postalSector}</div>
+    </div>
+  </div>
+);
+
+// ─── REUSABLE PDF FOOTER STRIP ────────────────────────────────────────────────
+const PdfFooter = ({ label, pageNum }) => (
+  <div style={{ background: '#0f172a', padding: '10px 40px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 'auto' }}>
+    <div style={{ color: '#64748b', fontSize: 9, fontWeight: 700, letterSpacing: 2 }}>{label}</div>
+    <div style={{ color: '#94a3b8', fontSize: 9, fontWeight: 700, letterSpacing: 2 }}>PAGE {pageNum} OF 2</div>
+  </div>
+);
+
 // ─── PAVS PANEL ───────────────────────────────────────────────────────────────
 const PavsPanel = ({ data, t }) => {
   const score = data?.pavsScore;
@@ -295,7 +322,7 @@ const PavsPanel = ({ data, t }) => {
       <div className="grid grid-cols-3 gap-3 mb-5">
         {[
           { value: score,                    label: t.pavsWeekly },
-          { value: data.pavsDays    ?? '–',                                label: t.pavsDays },
+          { value: data.pavsDays    ?? '–',  label: t.pavsDays },
           { value: data.pavsDays === 0 ? 0 : (data.pavsMinutes ?? '–'), label: t.pavsMins },
         ].map(({ value, label }, i) => (
           <div key={i} className="text-center py-3 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700">
@@ -406,6 +433,19 @@ const LANGS = [
   { code: 'ta', label: 'தமிழ்' },
 ];
 
+// ─── PDF PAGE WRAPPER (shared structure for both pages) ───────────────────────
+const PDF_PAGE_STYLE = {
+  width: '794px',
+  minHeight: '1123px',
+  background: '#ffffff',
+  padding: 0,
+  display: 'flex',
+  flexDirection: 'column',
+  boxSizing: 'border-box',
+  fontFamily: 'Arial, sans-serif',
+  color: '#000000',
+};
+
 // ─── MAIN COMPONENT ───────────────────────────────────────────────────────────
 export default function ResultPage() {
   const location = useLocation();
@@ -416,19 +456,17 @@ export default function ResultPage() {
   const [isGenerating,       setIsGenerating]       = useState(true);
   const [suggestedResources, setSuggestedResources] = useState([]);
   const [isDark, setIsDark] = useState(() => {
-  try {
-    const s = localStorage.getItem('nexus-theme');
-    if (s === 'dark') return true;
-    if (s === 'light') return false;
-    return window.matchMedia('(prefers-color-scheme: dark)').matches;
-  } catch { return false; }
-});
+    try {
+      const s = localStorage.getItem('nexus-theme');
+      if (s === 'dark') return true;
+      if (s === 'light') return false;
+      return window.matchMedia('(prefers-color-scheme: dark)').matches;
+    } catch { return false; }
+  });
 
-  // FIX 1: Two refs — one per PDF page
-  const printRef  = useRef(null); // Page 1: health report
-  const printRef2 = useRef(null); // Page 2: governance, disclaimer, references, M3
+  const printRef  = useRef(null);
+  const printRef2 = useRef(null);
 
-  // FIX 3: clean hasState — handles score === 0 correctly
   const hasState = location.state?.score != null;
 
   useEffect(() => {
@@ -445,9 +483,9 @@ export default function ResultPage() {
   const qrCodeUrl       = `https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent(nexusUrl)}`;
   const baseUrl         = window.location.origin;
 
-useEffect(() => {
-  document.documentElement.classList.toggle('dark', isDark);
-}, [isDark]);
+  useEffect(() => {
+    document.documentElement.classList.toggle('dark', isDark);
+  }, [isDark]);
 
   const toggleTheme = () => {
     const next = !isDark;
@@ -456,7 +494,6 @@ useEffect(() => {
     localStorage.setItem('nexus-theme', next ? 'dark' : 'light');
   };
 
-  // FIX 2: language switcher with persistence
   const switchLang = (code) => {
     setLang(code);
     localStorage.setItem('nexus_language', code);
@@ -486,7 +523,7 @@ useEffect(() => {
   const tierLabel = riskTier === 'Red' ? t.red : riskTier === 'Amber' ? t.amber : t.green;
   const tierDesc  = riskTier === 'Red' ? t.redDesc : riskTier === 'Amber' ? t.amberDesc : t.greenDesc;
 
-  // FIX 1: Two-page PDF generation
+  // ── PDF GENERATION ─────────────────────────────────────────────────────────
   const handleDownloadPDF = async () => {
     if (!printRef.current || !printRef2.current) return;
     recordTelemetry(postalSector, { action: 'download_pdf', score, language: lang, ctaTier });
@@ -509,11 +546,10 @@ useEffect(() => {
       ]);
 
       const pdf = new jsPDF('p', 'mm', 'a4');
-      const pw  = pdf.internal.pageSize.getWidth();   // 210 mm
-      const ph  = pdf.internal.pageSize.getHeight();  // 297 mm
+      const pw  = pdf.internal.pageSize.getWidth();
+      const ph  = pdf.internal.pageSize.getHeight();
 
       const addCanvasPage = (canvas) => {
-        // JPEG at 0.82 quality + scale 1.5 reduces file size from ~34 MB to ~3–5 MB
         const img = canvas.toDataURL('image/jpeg', 0.82);
         let rw = pw, rh = (canvas.height * rw) / canvas.width, mx = 0;
         if (rh > ph) { rh = ph; rw = (canvas.width * rh) / canvas.height; mx = (pw - rw) / 2; }
@@ -554,7 +590,6 @@ useEffect(() => {
             <Loader2 className="w-8 h-8 text-teal-500 animate-spin" />
           </div>
           <h2 className="text-lg font-bold text-slate-800 dark:text-white max-w-xs">{t.loading}</h2>
-          {/* FIX 4: animate-pulse replaces custom keyframe that required tailwind.config */}
           <div className="w-48 h-1.5 bg-slate-200 dark:bg-slate-800 rounded-full overflow-hidden">
             <div className="h-full w-1/2 bg-teal-500 rounded-full animate-pulse" />
           </div>
@@ -563,97 +598,88 @@ useEffect(() => {
     );
   }
 
+  // ── Shared header props ────────────────────────────────────────────────────
+  const headerProps = { baseUrl, t, formattedDate, activeSessionId, previousSessionId, postalSector };
+
   return (
     <div className="min-h-screen w-full bg-stone-50 dark:bg-slate-950 transition-colors duration-700 flex flex-col items-center py-12 px-4 md:px-6 relative overflow-x-hidden font-sans">
 
-      {/* ── HIDDEN PDF TEMPLATES (off-screen) ──────────────────────────────── */}
+      {/* ══════════════════════════════════════════════════════════════════════
+          HIDDEN PDF TEMPLATES (off-screen, identical wrapper structure)
+          ══════════════════════════════════════════════════════════════════════ */}
       <div style={{ position: 'absolute', top: '-10000px', left: '-10000px' }}>
 
         {/* ── PAGE 1: Health Report ────────────────────────────────────── */}
-        <div ref={printRef} className="w-[794px] bg-white text-black flex flex-col" style={{ fontFamily: 'Arial, sans-serif' }}>
+        <div ref={printRef} style={PDF_PAGE_STYLE}>
 
-          {/* PDF Header */}
-          <div style={{ background: '#0f172a', padding: '28px 40px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-              <img src={`${baseUrl}/nexus.png`} alt="NEXUS" crossOrigin="anonymous" style={{ width: 40, height: 40, objectFit: 'contain' }} />
-              <div>
-                <div style={{ color: 'white', fontWeight: 900, fontSize: 22, letterSpacing: 6 }}>NEXUS</div>
-                <div style={{ color: '#94a3b8', fontWeight: 700, fontSize: 10, letterSpacing: 4, marginTop: 2 }}>{t.reportTitle}</div>
-              </div>
-            </div>
-            <div style={{ textAlign: 'right', fontSize: 12, color: '#94a3b8', lineHeight: 1.8 }}>
-              <div><strong style={{ color: 'white' }}>{t.date}:</strong> {formattedDate}</div>
-              <div><strong style={{ color: 'white' }}>{t.assessmentId}:</strong> {activeSessionId}</div>
-              {previousSessionId && <div><strong style={{ color: 'white' }}>{t.prevId}:</strong> {previousSessionId}</div>}
-              <div><strong style={{ color: 'white' }}>{t.postalSector}:</strong> Sector {postalSector}</div>
-            </div>
-          </div>
+          <PdfHeader subtitle={t.reportTitle} {...headerProps} />
 
-          <div style={{ padding: '32px 40px', display: 'flex', flexDirection: 'column', gap: 24 }}>
+          {/* Content area — flex: 1 pushes footer to bottom */}
+          <div style={{ padding: '28px 40px', display: 'flex', flexDirection: 'column', gap: 20, flex: 1 }}>
 
             {/* Risk Tier */}
-            <div style={{ background: th.printBg, borderRadius: 12, padding: '28px 32px' }}>
-              <div style={{ color: 'white', fontWeight: 900, fontSize: 26, marginBottom: 10 }}>{tierLabel}</div>
-              <div style={{ color: 'rgba(255,255,255,0.9)', fontWeight: 700, fontSize: 14, lineHeight: 1.6, marginBottom: 14 }}>{tierDesc}</div>
+            <div style={{ background: th.printBg, borderRadius: 12, padding: '24px 28px' }}>
+              <div style={{ color: 'white', fontWeight: 900, fontSize: 24, marginBottom: 8 }}>{tierLabel}</div>
+              <div style={{ color: 'rgba(255,255,255,0.9)', fontWeight: 700, fontSize: 12, lineHeight: 1.6, marginBottom: 12 }}>{tierDesc}</div>
               {(data.sdohFinancial || data.sdohSocial || hasPsycho) && (
-                <div style={{ borderTop: '1px solid rgba(255,255,255,0.25)', paddingTop: 14, display: 'flex', flexDirection: 'column', gap: 6 }}>
-                  {data.sdohFinancial && <div style={{ color: 'white', fontSize: 12, fontWeight: 700 }}>• {t.sdohFinText}</div>}
-                  {data.sdohSocial    && <div style={{ color: 'white', fontSize: 12, fontWeight: 700 }}>• {t.sdohSocText}</div>}
-                  {hasPsycho          && <div style={{ color: 'white', fontSize: 12, fontWeight: 700 }}>• {t.sdohPsychoText}</div>}
+                <div style={{ borderTop: '1px solid rgba(255,255,255,0.25)', paddingTop: 10, display: 'flex', flexDirection: 'column', gap: 4 }}>
+                  {data.sdohFinancial && <div style={{ color: 'white', fontSize: 11, fontWeight: 700 }}>• {t.sdohFinText}</div>}
+                  {data.sdohSocial    && <div style={{ color: 'white', fontSize: 11, fontWeight: 700 }}>• {t.sdohSocText}</div>}
+                  {hasPsycho          && <div style={{ color: 'white', fontSize: 11, fontWeight: 700 }}>• {t.sdohPsychoText}</div>}
                 </div>
               )}
             </div>
 
             {/* PAVS Metrics */}
             {data?.pavsScore != null && (
-              <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 12, padding: '20px 28px' }}>
-                <div style={{ fontWeight: 900, fontSize: 11, color: '#64748b', textTransform: 'uppercase', letterSpacing: 3, marginBottom: 14 }}>{t.pavsTitle}</div>
-                <div style={{ display: 'flex', gap: 16, marginBottom: 14 }}>
+              <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 12, padding: '16px 24px' }}>
+                <div style={{ fontWeight: 900, fontSize: 10, color: '#64748b', textTransform: 'uppercase', letterSpacing: 3, marginBottom: 12 }}>{t.pavsTitle}</div>
+                <div style={{ display: 'flex', gap: 12 }}>
                   {[
                     { value: data.pavsScore,           label: t.pavsWeekly },
-                    { value: data.pavsDays    ?? '–',                                label: t.pavsDays },
+                    { value: data.pavsDays    ?? '–',  label: t.pavsDays },
                     { value: data.pavsDays === 0 ? 0 : (data.pavsMinutes ?? '–'), label: t.pavsMins },
                   ].map(({ value, label }, i) => (
-                    <div key={i} style={{ flex: 1, background: 'white', border: '1px solid #e2e8f0', borderRadius: 8, padding: '12px 10px', textAlign: 'center' }}>
-                      <div style={{ fontWeight: 900, fontSize: 24, color: '#0f172a' }}>{value}</div>
-                      <div style={{ fontSize: 10, color: '#94a3b8', marginTop: 4, fontWeight: 600 }}>{label}</div>
+                    <div key={i} style={{ flex: 1, background: 'white', border: '1px solid #e2e8f0', borderRadius: 8, padding: '10px 8px', textAlign: 'center' }}>
+                      <div style={{ fontWeight: 900, fontSize: 22, color: '#0f172a' }}>{value}</div>
+                      <div style={{ fontSize: 9, color: '#94a3b8', marginTop: 3, fontWeight: 600 }}>{label}</div>
                     </div>
                   ))}
-                  <div style={{ flex: 2, background: 'white', border: '1px solid #e2e8f0', borderRadius: 8, padding: '12px 16px', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
-                    <div style={{ fontWeight: 700, fontSize: 11, color: getPavsTier(data.pavsScore) === 'active' ? '#059669' : getPavsTier(data.pavsScore) === 'meets' ? '#0d9488' : '#d97706', marginBottom: 4 }}>
+                  <div style={{ flex: 2, background: 'white', border: '1px solid #e2e8f0', borderRadius: 8, padding: '10px 14px', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
+                    <div style={{ fontWeight: 700, fontSize: 11, color: getPavsTier(data.pavsScore) === 'active' ? '#059669' : getPavsTier(data.pavsScore) === 'meets' ? '#0d9488' : '#d97706', marginBottom: 3 }}>
                       {getPavsTier(data.pavsScore) === 'active' ? t.pavsActive : getPavsTier(data.pavsScore) === 'meets' ? t.pavsMeets : t.pavsBelow}
                     </div>
-                    <div style={{ fontSize: 10, color: '#64748b', lineHeight: 1.5 }}>{t.pavsThreshold}</div>
+                    <div style={{ fontSize: 9, color: '#64748b', lineHeight: 1.5 }}>{t.pavsThreshold}</div>
                   </div>
                 </div>
               </div>
             )}
 
             {/* Primary Action Banner */}
-            <div style={{ background: '#f0fdfa', border: '1px solid #99f6e4', borderRadius: 12, padding: '20px 28px' }}>
-              <div style={{ fontWeight: 900, fontSize: 11, color: '#0f766e', textTransform: 'uppercase', letterSpacing: 3, marginBottom: 10 }}>{t.primaryAction}</div>
-              <div style={{ fontWeight: 700, fontSize: 13, color: '#134e4a', lineHeight: 1.6 }}>
+            <div style={{ background: '#f0fdfa', border: '1px solid #99f6e4', borderRadius: 12, padding: '16px 24px' }}>
+              <div style={{ fontWeight: 900, fontSize: 10, color: '#0f766e', textTransform: 'uppercase', letterSpacing: 3, marginBottom: 8 }}>{t.primaryAction}</div>
+              <div style={{ fontWeight: 700, fontSize: 12, color: '#134e4a', lineHeight: 1.6 }}>
                 {ctaBanner.emoji} {ctaBanner.action[lang] || ctaBanner.action.en}
               </div>
-              <div style={{ marginTop: 8, fontSize: 11, color: '#0d9488', fontWeight: 600 }}>{ctaBanner.url}</div>
+              <div style={{ marginTop: 6, fontSize: 10, color: '#0d9488', fontWeight: 600 }}>{ctaBanner.url}</div>
             </div>
 
             {/* Resources Grid */}
             <div>
-              <div style={{ fontWeight: 900, fontSize: 13, color: '#0f172a', textTransform: 'uppercase', letterSpacing: 3, borderBottom: '2px solid #e2e8f0', paddingBottom: 10, marginBottom: 20 }}>{t.resources}</div>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+              <div style={{ fontWeight: 900, fontSize: 11, color: '#0f172a', textTransform: 'uppercase', letterSpacing: 3, borderBottom: '2px solid #e2e8f0', paddingBottom: 8, marginBottom: 14 }}>{t.resources}</div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
                 {suggestedResources.map((resource) => {
                   const c = resource[lang] || resource.en;
                   return (
-                    <div key={resource.id} style={{ border: '1px solid #e2e8f0', borderRadius: 10, padding: '14px 16px', background: '#f8fafc', display: 'flex', flexDirection: 'column', gap: 10 }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                        <div style={{ width: 36, height: 36, flexShrink: 0, background: 'white', border: '1px solid #e2e8f0', borderRadius: 8, overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <div key={resource.id} style={{ border: '1px solid #e2e8f0', borderRadius: 10, padding: '12px 14px', background: '#f8fafc', display: 'flex', flexDirection: 'column', gap: 6 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                        <div style={{ width: 32, height: 32, flexShrink: 0, background: 'white', border: '1px solid #e2e8f0', borderRadius: 6, overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                           <img src={`${baseUrl}${resource.logo}`} alt="" crossOrigin="anonymous" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                         </div>
-                        <div style={{ fontWeight: 900, fontSize: 13, color: '#0f172a', lineHeight: 1.3 }}>{c.title}</div>
+                        <div style={{ fontWeight: 900, fontSize: 11, color: '#0f172a', lineHeight: 1.3 }}>{c.title}</div>
                       </div>
-                      <div style={{ fontSize: 11, color: '#475569', lineHeight: 1.55 }}>{c.desc}</div>
-                      <div style={{ fontSize: 10, color: '#0d9488', fontWeight: 700, background: '#f0fdfa', padding: '6px 10px', borderRadius: 6, border: '1px solid #99f6e4', wordBreak: 'break-all' }}>
+                      <div style={{ fontSize: 10, color: '#475569', lineHeight: 1.5 }}>{c.desc}</div>
+                      <div style={{ fontSize: 9, color: '#0d9488', fontWeight: 700, background: '#f0fdfa', padding: '4px 8px', borderRadius: 4, border: '1px solid #99f6e4', wordBreak: 'break-all' }}>
                         <span style={{ color: '#64748b', fontWeight: 600, marginRight: 4 }}>{t.webLink}</span>{resource.url}
                       </div>
                     </div>
@@ -662,152 +688,107 @@ useEffect(() => {
               </div>
             </div>
 
-            {/* PDF Footer — Page 1 of 2 */}
-            <div style={{ borderTop: '1px solid #e2e8f0', paddingTop: 20, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                <img src={qrCodeUrl} alt="QR" crossOrigin="anonymous" style={{ width: 70, height: 70, border: '1px solid #e2e8f0', borderRadius: 6, padding: 4 }} />
+            {/* QR + Assessment ID footer area */}
+            <div style={{ borderTop: '1px solid #e2e8f0', paddingTop: 16, display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 'auto' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <img src={qrCodeUrl} alt="QR" crossOrigin="anonymous" style={{ width: 60, height: 60, border: '1px solid #e2e8f0', borderRadius: 6, padding: 3 }} />
                 <div>
-                  <div style={{ fontWeight: 900, fontSize: 10, textTransform: 'uppercase', letterSpacing: 3, color: '#0f172a' }}>{t.scanQR}</div>
-                  <div style={{ color: '#0d9488', fontSize: 11, fontWeight: 700, marginTop: 3 }}>{nexusUrl}</div>
+                  <div style={{ fontWeight: 900, fontSize: 9, textTransform: 'uppercase', letterSpacing: 3, color: '#0f172a' }}>{t.scanQR}</div>
+                  <div style={{ color: '#0d9488', fontSize: 10, fontWeight: 700, marginTop: 2 }}>{nexusUrl}</div>
                 </div>
               </div>
               <div style={{ textAlign: 'right' }}>
-                <div style={{ fontWeight: 900, fontSize: 10, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: 2 }}>{t.assessmentId}</div>
-                <div style={{ fontFamily: 'monospace', fontWeight: 700, fontSize: 12, color: '#0f172a', marginTop: 2 }}>{activeSessionId}</div>
+                <div style={{ fontWeight: 900, fontSize: 9, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: 2 }}>{t.assessmentId}</div>
+                <div style={{ fontFamily: 'monospace', fontWeight: 700, fontSize: 11, color: '#0f172a', marginTop: 2 }}>{activeSessionId}</div>
               </div>
             </div>
           </div>
 
-          {/* Unified footer strip — same dark style as Page 2 */}
-          <div style={{ background: '#0f172a', padding: '12px 40px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <div style={{ color: '#64748b', fontSize: 10, fontWeight: 700, letterSpacing: 2 }}>NEXUS AURA · SMART DASHBOARD</div>
-            <div style={{ color: '#94a3b8', fontSize: 10, fontWeight: 700, letterSpacing: 2 }}>PAGE 1 OF 2</div>
-          </div>
+          <PdfFooter label="NEXUS AURA · SMART DASHBOARD" pageNum={1} />
         </div>
 
-        {/* ── PAGE 2: Governance, Disclaimers, References, M3 ─────── */}
-        <div ref={printRef2}
-          style={{
-            width: '794px',
-            minHeight: '1123px',
-            background: '#ffffff',
-            padding: 0,
-            display: 'flex',
-            flexDirection: 'column',
-            boxSizing: 'border-box',
-            fontFamily: 'Arial, sans-serif',
-          }}>
+        {/* ── PAGE 2: Governance ──────────────────────────────────────── */}
+        <div ref={printRef2} style={PDF_PAGE_STYLE}>
 
-          {/* Page 2 Header — flush at top, identical structure to Page 1 */}
-          <div style={{ background: '#0f172a', padding: '28px 40px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-              <img src={`${baseUrl}/nexus.png`} alt="NEXUS" crossOrigin="anonymous" style={{ width: 40, height: 40, objectFit: 'contain' }} />
-              <div>
-                <div style={{ color: 'white', fontWeight: 900, fontSize: 22, letterSpacing: 6 }}>NEXUS</div>
-                <div style={{ color: '#94a3b8', fontWeight: 700, fontSize: 10, letterSpacing: 4, marginTop: 2 }}>HEALTH NAVIGATION GOVERNANCE</div>
+          <PdfHeader subtitle="HEALTH NAVIGATION GOVERNANCE" {...headerProps} />
+
+          <div style={{ padding: '28px 40px', display: 'flex', flexDirection: 'column', gap: 20, flex: 1 }}>
+
+            {/* Medical Disclaimer */}
+            <div style={{ background: '#fff1f2', border: '1px solid #fecdd3', borderRadius: 12, padding: '18px 24px' }}>
+              <div style={{ fontWeight: 900, fontSize: 10, color: '#be123c', marginBottom: 8, textTransform: 'uppercase', letterSpacing: 3 }}>
+                Important Medical Disclaimer
+              </div>
+              <div style={{ fontSize: 11, color: '#4c0519', lineHeight: 1.75 }}>
+                This NEXUS AURA report is an initial community health navigation tool and <strong>does not constitute medical advice, diagnosis, or a treatment plan</strong>. The physical activity recommendations are generated for educational and community navigation purposes only. Always consult a qualified healthcare professional or your Healthier SG GP before making significant changes to your lifestyle, diet, or exercise routine. If you are experiencing chest pain, dizziness, or any acute symptoms, please seek immediate medical attention.
               </div>
             </div>
-            <div style={{ textAlign: 'right', fontSize: 12, color: '#94a3b8', lineHeight: 1.8 }}>
-              <div><strong style={{ color: 'white' }}>{t.date}:</strong> {formattedDate}</div>
-              <div><strong style={{ color: 'white' }}>{t.assessmentId}:</strong> {activeSessionId}</div>
-              {previousSessionId && <div><strong style={{ color: 'white' }}>{t.prevId}:</strong> {previousSessionId}</div>}
-              <div><strong style={{ color: 'white' }}>{t.postalSector}:</strong> Sector {postalSector}</div>
-            </div>
-          </div>
 
-          {/* Padded content area — padding applied here, not on outer wrapper */}
-          <div style={{ padding: '32px 40px', display: 'flex', flexDirection: 'column', gap: '24px', flex: 1 }}>
-
-          {/* ── CARD 1: Medical Disclaimer — rose callout, same borderRadius as P1 ── */}
-          <div style={{ background: '#fff1f2', border: '1px solid #fecdd3', borderRadius: 12, padding: '20px 28px' }}>
-            <div style={{ fontWeight: 900, fontSize: 11, color: '#be123c', marginBottom: '10px', textTransform: 'uppercase', letterSpacing: 3 }}>
-              Important Medical Disclaimer
-            </div>
-            <div style={{ fontSize: 11, color: '#4c0519', lineHeight: 1.75 }}>
-              This NEXUS AURA report is an initial community health navigation tool and <strong>does not constitute medical advice, diagnosis, or a treatment plan</strong>. The physical activity recommendations are generated for educational and community navigation purposes only. Always consult a qualified healthcare professional or your Healthier SG GP before making significant changes to your lifestyle, diet, or exercise routine. If you are experiencing chest pain, dizziness, or any acute symptoms, please seek immediate medical attention.
-            </div>
-          </div>
-
-          {/* ── CARD 2: Academic & Evidence Grounding — wrapped in same #f8fafc card as PAVS ── */}
-          <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 12, padding: '20px 28px' }}>
-            <div style={{ fontWeight: 900, fontSize: 11, color: '#64748b', marginBottom: '14px', textTransform: 'uppercase', letterSpacing: 3 }}>
-              Academic and Evidence Grounding
-            </div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-              {[
-                ['Physical Activity', 'ACSM Physical Activity Vital Sign (PAVS) — validated 2-question screening tool.'],
-                ['National Targets', 'Sport Singapore Physical Activity Guidelines (SPAG) — 150–300 mins/week moderate-intensity aerobic activity.'],
-                ['Psychological Wellbeing', 'BioPsychoSocial Risk Screener II (BPS-RS II), Domain P22 — PHQ-2 aligned, 2-week timeframe.'],
-                ['Social Isolation', 'Lubben Social Network Scale (LSNS-6) — validated for community-dwelling adults in Singapore (alpha 0.80–0.89).'],
-                ['Food Insecurity', 'Lien Centre for Social Innovation Food Insufficiency Screen — validated 2-question instrument.'],
-                ['Financial Adequacy', 'Duke-NUS Medical School Perceived Income Adequacy Scale — 3-level validated screen.'],
-                ['Housing Risk', 'BPS-RS II Housing Schema — 1–2 Room HDB rental as geographic social risk indicator.'],
-                ['Community Navigation', 'Northern Singapore Health Ecosystem Report (March 2026) — §5.7 8-Tier Community Call-to-Action Matrix.'],
-              ].map(([label, text], i) => (
-                <div key={i} style={{ display: 'flex', gap: 10, paddingBottom: 6, borderBottom: i < 7 ? '1px solid #f1f5f9' : 'none' }}>
-                  <div style={{ fontWeight: 800, fontSize: 10, color: '#0d9488', minWidth: 110, paddingTop: 1, textTransform: 'uppercase', letterSpacing: 0.5, flexShrink: 0 }}>{label}</div>
-                  <div style={{ fontSize: 10, color: '#475569', lineHeight: 1.65 }}>{text}</div>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          {/* ── CARD 3: Data Governance — same card treatment ── */}
-          <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 12, padding: '20px 28px' }}>
-            <div style={{ fontWeight: 900, fontSize: 11, color: '#64748b', marginBottom: '10px', textTransform: 'uppercase', letterSpacing: 3 }}>
-              Data Governance and Privacy
-            </div>
-            <div style={{ fontSize: 11, color: '#475569', lineHeight: 1.75 }}>
-              All data collected through the NEXUS AURA system is de-identified at the point of capture. Postal sector data is used solely for geographic resource mapping and is not linked to any identifiable personal information. This assessment does not collect, store, or transmit NRIC, name, contact, or financial account information. Aggregated, anonymised data may be used to improve community health programming across Singapore.
-            </div>
-          </div>
-
-        {/* ── CARD 4: Healthier SG — teal brand card ── */}
-          <div style={{ marginTop: 'auto', background: 'linear-gradient(135deg, #f0fdfa 0%, #ecfdf5 100%)', borderRadius: 12, padding: '24px 32px', textAlign: 'center', border: '1px solid #99f6e4' }}>
-            <div style={{ fontWeight: 900, fontSize: 15, color: '#0f766e', marginBottom: '8px', letterSpacing: 1 }}>
-              Your Healthier SG Health Plan
-            </div>
-            <div style={{ fontSize: 11, color: '#475569', marginBottom: '16px', lineHeight: 1.6, maxWidth: '540px', margin: '0 auto 16px' }}>
-              This assessment aligns with the <strong style={{ color: '#0f766e' }}>MOH Healthier SG</strong> framework. 
-              Enrol with a Healthier SG GP to receive a fully subsidised annual Health Plan consultation, personalised screening schedule, and community programme referrals.
-            </div>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px 32px', maxWidth: '560px', margin: '0 auto', textAlign: 'left' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8, gridColumn: '1 / -1', paddingBottom: 8, borderBottom: '1px solid #99f6e4' }}>
-                <img
-                  src={baseUrl + '/logos/healthiersg.png'}
-                  alt="Healthier SG"
-                  crossOrigin="anonymous"
-                  style={{ width: 22, height: 22, objectFit: 'contain', flexShrink: 0 }}
-                />
-                <span style={{ fontWeight: 700, fontSize: 11, color: '#0f766e' }}>healthiersg.gov.sg</span>
+            {/* Academic & Evidence Grounding */}
+            <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 12, padding: '18px 24px' }}>
+              <div style={{ fontWeight: 900, fontSize: 10, color: '#64748b', marginBottom: 12, textTransform: 'uppercase', letterSpacing: 3 }}>
+                Academic and Evidence Grounding
               </div>
-              {[
-                { logo: '/logos/hpb.png', text: 'healthhub.sg — Access your Health Plan & book screenings' },
-                { logo: '/logos/activehealth.png', text: 'activesgcircle.gov.sg/activehealth — Find your nearest Active Health Lab' },
-                { logo: '/logos/aic.png', text: 'aic.sg/care-services/active-ageing-centres — Locate AACs for residents 60+' },
-                { logo: '/logos/pa.png', text: 'onepa.gov.sg — Search HealthierSG interest groups near you' },
-              ].map((item, i) => (
-                <div key={i} style={{ display: 'flex', alignItems: 'flex-start', gap: 8 }}>
-                  <img
-                    src={baseUrl + item.logo}
-                    alt=""
-                    crossOrigin="anonymous"
-                    style={{ width: 15, height: 15, objectFit: 'contain', flexShrink: 0, marginTop: 1 }}
-                  />
-                  <span style={{ fontWeight: 600, fontSize: 10, color: '#0f766e', wordBreak: 'break-all', lineHeight: 1.5 }}>{item.text}</span>
-                </div>
-              ))}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                {[
+                  ['Physical Activity', 'ACSM Physical Activity Vital Sign (PAVS) — validated 2-question screening tool.'],
+                  ['National Targets', 'Sport Singapore Physical Activity Guidelines (SPAG) — 150–300 mins/week moderate-intensity aerobic activity.'],
+                  ['Psychological Wellbeing', 'BioPsychoSocial Risk Screener II (BPS-RS II), Domain P22 — PHQ-2 aligned, 2-week timeframe.'],
+                  ['Social Isolation', 'Lubben Social Network Scale (LSNS-6) — validated for community-dwelling adults in Singapore (alpha 0.80–0.89).'],
+                  ['Food Insecurity', 'Lien Centre for Social Innovation Food Insufficiency Screen — validated 2-question instrument.'],
+                  ['Financial Adequacy', 'Duke-NUS Medical School Perceived Income Adequacy Scale — 3-level validated screen.'],
+                  ['Housing Risk', 'BPS-RS II Housing Schema — 1–2 Room HDB rental as geographic social risk indicator.'],
+                  ['Community Navigation', 'NEXUS National Health Ecosystem Reports (April 2026) — §5.7 8-Tier Community Call-to-Action Matrix across all five URA regions.'],
+                ].map(([label, text], i) => (
+                  <div key={i} style={{ display: 'flex', gap: 10, paddingBottom: 5, borderBottom: i < 7 ? '1px solid #f1f5f9' : 'none' }}>
+                    <div style={{ fontWeight: 800, fontSize: 9, color: '#0d9488', minWidth: 110, paddingTop: 1, textTransform: 'uppercase', letterSpacing: 0.5, flexShrink: 0 }}>{label}</div>
+                    <div style={{ fontSize: 10, color: '#475569', lineHeight: 1.6 }}>{text}</div>
+                  </div>
+                ))}
+              </div>
             </div>
+
+            {/* Data Governance */}
+            <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 12, padding: '18px 24px' }}>
+              <div style={{ fontWeight: 900, fontSize: 10, color: '#64748b', marginBottom: 8, textTransform: 'uppercase', letterSpacing: 3 }}>
+                Data Governance and Privacy
+              </div>
+              <div style={{ fontSize: 11, color: '#475569', lineHeight: 1.75 }}>
+                All data collected through the NEXUS AURA system is de-identified at the point of capture. Postal sector data is used solely for geographic resource mapping and is not linked to any identifiable personal information. This assessment does not collect, store, or transmit NRIC, name, contact, or financial account information. Aggregated, anonymised data may be used to improve community health programming across Singapore.
+              </div>
+            </div>
+
+            {/* Healthier SG Card */}
+            <div style={{ marginTop: 'auto', background: 'linear-gradient(135deg, #f0fdfa 0%, #ecfdf5 100%)', borderRadius: 12, padding: '22px 28px', textAlign: 'center', border: '1px solid #99f6e4' }}>
+              <div style={{ fontWeight: 900, fontSize: 14, color: '#0f766e', marginBottom: 6, letterSpacing: 1 }}>
+                Your Healthier SG Health Plan
+              </div>
+              <div style={{ fontSize: 10, color: '#475569', marginBottom: 14, lineHeight: 1.6, maxWidth: '520px', margin: '0 auto 14px' }}>
+                This assessment aligns with the <strong style={{ color: '#0f766e' }}>MOH Healthier SG</strong> framework.
+                Enrol with a Healthier SG GP to receive a fully subsidised annual Health Plan consultation, personalised screening schedule, and community programme referrals.
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px 28px', maxWidth: '540px', margin: '0 auto', textAlign: 'left' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, gridColumn: '1 / -1', paddingBottom: 6, borderBottom: '1px solid #99f6e4' }}>
+                  <img src={baseUrl + '/logos/healthiersg.png'} alt="Healthier SG" crossOrigin="anonymous" style={{ width: 20, height: 20, objectFit: 'contain', flexShrink: 0 }} />
+                  <span style={{ fontWeight: 700, fontSize: 10, color: '#0f766e' }}>healthiersg.gov.sg</span>
+                </div>
+                {[
+                  { logo: '/logos/hpb.png', text: 'healthhub.sg — Access your Health Plan & book screenings' },
+                  { logo: '/logos/activehealth.png', text: 'activesgcircle.gov.sg/activehealth — Find your nearest Active Health Lab' },
+                  { logo: '/logos/aic.png', text: 'aic.sg/care-services/active-ageing-centres — Locate AACs for residents 60+' },
+                  { logo: '/logos/pa.png', text: 'onepa.gov.sg — Search HealthierSG interest groups near you' },
+                ].map((item, i) => (
+                  <div key={i} style={{ display: 'flex', alignItems: 'flex-start', gap: 6 }}>
+                    <img src={baseUrl + item.logo} alt="" crossOrigin="anonymous" style={{ width: 14, height: 14, objectFit: 'contain', flexShrink: 0, marginTop: 1 }} />
+                    <span style={{ fontWeight: 600, fontSize: 9, color: '#0f766e', wordBreak: 'break-all', lineHeight: 1.5 }}>{item.text}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+
           </div>
 
-          </div>{/* end padded content */}
-
-          {/* Unified footer strip — matches Page 1 position and style */}
-          <div style={{ marginTop: 'auto', background: '#0f172a', padding: '12px 40px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <div style={{ color: '#64748b', fontSize: 10, fontWeight: 700, letterSpacing: 2 }}>NEXUS AURA · HEALTH NAVIGATION GOVERNANCE</div>
-            <div style={{ color: '#94a3b8', fontSize: 10, fontWeight: 700, letterSpacing: 2 }}>PAGE 2 OF 2</div>
-          </div>
-
+          <PdfFooter label="NEXUS AURA · HEALTH NAVIGATION GOVERNANCE" pageNum={2} />
         </div>
       </div>
 
@@ -820,7 +801,6 @@ useEffect(() => {
 
         {/* Top nav */}
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-8 gap-3 px-1 flex-wrap">
-          {/* Left cluster — Back + theme toggle at the far edges */}
           <div className="flex items-center gap-2">
             <button onClick={() => navigate('/')}
               className="flex items-center gap-2 px-4 py-2 bg-white/70 dark:bg-slate-800/70 backdrop-blur-md text-slate-500 dark:text-slate-400 hover:text-teal-600 dark:hover:text-teal-400 font-bold text-xs uppercase tracking-widest rounded-full border border-slate-200 dark:border-slate-700 shadow-sm transition-all group">
@@ -832,10 +812,7 @@ useEffect(() => {
             </button>
           </div>
 
-          {/* Right cluster — language, share, download */}
           <div className="flex items-center gap-2 flex-wrap self-end sm:self-auto">
-
-            {/* Language selector */}
             <div className="flex items-center gap-1 bg-white/70 dark:bg-slate-800/70 backdrop-blur-md border border-slate-200 dark:border-slate-700 rounded-full px-1.5 py-1 shadow-sm">
               <Globe size={11} className="text-slate-400 ml-1" />
               {LANGS.map(l => (
@@ -876,7 +853,6 @@ useEffect(() => {
           {/* Body */}
           <div className="p-6 md:p-8 space-y-6">
 
-            {/* AURA analysis */}
             <div className={`p-5 rounded-2xl border ${th.bgCard}`}>
               <p className={`text-xs font-bold uppercase tracking-widest mb-2 ${th.titleColor}`}>AURA Smart Analysis</p>
               <p className="text-sm md:text-base text-slate-700 dark:text-slate-300 leading-relaxed font-medium">{tierDesc}</p>
@@ -886,7 +862,6 @@ useEffect(() => {
             <PrimaryActionBanner ctaTier={ctaTier} t={t} lang={lang} />
             <SdohFlags data={data} t={t} previousSessionId={previousSessionId} />
 
-            {/* Resource grid */}
             <div className="pt-2">
               <h2 className="text-sm font-black text-slate-900 dark:text-white uppercase tracking-widest mb-4 flex items-center gap-2">
                 <Zap size={14} className="text-teal-500" /> {t.cta}
@@ -898,7 +873,6 @@ useEffect(() => {
               </div>
             </div>
 
-            {/* Footer */}
             <div className="pt-4 border-t border-slate-100 dark:border-slate-800 flex justify-between items-center">
               <div className="flex items-center gap-3">
                 <img src={`${baseUrl}/nexus.png`} alt="NEXUS" crossOrigin="anonymous" className="w-10 h-10 object-contain" />
