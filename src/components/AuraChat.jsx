@@ -38,24 +38,23 @@ const WELL_WELL_PROMPT =
 
 // ─── DOMAIN CONFIGURATION ─────────────────────────────────────────────────────
 // Each step declares its clinical domain for badge display and progress colouring.
-// Domains map to: PAVS (0–2) | Clinical Safety (3) | SDOH Financial (4) |
-//                 SDOH Social (5) | SDOH Psychological (6) | Admin (7–9)
-
 const DOMAIN_CONFIG = [
-  { key: 'pavs_days',    badge: '🏃 ACSM PAVS · Q1 of 2',       group: 'pavs'     },
-  { key: 'pavs_mins',    badge: '⏱️ ACSM PAVS · Q2 of 2',       group: 'pavs'     },
-  { key: 'strength',     badge: '💪 SPAG Strength Screen',        group: 'pavs'     },
-  { key: 'medical',      badge: '🩺 Clinical Safety Screen',      group: 'clinical' },
-  { key: 'barriers',     badge: '🔑 SDOH · Financial & Access',  group: 'sdoh'     },
-  { key: 'social',       badge: '🤝 SDOH · Social Support',      group: 'sdoh'     },
-  { key: 'food_insecurity', badge: '🥗 SDOH · Food Security',      group: 'sdoh'     },
-  { key: 'wellbeing',    badge: '🧠 SDOH · Psychological',       group: 'sdoh'     },
-  { key: 'demographics', badge: '👤 Your Profile',               group: 'admin'    },
-  { key: 'postal_code',  badge: '📍 Resource Mapping',           group: 'admin'    },
-  { key: 'previous_id',  badge: '🔗 NEXUS Record Linkage',       group: 'admin'    },
+  { key: 'pavs_days',    badge: '🏃 ACSM PAVS · Q1 of 2',       group: 'pavs'     }, // 0
+  { key: 'pavs_mins',    badge: '⏱️ ACSM PAVS · Q2 of 2',       group: 'pavs'     }, // 1
+  { key: 'strength',     badge: '💪 SPAG Strength Screen',        group: 'pavs'     }, // 2
+  { key: 'medical',      badge: '🩺 Clinical Safety Screen',      group: 'clinical' }, // 3
+  { key: 'barriers',     badge: '🔑 SDOH · Financial & Access',  group: 'sdoh'     }, // 4
+  { key: 'social',       badge: '🤝 SDOH · Social Support',      group: 'sdoh'     }, // 5
+  { key: 'food_insecurity', badge: '🥗 SDOH · Food Security',      group: 'sdoh'     }, // 6
+  { key: 'wellbeing',    badge: '🧠 SDOH · Psychological',       group: 'sdoh'     }, // 7
+  { key: 'demographics', badge: '👤 Your Profile',               group: 'admin'    }, // 8
+  { key: 'ethnicity',    badge: '🌍 Cultural Background',        group: 'admin'    }, // 9 (NEW)
+  { key: 'housing_type', badge: '🏢 Housing Environment',        group: 'admin'    }, // 10 (NEW)
+  { key: 'postal_code',  badge: '📍 Resource Mapping',           group: 'admin'    }, // 11
+  { key: 'previous_id',  badge: '🔗 NEXUS Record Linkage',       group: 'admin'    }, // 12
 ];
 
-const TOTAL_STEPS = DOMAIN_CONFIG.length; // 11
+const TOTAL_STEPS = DOMAIN_CONFIG.length; // 13
 
 // Progress segment colour by group
 const GROUP_COLOURS = {
@@ -67,9 +66,6 @@ const GROUP_COLOURS = {
 
 // ─── TIERED CTA LIBRARY ───────────────────────────────────────────────────────
 // Source: Northern Singapore Health Ecosystem Report, Section 5.7
-// Priority order: Safety → Chronic → Senior+Low → Psychological SDOH →
-//                 Financial SDOH → Social SDOH → PAVS tiers
-
 const CTA = {
   symptoms_present: {
     tier: 'URGENT',
@@ -189,8 +185,6 @@ const CTA = {
   },
 };
 
-// ─── CTA SELECTION LOGIC ──────────────────────────────────────────────────────
-// Implements the 8-tier hierarchy from the Ecosystem Report, Section 5.7
 const selectCTA = (parsed) => {
   const {
     pavsScore, symptomFlag, medFlag, age,
@@ -223,7 +217,7 @@ const DICTIONARY = {
     ctaResources: 'Additional Resources',
     error: 'A connection error occurred while saving your profile. Please try again.',
     progressLabel: (step, total) => `Step ${step + 1} of ${total}`,
-    // 10 prompts — indices match DOMAIN_CONFIG
+    // 13 prompts — indices match DOMAIN_CONFIG
     prompts: [
       /* 0  pavs_days       */ 'Hi, I\'m AURA 👋 I\'m here to connect you with the right community health resources. Let\'s start with physical activity. On a typical week, how many days do you do moderate or vigorous exercise? (e.g. brisk walking, cycling, swimming, gym)',
       /* 1  pavs_mins       */ (data) => data.pavs_days === '0 days'
@@ -236,11 +230,12 @@ const DICTIONARY = {
       /* 6  food_insecurity */ 'One more quick question — in the past 12 months, were there times when you were hungry but did not eat because you could not afford enough food?',
       /* 7  wellbeing       */ 'Over the past two weeks, how have you been feeling overall? Have you felt stressed, low in mood, or overwhelmed — for example, due to work, caregiving, or financial pressure?',
       /* 8  demographics    */ 'Almost done! Could you share your age group and gender? This helps me find programmes designed for your profile. (e.g. Female, 41–60)',
-      /* 9  postal_code     */ 'What are the first two digits of your postal code? This lets me map the nearest resources to you.',
-      /* 10 previous_id     */ 'Last question — do you have a previous NEXUS Assessment ID? If yes, paste it below so I can link your records. If not, just select No.',
+      /* 9  ethnicity       */ 'What is your ethnic group? This helps us understand the diverse communities we serve.',
+      /* 10 housing_type    */ 'What type of housing do you live in? (e.g. HDB 3-Room, Condo)',
+      /* 11 postal_code     */ 'What are the first two digits of your postal code? This lets me map the nearest resources to you.',
+      /* 12 previous_id     */ 'Last question — do you have a previous NEXUS Assessment ID? If yes, paste it below so I can link your records. If not, just select No.',
     ],
 
-    // Reflections — empathic, motivational, clinically appropriate
     reflections: [
       /* 0 */ (input) => {
         const n = parseInt((input.match(/\d+/) || ['0'])[0], 10);
@@ -265,30 +260,32 @@ const DICTIONARY = {
       /* 6 */ (input) => input.toLowerCase().includes('yes') ? 'Thank you for trusting me with that \u2014 food security is something we will factor directly into your plan. ' : 'Good to know. ',
       /* 7 */ () => 'Your mental wellbeing matters as much as your physical health. ',
       /* 8 */ () => 'Noted. ',
-      /* 9 */ () => 'Mapping your nearest resources now. ',
-      /* 10 */ (input) =>
+      /* 9 */ () => 'Thank you for sharing. ',
+      /* 10 */() => 'Got it. This helps us suggest nearby community spaces. ',
+      /* 11 */() => 'Mapping your nearest resources now. ',
+      /* 12 */(input) =>
         /(no|none|don'?t)/i.test(input)
           ? 'No problem — I will start a fresh record for you today. '
           : 'I will link your previous records to track your progress over time. ',
     ],
 
-    // Quick replies per step
     quickReplies: [
-      /* 0 pavs_days    */ ['0 days', '1–2 days', '3–4 days', '5–7 days'],
-      /* 1 pavs_mins    */ ['Less than 20 mins', '20–30 mins', '30–45 mins', '45–60 mins', '60+ mins'],
-      /* 2 strength     */ ['No strength training', '1 day a week', '2 days a week', '3+ days a week'],
-      /* 3 medical      */ ['No conditions or symptoms', 'High blood pressure', 'Prediabetes or diabetes', 'Heart condition', 'Dizziness or chest pain when active'],
-      /* 4 barriers     */ ['Lack of time', 'Too expensive', 'Too far away', 'I prefer hospitals over community', 'Unsure what is available', 'No barriers for me'],
-      /* 5 social       */ ['I have several people I can rely on', 'I have one or two close people', 'I mostly manage on my own', 'I feel quite isolated'],
+      /* 0 pavs_days       */ ['0 days', '1–2 days', '3–4 days', '5–7 days'],
+      /* 1 pavs_mins       */ ['Less than 20 mins', '20–30 mins', '30–45 mins', '45–60 mins', '60+ mins'],
+      /* 2 strength        */ ['No strength training', '1 day a week', '2 days a week', '3+ days a week'],
+      /* 3 medical         */ ['No conditions or symptoms', 'High blood pressure', 'Prediabetes or diabetes', 'Heart condition', 'Dizziness or chest pain when active'],
+      /* 4 barriers        */ ['Lack of time', 'Too expensive', 'Too far away', 'I prefer hospitals over community', 'Unsure what is available', 'No barriers for me'],
+      /* 5 social          */ ['I have several people I can rely on', 'I have one or two close people', 'I mostly manage on my own', 'I feel quite isolated'],
       /* 6 food_insecurity */ ['Yes, this has happened', 'No, I have always had enough'],
-      /* 7 wellbeing    */ ['Feeling good overall', 'Some stress but managing', 'Feeling quite stressed or low', 'Overwhelmed — caregiving or financial pressure'],
-      /* 7 demographics */ ['Male, 21–40', 'Female, 21–40', 'Male, 41–60', 'Female, 41–60', 'Male, 60+', 'Female, 60+'],
-      /* 9 postal_code  */ ['73 (Woodlands)', '75–76 (Yishun)', '75 (Sembawang)', '68 (Admiralty/Canberra)', 'Other / Not sure'],
-      /* 10 previous_id  */ ['No previous ID'],
+      /* 7 wellbeing       */ ['Feeling good overall', 'Some stress but managing', 'Feeling quite stressed or low', 'Overwhelmed — caregiving or financial pressure'],
+      /* 8 demographics    */ ['Male, 21–40', 'Female, 21–40', 'Male, 41–60', 'Female, 41–60', 'Male, 60+', 'Female, 60+'],
+      /* 9 ethnicity       */ ['Chinese', 'Malay', 'Indian', 'Eurasian', 'Others', 'Prefer not to say'],
+      /* 10 housing_type   */ ['HDB 1-2 Room', 'HDB 3 Room', 'HDB 4 Room', 'HDB 5 Room / Exec', 'Condo / Private', 'Landed'],
+      /* 11 postal_code    */ ['North (e.g. 73, 75)', 'East (e.g. 46, 52)', 'West (e.g. 60, 64)', 'North-East (e.g. 53, 82)', 'Central/South (e.g. 01–33)', 'Other / Type my own'],
+      /* 12 previous_id    */ ['No previous ID'],
     ],
   },
 
-  // ── Malay ──────────────────────────────────────────────────────────────────
   ms: {
     back: 'Kembali',
     typing: 'AURA sedang menaip\u2026',
@@ -312,6 +309,8 @@ const DICTIONARY = {
       'Satu soalan lagi — dalam 12 bulan yang lalu, pernahkah anda lapar tetapi tidak makan kerana tidak mampu membeli makanan yang cukup?',
       'Dalam dua minggu lalu, bagaimana perasaan anda secara keseluruhan? Adakah anda berasa tertekan, murung, atau terbeban?',
       'Hampir siap! Boleh kongsi kumpulan umur dan jantina anda? (cth. Perempuan, 41–60)',
+      'Apakah kumpulan etnik anda? Ini membantu kami memahami komuniti pelbagai yang kami layani.',
+      'Apakah jenis perumahan yang anda diami? (cth. HDB 3-Bilik, Kondo)',
       'Apakah dua digit pertama poskod anda supaya saya boleh mencari sumber berdekatan?',
       'Soalan terakhir — adakah anda mempunyai ID Penilaian NEXUS yang sebelumnya? Jika ya, tampal di bawah. Jika tidak, pilih Tiada.',
     ],
@@ -325,6 +324,8 @@ const DICTIONARY = {
       (input) => /(ya|yes)/i.test(input) ? 'Terima kasih kerana berkongsi — ini akan diambil kira dalam pelan anda. ' : 'Baik, direkodkan. ',
       () => 'Kesejahteraan mental anda sama pentingnya dengan kesihatan fizikal. ',
       () => 'Direkodkan. ',
+      () => 'Terima kasih kerana berkongsi. ',
+      () => 'Baik, ini membantu kami mencari ruang komuniti berdekatan. ',
       () => 'Memetakan sumber berdekatan sekarang. ',
       (input) => /(tidak|tiada|no)/i.test(input) ? 'Baik, rekod baharu akan dimulakan. ' : 'Saya akan menghubungkan rekod lama anda. ',
     ],
@@ -338,12 +339,13 @@ const DICTIONARY = {
       ['Ya, ini pernah berlaku', 'Tidak, saya sentiasa ada makanan yang cukup'],
       ['Perasaan baik secara keseluruhannya', 'Ada sedikit tekanan tapi boleh kawal', 'Rasa sangat tertekan atau sedih', 'Terbeban — tanggungjawab penjagaan atau tekanan kewangan'],
       ['Lelaki, 21–40', 'Perempuan, 21–40', 'Lelaki, 41–60', 'Perempuan, 41–60', 'Lelaki, 60+', 'Perempuan, 60+'],
-      ['73 (Woodlands)', '75–76 (Yishun)', '75 (Sembawang)', '68 (Admiralty/Canberra)', 'Lain-lain / Tidak pasti'],
+      ['Cina', 'Melayu', 'India', 'Eurasian', 'Lain-lain', 'Tidak mahu beritahu'],
+      ['HDB 1-2 Bilik', 'HDB 3 Bilik', 'HDB 4 Bilik', 'HDB 5 Bilik / Eksekutif', 'Kondo / Pangsapuri', 'Landed'],
+      ['Utara (cth. 73, 75)', 'Timur (cth. 46, 52)', 'Barat (cth. 60, 64)', 'Timur Laut (cth. 53, 82)', 'Tengah/Selatan (cth. 01–33)', 'Lain-lain / Taip sendiri'],
       ['Tiada ID'],
     ],
   },
 
-  // ── Mandarin ───────────────────────────────────────────────────────────────
   zh: {
     back: '返回',
     typing: 'AURA 正在输入\u2026',
@@ -367,6 +369,8 @@ const DICTIONARY = {
       '还有一个问题——在过去12个月里，您是否因为买不起足够的食物而挨过饿？',
       '在过去两周里，您的整体感觉如何？是否感到压力大、情绪低落或不知所措？',
       '快完成了！能告诉我您的年龄段和性别吗？（例如：女，41–60）',
+      '您的种族是什么？这有助于我们更好地了解我们服务的多元社区。',
+      '您居住的房屋类型是什么？（例如：HDB 3房式，公寓等）',
       '您的邮政编码前两位数是什么？这样我可以为您找到附近的资源。',
       '最后一个问题 — 您是否有之前的 NEXUS 评估 ID？如有，请粘贴在下方；如没有，请选择"没有"。',
     ],
@@ -380,6 +384,8 @@ const DICTIONARY = {
       (input) => /是|yes/i.test(input) ? '谢谢您告诉我这些，我们会将这点纳入您的健康计划中。' : '好的，已记录。',
       () => '您的心理健康与身体健康同样重要。',
       () => '已记录，谢谢。',
+      () => '谢谢您的分享。',
+      () => '明白了，这有助于我们为您推荐附近的社区空间。',
       () => '正在为您定位附近的资源。',
       (input) => /(没|无|不|no)/i.test(input) ? '没问题，今天将为您建立新记录。' : '很好，我将链接您的历史记录。',
     ],
@@ -390,14 +396,16 @@ const DICTIONARY = {
       ['没有疾病或症状', '高血压', '糖尿病前期或糖尿病', '心脏病', '运动时头晕或胸痛'],
       ['没时间', '太贵了', '太远了', '更喜欢去医院', '不确定有哪些资源', '没有障碍'],
       ['有几个可以依靠的人', '有一两个亲近的人', '大多数情况自己处理', '感到相当孤立'],
+      ['是的', '没有，我一直都有足够的食物'],
       ['整体感觉不错', '有些压力但能应对', '感到很压抑或情绪低落', '感到不知所措 — 照顾或经济压力'],
       ['男, 21–40', '女, 21–40', '男, 41–60', '女, 41–60', '男, 60+', '女, 60+'],
-      ['73 (Woodlands)', '75–76 (义顺)', '75 (三巴旺)', '68 (海军部/甘巴)', '其他 / 不确定'],
+      ['华人', '马来人', '印度人', '欧亚裔', '其他', '不愿透露'],
+      ['HDB 1-2 房式', 'HDB 3 房式', 'HDB 4 房式', 'HDB 5 房式 / 执行组屋', '私人公寓', '有地住宅'],
+      ['北部 (如 73, 75)', '东部 (如 46, 52)', '西部 (如 60, 64)', '东北部 (如 53, 82)', '中南部 (如 01–33)', '其他 / 手动输入'],
       ['没有之前的 ID'],
     ],
   },
 
-  // ── Tamil ──────────────────────────────────────────────────────────────────
   ta: {
     back: 'பின்செல்',
     typing: 'AURA தட்டச்சு செய்கிறார்\u2026',
@@ -418,8 +426,11 @@ const DICTIONARY = {
       'உங்களுக்கு உயர் இரத்த அழுத்தம், நீரிழிவு முன்நிலை, அல்லது இதய நோய் போன்ற நாட்பட்ட நோய்கள் உள்ளதா? செயலில் இருக்கும்போது நெஞ்சு வலி அல்லது தலைச்சுற்றல் ஏற்படுகிறதா?',
       'சமூக சுகாதார சேவைகளை அணுகுவதில் உங்களின் முக்கிய தடை என்ன?',
       'தோராயமாக எத்தனை குடும்பத்தினர் அல்லது நண்பர்கள் உங்களுக்கு உதவ முடியும்? நெருங்கி பேச யாரேனும் இருக்கிறார்களா?',
+      'கடந்த 12 மாதங்களில் உணவு வாங்க வசதியில்லாததால் பசியுடன் இருந்தும் சாப்பிடாத நேரங்கள் இருந்தனவா?',
       'கடந்த இரண்டு வாரங்களில் நீங்கள் எப்படி உணர்ந்தீர்கள்? மன அழுத்தம், மனச்சோர்வு, அல்லது அதிக சுமையாக உணர்ந்தீர்களா?',
       'கிட்டத்தட்ட முடிந்துவிட்டது! உங்கள் வயது மற்றும் பாலினம் என்ன? (எ.கா. பெண், 41–60)',
+      'உங்கள் இனம் என்ன? இது நாங்கள் சேவை செய்யும் பல்வேறு சமூகங்களை புரிந்துகொள்ள உதவுகிறது.',
+      'நீங்கள் எந்த வகையான வீட்டில் வசிக்கிறீர்கள்? (எ.கா. HDB 3-அறை, காண்டோ)',
       'உங்கள் தபால் குறியீட்டின் முதல் இரண்டு இலக்கங்கள் என்ன?',
       'கடைசி கேள்வி — உங்களிடம் ஏற்கனவே NEXUS மதிப்பீட்டு ID உள்ளதா? இருந்தால் கீழே ஒட்டவும்; இல்லையெனில் "இல்லை" என்பதைத் தேர்ந்தெடுக்கவும்.',
     ],
@@ -430,8 +441,11 @@ const DICTIONARY = {
       () => 'பகிர்ந்ததற்கு நன்றி. பரிந்துரைகள் உங்களுக்கு பாதுகாப்பானவை என்பதை உறுதிப்படுத்துவேன். ',
       () => 'இது மிகவும் உண்மையான சவால். ',
       () => 'சமூக இணைப்பு ஆரோக்கியத்திற்கான முக்கியமான பாதுகாப்பு காரணி. ',
+      (input) => /(ஆம்|yes)/i.test(input) ? 'பகிர்ந்ததற்கு நன்றி — இதை உங்கள் திட்டத்தில் கருத்தில் கொள்வோம். ' : 'புரிந்தது. ',
       () => 'உங்கள் மனநல நலன் உடல் ஆரோக்கியம் போலவே முக்கியமானது. ',
       () => 'பதிவு செய்யப்பட்டது. ',
+      () => 'பகிர்ந்ததற்கு நன்றி. ',
+      () => 'புரிந்தது, அருகிலுள்ள சமூக இடங்களை பரிந்துரைக்க இது உதவுகிறது. ',
       () => 'அருகிலுள்ள வளங்களை இப்போது வரைபடமாக்குகிறேன். ',
       (input) => /(இல்லை|no)/i.test(input) ? 'பரவாயில்லை, புதிய பதிவை தொடங்குவோம். ' : 'முந்தைய பதிவுகளை இணைக்கிறேன். ',
     ],
@@ -442,17 +456,18 @@ const DICTIONARY = {
       ['நோய் அல்லது அறிகுறிகள் இல்லை', 'உயர் இரத்த அழுத்தம்', 'நீரிழிவு முன்நிலை அல்லது நீரிழிவு', 'இதய நோய்', 'செயலில் இருக்கும்போது தலைச்சுற்றல் அல்லது நெஞ்சு வலி'],
       ['நேரமின்மை', 'மிகவும் விலை அதிகம்', 'மிகவும் தூரம்', 'மருத்துவமனைகளை விரும்புகிறேன்', 'என்ன கிடைக்கும் என்று தெரியாது', 'தடைகள் இல்லை'],
       ['பல நம்பகமான நபர்கள் உள்ளனர்', 'ஒன்று அல்லது இரண்டு நெருங்கிய நபர்கள்', 'பெரும்பாலும் சுயமாக சமாளிக்கிறேன்', 'மிகவும் தனிமையாக உணர்கிறேன்'],
+      ['ஆம், இது நடந்துள்ளது', 'இல்லை, என்னிடம் எப்போதும் போதுமான உணவு இருந்தது'],
       ['ஒட்டுமொத்தமாக நல்லாக உணர்கிறேன்', 'சில மன அழுத்தம் ஆனால் சமாளிக்கிறேன்', 'மிகவும் மன அழுத்தம் அல்லது மனச்சோர்வு', 'அதிக சுமை — பராமரிப்பு அல்லது நிதி அழுத்தம்'],
       ['ஆண், 21–40', 'பெண், 21–40', 'ஆண், 41–60', 'பெண், 41–60', 'ஆண், 60+', 'பெண், 60+'],
-      ['73 (Woodlands)', '75–76 (Yishun)', '75 (Sembawang)', '68 (Admiralty/Canberra)', 'மற்றவை / தெரியாது'],
+      ['சீனர்', 'மலாய்', 'இந்தியர்', 'யுரேஷியன்', 'மற்றவை', 'கூற விரும்பவில்லை'],
+      ['HDB 1-2 அறை', 'HDB 3 அறை', 'HDB 4 அறை', 'HDB 5 அறை / எக்ஸிகியூட்டிவ்', 'காண்டோ / தனியார் அபார்ட்மெண்ட்', 'நிலம் உள்ள வீடு'],
+      ['வடக்கு (எ.கா. 73, 75)', 'கிழக்கு (எ.கா. 46, 52)', 'மேற்கு (எ.கா. 60, 64)', 'வடகிழக்கு (எ.கா. 53, 82)', 'மத்திய/தெற்கு (எ.கா. 01–33)', 'மற்றவை / தட்டச்சு செய்கிறேன்'],
       ['முந்தைய ID இல்லை'],
     ],
   },
 };
 
 // ─── CLINICAL DATA PARSER ─────────────────────────────────────────────────────
-// Now correctly parses PAVS as Days × Minutes for a validated composite score.
-// Also captures 5 SDOH domains from the expanded question set.
 const parseClinicalData = (raw) => {
   // PAVS — Q0 days, Q1 minutes
   const daysStr  = (raw.pavs_days || '').toLowerCase();
@@ -471,9 +486,9 @@ const parseClinicalData = (raw) => {
               : minsStr.includes('less') || minsStr.includes('20')     ? 15
               : parseInt((minsStr.match(/\d+/) || ['0'])[0], 10);
 
-  const pavsScore    = Math.round(daysN * minsN); // weekly total = days × mins
+  const pavsScore    = Math.round(daysN * minsN); 
   const pavsDays     = daysN;
-  const pavsMinutes  = daysN === 0 ? 0 : minsN; // 0 days → 0 mins/session, not a midpoint
+  const pavsMinutes  = daysN === 0 ? 0 : minsN;
 
   // Strength
   const strStr      = (raw.strength || '').toLowerCase();
@@ -491,11 +506,11 @@ const parseClinicalData = (raw) => {
   const barrStr      = (raw.barriers || '').toLowerCase();
   const sdohFinancial = /(expensive|cost|afford|mahal|kos|贵|செலவு|too far|jauh|太远)/.test(barrStr);
 
-  // SDOH — Social (LSNS-6 inspired)
+  // SDOH — Social 
   const socialStr    = (raw.social || '').toLowerCase();
   const sdohSocial   = /(isolated|alone|on my own|keseorangan|孤立|தனிமை)/.test(socialStr);
 
-  // SDOH — Psychological (BPS-RS II P-domain inspired)
+  // SDOH — Psychological 
   const wellStr      = (raw.wellbeing || '').toLowerCase();
   const sdohPsychological = /(stressed|stress|low|overwhelmed|tertekan|murung|terbeban|压抑|不知所措|மன அழுத்தம்|மனச்சோர்வு|அதிக சுமை)/.test(wellStr);
 
@@ -510,13 +525,16 @@ const parseClinicalData = (raw) => {
   else if (demoStr.includes('41'))                         age = '41-60';
   else if (demoStr.includes('21'))                         age = '21-40';
 
+  // NEW: Ethnicity & Housing Type
+  const ethnicity = raw.ethnicity || 'Unknown';
+  const housingType = raw.housing_type || 'Unknown';
+
   // Location
   const locStr       = (raw.postal_code || '');
   const sectorMatch  = locStr.match(/\d{2}/);
   const postalSector = sectorMatch ? sectorMatch[0] : '00';
 
   // Continuity
-  // Food insecurity — Lien Centre Q1 (SDOH PDF p.10)
   const foodStr        = (raw.food_insecurity || '').toLowerCase();
   const sdohFoodInsecure = /(yes|ya|是|ஆம்)/.test(foodStr);
 
@@ -528,8 +546,7 @@ const parseClinicalData = (raw) => {
     pavsScore, pavsDays, pavsMinutes, strengthDays,
     symptomFlag, medFlag,
     sdohFinancial, sdohSocial, sdohPsychological, sdohFoodInsecure,
-    gender, age, postalSector, previousId,
-    // Legacy compat for calculateRiskScore util
+    gender, age, ethnicity, housingType, postalSector, previousId,
     psychoFlag: sdohPsychological,
   };
 };
@@ -638,15 +655,11 @@ const DomainBadge = ({ step }) => {
 
 // ─── MAIN COMPONENT ───────────────────────────────────────────────────────────
 const AuraChatbot = () => {
-  // Lazy init — reads localStorage SYNCHRONOUSLY before first render.
-  // Critically, also sets the <html> dark class inside the initialiser so
-  // Tailwind dark: utilities are already active on frame 0, not after useEffect.
-  // This is the only reliable way to prevent a light-flash on navigation.
   const [isDark, setIsDark] = useState(() => {
     try {
       const s = localStorage.getItem('nexus-theme');
       const dark = s === 'dark' || (!s && window.matchMedia('(prefers-color-scheme: dark)').matches);
-      document.documentElement.classList.toggle('dark', dark); // ← before first paint
+      document.documentElement.classList.toggle('dark', dark); 
       return dark;
     } catch { return false; }
   });
@@ -665,7 +678,6 @@ const AuraChatbot = () => {
   const [collectedData, setCollectedData] = useState({});
   const [isComplete,    setIsComplete]    = useState(false);
 
-  // ── Sync dark class to <html> whenever isDark changes (including on mount)
   useEffect(() => {
     document.documentElement.classList.toggle('dark', isDark);
   }, [isDark]);
@@ -677,22 +689,18 @@ const AuraChatbot = () => {
     localStorage.setItem('nexus-theme', next ? 'dark' : 'light');
   };
 
-  // ── First prompt
   useEffect(() => {
     if (messages.length === 0) appendBotMessage(langData.prompts[0], 0);
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // ── Auto-scroll
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, isTyping]);
 
-  // ── Focus input after bot finishes typing
   useEffect(() => {
     if (!isTyping) inputRef.current?.focus();
   }, [isTyping]);
 
-  // ── Append a bot message with domain step context
   const appendBotMessage = (text, step, ctaData = null) => {
     setIsTyping(true);
     setTimeout(() => {
@@ -701,13 +709,6 @@ const AuraChatbot = () => {
     }, 850);
   };
 
-  // ── Handle submission — optimistic UI for instant response ──────────────────
-  //
-  // SPEED: static reflection + next question render IMMEDIATELY on tap.
-  // CF call fires in the background (fire-and-forget). If a valid AI response
-  // arrives within AI_UPGRADE_WINDOW_MS it silently upgrades the message text.
-  // If CF is slow or fails the static text stands — the user never waits.
-  //
   const AI_UPGRADE_WINDOW_MS = 1500;
 
   const handleUserSubmission = (text) => {
@@ -721,7 +722,6 @@ const AuraChatbot = () => {
     setCollectedData(updatedData);
     setIsTyping(true);
 
-    // Step 1: static acknowledgement — synchronous, instant
     const staticAck = langData.reflections[currentStep]?.(text) ?? '';
     const nextStep  = currentStep + 1;
 
@@ -730,13 +730,11 @@ const AuraChatbot = () => {
       const nextPrompt    = typeof nextPromptRaw === 'function' ? nextPromptRaw(updatedData) : nextPromptRaw;
       const staticText    = (staticAck ? staticAck + ' ' : '') + nextPrompt;
 
-      // Step 2: render immediately — zero wait for the user
       const msgId = Date.now();
       setCurrentStep(nextStep);
       setMessages(prev => [...prev, { sender: 'bot', text: staticText, step: nextStep, _id: msgId }]);
       setIsTyping(false);
 
-      // Step 3: fire CF in background — upgrade if better AI response arrives in time
       const historySnap = messages
         .filter(m => !m.isGreeting)
         .map(m => ({ role: m.sender === 'bot' ? 'model' : 'user', parts: [{ text: m.text }] }));
@@ -758,7 +756,7 @@ const AuraChatbot = () => {
         role: 'Community Member — Well Well', prompt: contextPrompt, isDemo: false,
       }).then(function(result) {
         clearTimeout(upgradeTimer);
-        if (upgradeExpired) return; // window passed — static text stays
+        if (upgradeExpired) return; 
 
         var raw      = (result.data && result.data.text) ? result.data.text : '';
         var stripped = raw.replace(/```json|```/g, '').trim();
@@ -773,7 +771,6 @@ const AuraChatbot = () => {
         if (!aiAck) aiAck = stripped;
         if (!aiAck) return;
 
-        // Silently upgrade the already-visible message with the AI acknowledgement
         setMessages(function(prev) {
           return prev.map(function(m) {
             return (m._id === msgId) ? Object.assign({}, m, { text: aiAck + ' ' + nextPrompt }) : m;
@@ -782,19 +779,18 @@ const AuraChatbot = () => {
       }).catch(function() { clearTimeout(upgradeTimer); });
 
     } else {
-      // Final step — show closing immediately, then conclude
       var closing = (staticAck ? staticAck + ' ' : '') + 'I have mapped your full profile. Generating your personalised plan now…';
       setMessages(prev => [...prev, { sender: 'bot', text: closing, step: currentStep }]);
       setIsTyping(false);
       concludeTriage(updatedData);
     }
   };
+  
   const handleFormSubmit = (e) => {
     e.preventDefault();
     handleUserSubmission(userInput);
   };
 
-  // ── Triage conclusion
   const concludeTriage = async (finalData) => {
     const parsed    = parseClinicalData(finalData);
     const riskScore = calculateRiskScore(parsed);
@@ -810,7 +806,6 @@ const AuraChatbot = () => {
         ctaTier: ctaData.tier,
       });
 
-      // Render the CTA card inside the chat before navigating
       setTimeout(() => {
         setIsComplete(true);
         setMessages(prev => [...prev, {
@@ -820,7 +815,6 @@ const AuraChatbot = () => {
           ctaData,
         }]);
 
-        // Navigate after user has had time to read the card
         setTimeout(() => {
           navigate('/individuals/result', {
             state: {
@@ -842,7 +836,6 @@ const AuraChatbot = () => {
     }
   };
 
-  // ── Quick replies — only show when bot is not typing and step has replies
   const showQuickReplies = !isTyping && !isComplete && currentStep < langData.quickReplies.length;
 
   return (
@@ -887,11 +880,11 @@ const AuraChatbot = () => {
         {messages.map((msg, idx) => (
           <div key={idx} className={`flex gap-2 ${msg.sender === 'user' ? 'justify-end' : 'justify-start'}`}>
 
-            {/* Bot avatar — left of bot bubbles */}
+            {/* Bot avatar */}
             {msg.sender === 'bot' && <AuraAvatar size="sm" />}
 
             <div className={`max-w-[82%] ${msg.sender === 'user' ? '' : ''}`}>
-              {/* Domain badge — only on bot messages where step is defined */}
+              {/* Domain badge */}
               {msg.sender === 'bot' && msg.step !== undefined && (
                 <DomainBadge step={msg.step} />
               )}
@@ -905,7 +898,7 @@ const AuraChatbot = () => {
                 {msg.text}
               </div>
 
-              {/* CTA card — rendered inside the chat for immediate visibility */}
+              {/* CTA card */}
               {msg.ctaData && <CtaCard ctaData={msg.ctaData} langData={langData} />}
             </div>
           </div>
@@ -931,7 +924,7 @@ const AuraChatbot = () => {
       {/* ── INPUT AREA ── */}
       <div className="px-4 pt-3 pb-4 bg-white dark:bg-[#111827] border-t border-slate-100 dark:border-slate-800 shadow-[0_-4px_8px_-2px_rgba(0,0,0,0.04)]">
 
-        {/* Quick replies — only when not typing and not complete */}
+        {/* Quick replies */}
         {showQuickReplies && (
           <div className="mb-3 animate-in fade-in slide-in-from-bottom-2 duration-300">
             <p className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-2 px-0.5">
