@@ -12,23 +12,19 @@ const rotate = (arr, k) => {
 export const generateRoster = (config) => {
     const { staff, tasks, startDate, weeks } = config;
     const start = new Date(startDate);
-    let roster = {}; // Format: { "2026-01-05": [ {staff, task, category, week} ] }
+    let roster = {}; 
 
     // --- A. MAIN CORE TASKS (Mon-Fri) ---
-    // Logic: Tasks stay fixed in order, Staff rotates 1 slot every week
     for (let w = 0; w < weeks; w++) {
-        // Calculate Week Start (Monday)
         const weekStart = new Date(start);
         weekStart.setDate(start.getDate() + (w * 7));
 
-        // Get Staff Order for this week
         const currentStaffOrder = rotate(staff, w);
 
-        // Assign Staff to Tasks
         tasks.forEach((taskName, taskIdx) => {
-            const assignedStaff = currentStaffOrder[taskIdx % staff.length];
+            const leadStaff = currentStaffOrder[taskIdx % staff.length];
+            const coLeadStaff = currentStaffOrder[(taskIdx + 1) % staff.length];
 
-            // Fill Mon(0) to Fri(4)
             for (let d = 0; d < 5; d++) {
                 const dayDate = new Date(weekStart);
                 dayDate.setDate(weekStart.getDate() + d);
@@ -36,9 +32,12 @@ export const generateRoster = (config) => {
 
                 if (!roster[dateKey]) roster[dateKey] = [];
                 
+                // Unified shift object per task
                 roster[dateKey].push({
-                    staff: assignedStaff,
                     task: taskName,
+                    lead: leadStaff,
+                    coLead: coLeadStaff,
+                    staff: `Lead: ${leadStaff}, Co: ${coLeadStaff}`, // Formats the UI and ICS perfectly
                     category: 'CORE', 
                     week: w + 1
                 });
@@ -46,7 +45,6 @@ export const generateRoster = (config) => {
         });
 
         // --- B. VC TASKS (Tue & Sat) ---
-        // Logic: Lead and Co-Lead assigned for the week. Co-Lead follows Lead in the array.
         const vcLead = staff[w % staff.length];
         const vcCoLead = staff[(w + 1) % staff.length];
 
@@ -56,8 +54,14 @@ export const generateRoster = (config) => {
         const tueKey = tueDate.toISOString().split('T')[0];
         
         if (!roster[tueKey]) roster[tueKey] = [];
-        roster[tueKey].push({ staff: vcLead, task: "VC Lead (PM)", category: "VC", week: w + 1 });
-        roster[tueKey].push({ staff: vcCoLead, task: "VC Co-Lead (PM)", category: "VC", week: w + 1 });
+        roster[tueKey].push({ 
+            task: "VC (PM)", 
+            lead: vcLead,
+            coLead: vcCoLead,
+            staff: `Lead: ${vcLead}, Co: ${vcCoLead}`,
+            category: "VC", 
+            week: w + 1 
+        });
 
         // Saturday (Index 5)
         const satDate = new Date(weekStart);
@@ -65,8 +69,14 @@ export const generateRoster = (config) => {
         const satKey = satDate.toISOString().split('T')[0];
         
         if (!roster[satKey]) roster[satKey] = [];
-        roster[satKey].push({ staff: vcLead, task: "VC Lead (AM)", category: "VC", week: w + 1 });
-        roster[satKey].push({ staff: vcCoLead, task: "VC Co-Lead (AM)", category: "VC", week: w + 1 });
+        roster[satKey].push({ 
+            task: "VC (AM)", 
+            lead: vcLead,
+            coLead: vcCoLead,
+            staff: `Lead: ${vcLead}, Co: ${vcCoLead}`,
+            category: "VC", 
+            week: w + 1 
+        });
     }
 
     return roster;
@@ -85,13 +95,12 @@ export const downloadICS = (rosterData) => {
 
     Object.entries(rosterData).forEach(([date, shifts]) => {
         shifts.forEach(shift => {
-            // Format Date: YYYYMMDD
             const dtStart = date.replace(/-/g, '');
             
             ics.push(
                 "BEGIN:VEVENT",
                 `DTSTART;VALUE=DATE:${dtStart}`,
-                `SUMMARY:[${shift.task}] ${shift.staff}`,
+                `SUMMARY:[${shift.task}] ${shift.staff}`, // This will output exactly: [EFT] Lead: BF, Co: DK
                 `DESCRIPTION:Week ${shift.week} - ${shift.category}`,
                 "END:VEVENT"
             );
@@ -103,26 +112,27 @@ export const downloadICS = (rosterData) => {
     const blob = new Blob([ics.join("\r\n")], { type: 'text/calendar' });
     const link = document.createElement('a');
     link.href = URL.createObjectURL(blob);
-    link.download = "AURA_Roster.ics";
+    link.download = "AURA_Roster_Merged.ics";
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
 };
 
 export const downloadCSV = (rosterData) => {
-    let csv = ["Date,Week,Staff,Task,Category"];
+    // Dedicated Lead and Co-Lead columns for cleaner Excel filtering
+    let csv = ["Date,Week,Task,Category,Lead,Co-Lead"];
     const sortedDates = Object.keys(rosterData).sort();
     
     sortedDates.forEach(date => {
         rosterData[date].forEach(s => {
-            csv.push(`${date},${s.week},${s.staff},${s.task},${s.category}`);
+            csv.push(`${date},${s.week},${s.task},${s.category},${s.lead},${s.coLead}`);
         });
     });
 
     const blob = new Blob([csv.join("\n")], { type: 'text/csv' });
     const link = document.createElement('a');
     link.href = URL.createObjectURL(blob);
-    link.download = "AURA_Roster.csv";
+    link.download = "AURA_Roster_Merged.csv";
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
