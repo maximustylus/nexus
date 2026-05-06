@@ -12,7 +12,7 @@ const rotate = (arr, k) => {
 export const generateRoster = (config) => {
     const { staff, tasks, startDate, weeks } = config;
     const start = new Date(startDate);
-    let roster = {}; // Format: { "2026-01-05": [ {staff, task, type} ] }
+    let roster = {}; // Format: { "2026-01-05": [ {staff, task, category, week} ] }
 
     // --- A. MAIN CORE TASKS (Mon-Fri) ---
     // Logic: Tasks stay fixed in order, Staff rotates 1 slot every week
@@ -46,8 +46,9 @@ export const generateRoster = (config) => {
         });
 
         // --- B. VC TASKS (Tue & Sat) ---
-        // Logic: 1 person does BOTH Tue & Sat for the week. Rotates sequentially.
+        // Logic: Lead and Co-Lead assigned for the week. Co-Lead follows Lead in the array.
         const vcLead = staff[w % staff.length];
+        const vcCoLead = staff[(w + 1) % staff.length];
 
         // Tuesday (Index 1)
         const tueDate = new Date(weekStart);
@@ -55,7 +56,8 @@ export const generateRoster = (config) => {
         const tueKey = tueDate.toISOString().split('T')[0];
         
         if (!roster[tueKey]) roster[tueKey] = [];
-        roster[tueKey].push({ staff: vcLead, task: "VC (PM)", category: "VC", week: w+1 });
+        roster[tueKey].push({ staff: vcLead, task: "VC Lead (PM)", category: "VC", week: w + 1 });
+        roster[tueKey].push({ staff: vcCoLead, task: "VC Co-Lead (PM)", category: "VC", week: w + 1 });
 
         // Saturday (Index 5)
         const satDate = new Date(weekStart);
@@ -63,11 +65,13 @@ export const generateRoster = (config) => {
         const satKey = satDate.toISOString().split('T')[0];
         
         if (!roster[satKey]) roster[satKey] = [];
-        roster[satKey].push({ staff: vcLead, task: "VC (AM)", category: "VC", week: w+1 });
+        roster[satKey].push({ staff: vcLead, task: "VC Lead (AM)", category: "VC", week: w + 1 });
+        roster[satKey].push({ staff: vcCoLead, task: "VC Co-Lead (AM)", category: "VC", week: w + 1 });
     }
 
     return roster;
 };
+
 
 // --- 2. EXPORT LOGIC ---
 
