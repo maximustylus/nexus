@@ -50,6 +50,7 @@ const RosterView = ({ user }) => {
                 }
                 transformedData[dateKey].push({
                     staff: event.resource,
+                    lead: event.resource, // Fallback for old demo data
                     task: event.title,
                     category: event.type === 'OnCall' ? 'VC' : 'Clinical' 
                 });
@@ -72,7 +73,6 @@ const RosterView = ({ user }) => {
 
     // --- ACTIONS ---
     
-    // 1. The button click now just handles demo mode or opens the modal
     const handleGenerateClick = () => {
         if (isDemo) {
             alert("🧪 [SANDBOX] AURA is simulating roster conflict resolution for the Marvel Team...");
@@ -86,7 +86,6 @@ const RosterView = ({ user }) => {
         setIsConfirmModalOpen(true);
     };
 
-    // 2. The actual generation logic runs ONLY when confirmed via the modal
     const executeRosterGeneration = async () => {
         setIsConfirmModalOpen(false); // Close the confirm modal
         
@@ -108,7 +107,8 @@ const RosterView = ({ user }) => {
 
     // --- SWAP LOGIC ---
     const handleShiftClick = (shift, dateKey) => {
-        const isMyShift = isDemo ? true : shift.staff === user?.name;
+        // 🌟 UPDATED: Checks if user is Lead OR Co-Lead. Also maintains backwards compatibility.
+        const isMyShift = isDemo ? true : (shift.lead === user?.name || shift.coLead === user?.name || shift.staff === user?.name);
         
         if (isMyShift || user?.role === 'admin') {
             setSelectedShift({ ...shift, date: dateKey });
@@ -116,7 +116,6 @@ const RosterView = ({ user }) => {
         }
     };
 
-    // 🛡️ NEW: The Firebase Database Engine
     const submitSwapRequest = async (e) => {
         e.preventDefault();
         if (!swapTargetStaff) return;
@@ -230,7 +229,8 @@ const RosterView = ({ user }) => {
                             
                             <div className="mt-5 flex flex-col gap-1 overflow-y-auto max-h-[90px] custom-scrollbar">
                                 {shifts.map((s, idx) => {
-                                    const isMyShift = isDemo ? true : s.staff === user?.name;
+                                    // 🌟 UPDATED: Checks both Lead and Co-Lead safely
+                                    const isMyShift = isDemo ? true : (s.lead === user?.name || s.coLead === user?.name || s.staff === user?.name);
 
                                     return (
                                         <button 
@@ -293,8 +293,11 @@ const RosterView = ({ user }) => {
                                         className="w-full bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-700 rounded-lg p-3 text-sm font-bold text-slate-800 dark:text-white focus:ring-2 focus:ring-indigo-500 outline-none"
                                     >
                                         <option value="" disabled>Select a Colleague...</option>
-                                        {config.staff.filter(name => name !== selectedShift.staff).map(colleague => (
-                                            <option key={colleague} value={colleague}>{colleague}</option>
+                                        {config.staff
+                                            // Ensure we don't show the people currently ON this shift as swap options
+                                            .filter(name => !selectedShift.staff?.includes(name))
+                                            .map(colleague => (
+                                                <option key={colleague} value={colleague}>{colleague}</option>
                                         ))}
                                     </select>
                                 </div>
