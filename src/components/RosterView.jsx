@@ -9,6 +9,9 @@ import { generateRoster, downloadICS, downloadCSV } from '../utils/auraEngine';
 import { useNexus } from '../context/NexusContext';
 import { MOCK_ROSTER, MOCK_STAFF_NAMES } from '../data/mockData';
 
+// 🌟 IMPORT THE CUSTOM MODAL
+import ConfirmationModal from './ConfirmationModal';
+
 const RosterView = ({ user }) => {
     // --- CONTEXT ---
     const { isDemo } = useNexus();
@@ -17,6 +20,9 @@ const RosterView = ({ user }) => {
     const [currentDate, setCurrentDate] = useState(new Date(2026, 1, 1)); 
     const [rosterData, setRosterData] = useState({});
     const [isConfigOpen, setIsConfigOpen] = useState(false);
+    
+    // 🌟 CUSTOM MODAL STATE
+    const [isConfirmModalOpen, setIsConfirmModalOpen] = useState(false);
     
     // --- SWAP MODAL STATE ---
     const [isSwapModalOpen, setIsSwapModalOpen] = useState(false);
@@ -65,7 +71,9 @@ const RosterView = ({ user }) => {
     }, [isDemo]);
 
     // --- ACTIONS ---
-    const handleGenerate = async () => {
+    
+    // 1. The button click now just handles demo mode or opens the modal
+    const handleGenerateClick = () => {
         if (isDemo) {
             alert("🧪 [SANDBOX] AURA is simulating roster conflict resolution for the Marvel Team...");
             setTimeout(() => {
@@ -74,12 +82,23 @@ const RosterView = ({ user }) => {
             }, 1500);
             return;
         }
+        
+        setIsConfirmModalOpen(true);
+    };
 
-        if(!window.confirm("Overwrite existing roster with new AURA configuration?")) return;
-        const newData = generateRoster(config);
-        await setDoc(doc(db, 'system_data', 'roster_2026'), newData);
-        setIsConfigOpen(false);
-        alert("✅ AURA has generated a conflict-free roster.");
+    // 2. The actual generation logic runs ONLY when confirmed via the modal
+    const executeRosterGeneration = async () => {
+        setIsConfirmModalOpen(false); // Close the confirm modal
+        
+        try {
+            const newData = generateRoster(config);
+            await setDoc(doc(db, 'system_data', 'roster_2026'), newData);
+            setIsConfigOpen(false); // Close the config wizard
+            alert("✅ AURA has generated a conflict-free roster.");
+        } catch (error) {
+            console.error("Error generating roster:", error);
+            alert("❌ Failed to generate roster. Check your connection.");
+        }
     };
 
     const handleMonthChange = (offset) => {
@@ -358,7 +377,7 @@ const RosterView = ({ user }) => {
                         <div className="flex gap-2">
                             <button onClick={() => setIsConfigOpen(false)} className="flex-1 py-3 text-slate-500 dark:text-slate-400 font-bold hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg transition-colors">Cancel</button>
                             <button 
-                                onClick={handleGenerate} 
+                                onClick={handleGenerateClick} 
                                 className={`flex-1 py-3 text-white font-bold rounded-lg shadow-lg transition-colors flex justify-center items-center gap-2 ${isDemo ? 'bg-emerald-600 hover:bg-emerald-700' : 'bg-indigo-600 hover:bg-indigo-700'}`}
                             >
                                 <Play size={16} /> {isDemo ? 'Simulate Check' : 'Generate Roster'}
@@ -367,6 +386,16 @@ const RosterView = ({ user }) => {
                     </div>
                 </div>
             )}
+
+            {/* 🌟 CUSTOM GENERATE CONFIRMATION MODAL */}
+            <ConfirmationModal 
+                isOpen={isConfirmModalOpen}
+                title="NEXUS says"
+                message="Are you sure you want to generate a new 4-Week Roster? This will overwrite the currently displayed schedule."
+                onCancel={() => setIsConfirmModalOpen(false)}
+                onConfirm={executeRosterGeneration}
+            />
+
         </div>
     );
 };
