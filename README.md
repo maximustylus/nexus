@@ -1,6 +1,6 @@
-# NEXUS: Smart Operations Dashboard v1.5 [BETA]
+# NEXUS: Smart Operations Dashboard v1.6 [BETA]
 
-![Status](https://img.shields.io/badge/Status-Beta%20Phase-emerald) ![Org](https://img.shields.io/badge/Unit-Sport%20%26%20Exercise%20Medicine-indigo) ![Tech](https://img.shields.io/badge/AI-Gemini%20Powered-purple) ![AURA](https://img.shields.io/badge/AURA-v2.3%20Engine-blue) ![PWA](https://img.shields.io/badge/PWA-Native%20Push%20Enabled-blue) ![CI/CD](https://img.shields.io/badge/CI%2FCD-GitHub%20Actions-2ea44f)
+![Version](https://img.shields.io/badge/Version-v1.6.0-blue) ![Status](https://img.shields.io/badge/Status-Beta%20Phase-emerald) ![Org](https://img.shields.io/badge/Unit-Sport%20%26%20Exercise%20Medicine-indigo) ![Tech](https://img.shields.io/badge/AI-Gemini%20Powered-purple) ![AURA](https://img.shields.io/badge/AURA-v2.3%20Engine-blue) ![PWA](https://img.shields.io/badge/PWA-Native%20Push%20Enabled-blue) ![CI/CD](https://img.shields.io/badge/CI%2FCD-GitHub%20Actions-2ea44f)
 
 **NEXUS** (formerly IDC App) is a clinician-led innovation platform designed to revolutionise workload management, optimise skill-mix routing, and actively protect staff wellbeing at the Sport and Exercise Medicine Centre. 
 
@@ -145,9 +145,9 @@ This application is an operational and workload management tool. It is not a cli
 ### Supported Versions
 | Version | Status |
 | ------- | ------ |
-| 1.5.x   | **Active Beta** (Evaluated by Senior CEPs) |
-| 1.4.x   | Legacy Stable |
-| < 1.4   | Deprecated / Offline |
+| 1.6.x   | **Active Beta** (Evaluated by Senior CEPs) |
+| 1.5.x   | Legacy Stable |
+| < 1.5   | Deprecated / Offline |
 
 ### The "Data Firewall" and Security Policies
 1. **Strict Whitelisting (Backend Firewall):** Access is exclusively limited to pre-approved `@kkh.com.sg` email addresses via a master scalable allowlist array.
@@ -174,7 +174,18 @@ Beta testers should utilise Demo Mode to verify system integrity:
 
 ## Release History
 
-### NEXUS v1.5 [Current Beta]
+> The authoritative, machine-readable record is **[`CHANGELOG.md`](CHANGELOG.md)**, which
+> also lists the **known issues that are documented but not yet fixed**. The summaries
+> below are narrative highlights; where the two disagree, `CHANGELOG.md` is correct.
+
+### NEXUS v1.6 [Current Beta]
+* **Verification Infrastructure:** Introduced the project's first working test harness (Vitest, Testing Library, jsdom) with 23 characterization tests for the roster generator, and wired `npm test` into the GitHub Actions deploy workflow so a failing suite now blocks release.
+* **Roster Lead / Co-Lead Pairing:** Restructured generated shifts into a single paired object per task carrying explicit `lead` and `coLead` fields, with dedicated Lead and Co-Lead columns in the CSV export. **Note:** this changed the stored shape of `system_data/roster_2026` — see the *Breaking* entry in `CHANGELOG.md`.
+* **Safer Roster Generation:** Routed the destructive 4-week generation through the custom `ConfirmationModal` and added error handling to the write path.
+* **Clinical Reach:** Seeded the national resource registry (22 resources across 5 regions) and added an AURA care tier routing socially isolated seniors to tele-befriending and Active Ageing Centre support.
+* **Engineering Governance:** Published the roster post-mortem, independent QC audit and sequenced remediation plan; pinned the previously unpinned `@google/generative-ai` dependency; established `CHANGELOG.md` and reconciled `package.json` with the documented version.
+
+### NEXUS v1.5
 * **NEXUS Feeds Integration:** Deployed the Digital Watercooler for secure, PDPA-compliant clinical knowledge sharing and Community of Practice updates.
 * **Immersive Lightbox UI:** Implemented distraction-free reading environments with nested real-time discussion threads.
 * **Smart Routing Architecture:** Engineered URL parameter detection to support secure deep-linking and cross-platform post sharing.
@@ -193,7 +204,7 @@ Beta testers should utilise Demo Mode to verify system integrity:
 * **Auto-Rostering Framework:** Built the initial zero-conflict scheduling logic and unified calendar interfaces.
 * **Early AURA Integration:** Introduced the baseline conversational agent focused heavily on Motivational Interviewing (OARS) and basic administrative query routing.
 
-## Future Roadmap (Pending v1.6)
+## Future Roadmap (Pending v1.7)
 
 * **Admin Security Audit Logs:** Implementation of a transparent access tracking system within the Admin Panel to monitor user logins, profile alterations, and data export events.
 * **Enterprise Scaling and Multi-Tenancy:** Transitioning the app from a hardcoded single-team environment to a dynamic, database-driven configuration. This will allow multiple departments to utilise NEXUS with completely isolated data sub-collections and custom organisation logos.
