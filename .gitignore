@@ -68,3 +68,6 @@ node_modules/
 # dataconnect generated files
 .dataconnect
 serviceAccountKey.json
+
+# Build output (never commit — would dirty the tree and bloat deploys)
+dist/

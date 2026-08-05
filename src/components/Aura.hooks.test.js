@@ -22,7 +22,7 @@ import {
     useRotatingPool,
     useInitGuard,
     useScrollToBottom,
-} from './aura.hooks';
+} from './Aura.hooks';
 
 afterEach(cleanup);
 
