@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Routes, Route, useLocation } from 'react-router-dom';
 import { getMessaging, onMessage } from "firebase/messaging";
 
@@ -102,7 +102,16 @@ export default function App() {
   const [isGuideOpen, setIsGuideOpen] = useState(false);
   const [notifications, setNotifications] = useState([]);
   const [isBellOpen, setIsBellOpen] = useState(false);
-  
+
+  // 🛡️ M5: AuraPulseBot's coverage-request listener calls `onOpen()` to force the
+  // panel open for an urgent shift swap. That prop was never passed, so
+  // `if (onOpen) onOpen()` was a no-op and the request never surfaced.
+  // These are stable (useCallback, no deps) on purpose: the listener effect must
+  // not re-subscribe on every App render, because each re-subscribe re-delivers
+  // every PENDING request as an `added` change.
+  const openAura  = useCallback(() => setIsAuraOpen(true), []);
+  const closeAura = useCallback(() => setIsAuraOpen(false), []);
+
   const [isDark, setIsDark] = useState(() => {
     if (typeof window !== 'undefined') {
       const savedTheme = localStorage.getItem('nexus_theme');
@@ -622,8 +631,8 @@ export default function App() {
               <>
                 <AppGuide isOpen={isGuideOpen} onClose={() => setIsGuideOpen(false)} />
                 <FeedbackWidget user={user} />
-                <AuraGreeting openAuraChat={() => setIsAuraOpen(true)} dailyPatientLoad={145} />
-                <AuraPulseBot isOpen={isAuraOpen} onClose={() => setIsAuraOpen(false)} user={user} />
+                <AuraGreeting openAuraChat={openAura} dailyPatientLoad={145} />
+                <AuraPulseBot isOpen={isAuraOpen} onClose={closeAura} onOpen={openAura} user={user} />
               </>
             }
           >

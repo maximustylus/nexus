@@ -48,19 +48,68 @@ traceable to those documents.
 
 | Id | Severity | Defect |
 |---|---|---|
-| **A1** | Critical | **Accepting a shift swap does not change the roster.** The swap mutator's comparison never matches the stored shift, so the accept path completes and reports success without writing the swap into `system_data/roster_2026`. Post-mortem Block A. |
-| **M5** | High | **The coverage alert never surfaces.** `onOpen` is not passed to the consumer, and any new chat session silently discards the pending request, so the amber coverage/`ROSTER_ALERT` prompt the README's smoke test asks testers to look for cannot appear. Audit M5. |
 | **M6** | High | **The ICS export is malformed.** `SUMMARY` is an RFC 5545 TEXT property, but the emitted value contains an unescaped `,` (`SUMMARY:[EFT] Lead: Brandon, Co: Ying Xian`), making it a multi-valued property; the events also carry no `UID` and no `DTSTAMP`. Introduced by the lead/co-lead refactor in this release — see *Breaking* below. Audit M6. |
 | **B1** | High | **Sunday-start weekday misalignment.** The default start date is a Sunday, so the generator's "Mon–Fri" day loop (`d = 0..4` from the week start) and its Tuesday/Saturday VC indices are all offset by one day. Post-mortem Block B. |
 | **P0.7** | Medium | **`npm run lint` has never worked.** No ESLint configuration file exists anywhere in the repository (`git ls-files \| grep -i eslint` returns nothing), so the `lint` script exits `2` on any invocation — "ESLint couldn't find a configuration file". Pre-existing; the deploy workflow never called it, so this was never surfaced by CI. Plan P0.7 in `ROSTER_TODO.md`. |
 
-Additional lower-severity findings (M10 CSV formula injection, M11 admin swaps
-structurally no-op, M12 no duplicate-request guard, C1/C3/C4 persistence and
+Additional lower-severity findings (M10 CSV formula injection, M12 no
+duplicate-request guard, C1/C3/C4 persistence and
 configuration drift, D-series verification gaps, E1/E2/E4 documentation overstatement)
 are recorded in `ROSTER_QC_AUDIT.md` and `ROSTER_POSTMORTEM.md` and are likewise
 **not** fixed.
 
 ---
+
+## [1.6.1] - 2026-08-06
+
+The shift-swap flow — the "Auto-Healer" — now actually works. Every item here is a fix to
+behaviour that already shipped, hence a patch rather than a feature release.
+
+### Fixed
+
+- **A1 (Critical) — accepting a shift swap did not change the roster.** The mutator compared
+  `shift.staff` against `swapData.requestedBy`. Since the 6 May 2026 lead/co-lead refactor
+  `staff` holds a *display string* (`"Lead: Brandon, Co: Ying Xian"`) while `requestedBy` is a
+  bare name, so `.map()` matched nothing, `updateDoc` wrote byte-identical data, nothing threw,
+  and AURA still reported *"I have updated the master roster."* The swap flow now:
+  - records `swapRole` (`'lead' | 'coLead'`) at request time — the missing field that made the
+    mutation impossible even in principle;
+  - applies **mechanical substitution**: the covering colleague takes exactly the role the
+    requester held. No promotion, and no third person's duty changes;
+  - tolerates **both** shift shapes — modern (`lead`/`coLead`) and pre-refactor (`staff` as a
+    bare identity), upgrading legacy shifts to the modern shape on write — so it is correct
+    regardless of when the live document was last generated;
+  - refuses rather than guesses when the requester no longer holds the recorded role.
+- **A-RC4 (Critical) — success was printed, never observed.** The confirmation was a hardcoded
+  literal emitted down every path, including silent no-ops. AURA now writes, **reads the
+  document back, locates the substitution in it**, and only then reports — quoting the shift as
+  it actually reads. A no-match is a visible failure that leaves the request `PENDING`.
+- **M9 (High) — the ledger recorded approvals that never happened.** `status: 'APPROVED'` was
+  written *before* the roster was even read, with no rollback. It is now written only after a
+  verified roster write.
+- **M5 (High) — the coverage alert never surfaced.** `App.jsx` never passed `onOpen`, so the
+  force-open was a no-op; and `startSession`/`handleClearChat` discarded queued alerts by
+  resetting `messages`. `onOpen` is now passed, pending alerts survive session resets, and they
+  are de-duplicated by document id so a re-subscribe cannot stack duplicate Accept buttons.
+- **M11 — admin-initiated swaps were structurally guaranteed to fail.** An admin who is not on
+  the roster resolved to `swapRole: null`, so the request could never be applied. An admin
+  acting on a shift they do not hold now arranges cover **on behalf of** the clinician who does:
+  `requestedBy` is that clinician, `swapRole` their duty, and `initiatedBy` records who arranged
+  it. The modal states plainly whose shift is being reassigned.
+- **M8 (Medium) — Firestore listener failures were silent.** Both `onSnapshot` calls now have
+  error callbacks; a `permission-denied` surfaces a readable message instead of the feature
+  quietly ceasing to exist.
+- **A4 — the swap-candidate filter used a substring test** (`staff.includes(name)`), which would
+  silently drop any colleague whose name is a substring of another's. Now an identity comparison.
+- **M4 (partial)** — removed the false claim that a declining colleague's requester "will be
+  notified". No such mechanism exists; the copy now says to tell them directly.
+
+### Notes
+
+- `generateRoster` is untouched: verified byte-identical output against the previous release
+  across three configurations, including a year-boundary run.
+- Requester and roster-owner notification remain unbuilt (see Known issues).
+- 254 tests (was 163). The 23 `generateRoster` characterization tests are unmodified.
 
 ## [1.6.0] - 2026-08-05
 

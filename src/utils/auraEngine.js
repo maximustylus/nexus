@@ -1,5 +1,23 @@
 // src/utils/auraEngine.js
 
+// --- 0. THE SHIFT DISPLAY STRING — ONE DEFINITION ----------------------------
+//
+// `staff` is a DERIVED DISPLAY STRING, not an identity. It stopped being an
+// identity on 6 May 2026 (commit 2de3dde) and only three of its four consumers
+// were reconciled (ROSTER_POSTMORTEM.md A-RC1). Every producer of that string —
+// `generateRoster` below and the swap mutator in AuraPulseBot.jsx — now goes
+// through this one function so the two cannot drift apart again.
+//
+// The exact format is load-bearing: `downloadICS` interpolates it straight into
+// a VEVENT SUMMARY and RosterView renders it in the calendar cell.
+//
+// A shift with no co-lead (the pre-6-May legacy shape had only one person)
+// yields `Lead: X` rather than `Lead: X, Co: undefined`.
+export const buildShiftStaffLabel = (lead, coLead) => {
+    const hasCoLead = typeof coLead === 'string' && coLead.trim() !== '';
+    return hasCoLead ? `Lead: ${lead}, Co: ${coLead}` : `Lead: ${lead}`;
+};
+
 // --- 1. CORE LOGIC ---
 
 // Helper: Rotate array by k steps (Cyclic Shift)
@@ -37,7 +55,7 @@ export const generateRoster = (config) => {
                     task: taskName,
                     lead: leadStaff,
                     coLead: coLeadStaff,
-                    staff: `Lead: ${leadStaff}, Co: ${coLeadStaff}`, // Formats the UI and ICS perfectly
+                    staff: buildShiftStaffLabel(leadStaff, coLeadStaff), // Formats the UI and ICS perfectly
                     category: 'CORE', 
                     week: w + 1
                 });
@@ -55,10 +73,10 @@ export const generateRoster = (config) => {
         
         if (!roster[tueKey]) roster[tueKey] = [];
         roster[tueKey].push({ 
-            task: "VC (PM)", 
+            task: "VC (PM)",
             lead: vcLead,
             coLead: vcCoLead,
-            staff: `Lead: ${vcLead}, Co: ${vcCoLead}`,
+            staff: buildShiftStaffLabel(vcLead, vcCoLead),
             category: "VC", 
             week: w + 1 
         });
@@ -70,10 +88,10 @@ export const generateRoster = (config) => {
         
         if (!roster[satKey]) roster[satKey] = [];
         roster[satKey].push({ 
-            task: "VC (AM)", 
+            task: "VC (AM)",
             lead: vcLead,
             coLead: vcCoLead,
-            staff: `Lead: ${vcLead}, Co: ${vcCoLead}`,
+            staff: buildShiftStaffLabel(vcLead, vcCoLead),
             category: "VC", 
             week: w + 1 
         });
@@ -279,6 +297,474 @@ export const prepareRosterWrite = (config, generate = generateRoster) => {
     }
 
     return { ok: true, reason: null, data };
+};
+
+
+// --- 1c. SHIFT IDENTITY + SWAP APPLICATION (ROSTER_TODO.md P6 / Block A) ------
+//
+// This section is the single owner of the shift object's *identity*. Before it
+// existed, `RosterView` read `lead`/`coLead`/`staff`, `generateRoster` wrote all
+// three, and `AuraPulseBot` compared `staff` to a bare name — three files with
+// three different ideas of what a shift is (ROSTER_POSTMORTEM.md A1/A2).
+//
+// SWAP SEMANTICS — MECHANICAL SUBSTITUTION (user decision, not inferred):
+// the covering colleague takes over EXACTLY the role the requester held. Lead
+// for lead, co-lead for co-lead. No promotion, and no third person's duty
+// changes. `applyShiftSubstitution` is the only place that rule lives.
+//
+// SHAPE TOLERANCE: the live document may still hold pre-6-May shifts where
+// `staff` was a bare identity and `lead`/`coLead` are absent. Whether it does is
+// unknown and will not be established before the presentation
+// (ROSTER_TODO.md "A1 live status: LIVE-VERIFY PENDING"), so every reader here
+// handles both shapes, and a write upgrades a legacy shift to the modern one.
+//
+// Everything below is pure: no Firestore, no React. The components keep only
+// the wiring.
+
+export const SHIFT_ROLE_LEAD = 'lead';
+export const SHIFT_ROLE_CO_LEAD = 'coLead';
+
+/** The two roles a person can hold on a shift, in `swapRole`'s vocabulary. */
+export const SHIFT_ROLES = Object.freeze([SHIFT_ROLE_LEAD, SHIFT_ROLE_CO_LEAD]);
+
+/** Human wording for a role, for messages shown to a clinician. */
+export const describeShiftRole = (role) => {
+    if (role === SHIFT_ROLE_LEAD) return 'lead';
+    if (role === SHIFT_ROLE_CO_LEAD) return 'co-lead';
+    return 'unknown duty';
+};
+
+/** A display string always starts `Lead: `; a bare identity never does. */
+const DISPLAY_LABEL_PATTERN = /^\s*Lead:\s/i;
+
+const asName = (value) => (typeof value === 'string' && value.trim() !== '' ? value : null);
+
+/**
+ * Who actually holds this shift, whichever schema version wrote it.
+ *
+ * Returns `{ lead, coLead, legacy }` where the names are `null` when absent and
+ * `legacy` is true only for a genuine pre-refactor shift — `lead`/`coLead` both
+ * missing and `staff` holding a bare name. A `staff` that looks like a display
+ * string with no `lead`/`coLead` is treated as having NO readable identity
+ * rather than being parsed back out of the label: re-deriving identity from a
+ * formatted string is what created this class of bug in the first place.
+ */
+export const readShiftIdentities = (shift) => {
+    if (!shift || typeof shift !== 'object') {
+        return { lead: null, coLead: null, legacy: false };
+    }
+
+    const lead = asName(shift.lead);
+    const coLead = asName(shift.coLead);
+    if (lead || coLead) return { lead, coLead, legacy: false };
+
+    const bare = asName(shift.staff);
+    if (bare && !DISPLAY_LABEL_PATTERN.test(bare)) {
+        // Pre-6-May: `staff` WAS the identity, and there was only ever one
+        // person on a shift. That person is the lead.
+        return { lead: bare, coLead: null, legacy: true };
+    }
+
+    return { lead: null, coLead: null, legacy: false };
+};
+
+/**
+ * Which role does `name` hold on this shift? `'lead'`, `'coLead'` or `null`.
+ *
+ * Identity comparison, never `includes()`. The substring test it replaces
+ * (ROSTER_POSTMORTEM.md A4) matched "Lynn" inside "Fadzlynn".
+ */
+export const shiftRoleOf = (shift, name) => {
+    const who = asName(name);
+    if (!who) return null;
+
+    const { lead, coLead } = readShiftIdentities(shift);
+    if (lead === who) return SHIFT_ROLE_LEAD;
+    if (coLead === who) return SHIFT_ROLE_CO_LEAD;
+    return null;
+};
+
+/**
+ * Mechanical substitution: `incomingStaff` takes over `role`, nothing else moves.
+ *
+ * Also normalises the shift to the modern shape — a legacy shift comes back with
+ * a real `lead` field and a `Lead: …` display string, so the same document is
+ * never read as legacy twice. Returns the shift unchanged if the arguments make
+ * no sense; callers decide via `planSwapApplication`, which refuses first.
+ */
+export const applyShiftSubstitution = (shift, role, incomingStaff) => {
+    const incoming = asName(incomingStaff);
+    if (!shift || typeof shift !== 'object') return shift;
+    if (!incoming) return shift;
+    if (role !== SHIFT_ROLE_LEAD && role !== SHIFT_ROLE_CO_LEAD) return shift;
+
+    const { lead, coLead } = readShiftIdentities(shift);
+    const nextLead = role === SHIFT_ROLE_LEAD ? incoming : lead;
+    const nextCoLead = role === SHIFT_ROLE_CO_LEAD ? incoming : coLead;
+
+    const next = {
+        ...shift,
+        lead: nextLead,
+        staff: buildShiftStaffLabel(nextLead, nextCoLead),
+    };
+
+    // A legacy shift had no co-lead. Inventing one would put a clinician on a
+    // duty nobody assigned them, so the field stays absent.
+    if (nextCoLead === null) delete next.coLead;
+    else next.coLead = nextCoLead;
+
+    return next;
+};
+
+/**
+ * The colleagues who could cover this shift: the configured pool minus the
+ * people already on it.
+ *
+ * Replaces `config.staff.filter(n => !selectedShift.staff?.includes(n))`
+ * (RosterView.jsx), a substring test against the composite display string that
+ * silently dropped any colleague whose name is a substring of another's.
+ */
+export const filterSwapCandidates = (staffPool, shift) => {
+    if (!Array.isArray(staffPool)) return [];
+
+    const { lead, coLead } = readShiftIdentities(shift);
+    const onShift = new Set([lead, coLead].filter(Boolean));
+
+    return staffPool.filter((name) => {
+        const candidate = asName(name);
+        return candidate !== null && !onShift.has(candidate);
+    });
+};
+
+/**
+ * The duties this shift actually has somebody in, in a stable order.
+ *
+ * A modern shift normally yields both roles; a pre-6-May legacy shift, or a
+ * modern shift written with no co-lead, yields only `lead`. A shift whose
+ * identities cannot be read at all yields `[]` — and an empty list is the signal
+ * that there is nobody to arrange cover FOR, not an invitation to guess.
+ *
+ * Each entry is `{ role, holder }` so a caller can label a control with the
+ * person's name without re-reading the shift.
+ */
+export const assignableShiftRoles = (shift) => {
+    const { lead, coLead } = readShiftIdentities(shift);
+
+    const roles = [];
+    if (lead) roles.push({ role: SHIFT_ROLE_LEAD, holder: lead });
+    if (coLead) roles.push({ role: SHIFT_ROLE_CO_LEAD, holder: coLead });
+    return roles;
+};
+
+/**
+ * WHOSE shift is being handed over, and which duty — decided at REQUEST time.
+ *
+ * This closes ROSTER_QC_AUDIT.md M11. `RosterView` used to write
+ * `requestedBy: <the clicking user>` unconditionally, while `swapRole` came from
+ * `shiftRoleOf(shift, <the clicking user>)`. For an admin acting on a shift they
+ * do not hold — and the app's only admins are not in the roster staff pool at
+ * all — that pair is `(<admin>, null)`: a request `planSwapApplication` is
+ * guaranteed to refuse, because it searches that day for the admin's own name.
+ *
+ * The semantics, which are a decision and not a derivation:
+ *
+ *   • The acting user HOLDS the shift (lead or coLead) — they are asking for
+ *     cover for themselves. `requestedBy` is them, `swapRole` is their own duty,
+ *     and no `initiatedBy` is recorded. This is the pre-existing behaviour and
+ *     is deliberately untouched. A `chosenRole` is IGNORED on this path: an
+ *     admin who is on the shift is still swapping their own duty, not
+ *     reassigning their colleague's.
+ *
+ *   • The acting user does NOT hold the shift but IS an admin — they are
+ *     arranging cover ON BEHALF OF the clinician who does hold it. So
+ *     `requestedBy` is that clinician (the person being swapped out, which is
+ *     what the mutator matches on), `swapRole` is that clinician's duty, and
+ *     `initiatedBy` records the admin so the ledger still says who arranged it.
+ *
+ *   • Anyone else — refused here, with a reason. `handleShiftClick` already
+ *     prevents them from opening the modal; this is the second latch.
+ *
+ * `chosenRole` is only consulted when the shift has more than one assignable
+ * duty. With exactly one there is no choice to make, so it is selected
+ * automatically (`autoSelected: true`) and `chosenRole` is not consulted at all
+ * — a legacy single-holder shift must not require the admin to pick `lead` out
+ * of a list of one.
+ *
+ * Returns the full triple plus everything the modal needs to describe itself:
+ * `{ ok, reason, requestedBy, swapRole, initiatedBy, onBehalf, holdsShift,
+ * assignableRoles, autoSelected }`. `assignableRoles` is populated even on the
+ * refusal paths, because the "pick a duty" refusal is exactly when the UI needs
+ * the list in order to offer the choice.
+ *
+ * Pure: no React, no Firestore. The triple it returns is the triple that later
+ * reaches `planSwapApplication` as `{ requestedBy, swapRole }`.
+ */
+export const resolveSwapSubject = ({ shift, actingUser, isAdmin = false, chosenRole = null } = {}) => {
+    const assignableRoles = assignableShiftRoles(shift);
+    const acting = asName(actingUser);
+
+    const base = {
+        ok: false,
+        reason: null,
+        requestedBy: null,
+        swapRole: null,
+        initiatedBy: null,
+        onBehalf: false,
+        holdsShift: false,
+        assignableRoles,
+        autoSelected: false,
+    };
+
+    // 1. The acting user is on this shift: unchanged behaviour, whatever their role.
+    const heldRole = shiftRoleOf(shift, acting);
+    if (heldRole) {
+        return {
+            ...base,
+            ok: true,
+            requestedBy: acting,
+            swapRole: heldRole,
+            holdsShift: true,
+        };
+    }
+
+    // 2. Not on the shift and not an admin: nobody's cover to arrange.
+    if (!isAdmin) {
+        return {
+            ...base,
+            reason: acting
+                ? `${acting} is not on this shift, so there is no duty to hand over. Only an administrator can arrange cover on someone else's behalf.`
+                : 'AURA could not tell who is making this request, so it has not been sent.',
+        };
+    }
+
+    // 3. An admin arranging cover for somebody else.
+    if (!acting) {
+        // `initiatedBy` is the whole point of this path — an unattributable
+        // reassignment of a clinician's duty is worse than no reassignment.
+        return {
+            ...base,
+            reason: 'AURA could not tell who is arranging this cover, so it has not been sent.',
+        };
+    }
+
+    if (assignableRoles.length === 0) {
+        return {
+            ...base,
+            reason: 'This shift does not record who is on it, so there is nobody to arrange cover for. Regenerate the roster for this date first.',
+        };
+    }
+
+    const chosen =
+        assignableRoles.length === 1
+            ? assignableRoles[0]
+            : assignableRoles.find((entry) => entry.role === chosenRole);
+
+    if (!chosen) {
+        const options = assignableRoles
+            .map((entry) => `${describeShiftRole(entry.role)} (${entry.holder})`)
+            .join(' or ');
+        return {
+            ...base,
+            reason: `Choose whose duty you are arranging cover for: ${options}.`,
+        };
+    }
+
+    return {
+        ...base,
+        ok: true,
+        requestedBy: chosen.holder,
+        swapRole: chosen.role,
+        initiatedBy: acting,
+        onBehalf: true,
+        autoSelected: assignableRoles.length === 1,
+    };
+};
+
+/**
+ * Decide — without writing anything — how a swap acceptance should change the
+ * roster. This is the whole of the mutator's judgment; AuraPulseBot only
+ * performs the I/O around it.
+ *
+ * `swap` is the `shift_swaps` document: `{ originalShiftDate, originalTask,
+ * requestedBy, swapRole }`. `swapRole` is written by RosterView at request time
+ * (ROSTER_POSTMORTEM.md A3 — its absence was the true root cause); requests
+ * created before that field existed simply lack it, and are matched on identity
+ * alone.
+ *
+ * Returns `{ ok: true, dateKey, role, index, shifts }` — `shifts` being the new
+ * array for that one day — or `{ ok: false, reason }` with a sentence that can
+ * be shown to a clinician verbatim. There is no third outcome: a no-match is a
+ * refusal, never a silent pass-through that reports success.
+ */
+export const planSwapApplication = ({ roster, swap, coveringStaff } = {}) => {
+    const fail = (reason) => ({ ok: false, reason, dateKey: null, role: null, index: -1, shifts: null });
+
+    if (!swap || typeof swap !== 'object') {
+        return fail('The coverage request is missing its details, so I could not look up the shift.');
+    }
+
+    const dateKey = asName(swap.originalShiftDate);
+    const task = asName(swap.originalTask);
+    const requestedBy = asName(swap.requestedBy);
+    const covering = asName(coveringStaff);
+
+    if (!dateKey || !task || !requestedBy) {
+        return fail('The coverage request does not say which shift it refers to (missing date, task or requester).');
+    }
+    if (!covering) {
+        return fail('I could not tell who is taking the shift over, so I have not touched the roster.');
+    }
+    if (covering === requestedBy) {
+        return fail(`${requestedBy} already holds that shift — a swap with themselves would change nothing.`);
+    }
+    if (!roster || typeof roster !== 'object') {
+        return fail('The master roster document could not be read, so there was nothing to update.');
+    }
+
+    const day = roster[dateKey];
+    if (!Array.isArray(day) || day.length === 0) {
+        return fail(`The master roster has no shifts stored on ${dateKey}. It may have been regenerated since this request was made.`);
+    }
+
+    const wantedRole = SHIFT_ROLES.includes(swap.swapRole) ? swap.swapRole : null;
+
+    let index = -1;
+    let role = null;
+    let taskSeen = false;
+    let otherRoleIndex = -1;
+
+    for (let i = 0; i < day.length; i += 1) {
+        const shift = day[i];
+        if (!shift || typeof shift !== 'object' || shift.task !== task) continue;
+        taskSeen = true;
+
+        const held = shiftRoleOf(shift, requestedBy);
+        if (!held) continue;
+
+        // A legacy shift has exactly one person, so lead is the only role it can
+        // possibly be. Honour that even if the request recorded `coLead` —
+        // otherwise a pre-6-May document would be permanently unfixable.
+        const isLegacy = readShiftIdentities(shift).legacy;
+
+        if (!isLegacy && wantedRole && held !== wantedRole) {
+            otherRoleIndex = i;
+            continue;
+        }
+
+        index = i;
+        role = isLegacy ? SHIFT_ROLE_LEAD : held;
+        break;
+    }
+
+    if (index === -1) {
+        if (otherRoleIndex !== -1) {
+            const actual = shiftRoleOf(day[otherRoleIndex], requestedBy);
+            return fail(
+                `The roster has changed since this request was made: ${requestedBy} is now the ${describeShiftRole(actual)} of the ${task} shift on ${dateKey}, not the ${describeShiftRole(wantedRole)}. I have not guessed which duty you should take.`,
+            );
+        }
+        if (taskSeen) {
+            return fail(`${requestedBy} is no longer on the ${task} shift on ${dateKey}, so there is nothing to hand over.`);
+        }
+        return fail(`The master roster has no ${task} shift on ${dateKey}.`);
+    }
+
+    const { lead, coLead } = readShiftIdentities(day[index]);
+    const partner = role === SHIFT_ROLE_LEAD ? coLead : lead;
+    if (partner === covering) {
+        return fail(
+            `${covering} is already the ${describeShiftRole(role === SHIFT_ROLE_LEAD ? SHIFT_ROLE_CO_LEAD : SHIFT_ROLE_LEAD)} of the ${task} shift on ${dateKey}. One person cannot hold both duties.`,
+        );
+    }
+
+    const shifts = day.map((shift, i) =>
+        (i === index ? applyShiftSubstitution(shift, role, covering) : shift),
+    );
+
+    return { ok: true, reason: null, dateKey, role, index, shifts };
+};
+
+/**
+ * Find the shift that proves a swap landed, in a roster READ BACK FROM THE
+ * DATABASE after the write.
+ *
+ * This is the evidence the success message is built from. Returns the observed
+ * shift or `null`; a `null` must never be reported as success
+ * (ROSTER_POSTMORTEM.md A-RC4 — "success asserted, never observed").
+ */
+export const findAppliedSwapShift = ({ roster, swap, coveringStaff, role } = {}) => {
+    const covering = asName(coveringStaff);
+    if (!roster || typeof roster !== 'object' || !swap || !covering) return null;
+    if (role !== SHIFT_ROLE_LEAD && role !== SHIFT_ROLE_CO_LEAD) return null;
+
+    const day = roster[swap.originalShiftDate];
+    if (!Array.isArray(day)) return null;
+
+    const requestedBy = asName(swap.requestedBy);
+
+    return (
+        day.find((shift) => {
+            if (!shift || typeof shift !== 'object' || shift.task !== swap.originalTask) return false;
+
+            const ids = readShiftIdentities(shift);
+            if (ids[role] !== covering) return false;
+            // The requester must be out of the role they handed over.
+            if (requestedBy && ids[role] === requestedBy) return false;
+            // And the derived label must agree with the identities, or the
+            // calendar cell and the ICS export would still name the old person.
+            return shift.staff === buildShiftStaffLabel(ids.lead, ids.coLead);
+        }) ?? null
+    );
+};
+
+/** Boolean form of `findAppliedSwapShift`. */
+export const verifySwapApplied = (args) => findAppliedSwapShift(args) !== null;
+
+
+// --- 1d. COVERAGE-ALERT SURVIVAL (ROSTER_TODO.md P3 / M5) ---------------------
+//
+// The swap listener delivers each PENDING request once, as a `docChanges()`
+// `added` event. Three chat paths used to replace the whole history array with
+// `[greeting]`, destroying an un-answered request and its `swapData` — after
+// which nothing re-delivered it for the life of the subscription and the shift
+// went uncovered (ROSTER_QC_AUDIT.md M5).
+
+export const ROSTER_ALERT_MODE = 'ROSTER_ALERT';
+
+/** The coverage requests still awaiting an answer in a chat history. */
+export const pendingRosterAlerts = (messages) =>
+    (Array.isArray(messages) ? messages : []).filter(
+        (message) => message && message.mode === ROSTER_ALERT_MODE && message.swapData && message.swapData.docId,
+    );
+
+/**
+ * Replace a chat history without destroying un-answered coverage requests.
+ *
+ * The replacement (a greeting, or nothing) comes first so the conversation still
+ * reads correctly; the outstanding alerts are re-appended at the end, which is
+ * also where they are most visible.
+ */
+export const resetMessagesPreservingAlerts = (previous, replacement) => {
+    const kept = pendingRosterAlerts(previous);
+    const base = Array.isArray(replacement) ? replacement : [];
+    return kept.length === 0 ? base : [...base, ...kept];
+};
+
+/**
+ * Append a coverage alert, unless that request is already on screen.
+ *
+ * Needed because alerts now SURVIVE a session reset: without this, a
+ * re-subscribe (which re-delivers every PENDING doc as `added`) would stack
+ * duplicate Accept buttons for one request.
+ */
+export const appendRosterAlert = (messages, alert) => {
+    const list = Array.isArray(messages) ? messages : [];
+    if (!alert) return list;
+
+    const docId = alert.swapData?.docId;
+    if (docId && list.some((message) => message?.swapData?.docId === docId)) return list;
+
+    return [...list, alert];
 };
 
 

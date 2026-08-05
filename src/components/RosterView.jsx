@@ -13,6 +13,10 @@ import {
     formatRosterDateKey,
     prepareRosterWrite,
     MAX_ROSTER_WEEKS,
+    // 🛡️ P6 SHIFT SHAPE — pure, unit-tested in auraEngine.swap.test.js
+    filterSwapCandidates,
+    describeShiftRole,
+    resolveSwapSubject,
 } from '../utils/auraEngine';
 
 // --- SANDBOX IMPORTS ---
@@ -30,6 +34,9 @@ const RosterView = ({ user }) => {
     const [currentDate, setCurrentDate] = useState(new Date(2026, 1, 1)); 
     const [rosterData, setRosterData] = useState({});
     const [isConfigOpen, setIsConfigOpen] = useState(false);
+    // 🛡️ M8: an empty calendar caused by a rules denial was indistinguishable
+    // from "no roster has been generated yet". This is the difference.
+    const [rosterError, setRosterError] = useState(null);
     
     // 🌟 CUSTOM MODAL STATE
     const [isConfirmModalOpen, setIsConfirmModalOpen] = useState(false);
@@ -40,6 +47,10 @@ const RosterView = ({ user }) => {
     const [swapTargetStaff, setSwapTargetStaff] = useState('');
     const [swapReason, setSwapReason] = useState('');
     const [isSubmitting, setIsSubmitting] = useState(false);
+    // 🛡️ M11: which duty an ADMIN is reassigning on a shift they do not hold.
+    // '' until they pick; ignored entirely when the acting user is on the shift,
+    // or when the shift has only one assignable duty to begin with.
+    const [swapRoleChoice, setSwapRoleChoice] = useState('');
     
     // Default Config — the live staff pool and task list now live in
     // LIVE_ROSTER_DEFAULTS (auraEngine.js) so that leaving demo mode can restore
@@ -68,6 +79,7 @@ const RosterView = ({ user }) => {
             });
 
             setRosterData(transformedData);
+            setRosterError(null);
             setConfig(prev => ({
                 ...prev,
                 staff: MOCK_STAFF_NAMES,
@@ -82,9 +94,24 @@ const RosterView = ({ user }) => {
             // startDate/weeks edit is preserved — demo mode never touches those.
             setConfig(prev => restoreLiveRosterConfig(prev));
 
-            const unsub = onSnapshot(doc(db, 'system_data', 'roster_2026'), (doc) => {
-                if (doc.exists()) setRosterData(doc.data());
-            });
+            const unsub = onSnapshot(
+                doc(db, 'system_data', 'roster_2026'),
+                (snap) => {
+                    setRosterError(null);
+                    if (snap.exists()) setRosterData(snap.data());
+                },
+                // 🛡️ M8 FIX: this listener had no error callback, so a Firestore
+                // rules denial produced an empty calendar and no message
+                // anywhere — the one signal that would have explained it.
+                (error) => {
+                    console.error('🔥 Roster listener failed:', error.code, error.message);
+                    setRosterError(
+                        error.code === 'permission-denied'
+                            ? 'You do not have permission to read the master roster. The calendar below is empty because it could not be loaded — not because no roster exists.'
+                            : `The roster could not be loaded (${error.code || 'unknown error'}). The calendar below may be empty or out of date.`
+                    );
+                }
+            );
             return () => unsub();
         }
     }, [isDemo]);
@@ -149,14 +176,62 @@ const RosterView = ({ user }) => {
         
         if (isMyShift || user?.role === 'admin') {
             setSelectedShift({ ...shift, date: dateKey });
+            // A fresh shift means a fresh duty choice — never carry the previous
+            // shift's selection into this one.
+            setSwapRoleChoice('');
             setIsSwapModalOpen(true);
         }
     };
 
+    // 🛡️ A3 + M11 — THE TRUE ROOT CAUSE OF THE BROKEN SWAP, AND ITS ADMIN HOLE.
+    //
+    // A3: the swap message contract never recorded WHICH duty was being handed
+    // over, so the mutator could not know which field to rewrite even in
+    // principle. `selectedShift` has the answer in hand at exactly this moment;
+    // the old code discarded it.
+    //
+    // M11: the old code then derived that duty from the CLICKING user, and wrote
+    // `requestedBy: <clicking user>`. An admin is allowed to open this modal on
+    // any shift, and the app's admins are not in the roster staff pool at all —
+    // so every admin-brokered request was written as `(<admin>, null)` and was
+    // guaranteed to be refused on acceptance.
+    //
+    // Both decisions now live in `resolveSwapSubject`, which is pure and unit
+    // tested against the real `planSwapApplication` so the request side and the
+    // acceptance side cannot drift apart. Identity comparison, never
+    // `includes()` (A4).
+    const actingUserName = user?.name || user?.email || 'Unknown User';
+
+    // Demo mode's standing fiction is that every shift is actionable
+    // (`isMyShift` is forced true above). Granting it the admin path keeps the
+    // sandbox behaving exactly as it did, without a live-mode special case.
+    const canArrangeForOthers = user?.role === 'admin' || isDemo;
+
+    const swapSubject = useMemo(
+        () => (selectedShift
+            ? resolveSwapSubject({
+                shift: selectedShift,
+                actingUser: actingUserName,
+                isAdmin: canArrangeForOthers,
+                chosenRole: swapRoleChoice,
+            })
+            : null),
+        [selectedShift, actingUserName, canArrangeForOthers, swapRoleChoice],
+    );
+
     const submitSwapRequest = async (e) => {
         e.preventDefault();
         if (!swapTargetStaff) return;
-        
+
+        // 🛡️ M11: refuse to CREATE a request that cannot be applied. The button
+        // is disabled too; this is the second latch. Previously this path
+        // happily wrote `swapRole: null`, alerted "securely transmitted", and
+        // the failure surfaced only when a colleague tried to accept it.
+        if (!swapSubject || !swapSubject.ok) {
+            alert(`⚠️ Request not sent. ${swapSubject?.reason || 'AURA could not work out which duty this swap refers to.'}`);
+            return;
+        }
+
         setIsSubmitting(true);
 
         try {
@@ -167,21 +242,40 @@ const RosterView = ({ user }) => {
             } else {
                 // 📡 LIVE MODE: Pushing the request to Firebase Firestore
                 await addDoc(collection(db, 'shift_swaps'), {
-                    requestedBy: user?.name || user?.email || 'Unknown User',
+                    // 🛡️ M11: the person being SWAPPED OUT, which is what
+                    // `planSwapApplication` matches on — not necessarily the
+                    // person who clicked. For an admin arranging cover this is
+                    // the clinician who actually holds the duty.
+                    requestedBy: swapSubject.requestedBy,
                     targetStaff: swapTargetStaff,
                     originalShiftDate: selectedShift.date,
                     originalTask: selectedShift.task,
+                    // 🛡️ A3: 'lead' | 'coLead' — the duty the covering colleague
+                    // will take over, mechanically, when they accept. Never null
+                    // now: a request that could not name its duty is refused
+                    // above rather than written.
+                    swapRole: swapSubject.swapRole,
+                    // 🛡️ M11: present only when somebody arranged this on
+                    // another clinician's behalf, so the ledger records who did.
+                    // Absent on a self-request, which keeps that document's shape
+                    // byte-for-byte what it was before this fix.
+                    ...(swapSubject.initiatedBy ? { initiatedBy: swapSubject.initiatedBy } : {}),
                     reason: swapReason,
                     status: 'PENDING',
                     timestamp: serverTimestamp()
                 });
-                alert(`✅ Swap request securely transmitted to ${swapTargetStaff}!`);
+                alert(
+                    swapSubject.onBehalf
+                        ? `✅ Coverage request sent to ${swapTargetStaff}, on behalf of ${swapSubject.requestedBy}.`
+                        : `✅ Swap request securely transmitted to ${swapTargetStaff}!`
+                );
             }
             
             // Clean up and close modal
             setIsSwapModalOpen(false);
             setSwapTargetStaff('');
             setSwapReason('');
+            setSwapRoleChoice('');
         } catch (error) {
             console.error("🔥 Swap Request Failed:", error);
             alert("Could not send request. Please check your connection.");
@@ -243,6 +337,15 @@ const RosterView = ({ user }) => {
                     </button>
                 </div>
             </div>
+
+            {/* 🛡️ M8 FIX: surface a listener failure. Without this an empty
+                calendar looked exactly like "no roster generated yet". */}
+            {rosterError && (
+                <div className="mb-4 flex items-start gap-2 p-3 rounded-xl bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800">
+                    <ShieldAlert size={16} className="text-red-600 dark:text-red-400 shrink-0 mt-0.5" />
+                    <p className="text-xs font-bold text-red-700 dark:text-red-300 leading-relaxed">{rosterError}</p>
+                </div>
+            )}
 
             {/* CALENDAR GRID */}
             <div className="grid grid-cols-7 gap-px bg-slate-200 dark:bg-slate-700 rounded-xl overflow-hidden border border-slate-200 dark:border-slate-700">
@@ -312,15 +415,73 @@ const RosterView = ({ user }) => {
 
                         <form onSubmit={submitSwapRequest} className="p-6">
                             <div className="bg-slate-50 dark:bg-slate-800/50 p-4 rounded-xl border border-slate-200 dark:border-slate-700 mb-6">
-                                <p className="text-[10px] text-slate-500 dark:text-slate-400 font-bold uppercase tracking-widest mb-1">Your Shift to Swap</p>
+                                <p className="text-[10px] text-slate-500 dark:text-slate-400 font-bold uppercase tracking-widest mb-1">
+                                    {/* 🛡️ M11: an admin is almost never looking at their
+                                        own shift here, and calling it "Your Shift" is
+                                        exactly the misreading that has to be impossible. */}
+                                    {swapSubject?.holdsShift ? 'Your Shift to Swap' : 'Shift to Reassign'}
+                                </p>
                                 <p className="text-sm font-black text-slate-800 dark:text-white mb-1">{selectedShift.date}</p>
                                 <div className="flex gap-2 items-center">
                                     <span className="text-xs font-bold px-2 py-0.5 rounded bg-indigo-100 text-indigo-700 dark:bg-indigo-900/50 dark:text-indigo-400">{selectedShift.task}</span>
                                     <span className="text-xs text-slate-500 font-medium">currently assigned to {selectedShift.staff}</span>
                                 </div>
+
+                                {/* 🛡️ A3 + M11: name the duty being handed over AND the
+                                    person it is being taken from. The colleague who
+                                    accepts takes over exactly this role — no promotion,
+                                    and nobody else's duty changes. */}
+                                {swapSubject?.holdsShift && (
+                                    <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-2">
+                                        You hold this shift as{' '}
+                                        <span className="font-black text-indigo-600 dark:text-indigo-400 uppercase">{describeShiftRole(swapSubject.swapRole)}</span>
+                                        {' '}— that is the duty your colleague would take over.
+                                    </p>
+                                )}
+
+                                {swapSubject?.onBehalf && (
+                                    <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-2">
+                                        Arranging cover on behalf of{' '}
+                                        <span className="font-black text-indigo-600 dark:text-indigo-400">{swapSubject.requestedBy}</span>
+                                        {' '}(<span className="font-black text-indigo-600 dark:text-indigo-400 uppercase">{describeShiftRole(swapSubject.swapRole)}</span>).
+                                        {' '}This is not your shift — {swapSubject.requestedBy} is the person being swapped out, and the request will be
+                                        recorded as arranged by you.
+                                    </p>
+                                )}
+
+                                {swapSubject && !swapSubject.ok && (
+                                    <p className="text-[11px] font-bold text-amber-600 dark:text-amber-400 mt-2 flex items-start gap-1.5">
+                                        <ShieldAlert size={13} className="shrink-0 mt-px" />
+                                        <span>{swapSubject.reason}</span>
+                                    </p>
+                                )}
                             </div>
 
                             <div className="space-y-4 mb-6">
+                                {/* 🛡️ M11: the duty picker. Rendered only when the acting
+                                    user is NOT on the shift and it has more than one
+                                    person on it — a single-holder (or legacy) shift has
+                                    nothing to choose, so `resolveSwapSubject` selects it
+                                    and the banner above simply states it. */}
+                                {swapSubject && !swapSubject.holdsShift && swapSubject.assignableRoles.length > 1 && (
+                                    <div>
+                                        <label className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1 block">Whose Duty Are You Reassigning?</label>
+                                        <select
+                                            required
+                                            value={swapRoleChoice}
+                                            onChange={(e) => setSwapRoleChoice(e.target.value)}
+                                            className="w-full bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-700 rounded-lg p-3 text-sm font-bold text-slate-800 dark:text-white focus:ring-2 focus:ring-indigo-500 outline-none"
+                                        >
+                                            <option value="" disabled>Select a duty...</option>
+                                            {swapSubject.assignableRoles.map(({ role, holder }) => (
+                                                <option key={role} value={role}>
+                                                    {describeShiftRole(role)} — {holder}
+                                                </option>
+                                            ))}
+                                        </select>
+                                    </div>
+                                )}
+
                                 <div>
                                     <label className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1 block">Request Coverage From:</label>
                                     <select 
@@ -330,11 +491,18 @@ const RosterView = ({ user }) => {
                                         className="w-full bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-700 rounded-lg p-3 text-sm font-bold text-slate-800 dark:text-white focus:ring-2 focus:ring-indigo-500 outline-none"
                                     >
                                         <option value="" disabled>Select a Colleague...</option>
-                                        {config.staff
-                                            // Ensure we don't show the people currently ON this shift as swap options
-                                            .filter(name => !selectedShift.staff?.includes(name))
-                                            .map(colleague => (
-                                                <option key={colleague} value={colleague}>{colleague}</option>
+                                        {/* 🛡️ A4 FIX: this was
+                                            `.filter(name => !selectedShift.staff?.includes(name))`
+                                            — a SUBSTRING test against the composite
+                                            display string "Lead: X, Co: Y". It happened
+                                            to work only because no current name is a
+                                            substring of another: a "Lynn" silently
+                                            disappeared from this dropdown whenever
+                                            "Fadzlynn" was on the shift, and could never
+                                            be asked to cover. Now an identity comparison
+                                            against the shift's lead/coLead. */}
+                                        {filterSwapCandidates(config.staff, selectedShift).map(colleague => (
+                                            <option key={colleague} value={colleague}>{colleague}</option>
                                         ))}
                                     </select>
                                 </div>
@@ -350,12 +518,19 @@ const RosterView = ({ user }) => {
                                 </div>
                             </div>
 
-                            <button 
+                            {/* 🛡️ M11: a request AURA already knows it cannot apply is
+                                not submittable. `title` carries the reason for the
+                                disabled state, as the Generate button does. */}
+                            <button
                                 type="submit"
-                                disabled={isSubmitting}
-                                className="w-full py-4 bg-indigo-600 hover:bg-indigo-700 disabled:bg-indigo-400 text-white font-black text-xs uppercase tracking-widest rounded-xl transition-colors shadow-lg shadow-indigo-500/30 flex items-center justify-center gap-2"
+                                disabled={isSubmitting || !swapSubject?.ok}
+                                title={swapSubject?.ok ? undefined : swapSubject?.reason}
+                                className="w-full py-4 bg-indigo-600 hover:bg-indigo-700 disabled:bg-indigo-400 disabled:cursor-not-allowed text-white font-black text-xs uppercase tracking-widest rounded-xl transition-colors shadow-lg shadow-indigo-500/30 flex items-center justify-center gap-2"
                             >
-                                <ArrowRightLeft size={16} /> {isSubmitting ? 'Transmitting...' : 'Submit Request'}
+                                <ArrowRightLeft size={16} />
+                                {isSubmitting
+                                    ? 'Transmitting...'
+                                    : (swapSubject?.onBehalf ? 'Arrange Cover' : 'Submit Request')}
                             </button>
                         </form>
                     </div>
