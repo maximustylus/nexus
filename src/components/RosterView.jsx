@@ -1,9 +1,19 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { db } from '../firebase';
 // 🛡️ NEW: Imported collection, addDoc, and serverTimestamp for the Swap Engine
 import { doc, onSnapshot, setDoc, collection, addDoc, serverTimestamp } from 'firebase/firestore';
 import { Calendar, Download, Settings, ChevronLeft, ChevronRight, Play, FileSpreadsheet, ShieldAlert, ArrowRightLeft, X } from 'lucide-react';
-import { generateRoster, downloadICS, downloadCSV } from '../utils/auraEngine';
+import {
+    downloadICS,
+    downloadCSV,
+    // 🛡️ P1 SAFETY GUARDS — pure, unit-tested in auraEngine.guards.test.js
+    restoreLiveRosterConfig,
+    validateRosterConfig,
+    describeGenerationRange,
+    formatRosterDateKey,
+    prepareRosterWrite,
+    MAX_ROSTER_WEEKS,
+} from '../utils/auraEngine';
 
 // --- SANDBOX IMPORTS ---
 import { useNexus } from '../context/NexusContext';
@@ -31,13 +41,14 @@ const RosterView = ({ user }) => {
     const [swapReason, setSwapReason] = useState('');
     const [isSubmitting, setIsSubmitting] = useState(false);
     
-    // Default Config 
-    const [config, setConfig] = useState({
-        staff: ["Brandon", "Ying Xian", "Derlinder", "Fadzlynn"], 
-        tasks: ["EFT", "IPT+SKG", "NC", "FSG+WI"],
-        startDate: "2026-02-01",
-        weeks: 4
-    });
+    // Default Config — the live staff pool and task list now live in
+    // LIVE_ROSTER_DEFAULTS (auraEngine.js) so that leaving demo mode can restore
+    // exactly these values. Same values as before, one source of truth.
+    const [config, setConfig] = useState(() => restoreLiveRosterConfig());
+
+    // 🛡️ Every write decision is made by pure functions, re-run on config change.
+    const configValidation = useMemo(() => validateRosterConfig(config), [config]);
+    const generationPlan = useMemo(() => describeGenerationRange(config), [config]);
 
     // --- EFFECT: SWITCH DATA SOURCE ---
     useEffect(() => {
@@ -64,6 +75,13 @@ const RosterView = ({ user }) => {
             }));
 
         } else {
+            // 🛡️ M1 FIX: the demo branch above overwrites config.staff/config.tasks
+            // with the Marvel dataset. Without this reset the demo pool survived
+            // the toggle back to LIVE, and one Generate click replaced four real
+            // clinicians with Steve/Peter/Charles/Jean/Tony. An in-progress
+            // startDate/weeks edit is preserved — demo mode never touches those.
+            setConfig(prev => restoreLiveRosterConfig(prev));
+
             const unsub = onSnapshot(doc(db, 'system_data', 'roster_2026'), (doc) => {
                 if (doc.exists()) setRosterData(doc.data());
             });
@@ -82,16 +100,35 @@ const RosterView = ({ user }) => {
             }, 1500);
             return;
         }
-        
+
+        // 🛡️ M3 FIX: never even open the confirmation for a config that cannot
+        // be generated. The button is disabled too; this is the second latch.
+        if (!configValidation.valid) {
+            alert(`⚠️ Cannot generate: ${configValidation.reason}`);
+            return;
+        }
+
         setIsConfirmModalOpen(true);
     };
 
     const executeRosterGeneration = async () => {
         setIsConfirmModalOpen(false); // Close the confirm modal
-        
+
+        // 🛡️ M3 FIX (defence in depth): validate, generate, and refuse to write
+        // an empty roster — all decided by prepareRosterWrite, which is unit
+        // tested. An empty write used to blank the whole document and report
+        // success.
+        const prepared = prepareRosterWrite(config);
+        if (!prepared.ok) {
+            console.error("Roster generation blocked before write:", prepared.reason, config);
+            alert(`❌ Roster NOT generated. ${prepared.reason}`);
+            return;
+        }
+
         try {
-            const newData = generateRoster(config);
-            await setDoc(doc(db, 'system_data', 'roster_2026'), newData);
+            // 🛡️ C2 FIX: { merge: true } — generating one period must not erase
+            // the periods already stored in this document.
+            await setDoc(doc(db, 'system_data', 'roster_2026'), prepared.data, { merge: true });
             setIsConfigOpen(false); // Close the config wizard
             alert("✅ AURA has generated a conflict-free roster.");
         } catch (error) {
@@ -349,11 +386,21 @@ const RosterView = ({ user }) => {
                                 </div>
                                 <div>
                                     <label className="text-xs font-bold text-slate-400 uppercase">Weeks</label>
-                                    <input 
-                                        type="number" 
-                                        className="input-field w-full mt-1 font-bold bg-white dark:bg-slate-900 border dark:border-slate-700 rounded p-2 text-slate-800 dark:text-white" 
-                                        value={config.weeks} 
-                                        onChange={(e) => setConfig({...config, weeks: parseInt(e.target.value)})}
+                                    <input
+                                        type="number"
+                                        min="1"
+                                        max={MAX_ROSTER_WEEKS}
+                                        step="1"
+                                        className="input-field w-full mt-1 font-bold bg-white dark:bg-slate-900 border dark:border-slate-700 rounded p-2 text-slate-800 dark:text-white"
+                                        value={config.weeks}
+                                        // 🛡️ M3 FIX: an empty field is kept as '' rather than becoming
+                                        // parseInt('') === NaN. '' is rejected by validateRosterConfig,
+                                        // so the field can still be cleared and retyped, but an
+                                        // unparseable value can no longer reach generateRoster.
+                                        onChange={(e) => {
+                                            const raw = e.target.value;
+                                            setConfig({ ...config, weeks: raw === '' ? '' : Number(raw) });
+                                        }}
                                     />
                                 </div>
                             </div>
@@ -377,11 +424,21 @@ const RosterView = ({ user }) => {
                             </div>
                         </div>
 
+                        {/* 🛡️ M3 FIX: tell the user why generation is unavailable. */}
+                        {!configValidation.valid && (
+                            <p className="-mt-4 mb-4 text-xs font-bold text-red-600 dark:text-red-400 flex items-start gap-1.5">
+                                <ShieldAlert size={14} className="shrink-0 mt-px" />
+                                <span>{configValidation.reason}</span>
+                            </p>
+                        )}
+
                         <div className="flex gap-2">
                             <button onClick={() => setIsConfigOpen(false)} className="flex-1 py-3 text-slate-500 dark:text-slate-400 font-bold hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg transition-colors">Cancel</button>
-                            <button 
-                                onClick={handleGenerateClick} 
-                                className={`flex-1 py-3 text-white font-bold rounded-lg shadow-lg transition-colors flex justify-center items-center gap-2 ${isDemo ? 'bg-emerald-600 hover:bg-emerald-700' : 'bg-indigo-600 hover:bg-indigo-700'}`}
+                            <button
+                                onClick={handleGenerateClick}
+                                disabled={!configValidation.valid}
+                                title={configValidation.valid ? undefined : configValidation.reason}
+                                className={`flex-1 py-3 text-white font-bold rounded-lg shadow-lg transition-colors flex justify-center items-center gap-2 disabled:bg-slate-300 dark:disabled:bg-slate-700 disabled:text-slate-500 disabled:shadow-none disabled:cursor-not-allowed ${isDemo ? 'bg-emerald-600 hover:bg-emerald-700' : 'bg-indigo-600 hover:bg-indigo-700'}`}
                             >
                                 <Play size={16} /> {isDemo ? 'Simulate Check' : 'Generate Roster'}
                             </button>
@@ -390,11 +447,38 @@ const RosterView = ({ user }) => {
                 </div>
             )}
 
-            {/* 🌟 CUSTOM GENERATE CONFIRMATION MODAL */}
-            <ConfirmationModal 
+            {/* 🌟 CUSTOM GENERATE CONFIRMATION MODAL
+                🛡️ The old copy ("will overwrite the currently displayed schedule") was
+                false in both directions: the write was not scoped to the displayed
+                month, and it erased every other period in the document. It now names
+                the exact range about to be written and the staff pool that will be
+                used, so an M1-style demo pool is visible BEFORE the click.
+                Range comes from describeGenerationRange, which reads the keys
+                generateRoster really produces — start dates are not Monday-snapped
+                today, so a Sunday start honestly shows a Sunday. */}
+            <ConfirmationModal
                 isOpen={isConfirmModalOpen}
                 title="NEXUS says"
-                message="Are you sure you want to generate a new 4-Week Roster? This will overwrite the currently displayed schedule."
+                message={generationPlan ? (
+                    <>
+                        <span className="block">
+                            Generate a {config.weeks}-week roster?
+                        </span>
+                        <span className="block mt-3 text-sm text-slate-400">
+                            Writes <span className="font-bold text-slate-200">{generationPlan.dayCount}</span> days:
+                            <span className="block font-bold text-slate-200">
+                                {formatRosterDateKey(generationPlan.firstDate)} → {formatRosterDateKey(generationPlan.lastDate)}
+                            </span>
+                        </span>
+                        <span className="block mt-2 text-sm text-slate-400">
+                            Every shift already stored on those dates is replaced. Dates outside this range are left untouched.
+                        </span>
+                        <span className="block mt-3 text-sm text-slate-400">
+                            Staff pool:
+                            <span className="block font-bold text-slate-200">{config.staff.join(', ')}</span>
+                        </span>
+                    </>
+                ) : `Cannot generate: ${configValidation.reason || 'this configuration produces no dates.'}`}
                 onCancel={() => setIsConfirmModalOpen(false)}
                 onConfirm={executeRosterGeneration}
             />
