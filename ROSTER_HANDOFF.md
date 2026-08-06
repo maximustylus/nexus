@@ -7,13 +7,35 @@
 
 ## 1. What is LIVE right now
 
-Two releases shipped and verified today. `smartdashboard.web.app` is running **v1.6.1**.
+Three releases shipped and verified today. `smartdashboard.web.app` is running **v1.7.0**.
 
 | Tag | What it fixed |
 |---|---|
 | `v1.5.0-pre-remediation` | *(rollback point — the original code, before any of today's work)* |
 | `v1.6.0` | Two one-click paths that destroyed the live roster (**M1** demo config leaking into live mode, **M3** cleared Weeks field wiping the document). Plus the first runnable test harness. |
 | `v1.6.1` | The shift-swap flow now actually works (**A1**), can no longer claim success it did not achieve (**A-RC4**), the coverage alert surfaces (**M5**), the ledger no longer approves before writing (**M9**), admin-initiated swaps work (**M11**). |
+| **`v1.7.0`** | **The constraint-aware engine, live in Sandbox.** Generate really generates; the staff field is editable so visitors can enter their own team; the result panel shows load, warnings and every unstaffable slot with its reason. |
+
+**Deploy verified, not assumed.** CI green end to end in 2m43s (including the test gate). The
+live bundle is `index-Ck4olkEf.js`, and I confirmed the new code is *in* it — `effectiveStart`,
+`unfilled`, `Load example department`, `Scott Lang`, `Nothing is saved` all present — and that the
+old theatre is *gone*: `multiverse timeline` and `Simulation Locked` both return **zero** hits.
+
+### What to click, in Sandbox
+
+1. Toggle **Demo** in the header. The staff and task boxes are now empty and editable.
+2. **Configure → Load example department** → Generate. You should get 40 shifts over 12 days
+   starting Monday 7 September 2026, and **exactly one unstaffable slot**:
+   *"no available staff hold skill CPET for Paediatric CPET coLead on 2026-09-16 (2 qualified,
+   1 on leave, 1 already on this task)"*. **Point at that.** It is the argument for trusting the
+   tool: it tells you what it could not do instead of quietly double-booking someone.
+3. Or type any team's names and routines and Generate — that is the try-it-yourself path for the
+   respiratory and psychology teams.
+4. CSV and ICS both export complete data from a generated Sandbox roster.
+
+One cosmetic rough edge: the CSV shows `undefined` in the Co-Lead column for that single
+unstaffable slot, because the shift genuinely has no co-lead. Harmless, and arguably makes the
+point — but if it bothers you on stage, mention it before someone spots it.
 
 **Rollback, fastest first:**
 1. Firebase Console → Hosting → `smartdashboard` → **Rollback** on the previous release. Instant, no git.
