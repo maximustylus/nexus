@@ -60,6 +60,83 @@ are recorded in `ROSTER_QC_AUDIT.md` and `ROSTER_POSTMORTEM.md` and are likewise
 
 ---
 
+## [1.7.0] - 2026-08-06
+
+A constraint-aware rostering engine, available in Sandbox mode. **Live mode is unchanged** and
+still uses the original `generateRoster`, whose output was verified byte-identical across 720
+configurations — no existing roster can be affected by this release.
+
+### Added
+
+- **`src/utils/rosterEngineV2.js` — a constraint-aware roster engine.** The original engine is a
+  cyclic rotation for a team where staff count happens to equal task count. Measured at other
+  sizes it fails two ways, and both are now fixed:
+
+  | staff / tasks | Old: max duties one person holds in a day | Old: never rostered | New: max/day | New: never rostered | New: unfilled, each with a reason |
+  |---|---|---|---|---|---|
+  | 4 / 4 | 3 | 0 of 4 | 2 | 0 of 4 | 0 |
+  | 12 / 8 | 3 | 0 of 12 | 2 | 0 of 12 | 0 |
+  | 6 / 10 | **5** | 0 of 6 | **2** | 0 of 6 | **160** |
+  | 20 / 4 | 3 | **12 of 20** | 1 | **0 of 20** | 0 |
+
+  Reproduce with `node scripts/roster-scaling.mjs`. The old engine reached five concurrent duties
+  by wrapping the task index back around the staff list, and said nothing; and left 12 of 20
+  people entirely unrostered because the rotation never passed the end of the task list.
+
+  Inputs it accepts — per staff member: `fte`, `skills`, `unavailable` dates, `maxPerDay`. Per
+  task: `requiresSkill`, `days` of the week, `leads`, `coLeads`, `category`. Plus rules:
+  `maxConcurrentPerDay`, `maxConsecutiveDays`, `forbidPairs`.
+
+  Design properties: hard constraints are **never** violated — an unstaffable slot is reported in
+  `unfilled` with the binding constraint named, never filled by an unqualified or over-committed
+  person. Slots are filled most-constrained-first (minimum-remaining-values) so a scarce
+  qualification is not spent on a slot anyone could have covered. Fairness is FTE-weighted, so a
+  0.6 FTE colleague receives roughly 60% of a full-timer's load. Output is deterministic — no
+  `Math.random`, no `Date.now` — so the same inputs always give the same roster. `hardViolations`
+  is **measured** by re-auditing the finished roster, not asserted.
+- **Sandbox mode now really generates a roster.** Previously, clicking Generate in Sandbox showed
+  two `alert()` boxes on a timer — *"AURA is simulating roster conflict resolution…"* then
+  *"Zero conflicts found in multiverse timeline"* — and computed nothing; the calendar kept showing
+  13 hardcoded events from February 2026. It now runs the real engine, in component state only,
+  and renders the result.
+- **The Sandbox staff field is editable.** It was `readOnly` with a "Simulation Locked" caption, so
+  a visitor could not enter their own team. Names and task names alone now produce a working
+  roster; skills, FTE and leave are optional extras.
+- **Sandbox result panel** showing the effective start date, per-person load with a `duties ÷ FTE`
+  column, any warnings, and the `unfilled` list with each slot's reason.
+- **`DEMO_EXAMPLE_DEPARTMENT`** in `src/data/mockData.js` — a 12-person, 8-task fictional
+  department with three skills, one 0.6 FTE colleague and one person on leave, loadable from the
+  wizard. It generates 40 shifts over 12 days with zero hard violations and **exactly one
+  deliberately unstaffable slot**, so the honest-reporting behaviour is visible rather than
+  described. Appended only; `MOCK_STAFF`, `MOCK_STAFF_NAMES`, `MOCK_ROSTER`, `MOCK_PULSE_TRENDS`
+  and `MOCK_TEAM_DATA` are untouched.
+
+### Fixed
+
+- **Sandbox CSV and ICS exports were incomplete.** The demo data set only four fields, so `Week`
+  and `Co-Lead` came out as `undefined` on every row. A generated Sandbox roster now exports
+  complete data (partial fix for audit **M7**; the demo path is fixed, the `MOCK_ROSTER` fallback
+  path is not).
+
+### Notes
+
+- **Demo mode still writes nothing to Firestore, and this is now enforced three ways** — the early
+  return in `handleGenerateClick`, a guard at the top of `executeRosterGeneration` (a no-op in live
+  mode), and a component test asserting `setDoc`, `addDoc`, `onSnapshot`, `doc` and `collection`
+  are never called on the demo path.
+- 434 tests, up from 254. Includes `RosterView.demo.test.jsx`, the project's first component test.
+- **`softPenalty` is deliberately not displayed.** It is unnormalised and not comparable between
+  differently-shaped configurations, so showing it would mislead.
+- **Known rough edge:** one CSV cell reads `undefined` for the deliberately unstaffed co-lead in
+  the example department, because the shift genuinely has no `coLead` key and the exporter
+  interpolates it directly. Cosmetic, and confined to that one unstaffable slot.
+- The engine's 15 documented limits are in its file header. The ones that matter most: it is greedy
+  rather than optimal and has no repair pass; `maxConsecutiveDays` cannot see across separate
+  generation runs; a skill requirement gates the co-lead too, so "senior supervising a trainee" is
+  not expressible; `forbidPairs` is same-task-only; and FTE sets relative share, not an absolute cap.
+- Not wired into **live** mode. The Configure wizard has no fields for skills, FTE or leave in live
+  mode yet, and multi-team support (per-team documents, a per-team login list) does not exist.
+
 ## [1.6.1] - 2026-08-06
 
 The shift-swap flow — the "Auto-Healer" — now actually works. Every item here is a fix to

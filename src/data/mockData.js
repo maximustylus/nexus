@@ -117,3 +117,70 @@ export const MOCK_TEAM_DATA = MOCK_STAFF_NAMES.map((name) => {
 
   return { id: name.toLowerCase(), staff_name: name, projects: staffProjects };
 });
+
+// 8. THE SANDBOX EXAMPLE DEPARTMENT (RosterView demo mode → "Load example department")
+//
+// A NEW export, deliberately separate from MOCK_STAFF, MOCK_STAFF_NAMES,
+// MOCK_ROSTER, MOCK_PULSE_TRENDS and MOCK_TEAM_DATA. Those five are read by the
+// dashboard, the wellbeing view and the admin panels, so widening them to a
+// 12-person department would ripple into every chart. Nothing above this line is
+// touched.
+//
+// SHAPE: this is `rosterEngineV2`'s input contract verbatim — `{ startDate,
+// weeks, staff: [{ name, fte, skills, unavailable }], tasks: [{ name,
+// requiresSkill, days, leads, coLeads, category }], rules }` — so the sandbox
+// loader hands it straight to `generateRosterV2` and a test can reproduce the
+// expected roster by calling the engine with this object.
+//
+// FOUR DESIGN CONSTRAINTS, each derived from a documented engine limit:
+//
+//   1. `coLeads` is never above 1. With `coLeads > 1` the engine puts the extra
+//      people in `assignees`, which `downloadCSV`/`downloadICS` do not read, so
+//      the exports this demo shows off would be silently incomplete.
+//   2. `startDate` is a MONDAY (2026-09-07). The engine snaps a mid-week date
+//      BACKWARDS to the preceding Monday, so a Wednesday here would quietly
+//      start the demo roster in the past.
+//   3. `requiresSkill` gates the co-lead as well as the lead, so the skills are
+//      deliberately NOT over-applied: REHAB has four holders and SLEEP three, so
+//      those tasks always fill both duties and the only unfilled slot in the run
+//      is the intended one.
+//   4. Exactly ONE unfillable slot, and it is legible: CPET is held by only
+//      Bruce Banner and Shuri. Shuri is on leave on Wednesday 2026-09-16, and
+//      Paediatric CPET runs on Wednesdays only — so on that one date the engine
+//      fills the lead (Bruce) and reports the co-lead as unfilled, saying why:
+//      "2 qualified, 1 on leave, 1 already on this task". Verified against the
+//      engine: 1 unfilled slot, 0 hard-constraint violations, 40 shifts.
+//
+// Scott Lang is the part-timer (0.6 FTE) — the load table shows him accruing
+// duties at roughly 60% of a full-timer's rate, which is the FTE weighting
+// doing visible work rather than being claimed in a caption.
+export const DEMO_EXAMPLE_DEPARTMENT = Object.freeze({
+  label: 'Allied Health — Respiratory & Rehab (example)',
+  startDate: '2026-09-07', // Monday
+  weeks: 2,
+  staff: Object.freeze([
+    { name: 'Carol Danvers', fte: 1.0, skills: ['SLEEP', 'REHAB'], unavailable: [] },
+    { name: 'Bruce Banner', fte: 1.0, skills: ['CPET', 'SLEEP'], unavailable: [] },
+    { name: 'Shuri', fte: 1.0, skills: ['CPET'], unavailable: ['2026-09-16'] },
+    { name: 'Sam Wilson', fte: 1.0, skills: ['REHAB'], unavailable: [] },
+    { name: 'Wanda Maximoff', fte: 1.0, skills: ['REHAB'], unavailable: [] },
+    { name: 'Stephen Strange', fte: 1.0, skills: ['SLEEP'], unavailable: [] },
+    { name: 'Natasha Romanoff', fte: 1.0, skills: [], unavailable: [] },
+    { name: "T'Challa", fte: 1.0, skills: ['REHAB'], unavailable: [] },
+    { name: 'Kamala Khan', fte: 1.0, skills: [], unavailable: [] },
+    { name: 'Scott Lang', fte: 0.6, skills: [], unavailable: [] },
+    { name: 'Riri Williams', fte: 1.0, skills: [], unavailable: [] },
+    { name: 'Monica Rambeau', fte: 1.0, skills: [], unavailable: [] },
+  ]),
+  tasks: Object.freeze([
+    { name: 'Inpatient Rounds', days: [1, 2, 3, 4, 5], leads: 1, coLeads: 1, category: 'Clinical' },
+    { name: 'Outpatient Clinic', days: [1, 2, 3, 4, 5], leads: 1, coLeads: 1, category: 'Clinical' },
+    { name: 'Paediatric CPET', days: [3], leads: 1, coLeads: 1, category: 'Clinical', requiresSkill: 'CPET' },
+    { name: 'Pulmonary Rehab Group', days: [2, 4], leads: 1, coLeads: 1, category: 'Rehab', requiresSkill: 'REHAB' },
+    { name: 'Cardiac Rehab Clinic', days: [1, 5], leads: 1, coLeads: 1, category: 'Rehab', requiresSkill: 'REHAB' },
+    { name: 'Sleep Study Review', days: [1, 4], leads: 1, coLeads: 1, category: 'Diagnostics', requiresSkill: 'SLEEP' },
+    { name: 'Student Supervision', days: [2, 4], leads: 1, coLeads: 1, category: 'Education' },
+    { name: 'Weekend Acute Cover', days: [6], leads: 1, coLeads: 1, category: 'On Call' },
+  ]),
+  rules: Object.freeze({ maxConcurrentPerDay: 2, maxConsecutiveDays: 6 }),
+});

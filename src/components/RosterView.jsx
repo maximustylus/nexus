@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { db } from '../firebase';
 // 🛡️ NEW: Imported collection, addDoc, and serverTimestamp for the Swap Engine
 import { doc, onSnapshot, setDoc, collection, addDoc, serverTimestamp } from 'firebase/firestore';
-import { Calendar, Download, Settings, ChevronLeft, ChevronRight, Play, FileSpreadsheet, ShieldAlert, ArrowRightLeft, X } from 'lucide-react';
+import { Calendar, Download, Settings, ChevronLeft, ChevronRight, Play, FileSpreadsheet, ShieldAlert, ArrowRightLeft, X, Users, FlaskConical } from 'lucide-react';
 import {
     downloadICS,
     downloadCSV,
@@ -21,10 +21,82 @@ import {
 
 // --- SANDBOX IMPORTS ---
 import { useNexus } from '../context/NexusContext';
-import { MOCK_ROSTER, MOCK_STAFF_NAMES } from '../data/mockData';
+import { DEMO_EXAMPLE_DEPARTMENT } from '../data/mockData';
+// 🧪 SANDBOX ENGINE — the constraint-aware engine, used ONLY on the demo path.
+// Live generation still goes through prepareRosterWrite → generateRoster, which
+// has characterization tests pinning its byte-exact output and a live document
+// reading it. Nothing below migrates live mode.
+import {
+    generateRosterV2,
+    parseLocalDateKey,
+    ROSTER_V2_DEFAULTS,
+} from '../utils/rosterEngineV2';
 
 // 🌟 IMPORT THE CUSTOM MODAL
 import ConfirmationModal from './ConfirmationModal';
+
+/**
+ * 🧪 SANDBOX: turn what the Configure wizard holds into a `generateRosterV2`
+ * config.
+ *
+ * The wizard's two textareas are, and stay, plain comma-separated NAMES —
+ * requirement 3 of this feature is that a visiting respiratory therapist can
+ * type twelve names and eight task names and get a real roster. Everything the
+ * engine also understands (FTE, skills, leave, per-task days/skills) arrives
+ * through `details`, which "Load example department" fills, and is matched back
+ * to the textarea contents BY NAME.
+ *
+ * That matching is deliberate: edit or delete a name and its extra detail simply
+ * stops applying, so the form can never claim a skill for somebody who is no
+ * longer in the pool. Anyone without detail gets the engine's own documented
+ * defaults (`ROSTER_V2_DEFAULTS.fte`, no skills, no leave) — imported, not
+ * re-guessed here.
+ *
+ * Pure, and exported so it can be reasoned about (and tested) without a DOM.
+ */
+export const buildDemoRosterV2Config = ({ config, details }) => {
+    const cleanNames = (list) =>
+        (Array.isArray(list) ? list : [])
+            .map((entry) => (typeof entry === 'string' ? entry.trim() : ''))
+            .filter((entry) => entry !== '');
+
+    const staffDetail = new Map(
+        (details?.staff || []).map((person) => [person.name, person]),
+    );
+    const taskDetail = new Map(
+        (details?.tasks || []).map((task) => [task.name, task]),
+    );
+
+    return {
+        startDate: config.startDate,
+        weeks: config.weeks,
+        staff: cleanNames(config.staff).map((name) => {
+            const extra = staffDetail.get(name);
+            return {
+                name,
+                fte: typeof extra?.fte === 'number' ? extra.fte : ROSTER_V2_DEFAULTS.fte,
+                skills: Array.isArray(extra?.skills) ? [...extra.skills] : [],
+                unavailable: Array.isArray(extra?.unavailable) ? [...extra.unavailable] : [],
+                ...(typeof extra?.maxPerDay === 'number' ? { maxPerDay: extra.maxPerDay } : {}),
+            };
+        }),
+        tasks: cleanNames(config.tasks).map((name) => {
+            const extra = taskDetail.get(name);
+            return {
+                name,
+                ...(extra?.requiresSkill ? { requiresSkill: extra.requiresSkill } : {}),
+                ...(Array.isArray(extra?.days) ? { days: [...extra.days] } : {}),
+                ...(typeof extra?.leads === 'number' ? { leads: extra.leads } : {}),
+                ...(typeof extra?.coLeads === 'number' ? { coLeads: extra.coLeads } : {}),
+                ...(extra?.category ? { category: extra.category } : {}),
+            };
+        }),
+        ...(details?.rules ? { rules: { ...details.rules } } : {}),
+    };
+};
+
+/** How many unfilled slots the sandbox panel lists before it summarises. */
+const DEMO_UNFILLED_PREVIEW = 20;
 
 const RosterView = ({ user }) => {
     // --- CONTEXT ---
@@ -37,7 +109,17 @@ const RosterView = ({ user }) => {
     // 🛡️ M8: an empty calendar caused by a rules denial was indistinguishable
     // from "no roster has been generated yet". This is the difference.
     const [rosterError, setRosterError] = useState(null);
-    
+
+    // 🧪 SANDBOX STATE — both fields exist only in demo mode and only in memory.
+    // `demoResult` is the whole `generateRosterV2` return value (effectiveStart,
+    // unfilled, load, warnings, score) so the panel below the calendar can report
+    // what the engine actually knew, rather than a summary of it.
+    const [demoResult, setDemoResult] = useState(null);
+    // The per-person / per-task detail the two name textareas cannot express.
+    // `null` until "Load example department" is pressed — a typed-in team runs on
+    // the engine's defaults, which is the point of requirement 3.
+    const [demoDetails, setDemoDetails] = useState(null);
+
     // 🌟 CUSTOM MODAL STATE
     const [isConfirmModalOpen, setIsConfirmModalOpen] = useState(false);
     
@@ -64,34 +146,48 @@ const RosterView = ({ user }) => {
     // --- EFFECT: SWITCH DATA SOURCE ---
     useEffect(() => {
         if (isDemo) {
-            const transformedData = {};
-            MOCK_ROSTER.forEach(event => {
-                const dateKey = event.start.split('T')[0];
-                if (!transformedData[dateKey]) {
-                    transformedData[dateKey] = [];
-                }
-                transformedData[dateKey].push({
-                    staff: event.resource,
-                    lead: event.resource, // Fallback for old demo data
-                    task: event.title,
-                    category: event.type === 'OnCall' ? 'VC' : 'Clinical' 
-                });
-            });
-
-            setRosterData(transformedData);
+            // 🧪 SANDBOX: no listener, no document, no write — demo mode never
+            // opens a Firestore channel at all.
+            //
+            // This branch used to transform 13 hardcoded MOCK_ROSTER events onto
+            // 17–18 Feb 2026 and pin the staff pool to the Marvel names. Those
+            // events carried no `week` and no `coLead`, which is exactly why the
+            // CSV export wrote "undefined" in those two columns, and the calendar
+            // showed the same two days whatever anyone configured.
+            // The calendar now starts EMPTY and is filled only by a real
+            // `generateRosterV2` run (Configure → Generate).
+            //
+            // The pool is cleared rather than pre-filled with the live names: in
+            // demo mode the box is for the visitor's own team, and showing four
+            // real colleagues' names to a stranger is not a sandbox.
+            setRosterData({});
             setRosterError(null);
-            setConfig(prev => ({
-                ...prev,
-                staff: MOCK_STAFF_NAMES,
-                tasks: ["Avenger Protocol", "Web Slinger Audit", "Cerebro Scan", "Shield Patrol"]
-            }));
+            setDemoResult(null);
+            setDemoDetails(null);
+            setConfig(prev => ({ ...prev, staff: [], tasks: [] }));
+            // 🛡️ A live "Generate?" confirmation must not survive into demo mode.
+            // It is the ONE control whose OK button reaches setDoc, and both
+            // modals are fixed overlays that can be open at the same time, so
+            // switching universes underneath it is closed off here rather than
+            // reasoned about.
+            setIsConfirmModalOpen(false);
 
         } else {
-            // 🛡️ M1 FIX: the demo branch above overwrites config.staff/config.tasks
-            // with the Marvel dataset. Without this reset the demo pool survived
-            // the toggle back to LIVE, and one Generate click replaced four real
-            // clinicians with Steve/Peter/Charles/Jean/Tony. An in-progress
-            // startDate/weeks edit is preserved — demo mode never touches those.
+            // 🧪 Leaving the sandbox: drop the generated roster and its report
+            // together. Without this the fictional shifts stayed on the calendar
+            // until a snapshot arrived — and if the live document does not exist,
+            // no snapshot ever replaces them.
+            setRosterData({});
+            setDemoResult(null);
+            setDemoDetails(null);
+
+            // 🛡️ M1 FIX: the demo branch above rewrites config.staff/config.tasks
+            // (it used to overwrite them with the Marvel dataset; it now clears
+            // them for the visitor's own team, and "Load example department" can
+            // fill them with twelve fictional names). Either way the demo pool
+            // must not survive the toggle back to LIVE, where one Generate click
+            // would write it over four real clinicians. An in-progress
+            // startDate/weeks edit is preserved.
             setConfig(prev => restoreLiveRosterConfig(prev));
 
             const unsub = onSnapshot(
@@ -118,13 +214,74 @@ const RosterView = ({ user }) => {
 
     // --- ACTIONS ---
     
+    /**
+     * 🧪 SANDBOX: fill the example department into the wizard.
+     *
+     * Sets BOTH halves at once — the two name textareas (what the visitor can
+     * see and edit) and `demoDetails` (the FTE / skills / leave / per-task days
+     * the textareas cannot express). Fresh copies, so a later edit cannot mutate
+     * the frozen export through a shared reference.
+     */
+    const loadExampleDepartment = () => {
+        setDemoDetails({
+            staff: DEMO_EXAMPLE_DEPARTMENT.staff.map(person => ({ ...person })),
+            tasks: DEMO_EXAMPLE_DEPARTMENT.tasks.map(task => ({ ...task })),
+            rules: { ...DEMO_EXAMPLE_DEPARTMENT.rules },
+        });
+        setConfig(prev => ({
+            ...prev,
+            startDate: DEMO_EXAMPLE_DEPARTMENT.startDate,
+            weeks: DEMO_EXAMPLE_DEPARTMENT.weeks,
+            staff: DEMO_EXAMPLE_DEPARTMENT.staff.map(person => person.name),
+            tasks: DEMO_EXAMPLE_DEPARTMENT.tasks.map(task => task.name),
+        }));
+    };
+
     const handleGenerateClick = () => {
         if (isDemo) {
-            alert("🧪 [SANDBOX] AURA is simulating roster conflict resolution for the Marvel Team...");
-            setTimeout(() => {
-                alert("✅ Simulation Complete. Zero conflicts found in multiverse timeline.");
-                setIsConfigOpen(false);
-            }, 1500);
+            // 🧪 SANDBOX — A REAL ENGINE RUN, IN COMPONENT STATE ONLY.
+            //
+            // This branch used to fire two fake alerts ("simulating roster
+            // conflict resolution", then "Zero conflicts found in multiverse
+            // timeline") and generate nothing whatsoever. It now calls
+            // `generateRosterV2` on whatever the visitor typed and renders the
+            // result in the same calendar the live roster uses.
+            //
+            // 🛡️ NO FIRESTORE, EVER. There is no `doc`, no `setDoc`, no
+            // `addDoc` and no `collection` on this path, and the `return` below
+            // is what keeps it that way: the live write path
+            // (prepareRosterWrite → setDoc, inside executeRosterGeneration) is
+            // only reachable through the confirmation modal, which this early
+            // return never opens. Demo mode therefore cannot touch live data
+            // even if the configuration is valid, invalid, or malicious.
+            const demoConfig = buildDemoRosterV2Config({ config, details: demoDetails });
+            const result = generateRosterV2(demoConfig);
+
+            if (!result.ok) {
+                // The engine refuses configurations that cannot be what the
+                // author meant (a task requiring a skill nobody holds, a
+                // duplicated name). Its `reason` is written to be shown verbatim,
+                // so it is — in the same banner a live read failure uses.
+                setDemoResult(null);
+                setRosterData({});
+                setRosterError(`AURA did not generate a roster: ${result.reason}`);
+                return;
+            }
+
+            setRosterError(null);
+            setDemoResult(result);
+            setRosterData(result.roster);
+
+            // Jump the calendar to the month the roster really starts in. The
+            // engine snaps `startDate` back to its Monday and reports the result
+            // in `effectiveStart`, so this follows the engine rather than the
+            // typed date — otherwise a snapped run could open on the wrong month
+            // and look empty. Parsed with the engine's own LOCAL parser: a UTC
+            // parse here is post-mortem B2 all over again.
+            const started = parseLocalDateKey(result.effectiveStart);
+            setCurrentDate(new Date(started.getFullYear(), started.getMonth(), 1));
+
+            setIsConfigOpen(false);
             return;
         }
 
@@ -140,6 +297,18 @@ const RosterView = ({ user }) => {
 
     const executeRosterGeneration = async () => {
         setIsConfirmModalOpen(false); // Close the confirm modal
+
+        // 🛡️ THIRD LATCH, and the only line of the live write path this task
+        // added: demo mode must never reach `setDoc`. It cannot get here today —
+        // `handleGenerateClick` returns early in demo mode and this function runs
+        // only from the confirmation modal it never opens — but "cannot" was
+        // resting on the ORDER of two independent pieces of state, and the demo
+        // safety property is worth more than that. In live mode `isDemo` is false
+        // and this line is a no-op, so live behaviour is byte-for-byte unchanged.
+        if (isDemo) {
+            console.warn('Roster write refused: demo mode never writes to Firestore.');
+            return;
+        }
 
         // 🛡️ M3 FIX (defence in depth): validate, generate, and refuse to write
         // an empty roster — all decided by prepareRosterWrite, which is unit
@@ -397,6 +566,177 @@ const RosterView = ({ user }) => {
                 })}
             </div>
 
+            {/* --- 🧪 SANDBOX REPORT: WHAT THE ENGINE KNEW ----------------------
+                Requirement 4. `generateRosterV2` returns far more than a roster —
+                the Monday it actually started from, the per-person load, the
+                warnings it raised before filling a single slot, and every slot it
+                could NOT fill with the constraint that bound. A calendar alone
+                throws all of that away, and the last one matters most: a day on
+                which every slot failed produces no roster key at all, so an empty
+                square is indistinguishable from a day nothing was configured for.
+                This panel is the difference.
+
+                DELIBERATELY ABSENT: `score.softPenalty`. It is unnormalised and
+                not comparable across differently-shaped configurations — a
+                20-staff/4-task run scores 160 while a genuinely overloaded
+                6-staff/10-task run scores 19.83 — so shown as a headline it would
+                say the opposite of the truth. `score.hardViolations` IS shown:
+                that one is measured by re-auditing the finished roster, and 0 is a
+                claim the engine checked rather than asserted. */}
+            {isDemo && (
+                <div className="mt-6 space-y-4">
+
+                    {/* Requirement 6 — the no-persistence property, on screen. */}
+                    <div className="flex items-start gap-2 p-3 rounded-xl bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800">
+                        <FlaskConical size={16} className="text-emerald-600 dark:text-emerald-400 shrink-0 mt-0.5" />
+                        <p className="text-xs font-bold text-emerald-800 dark:text-emerald-300 leading-relaxed">
+                            Sandbox mode. Nothing is saved — closing or reloading this page clears everything.
+                            This roster is generated in your browser by the same engine the live department uses;
+                            it is never written to the live roster, and the live roster is never read here.
+                        </p>
+                    </div>
+
+                    {!demoResult && (
+                        <p className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed">
+                            No sandbox roster yet. Open <span className="font-bold">Configure</span>, type your
+                            own team (or load the example department) and press{' '}
+                            <span className="font-bold">Generate Sandbox Roster</span>. The calendar above is
+                            empty because nothing has been generated — not because a roster failed.
+                        </p>
+                    )}
+
+                    {demoResult && (
+                        <>
+                            {/* --- run summary --- */}
+                            <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+                                <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700">
+                                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Effective start</p>
+                                    <p className="text-sm font-black text-slate-800 dark:text-white">{demoResult.effectiveStart}</p>
+                                    <p className="text-[10px] text-slate-500 dark:text-slate-400">{formatRosterDateKey(demoResult.effectiveStart)}</p>
+                                </div>
+                                <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700">
+                                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Days scheduled</p>
+                                    <p className="text-sm font-black text-slate-800 dark:text-white">{Object.keys(demoResult.roster).length}</p>
+                                </div>
+                                <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700">
+                                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Shifts</p>
+                                    <p className="text-sm font-black text-slate-800 dark:text-white">
+                                        {Object.values(demoResult.roster).reduce((sum, shifts) => sum + shifts.length, 0)}
+                                    </p>
+                                </div>
+                                <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700">
+                                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Hard violations</p>
+                                    <p className="text-sm font-black text-slate-800 dark:text-white">{demoResult.score.hardViolations}</p>
+                                    <p className="text-[10px] text-slate-500 dark:text-slate-400">re-audited, not asserted</p>
+                                </div>
+                            </div>
+
+                            {/* --- warnings --- */}
+                            {demoResult.warnings.length > 0 && (
+                                <div className="p-3 rounded-xl bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800">
+                                    <p className="text-[10px] font-black text-amber-700 dark:text-amber-400 uppercase tracking-widest mb-2">
+                                        Warnings ({demoResult.warnings.length})
+                                    </p>
+                                    <ul className="space-y-1">
+                                        {demoResult.warnings.map((warning, idx) => (
+                                            <li key={idx} className="text-xs text-amber-800 dark:text-amber-300 leading-relaxed flex items-start gap-1.5">
+                                                <ShieldAlert size={13} className="shrink-0 mt-0.5" />
+                                                <span>{warning}</span>
+                                            </li>
+                                        ))}
+                                    </ul>
+                                </div>
+                            )}
+
+                            {/* --- unfilled slots: the selling point ------------------
+                                Software that says what it could not staff, instead of
+                                quietly double-booking somebody, is the whole pitch. It
+                                goes ABOVE the load table for that reason. */}
+                            <div className={`p-3 rounded-xl border ${
+                                demoResult.unfilled.length > 0
+                                    ? 'bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800'
+                                    : 'bg-slate-50 dark:bg-slate-900 border-slate-200 dark:border-slate-700'
+                            }`}>
+                                <p className={`text-[10px] font-black uppercase tracking-widest mb-2 ${
+                                    demoResult.unfilled.length > 0 ? 'text-red-700 dark:text-red-400' : 'text-slate-400'
+                                }`}>
+                                    Could not be staffed ({demoResult.unfilled.length})
+                                </p>
+
+                                {demoResult.unfilled.length === 0 ? (
+                                    <p className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed">
+                                        Every slot in this run was filled within the constraints — no clinician was
+                                        assigned past their daily limit, outside their skill set, or on a day they
+                                        were on leave.
+                                    </p>
+                                ) : (
+                                    <>
+                                        <ul className="space-y-1.5">
+                                            {demoResult.unfilled.slice(0, DEMO_UNFILLED_PREVIEW).map((slot, idx) => (
+                                                <li key={`${slot.date}-${slot.task}-${slot.role}-${idx}`} className="text-xs text-red-800 dark:text-red-300 leading-relaxed">
+                                                    <span className="font-black">{slot.date}</span>
+                                                    {' · '}
+                                                    <span className="font-bold">{slot.task}</span>
+                                                    {' · '}
+                                                    <span className="uppercase">{describeShiftRole(slot.role)}</span>
+                                                    <span className="block text-red-700/80 dark:text-red-400/80">{slot.reason}</span>
+                                                </li>
+                                            ))}
+                                        </ul>
+                                        {demoResult.unfilled.length > DEMO_UNFILLED_PREVIEW && (
+                                            <p className="text-xs font-bold text-red-700 dark:text-red-400 mt-2">
+                                                …and {demoResult.unfilled.length - DEMO_UNFILLED_PREVIEW} more.
+                                            </p>
+                                        )}
+                                        <p className="text-[10px] text-red-700/80 dark:text-red-400/80 mt-2 leading-relaxed">
+                                            A day on which every slot failed has no square filled in the calendar above,
+                                            so this list is the only record that it was attempted. AURA leaves the slot
+                                            empty and names the binding constraint rather than assigning somebody who is
+                                            unqualified, on leave, or already at their limit.
+                                        </p>
+                                    </>
+                                )}
+                            </div>
+
+                            {/* --- per-person load --- */}
+                            <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700">
+                                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 flex items-center gap-1.5">
+                                    <Users size={13} /> Load per person
+                                </p>
+                                <div className="overflow-x-auto">
+                                    <table className="w-full text-xs">
+                                        <thead>
+                                            <tr className="text-left text-slate-400">
+                                                <th className="font-bold uppercase text-[10px] py-1 pr-3">Name</th>
+                                                <th className="font-bold uppercase text-[10px] py-1 pr-3">FTE</th>
+                                                <th className="font-bold uppercase text-[10px] py-1 pr-3">Duties</th>
+                                                <th className="font-bold uppercase text-[10px] py-1 pr-3">Per FTE</th>
+                                                <th className="font-bold uppercase text-[10px] py-1">Share</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {Object.entries(demoResult.load).map(([name, entry]) => (
+                                                <tr key={name} className="border-t border-slate-200 dark:border-slate-700">
+                                                    <td className="py-1 pr-3 font-bold text-slate-700 dark:text-slate-200">{name}</td>
+                                                    <td className="py-1 pr-3 text-slate-500 dark:text-slate-400">{entry.fte}</td>
+                                                    <td className="py-1 pr-3 font-black text-slate-800 dark:text-white">{entry.duties}</td>
+                                                    <td className="py-1 pr-3 text-slate-500 dark:text-slate-400">{entry.weighted}</td>
+                                                    <td className="py-1 text-slate-500 dark:text-slate-400">{Math.round(entry.share * 100)}%</td>
+                                                </tr>
+                                            ))}
+                                        </tbody>
+                                    </table>
+                                </div>
+                                <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-2 leading-relaxed">
+                                    <span className="font-bold">Per FTE</span> is duties ÷ FTE: it is the column that
+                                    shows a 0.6 FTE colleague carrying a fair share rather than an equal one.
+                                </p>
+                            </div>
+                        </>
+                    )}
+                </div>
+            )}
+
             {/* --- MODAL: SWAP REQUEST --- */}
             {isSwapModalOpen && selectedShift && (
                 <div className="fixed inset-0 z-[120] flex items-center justify-center p-4">
@@ -548,20 +888,48 @@ const RosterView = ({ user }) => {
                             </h3>
                         </div>
                         
+                        {/* 🧪 SANDBOX: one press fills a whole fictional department —
+                            twelve staff, eight tasks, three skills, a 0.6 FTE
+                            part-timer and a day of leave. It is the only way to get
+                            skills/FTE/leave in from this wizard, and it is the
+                            configuration the unfilled-slot behaviour is demonstrated
+                            with. Typed-in names alone still work; they just run on the
+                            engine's defaults. */}
+                        {isDemo && (
+                            <div className="mb-4 p-3 rounded-xl bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800">
+                                <button
+                                    type="button"
+                                    onClick={loadExampleDepartment}
+                                    className="flex items-center gap-2 px-3 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs uppercase tracking-wider transition-colors"
+                                >
+                                    <Users size={14} /> Load example department
+                                </button>
+                                <p className="text-[10px] text-emerald-700 dark:text-emerald-300 mt-2 leading-relaxed">
+                                    {DEMO_EXAMPLE_DEPARTMENT.label} — {DEMO_EXAMPLE_DEPARTMENT.staff.length} staff,
+                                    {' '}{DEMO_EXAMPLE_DEPARTMENT.tasks.length} tasks, skill-gated duties, one
+                                    part-timer and one person on leave. Or just type your own team below: names
+                                    alone are enough. Everyone AURA is not told about defaults
+                                    to {ROSTER_V2_DEFAULTS.fte} FTE, no required skills and no leave.
+                                </p>
+                            </div>
+                        )}
+
                         <div className="space-y-4 mb-6">
                             <div className="grid grid-cols-2 gap-4">
                                 <div>
-                                    <label className="text-xs font-bold text-slate-400 uppercase">Start Date</label>
-                                    <input 
-                                        type="date" 
-                                        className="input-field w-full mt-1 font-bold bg-white dark:bg-slate-900 border dark:border-slate-700 rounded p-2 text-slate-800 dark:text-white" 
-                                        value={config.startDate} 
+                                    <label className="text-xs font-bold text-slate-400 uppercase" htmlFor="roster-start-date">Start Date</label>
+                                    <input
+                                        id="roster-start-date"
+                                        type="date"
+                                        className="input-field w-full mt-1 font-bold bg-white dark:bg-slate-900 border dark:border-slate-700 rounded p-2 text-slate-800 dark:text-white"
+                                        value={config.startDate}
                                         onChange={(e) => setConfig({...config, startDate: e.target.value})}
                                     />
                                 </div>
                                 <div>
-                                    <label className="text-xs font-bold text-slate-400 uppercase">Weeks</label>
+                                    <label className="text-xs font-bold text-slate-400 uppercase" htmlFor="roster-weeks">Weeks</label>
                                     <input
+                                        id="roster-weeks"
                                         type="number"
                                         min="1"
                                         max={MAX_ROSTER_WEEKS}
@@ -580,24 +948,41 @@ const RosterView = ({ user }) => {
                                 </div>
                             </div>
                             <div>
-                                <label className="text-xs font-bold text-slate-400 uppercase">Staff Pool (Order Matters)</label>
-                                <textarea 
-                                    className="input-field w-full mt-1 h-20 font-mono text-xs bg-white dark:bg-slate-900 border dark:border-slate-700 rounded p-2 text-slate-800 dark:text-white" 
-                                    value={config.staff.join(', ')} 
-                                    readOnly={isDemo} 
+                                <label className="text-xs font-bold text-slate-400 uppercase" htmlFor="roster-staff-pool">Staff Pool (Order Matters)</label>
+                                {/* 🧪 `readOnly={isDemo}` and the "Simulation Locked:
+                                    Using Marvel Dataset" caption are GONE. A visiting
+                                    respiratory therapist or psychologist types their own
+                                    team here and gets a roster for it — that is the
+                                    whole point of the sandbox, and a locked box that
+                                    always answers with the same five Marvel names
+                                    demonstrates nothing. */}
+                                <textarea
+                                    id="roster-staff-pool"
+                                    className="input-field w-full mt-1 h-20 font-mono text-xs bg-white dark:bg-slate-900 border dark:border-slate-700 rounded p-2 text-slate-800 dark:text-white"
+                                    value={config.staff.join(', ')}
+                                    placeholder={isDemo ? 'e.g. Aisha, Ben, Chloe, Daniel' : undefined}
                                     onChange={(e) => setConfig({...config, staff: e.target.value.split(',').map(s => s.trim())})}
                                 />
-                                {isDemo && <p className="text-[10px] text-emerald-600 mt-1 italic">Simulation Locked: Using Marvel Dataset</p>}
                             </div>
                             <div>
-                                <label className="text-xs font-bold text-slate-400 uppercase">Core Tasks</label>
-                                <textarea 
-                                    className="input-field w-full mt-1 h-20 font-mono text-xs bg-white dark:bg-slate-900 border dark:border-slate-700 rounded p-2 text-slate-800 dark:text-white" 
-                                    value={config.tasks.join(', ')} 
+                                <label className="text-xs font-bold text-slate-400 uppercase" htmlFor="roster-tasks">Core Tasks</label>
+                                <textarea
+                                    id="roster-tasks"
+                                    className="input-field w-full mt-1 h-20 font-mono text-xs bg-white dark:bg-slate-900 border dark:border-slate-700 rounded p-2 text-slate-800 dark:text-white"
+                                    value={config.tasks.join(', ')}
+                                    placeholder={isDemo ? 'e.g. Ward Round, Outpatient Clinic, Group Therapy' : undefined}
                                     onChange={(e) => setConfig({...config, tasks: e.target.value.split(',').map(t => t.trim())})}
                                 />
                             </div>
                         </div>
+
+                        {/* 🧪 Requirement 6, stated where the visitor is about to act. */}
+                        {isDemo && (
+                            <p className="-mt-4 mb-4 text-[10px] font-bold text-emerald-700 dark:text-emerald-300 leading-relaxed">
+                                Sandbox: this runs the real rostering engine in your browser and saves nothing.
+                                Nothing is written to the live roster, and closing or reloading this page clears everything.
+                            </p>
+                        )}
 
                         {/* 🛡️ M3 FIX: tell the user why generation is unavailable. */}
                         {!configValidation.valid && (
@@ -615,7 +1000,9 @@ const RosterView = ({ user }) => {
                                 title={configValidation.valid ? undefined : configValidation.reason}
                                 className={`flex-1 py-3 text-white font-bold rounded-lg shadow-lg transition-colors flex justify-center items-center gap-2 disabled:bg-slate-300 dark:disabled:bg-slate-700 disabled:text-slate-500 disabled:shadow-none disabled:cursor-not-allowed ${isDemo ? 'bg-emerald-600 hover:bg-emerald-700' : 'bg-indigo-600 hover:bg-indigo-700'}`}
                             >
-                                <Play size={16} /> {isDemo ? 'Simulate Check' : 'Generate Roster'}
+                                {/* 🧪 It said "Simulate Check" while doing nothing at
+                                    all. It generates a roster now, so it says so. */}
+                                <Play size={16} /> {isDemo ? 'Generate Sandbox Roster' : 'Generate Roster'}
                             </button>
                         </div>
                     </div>

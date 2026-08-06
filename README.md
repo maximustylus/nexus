@@ -1,6 +1,6 @@
-# NEXUS: Smart Operations Dashboard v1.6 [BETA]
+# NEXUS: Smart Operations Dashboard v1.7 [BETA]
 
-![Version](https://img.shields.io/badge/Version-v1.6.1-blue) ![Status](https://img.shields.io/badge/Status-Beta%20Phase-emerald) ![Org](https://img.shields.io/badge/Unit-Sport%20%26%20Exercise%20Medicine-indigo) ![Tech](https://img.shields.io/badge/AI-Gemini%20Powered-purple) ![AURA](https://img.shields.io/badge/AURA-v2.3%20Engine-blue) ![PWA](https://img.shields.io/badge/PWA-Native%20Push%20Enabled-blue) ![CI/CD](https://img.shields.io/badge/CI%2FCD-GitHub%20Actions-2ea44f)
+![Version](https://img.shields.io/badge/Version-v1.7.0-blue) ![Status](https://img.shields.io/badge/Status-Beta%20Phase-emerald) ![Org](https://img.shields.io/badge/Unit-Sport%20%26%20Exercise%20Medicine-indigo) ![Tech](https://img.shields.io/badge/AI-Gemini%20Powered-purple) ![AURA](https://img.shields.io/badge/AURA-v2.3%20Engine-blue) ![PWA](https://img.shields.io/badge/PWA-Native%20Push%20Enabled-blue) ![CI/CD](https://img.shields.io/badge/CI%2FCD-GitHub%20Actions-2ea44f)
 
 **NEXUS** (formerly IDC App) is a clinician-led innovation platform designed to revolutionise workload management, optimise skill-mix routing, and actively protect staff wellbeing at the Sport and Exercise Medicine Centre. 
 
@@ -204,7 +204,7 @@ Beta testers should utilise Demo Mode to verify system integrity:
 * **Auto-Rostering Framework:** Built the initial zero-conflict scheduling logic and unified calendar interfaces.
 * **Early AURA Integration:** Introduced the baseline conversational agent focused heavily on Motivational Interviewing (OARS) and basic administrative query routing.
 
-## Future Roadmap (Pending v1.7)
+## Future Roadmap (Pending v1.8)
 
 * **Admin Security Audit Logs:** Implementation of a transparent access tracking system within the Admin Panel to monitor user logins, profile alterations, and data export events.
 * **Enterprise Scaling and Multi-Tenancy:** Transitioning the app from a hardcoded single-team environment to a dynamic, database-driven configuration. This will allow multiple departments to utilise NEXUS with completely isolated data sub-collections and custom organisation logos.
