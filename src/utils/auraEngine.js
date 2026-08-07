@@ -8,8 +8,9 @@
 // `generateRoster` below and the swap mutator in AuraPulseBot.jsx — now goes
 // through this one function so the two cannot drift apart again.
 //
-// The exact format is load-bearing: `downloadICS` interpolates it straight into
-// a VEVENT SUMMARY and RosterView renders it in the calendar cell.
+// The exact format is load-bearing: `buildICS` puts it in a VEVENT SUMMARY (now
+// RFC 5545-escaped on the way — audit M6) and RosterView renders it in the
+// calendar cell.
 //
 // A shift with no co-lead (the pre-6-May legacy shape had only one person)
 // yields `Lead: X` rather than `Lead: X, Co: undefined`.
@@ -27,15 +28,95 @@ const rotate = (arr, k) => {
     return [...arr.slice(offset), ...arr.slice(0, offset)];
 };
 
+// --- 1a. DATE PRIMITIVES (ROSTER_TODO.md P4 — post-mortem B1/B2, audit M2) ---
+//
+// BOTH HALVES ARE LOCAL, AND THAT IS THE WHOLE POINT.
+//
+// Before P4 this engine parsed `startDate` with `new Date("YYYY-MM-DD")` — which
+// V8 reads as UTC midnight — and then emitted keys with
+// `toISOString().split('T')[0]`. Those two inconsistencies cancelled: local
+// `setDate` arithmetic preserves the wall-clock time, so a constant UTC offset
+// went in and came back out and every fixed-offset zone produced identical keys.
+//
+// Fixing only the OUTPUT half (the rev-1 remediation plan) breaks that
+// cancellation and puts every key a day early west of Greenwich — measured,
+// `TZ=America/New_York` -> `2026-01-31, 2026-02-01, …`. So the parse and the key
+// derivation move together, or neither moves. See ROSTER_POSTMORTEM.md B2 rev2.
+//
+// The residual defect the cancellation could NOT hide is DST (ROSTER_QC_AUDIT.md
+// M2): `setDate` on a live instant carries the wall-clock TIME across a
+// spring-forward boundary, dragging the underlying instant over a UTC date line,
+// so every week after the transition slid one day early (measured: start
+// `2026-03-02` under `TZ=America/New_York` -> weeks 2-4 ran Sun-Thu). `addDays`
+// below rebuilds the date from calendar PARTS instead, which asks the runtime
+// for local midnight on a calendar day — the question a roster actually needs
+// answered — and is therefore immune to the transition.
+//
+// `rosterEngineV2.js` has equivalents (`parseLocalDateKey`, `toLocalDateKey`,
+// `snapToMonday`) and they are deliberately NOT imported here: V2 already
+// imports `buildShiftStaffLabel` and `MAX_ROSTER_WEEKS` from this file, so
+// importing back would make the two modules circular. Four lines each is cheaper
+// than the cycle, and `auraEngine.test.js` pins that the two `snapToMonday`
+// implementations agree so they cannot drift.
+
+/** `'2026-02-02'` -> local midnight on 2 Feb 2026. Never a UTC instant. */
+export const parseLocalStartDate = (key) => {
+    const [y, m, d] = String(key).split('-').map(Number);
+    return new Date(y, m - 1, d);
+};
+
+/** Local `Date` -> `'YYYY-MM-DD'`. Local getters only; no `toISOString`. */
+export const toDateKey = (date) => {
+    const y = String(date.getFullYear()).padStart(4, '0');
+    const m = String(date.getMonth() + 1).padStart(2, '0');
+    const d = String(date.getDate()).padStart(2, '0');
+    return `${y}-${m}-${d}`;
+};
+
+/** `date` + `n` days, rebuilt from calendar parts. The DST-safe form. */
+const addDays = (date, n) =>
+    new Date(date.getFullYear(), date.getMonth(), date.getDate() + n);
+
+/**
+ * The Monday of `date`'s week.
+ *
+ * WEEK CONVENTION — identical to `rosterEngineV2.snapToMonday`, on purpose: two
+ * engines writing into the same document must not disagree about which Monday a
+ * date belongs to. `Date.prototype.getDay` treats Sunday as day 0, i.e. the
+ * first day of the week, so the Monday of a Sunday's week is the FOLLOWING day.
+ * Monday through Saturday step back to the Monday that opened their week.
+ *
+ * The ISO-8601 reading (Sunday closes the previous week) would snap the shipped
+ * default `2026-02-01` back to Monday 26 January — a roster starting six days
+ * before the date the roster master typed. Post-mortem B1 describes that default
+ * as a Sunday that was MEANT to open a Mon-Fri block, so forward matches intent.
+ *
+ * The snap is not silent: `describeGenerationRange` reads the real keys, so the
+ * confirmation modal shows the snapped first day before anything is written.
+ */
+export const snapToMonday = (date) => {
+    const day = date.getDay();
+    return addDays(date, day === 0 ? 1 : 1 - day);
+};
+
 export const generateRoster = (config) => {
     const { staff, tasks, startDate, weeks } = config;
-    const start = new Date(startDate);
-    let roster = {}; 
+    // 🛡️ P4 / B1: the "Mon-Fri" below is now enforced, not merely asserted in a
+    // comment. The shipped default `2026-02-01` is a SUNDAY, and the old loop
+    // filled whatever five days followed it — Sun-Thu, with `VC (PM)` ("Tuesday")
+    // on a Monday and `VC (AM)` ("Saturday") on a Friday. Snapping to the Monday
+    // of the requested week makes every fixed offset below mean what it says.
+    //
+    // RETURN SHAPE IS UNCHANGED — still the bare `{ dateKey: [shift, …] }` map.
+    // `prepareRosterWrite` hands this straight to `setDoc`, so it must stay a
+    // roster and nothing else; the effective start is surfaced through
+    // `describeGenerationRange`, which derives it from these keys.
+    const start = snapToMonday(parseLocalStartDate(startDate));
+    let roster = {};
 
     // --- A. MAIN CORE TASKS (Mon-Fri) ---
     for (let w = 0; w < weeks; w++) {
-        const weekStart = new Date(start);
-        weekStart.setDate(start.getDate() + (w * 7));
+        const weekStart = addDays(start, w * 7);
 
         const currentStaffOrder = rotate(staff, w);
 
@@ -44,9 +125,7 @@ export const generateRoster = (config) => {
             const coLeadStaff = currentStaffOrder[(taskIdx + 1) % staff.length];
 
             for (let d = 0; d < 5; d++) {
-                const dayDate = new Date(weekStart);
-                dayDate.setDate(weekStart.getDate() + d);
-                const dateKey = dayDate.toISOString().split('T')[0];
+                const dateKey = toDateKey(addDays(weekStart, d));
 
                 if (!roster[dateKey]) roster[dateKey] = [];
                 
@@ -66,11 +145,9 @@ export const generateRoster = (config) => {
         const vcLead = staff[w % staff.length];
         const vcCoLead = staff[(w + 1) % staff.length];
 
-        // Tuesday (Index 1)
-        const tueDate = new Date(weekStart);
-        tueDate.setDate(weekStart.getDate() + 1);
-        const tueKey = tueDate.toISOString().split('T')[0];
-        
+        // Tuesday (Index 1) — genuinely a Tuesday now that `weekStart` is a Monday.
+        const tueKey = toDateKey(addDays(weekStart, 1));
+
         if (!roster[tueKey]) roster[tueKey] = [];
         roster[tueKey].push({ 
             task: "VC (PM)",
@@ -81,11 +158,9 @@ export const generateRoster = (config) => {
             week: w + 1 
         });
 
-        // Saturday (Index 5)
-        const satDate = new Date(weekStart);
-        satDate.setDate(weekStart.getDate() + 5);
-        const satKey = satDate.toISOString().split('T')[0];
-        
+        // Saturday (Index 5) — genuinely a Saturday, for the same reason.
+        const satKey = toDateKey(addDays(weekStart, 5));
+
         if (!roster[satKey]) roster[satKey] = [];
         roster[satKey].push({ 
             task: "VC (AM)",
@@ -248,11 +323,13 @@ export const formatRosterDateKey = (key) => {
  * The exact span of dates a generation run would write.
  *
  * Derived from `generateRoster`'s real output rather than recomputed, so the
- * confirmation modal cannot drift from what is actually written. That includes
- * today's defects: the start date is NOT snapped to a Monday (ROSTER_TODO.md P4
- * / postmortem B1), so a Sunday `startDate` honestly reports a Sunday first
- * day, and a run spanning a DST forward transition outside UTC+8 honestly
- * reports the slid keys (ROSTER_QC_AUDIT.md M2).
+ * confirmation modal cannot drift from what is actually written.
+ *
+ * That is also how the P4 Monday snap reaches the user without changing
+ * `generateRoster`'s return shape: `firstDate` is read back off the generated
+ * keys, so a Sunday `startDate` reports the Monday the roster will actually
+ * open on (ROSTER_TODO.md P4.2 / post-mortem B1) and the modal states the snap
+ * before anything is written.
  *
  * Returns `null` when the config could not be generated at all.
  */
@@ -768,57 +845,230 @@ export const appendRosterAlert = (messages, alert) => {
 };
 
 
-// --- 2. EXPORT LOGIC ---
+// --- 2. EXPORT LOGIC (ROSTER_TODO.md P5 — audit M6, M7 residue, M10) ---------
+//
+// The file CONTENT is built by two pure functions, `buildICS` and `buildCSV`;
+// `downloadICS`/`downloadCSV` are thin wrappers that hand the string to the same
+// Blob/anchor download as before. The split exists so the escaping rules below
+// can be tested on strings, without stubbing the DOM — the previous exporters
+// were untestable in practice and shipped three RFC violations because of it.
 
-export const downloadICS = (rosterData) => {
-    let ics = [
-        "BEGIN:VCALENDAR",
-        "VERSION:2.0",
-        "PRODID:-//AURA//Roster//EN",
-        "CALSCALE:GREGORIAN"
+/** Neither `undefined` nor `null` may ever reach a file. Both become empty. */
+const exportText = (value) => (value === undefined || value === null ? '' : String(value));
+
+/**
+ * The display string for a shift, tolerant of every shape that reaches here.
+ *
+ * Live documents written before 6 May 2026 and the demo transform both omit
+ * `coLead`; `buildShiftStaffLabel` already handles that, and the empty-lead case
+ * yields '' rather than the literal `Lead: undefined` (audit M7).
+ */
+const shiftStaffText = (shift) => {
+    if (typeof shift.staff === 'string' && shift.staff.trim() !== '') return shift.staff;
+    const lead = exportText(shift.lead).trim();
+    return lead === '' ? '' : buildShiftStaffLabel(lead, shift.coLead);
+};
+
+
+// --- 2a. ICS (RFC 5545) ------------------------------------------------------
+
+/** Domain part of every generated UID. Fixed, so re-exports keep matching. */
+const ICS_UID_DOMAIN = '@nexus-aura-roster';
+
+/**
+ * RFC 5545 §3.3.11 TEXT escaping.
+ *
+ * This is audit M6.1. The 6 May display-string refactor turned `[EFT] Brandon`
+ * into `[EFT] Lead: Brandon, Co: Ying Xian`, and an unescaped `,` makes SUMMARY
+ * a MULTI-VALUED property — Outlook truncates at the comma and the co-lead
+ * silently disappears from the imported event.
+ *
+ * Backslash goes first, or it would double-escape the escapes added after it.
+ */
+const escapeICSText = (value) =>
+    exportText(value)
+        .replace(/\\/g, '\\\\')
+        .replace(/;/g, '\\;')
+        .replace(/,/g, '\\,')
+        .replace(/\r\n|\r|\n/g, '\\n');
+
+/**
+ * RFC 5545 §3.1 content-line folding: no line over 75 octets, continuations
+ * introduced by CRLF + a single space.
+ *
+ * BYTE-APPROXIMATE: this counts CODE POINTS, not octets, so a line of non-ASCII
+ * text folds later than 75 bytes. That is the safe direction of error for the
+ * clients we import into (they unfold before parsing) and it guarantees the fold
+ * never lands inside a surrogate pair, which a naive `slice(0, 75)` would do.
+ */
+const foldICSLine = (line) => {
+    const chars = Array.from(line);
+    if (chars.length <= 75) return line;
+
+    const out = [chars.slice(0, 75).join('')];
+    for (let i = 75; i < chars.length; i += 74) {
+        out.push(' ' + chars.slice(i, i + 74).join(''));
+    }
+    return out.join('\r\n');
+};
+
+/** A `Date` -> the UTC form RFC 5545 wants for DTSTAMP: `20260607T091500Z`. */
+const formatICSTimestampUTC = (date) => {
+    const pad = (n, width = 2) => String(n).padStart(width, '0');
+    return (
+        `${pad(date.getUTCFullYear(), 4)}${pad(date.getUTCMonth() + 1)}${pad(date.getUTCDate())}` +
+        `T${pad(date.getUTCHours())}${pad(date.getUTCMinutes())}${pad(date.getUTCSeconds())}Z`
+    );
+};
+
+/** Task name -> UID-safe slug. Anything unusable collapses to `shift`. */
+const uidSlug = (value) => {
+    const slug = exportText(value)
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/^-+|-+$/g, '');
+    return slug === '' ? 'shift' : slug;
+};
+
+/**
+ * The roster as an RFC 5545 calendar, as a string.
+ *
+ * `options.now` (a `Date`, default `new Date()`) is the DTSTAMP instant; tests
+ * inject a fixed one so the output is deterministic.
+ *
+ * UIDs are DETERMINISTIC — `<date>-<task-slug>@nexus-aura-roster` — because a
+ * random UID would make every re-import a duplicate set of events instead of an
+ * update (audit M6.2). `generateRoster` emits one shift object per task per day,
+ * so date + task is unique; should a config ever repeat a task name within a
+ * day, the second and later copies take a `-2`, `-3`… suffix, which is stable
+ * for as long as the roster is.
+ */
+export const buildICS = (rosterData, options = {}) => {
+    const stampSource =
+        options.now instanceof Date && !Number.isNaN(options.now.getTime()) ? options.now : new Date();
+    const dtStamp = formatICSTimestampUTC(stampSource);
+
+    const lines = [
+        'BEGIN:VCALENDAR',
+        'VERSION:2.0',
+        'PRODID:-//AURA//Roster//EN',
+        'CALSCALE:GREGORIAN',
     ];
 
-    Object.entries(rosterData).forEach(([date, shifts]) => {
-        shifts.forEach(shift => {
-            const dtStart = date.replace(/-/g, '');
-            
-            ics.push(
-                "BEGIN:VEVENT",
+    const days = rosterData && typeof rosterData === 'object' ? Object.entries(rosterData) : [];
+    const uidCounts = new Map();
+
+    days.forEach(([date, shifts]) => {
+        (Array.isArray(shifts) ? shifts : []).forEach((rawShift) => {
+            const shift = rawShift && typeof rawShift === 'object' ? rawShift : {};
+            const dtStart = exportText(date).replace(/-/g, '');
+
+            const base = `${exportText(date)}-${uidSlug(shift.task)}`;
+            const seen = (uidCounts.get(base) || 0) + 1;
+            uidCounts.set(base, seen);
+            const uid = `${seen === 1 ? base : `${base}-${seen}`}${ICS_UID_DOMAIN}`;
+
+            const summary = `[${exportText(shift.task)}] ${shiftStaffText(shift)}`.trimEnd();
+
+            // A shift with no `week` (demo transform, legacy documents) drops the
+            // prefix entirely rather than printing `Week undefined -` (audit M7).
+            const week = exportText(shift.week).trim();
+            const category = exportText(shift.category).trim();
+            const description = [week === '' ? '' : `Week ${week}`, category].filter(Boolean).join(' - ');
+
+            lines.push(
+                'BEGIN:VEVENT',
+                `UID:${uid}`,
+                `DTSTAMP:${dtStamp}`,
                 `DTSTART;VALUE=DATE:${dtStart}`,
-                `SUMMARY:[${shift.task}] ${shift.staff}`, // This will output exactly: [EFT] Lead: BF, Co: DK
-                `DESCRIPTION:Week ${shift.week} - ${shift.category}`,
-                "END:VEVENT"
+                `SUMMARY:${escapeICSText(summary)}`,
+                `DESCRIPTION:${escapeICSText(description)}`,
+                'END:VEVENT',
             );
         });
     });
 
-    ics.push("END:VCALENDAR");
-    
-    const blob = new Blob([ics.join("\r\n")], { type: 'text/calendar' });
+    lines.push('END:VCALENDAR');
+
+    // Every content line ends with CRLF, including the last one (§3.1).
+    return lines.map(foldICSLine).join('\r\n') + '\r\n';
+};
+
+
+// --- 2b. CSV (RFC 4180 + Excel formula guard) --------------------------------
+
+/**
+ * One CSV field, quoted and de-weaponised.
+ *
+ * Two separate problems, in order:
+ *
+ * 1. AUDIT M10 — this file exists to be opened in Excel, and task names are free
+ *    text from the wizard. A value starting `=`, `+`, `-` or `@` is a FORMULA to
+ *    Excel and LibreOffice (`=HYPERLINK(…)`, `+cmd|'/c calc'!A1`), so it gets a
+ *    leading apostrophe, which those two read as "this cell is text".
+ * 2. RFC 4180 quoting — a field containing `,`, `"` or a newline is wrapped in
+ *    double quotes with internal quotes doubled. Previously nothing was quoted
+ *    and a comma in a task name silently shifted every later column.
+ *
+ * The guard runs BEFORE quoting so the apostrophe stays inside the quotes.
+ */
+const csvField = (value) => {
+    const raw = exportText(value);
+    const guarded = /^[=+\-@]/.test(raw) ? `'${raw}` : raw;
+    return /[",\r\n]/.test(guarded) ? `"${guarded.replace(/"/g, '""')}"` : guarded;
+};
+
+/**
+ * The roster as a CSV, as a string.
+ *
+ * Column order and header text are unchanged — dedicated Lead and Co-Lead
+ * columns, for cleaner Excel filtering. Absent `week`/`coLead` (demo transform,
+ * pre-6-May documents) are empty cells, never the string `undefined` (M7).
+ */
+export const buildCSV = (rosterData) => {
+    const header = ['Date', 'Week', 'Task', 'Category', 'Lead', 'Co-Lead'];
+    const rows = [header.map(csvField).join(',')];
+
+    const source = rosterData && typeof rosterData === 'object' ? rosterData : {};
+    Object.keys(source)
+        .sort()
+        .forEach((date) => {
+            const shifts = source[date];
+            (Array.isArray(shifts) ? shifts : []).forEach((rawShift) => {
+                const s = rawShift && typeof rawShift === 'object' ? rawShift : {};
+                rows.push(
+                    [date, s.week, s.task, s.category, s.lead, s.coLead].map(csvField).join(','),
+                );
+            });
+        });
+
+    // RFC 4180 rows end with CRLF, and the UTF-8 BOM is what makes Excel on
+    // Windows decode non-ASCII names correctly (the demo lets visiting teams
+    // type their own staff names, which need not be ASCII). P5 follow-up to
+    // audit M10/M7 — see the exporter tests for the pins.
+    return '\ufeff' + rows.join('\r\n');
+};
+
+
+// --- 2c. THE DOWNLOAD WRAPPERS -----------------------------------------------
+//
+// Unchanged from before P5 apart from where the content comes from: same Blob
+// MIME types, same filenames, same append/click/remove dance.
+
+const downloadBlob = (contents, type, filename) => {
+    const blob = new Blob([contents], { type });
     const link = document.createElement('a');
     link.href = URL.createObjectURL(blob);
-    link.download = "AURA_Roster_Merged.ics";
+    link.download = filename;
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
 };
 
-export const downloadCSV = (rosterData) => {
-    // Dedicated Lead and Co-Lead columns for cleaner Excel filtering
-    let csv = ["Date,Week,Task,Category,Lead,Co-Lead"];
-    const sortedDates = Object.keys(rosterData).sort();
-    
-    sortedDates.forEach(date => {
-        rosterData[date].forEach(s => {
-            csv.push(`${date},${s.week},${s.task},${s.category},${s.lead},${s.coLead}`);
-        });
-    });
+export const downloadICS = (rosterData) => {
+    downloadBlob(buildICS(rosterData), 'text/calendar', 'AURA_Roster_Merged.ics');
+};
 
-    const blob = new Blob([csv.join("\n")], { type: 'text/csv' });
-    const link = document.createElement('a');
-    link.href = URL.createObjectURL(blob);
-    link.download = "AURA_Roster_Merged.csv";
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+export const downloadCSV = (rosterData) => {
+    downloadBlob(buildCSV(rosterData), 'text/csv', 'AURA_Roster_Merged.csv');
 };

@@ -16,11 +16,16 @@
  * They are deliberately pure: RosterView keeps only the wiring, so none of this
  * needs a mounted component or a mocked Firestore.
  *
- * NOTE ON SCOPE — nothing here asserts that dates are *correct*. Monday-snapping
- * and the DST slide are ROSTER_TODO.md P4 and have not landed. The range tests
- * below assert only that the range DESCRIBED matches the range WRITTEN, bugs
- * included; `describes today's unsnapped start date` exists precisely to fail if
- * someone assumes P4 has landed.
+ * NOTE ON SCOPE — [updated: ROSTER_TODO.md P4 has landed]. This suite still does
+ * not own date CORRECTNESS; the weekday and DST assertions live in
+ * `auraEngine.test.js`. What it owns is the guarantee that the range DESCRIBED
+ * to the user is the range that gets WRITTEN. That property is unchanged by P4,
+ * but two of its pins moved by one day because `generateRoster` now snaps its
+ * start to the Monday of the requested week, and `describeGenerationRange`
+ * reads the real keys back. The pin formerly named
+ * `describes today's UNSNAPPED start date` is now
+ * `reports the SNAPPED start date` — inverted deliberately, per P4.2, exactly as
+ * its own comment instructed.
  * ==============================================================================
  */
 
@@ -225,10 +230,12 @@ describe('describeGenerationRange — the confirmation modal is truthful', () =>
         return { firstDate: keys[0], lastDate: keys[keys.length - 1], dayCount: keys.length };
     };
 
-    it('pins the shipped default: 1–27 Feb 2026 across 24 days', () => {
+    it('pins the shipped default: 2–28 Feb 2026 across 24 days', () => {
+        // P4: was 1–27 Feb before `generateRoster` snapped its Sunday start to
+        // Monday 2 Feb. Same 24 days, moved forward one.
         expect(describeGenerationRange(liveConfig())).toEqual({
-            firstDate: '2026-02-01',
-            lastDate: '2026-02-27',
+            firstDate: '2026-02-02',
+            lastDate: '2026-02-28',
             dayCount: 24,
         });
     });
@@ -263,15 +270,38 @@ describe('describeGenerationRange — the confirmation modal is truthful', () =>
         });
     });
 
-    it('describes today\'s UNSNAPPED start date, not the P4 behaviour', () => {
-        // 2026-02-01 is a Sunday and the engine does not snap to Monday yet.
-        // The modal must say Sunday while that is the truth. When P4.2 lands,
-        // this assertion is the one that should be updated — deliberately.
+    it('reports the SNAPPED start date, which is how the user learns about the snap', () => {
+        // INVERTED BY ROSTER_TODO.md P4.2 — deliberately. This test used to be
+        // named `describes today's UNSNAPPED start date, not the P4 behaviour`
+        // and asserted `firstDate === config.startDate` with the label
+        // 'Sun 1 Feb 2026'; its own comment named it as the assertion P4 should
+        // update.
+        //
+        // `generateRoster` now snaps 2026-02-01 (Sunday) to Monday 2 February,
+        // and it does so WITHOUT changing its return shape — `prepareRosterWrite`
+        // still receives a bare roster map. `describeGenerationRange` derives the
+        // range from the generated keys, so the confirmation modal shows the
+        // Monday before anything is written. That read-back IS the disclosure
+        // mechanism: this assertion is what keeps the snap from being silent.
         const plan = describeGenerationRange(liveConfig());
 
-        expect(plan.firstDate).toBe(liveConfig().startDate);
-        expect(formatRosterDateKey(plan.firstDate)).toBe('Sun 1 Feb 2026');
-        expect(formatRosterDateKey(plan.lastDate)).toBe('Fri 27 Feb 2026');
+        expect(liveConfig().startDate).toBe('2026-02-01');
+        expect(formatRosterDateKey(liveConfig().startDate)).toBe('Sun 1 Feb 2026');
+
+        expect(plan.firstDate).not.toBe(liveConfig().startDate);
+        expect(plan.firstDate).toBe('2026-02-02');
+        expect(formatRosterDateKey(plan.firstDate)).toBe('Mon 2 Feb 2026');
+        expect(formatRosterDateKey(plan.lastDate)).toBe('Sat 28 Feb 2026');
+    });
+
+    it('is the identity for a start date that is already a Monday', () => {
+        // The complement of the test above: the snap only ever moves a date that
+        // is not a Monday, so a roster master who typed a Monday sees exactly
+        // what they typed.
+        const plan = describeGenerationRange(liveConfig({ startDate: '2026-02-02' }));
+
+        expect(plan.firstDate).toBe('2026-02-02');
+        expect(formatRosterDateKey(plan.firstDate)).toBe('Mon 2 Feb 2026');
     });
 
     REJECTED_WEEKS.forEach(([label, weeks]) => {

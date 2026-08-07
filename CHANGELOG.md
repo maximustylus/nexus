@@ -48,17 +48,69 @@ traceable to those documents.
 
 | Id | Severity | Defect |
 |---|---|---|
-| **M6** | High | **The ICS export is malformed.** `SUMMARY` is an RFC 5545 TEXT property, but the emitted value contains an unescaped `,` (`SUMMARY:[EFT] Lead: Brandon, Co: Ying Xian`), making it a multi-valued property; the events also carry no `UID` and no `DTSTAMP`. Introduced by the lead/co-lead refactor in this release — see *Breaking* below. Audit M6. |
-| **B1** | High | **Sunday-start weekday misalignment.** The default start date is a Sunday, so the generator's "Mon–Fri" day loop (`d = 0..4` from the week start) and its Tuesday/Saturday VC indices are all offset by one day. Post-mortem Block B. |
 | **P0.7** | Medium | **`npm run lint` has never worked.** No ESLint configuration file exists anywhere in the repository (`git ls-files \| grep -i eslint` returns nothing), so the `lint` script exits `2` on any invocation — "ESLint couldn't find a configuration file". Pre-existing; the deploy workflow never called it, so this was never surfaced by CI. Plan P0.7 in `ROSTER_TODO.md`. |
 
-Additional lower-severity findings (M10 CSV formula injection, M12 no
-duplicate-request guard, C1/C3/C4 persistence and
-configuration drift, D-series verification gaps, E1/E2/E4 documentation overstatement)
-are recorded in `ROSTER_QC_AUDIT.md` and `ROSTER_POSTMORTEM.md` and are likewise
-**not** fixed.
+Additional lower-severity findings (C1/C3/C4 persistence and configuration drift,
+D-series verification gaps, E1/E4 documentation overstatement, the swap modal's
+unlabelled `<select>`s — an accessibility gap noted during P8.3) are recorded in
+`ROSTER_QC_AUDIT.md`, `ROSTER_POSTMORTEM.md` and `ROSTER_TODO.md` and are likewise
+**not** fixed. M12's session-level guard is client-side only; the durable guard is a
+Firestore rule, blocked on decision D6.
 
 ---
+
+## [1.7.1] - 2026-08-06
+
+Every item is a fix. Live-mode generation now lands on the weekdays it claims, the
+exports are standards-compliant, and no native browser dialog remains in the roster view.
+
+### Fixed
+
+- **B1 (High) — Sunday-start weekday misalignment.** `generateRoster` commented its core
+  loop "Mon–Fri" but filled whatever five days followed the start date; the shipped
+  default `2026-02-01` is a Sunday, so every default generation produced Sun–Thu with the
+  "Tuesday" VC on Monday and the "Saturday" VC on Friday. The engine now **snaps the start
+  date to the Monday of its week** (matching `rosterEngineV2`) and parses/derives all dates
+  **locally**, which also fixes audit **M2**: the old UTC-parse/local-arithmetic mix slid
+  every key one day early across a DST spring-forward (measured, `TZ=America/New_York`,
+  start `2026-03-02`). Verified identical output across six timezones, and **byte-identical
+  output for a Monday start** against the pre-change engine — nothing stored in
+  `system_data/roster_2026` goes stale. The two `CURRENT BUG:` characterization tests
+  planted in v1.6.0 were inverted, exactly as their comments instructed.
+- **B3/B4 — the calendar opened on a hardcoded February 2026** and month navigation
+  mutated state in place. It now opens on the current month, with non-mutating navigation.
+- **M6 (High) — the ICS export was malformed.** `SUMMARY` contained an unescaped comma
+  (RFC 5545 reads that as a multi-valued property — the likely cause if Outlook truncated
+  titles at "Lead: X"), and events carried no `UID` or `DTSTAMP` (both required; without
+  `UID` every re-import duplicates all events). Now: full TEXT escaping, deterministic
+  content-derived `UID`s (a re-export of the same roster updates rather than duplicates),
+  `DTSTAMP`, and 75-octet line folding.
+- **M10 — CSV injection and quoting.** Fields containing commas, quotes or newlines are
+  quoted per RFC 4180; fields starting with `=`, `+`, `-` or `@` are neutralised (the file
+  is explicitly designed to be opened in Excel); rows are CRLF-joined and the file opens
+  with a UTF-8 BOM so Excel on Windows decodes non-ASCII staff names.
+- **M7 (residue) — no more `undefined` in exports.** A shift lacking `coLead` or `week`
+  (legacy shapes, the deliberately-unstaffed demo slot) renders as empty in both formats.
+- **E2 — all 8 native `alert()` dialogs in the roster view replaced** with branded,
+  dismissible status banners that mount inside whichever modal is open (an error raised in
+  the swap modal appears in the swap modal, not hidden behind it). Three messages were also
+  corrected, not just restyled: the success message no longer claims "conflict-free" (the
+  generator cannot know that — post-mortem E1), and the sandbox no longer claims AURA
+  "notified" a colleague when nothing was sent. The v1.5 release note's claim is now true
+  for the roster view; `window.confirm` remains in AuraPulseBot and AdminPanel.
+- **M12 (partial) — duplicate swap requests.** Submitting the same request twice
+  (same shift, same task, same target) is now blocked for the session, so a double-click no
+  longer creates two independently-acceptable PENDING documents. Client-side only — it does
+  not survive a reload or a second device; the real guard is a Firestore rule, blocked on
+  decision D6.
+
+### Notes
+
+- 499 tests, up from 434. The exporters were refactored into pure `buildICS`/`buildCSV`
+  (new exports) with the download wrappers unchanged.
+- **UID caveat:** UIDs are content-derived (date + task). Renaming a task changes its UID,
+  so a re-import after a rename leaves an orphan of the old event. A stable per-shift id
+  would need to be persisted at generation time — future work.
 
 ## [1.7.0] - 2026-08-06
 

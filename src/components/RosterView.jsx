@@ -1,8 +1,8 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { db } from '../firebase';
 // 🛡️ NEW: Imported collection, addDoc, and serverTimestamp for the Swap Engine
 import { doc, onSnapshot, setDoc, collection, addDoc, serverTimestamp } from 'firebase/firestore';
-import { Calendar, Download, Settings, ChevronLeft, ChevronRight, Play, FileSpreadsheet, ShieldAlert, ArrowRightLeft, X, Users, FlaskConical } from 'lucide-react';
+import { Calendar, Download, Settings, ChevronLeft, ChevronRight, Play, FileSpreadsheet, ShieldAlert, ArrowRightLeft, X, Users, FlaskConical, CheckCircle2, Info } from 'lucide-react';
 import {
     downloadICS,
     downloadCSV,
@@ -98,17 +98,123 @@ export const buildDemoRosterV2Config = ({ config, details }) => {
 /** How many unfilled slots the sandbox panel lists before it summarises. */
 const DEMO_UNFILLED_PREVIEW = 20;
 
+/**
+ * 🛡️ M12 — the identity of a swap request, as a comparable value.
+ *
+ * Two requests are "the same request" when they hand the same duty on the same
+ * date to the same colleague. That is exactly the triple `planSwapApplication`
+ * matches on, so two documents sharing a signature are two documents that would
+ * both be accepted against the same shift — the M12 failure.
+ *
+ * `swapRole` is deliberately NOT part of the signature: the audit's finding is
+ * about re-pressing Submit on one shift, and a shift's duty is already pinned by
+ * (date, task) plus who is being swapped out. Including it would let a
+ * double-click that lands on a different role slip through as "not a duplicate".
+ *
+ * Pure, and exported so the guard can be reasoned about without a DOM.
+ */
+export const buildSwapRequestSignature = ({ originalShiftDate, originalTask, targetStaff } = {}) =>
+    JSON.stringify(
+        [originalShiftDate, originalTask, targetStaff].map((part) =>
+            typeof part === 'string' ? part.trim() : (part == null ? '' : String(part)),
+        ),
+    );
+
+/** How long a success banner stays up before it clears itself. */
+const STATUS_AUTO_DISMISS_MS = 6000;
+
+/**
+ * 🌟 P8.3 — the one place this view says anything to the user.
+ *
+ * Replaces eight native `alert` calls. Same Tailwind idiom as the M8 banner and
+ * the sandbox panel below the calendar (rounded-xl, tinted background, tinted
+ * border, icon + bold small text), plus a dismiss control, because unlike those
+ * two this banner reports a finished ACTION rather than the state of the data.
+ */
+const STATUS_TONES = {
+    success: {
+        icon: CheckCircle2,
+        box: 'bg-emerald-50 dark:bg-emerald-900/20 border-emerald-200 dark:border-emerald-800',
+        icon_: 'text-emerald-600 dark:text-emerald-400',
+        text: 'text-emerald-800 dark:text-emerald-300',
+        hover: 'hover:bg-emerald-100 dark:hover:bg-emerald-800/40',
+    },
+    error: {
+        icon: ShieldAlert,
+        box: 'bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800',
+        icon_: 'text-red-600 dark:text-red-400',
+        text: 'text-red-700 dark:text-red-300',
+        hover: 'hover:bg-red-100 dark:hover:bg-red-800/40',
+    },
+    info: {
+        icon: Info,
+        box: 'bg-indigo-50 dark:bg-indigo-900/20 border-indigo-200 dark:border-indigo-800',
+        icon_: 'text-indigo-600 dark:text-indigo-400',
+        text: 'text-indigo-800 dark:text-indigo-300',
+        hover: 'hover:bg-indigo-100 dark:hover:bg-indigo-800/40',
+    },
+};
+
+const StatusBanner = ({ status, onDismiss }) => {
+    if (!status) return null;
+    const tone = STATUS_TONES[status.tone] || STATUS_TONES.info;
+    const ToneIcon = tone.icon;
+
+    return (
+        <div
+            role="status"
+            aria-live="polite"
+            className={`mb-4 flex items-start gap-2 p-3 rounded-xl border ${tone.box}`}
+        >
+            <ToneIcon size={16} className={`${tone.icon_} shrink-0 mt-0.5`} />
+            <p className={`flex-1 text-xs font-bold leading-relaxed ${tone.text}`}>{status.text}</p>
+            <button
+                type="button"
+                onClick={onDismiss}
+                aria-label="Dismiss message"
+                className={`shrink-0 p-0.5 rounded transition-colors ${tone.icon_} ${tone.hover}`}
+            >
+                <X size={14} />
+            </button>
+        </div>
+    );
+};
+
 const RosterView = ({ user }) => {
     // --- CONTEXT ---
     const { isDemo } = useNexus();
 
     // --- STATE ---
-    const [currentDate, setCurrentDate] = useState(new Date(2026, 1, 1)); 
+    // 🗓️ P4.3 / post-mortem B3: the calendar used to open on a hardcoded
+    // `new Date(2026, 1, 1)` — February 2026, the month this view was written
+    // in. Six months later every user landed on an empty grid in the past and
+    // had to click forward to reach today. It now opens on the CURRENT month.
+    //
+    // Normalised to the 1st, and computed in a lazy initialiser so it is read
+    // once per mount rather than on every render. Day-1 matters: `currentDate`
+    // is only ever used for its year and month, and a day-31 value would make
+    // month arithmetic overflow (31 Mar - 1 month -> "31 Feb" -> 3 Mar).
+    const [currentDate, setCurrentDate] = useState(() => {
+        const today = new Date();
+        return new Date(today.getFullYear(), today.getMonth(), 1);
+    });
     const [rosterData, setRosterData] = useState({});
     const [isConfigOpen, setIsConfigOpen] = useState(false);
     // 🛡️ M8: an empty calendar caused by a rules denial was indistinguishable
     // from "no roster has been generated yet". This is the difference.
+    //
+    // 🌟 P8.3: deliberately NOT merged into `status` below. This one describes
+    // the state of the DATA SOURCE — it is owned by the snapshot listener, which
+    // sets and clears it — and it must not be dismissible: a user who dismissed
+    // "you do not have permission to read the master roster" would be back to an
+    // unexplained empty calendar, which is the whole of M8 undone.
     const [rosterError, setRosterError] = useState(null);
+
+    // 🌟 P8.3 — THE REPLACEMENT FOR EIGHT NATIVE `alert` CALLS.
+    // `{ tone: 'success' | 'error' | 'info', text }`, or null. Reports the result
+    // of the last action the USER took, as opposed to `rosterError` above.
+    const [status, setStatus] = useState(null);
+    const statusTimerRef = useRef(null);
 
     // 🧪 SANDBOX STATE — both fields exist only in demo mode and only in memory.
     // `demoResult` is the whole `generateRosterV2` return value (effectiveStart,
@@ -133,7 +239,14 @@ const RosterView = ({ user }) => {
     // '' until they pick; ignored entirely when the acting user is on the shift,
     // or when the shift has only one assignable duty to begin with.
     const [swapRoleChoice, setSwapRoleChoice] = useState('');
-    
+
+    // 🛡️ M12: signatures of the swap requests this component has already sent.
+    // NOTE: client-side and in-memory only — it does not survive a reload, a
+    // second tab, or a second device. A real guard is a uniqueness constraint in
+    // `firestore.rules`, which cannot be written until blocked decision D6
+    // (there is no `firestore.rules` in the repo) is settled.
+    const [sentSwapSignatures, setSentSwapSignatures] = useState(() => new Set());
+
     // Default Config — the live staff pool and task list now live in
     // LIVE_ROSTER_DEFAULTS (auraEngine.js) so that leaving demo mode can restore
     // exactly these values. Same values as before, one source of truth.
@@ -143,8 +256,45 @@ const RosterView = ({ user }) => {
     const configValidation = useMemo(() => validateRosterConfig(config), [config]);
     const generationPlan = useMemo(() => describeGenerationRange(config), [config]);
 
+    // --- STATUS BANNER PLUMBING ---
+    // A success message is transient and clears itself; an error or an info
+    // notice stays until the user dismisses it, because both of them are things
+    // the user may still need to act on. Only ever ONE timer, and it is cleared
+    // on unmount, so no setState can land on an unmounted component.
+    const clearStatusTimer = () => {
+        if (statusTimerRef.current) {
+            clearTimeout(statusTimerRef.current);
+            statusTimerRef.current = null;
+        }
+    };
+
+    const showStatus = useCallback((tone, text) => {
+        clearStatusTimer();
+        setStatus({ tone, text });
+        if (tone === 'success') {
+            statusTimerRef.current = setTimeout(() => {
+                statusTimerRef.current = null;
+                setStatus(null);
+            }, STATUS_AUTO_DISMISS_MS);
+        }
+    }, []);
+
+    const dismissStatus = useCallback(() => {
+        clearStatusTimer();
+        setStatus(null);
+    }, []);
+
+    useEffect(() => clearStatusTimer, []);
+
     // --- EFFECT: SWITCH DATA SOURCE ---
     useEffect(() => {
+        // 🌟 P8.3: a message about the OTHER universe must not survive the
+        // toggle — "roster generated" from live mode reading as a sandbox result
+        // is the same class of lie the alerts were. Same for M12's memory of what
+        // has been sent: live and sandbox requests are not the same requests.
+        setStatus(null);
+        setSentSwapSignatures(new Set());
+
         if (isDemo) {
             // 🧪 SANDBOX: no listener, no document, no write — demo mode never
             // opens a Firestore channel at all.
@@ -288,7 +438,7 @@ const RosterView = ({ user }) => {
         // 🛡️ M3 FIX: never even open the confirmation for a config that cannot
         // be generated. The button is disabled too; this is the second latch.
         if (!configValidation.valid) {
-            alert(`⚠️ Cannot generate: ${configValidation.reason}`);
+            showStatus('error', `Cannot generate: ${configValidation.reason}`);
             return;
         }
 
@@ -317,7 +467,7 @@ const RosterView = ({ user }) => {
         const prepared = prepareRosterWrite(config);
         if (!prepared.ok) {
             console.error("Roster generation blocked before write:", prepared.reason, config);
-            alert(`❌ Roster NOT generated. ${prepared.reason}`);
+            showStatus('error', `Roster NOT generated. ${prepared.reason}`);
             return;
         }
 
@@ -326,16 +476,35 @@ const RosterView = ({ user }) => {
             // the periods already stored in this document.
             await setDoc(doc(db, 'system_data', 'roster_2026'), prepared.data, { merge: true });
             setIsConfigOpen(false); // Close the config wizard
-            alert("✅ AURA has generated a conflict-free roster.");
+            // 🌟 P8.3: "conflict-free" was the old copy. Post-mortem E1: the
+            // generator cannot know that — it means "cannot double-book by
+            // construction". It says what it actually did instead.
+            showStatus(
+                'success',
+                generationPlan
+                    ? `Roster saved: ${generationPlan.dayCount} days, ${formatRosterDateKey(generationPlan.firstDate)} → ${formatRosterDateKey(generationPlan.lastDate)}.`
+                    : 'Roster saved.',
+            );
         } catch (error) {
             console.error("Error generating roster:", error);
-            alert("❌ Failed to generate roster. Check your connection.");
+            // The code is included for the same reason the M8 listener banner
+            // includes it: "permission-denied" and "unavailable" call for
+            // completely different actions from the person reading this.
+            showStatus(
+                'error',
+                `The roster was NOT saved (${error?.code || 'unknown error'}). Your configuration is still here — check your connection and press Generate again.`,
+            );
         }
     };
 
+    // 🗓️ P4.4 / post-mortem B4: this used to be
+    // `new Date(currentDate.setMonth(currentDate.getMonth() + offset))`, which
+    // MUTATES the Date object held in state before constructing the new one. It
+    // re-rendered only because a fresh Date was then handed to the setter.
+    // Rebuilt from parts instead, through the functional setter so two rapid
+    // clicks cannot both read the same stale `currentDate` from the closure.
     const handleMonthChange = (offset) => {
-        const newDate = new Date(currentDate.setMonth(currentDate.getMonth() + offset));
-        setCurrentDate(new Date(newDate));
+        setCurrentDate((prev) => new Date(prev.getFullYear(), prev.getMonth() + offset, 1));
     };
 
     // --- SWAP LOGIC ---
@@ -397,7 +566,30 @@ const RosterView = ({ user }) => {
         // happily wrote `swapRole: null`, alerted "securely transmitted", and
         // the failure surfaced only when a colleague tried to accept it.
         if (!swapSubject || !swapSubject.ok) {
-            alert(`⚠️ Request not sent. ${swapSubject?.reason || 'AURA could not work out which duty this swap refers to.'}`);
+            showStatus(
+                'error',
+                `Request not sent. ${swapSubject?.reason || 'AURA could not work out which duty this swap refers to.'}`,
+            );
+            return;
+        }
+
+        // 🛡️ M12 FIX: `addDoc` was unconditional, so pressing Submit twice wrote
+        // two PENDING documents for one shift — two "URGENT COVERAGE REQUEST"
+        // messages on the target's next load, each independently acceptable, and
+        // accepting both ran the swap mutator twice.
+        //
+        // Client-side only: this does NOT survive a reload, a second tab or a
+        // second device. The real guard is a uniqueness constraint in
+        // `firestore.rules`, which is blocked on decision D6 (no `firestore.rules`
+        // exists in the repo).
+        const swapSignature = buildSwapRequestSignature({
+            originalShiftDate: selectedShift.date,
+            originalTask: selectedShift.task,
+            targetStaff: swapTargetStaff,
+        });
+
+        if (sentSwapSignatures.has(swapSignature)) {
+            showStatus('info', `You already sent this request — ${swapTargetStaff} has not responded yet.`);
             return;
         }
 
@@ -407,7 +599,13 @@ const RosterView = ({ user }) => {
             if (isDemo) {
                 // Fake delay for demo mode
                 await new Promise(resolve => setTimeout(resolve, 800));
-                alert(`🧪 [SANDBOX] Swap request intercepted! AURA notified ${swapTargetStaff}.`);
+                // 🌟 P8.3: the old alert said AURA "notified" the colleague. It
+                // did not — the sandbox writes nothing and sends nothing. This
+                // says what actually happened.
+                showStatus(
+                    'info',
+                    `Sandbox: nothing was sent and nothing was saved. In live mode this would have asked ${swapTargetStaff} to cover.`,
+                );
             } else {
                 // 📡 LIVE MODE: Pushing the request to Firebase Firestore
                 await addDoc(collection(db, 'shift_swaps'), {
@@ -433,13 +631,18 @@ const RosterView = ({ user }) => {
                     status: 'PENDING',
                     timestamp: serverTimestamp()
                 });
-                alert(
+                showStatus(
+                    'success',
                     swapSubject.onBehalf
-                        ? `✅ Coverage request sent to ${swapTargetStaff}, on behalf of ${swapSubject.requestedBy}.`
-                        : `✅ Swap request securely transmitted to ${swapTargetStaff}!`
+                        ? `Coverage request sent to ${swapTargetStaff}, on behalf of ${swapSubject.requestedBy}.`
+                        : `Swap request sent to ${swapTargetStaff}.`,
                 );
             }
-            
+
+            // 🛡️ M12: recorded only on a path that really completed — a failed
+            // `addDoc` falls through to the catch below and must stay retryable.
+            setSentSwapSignatures((prev) => new Set(prev).add(swapSignature));
+
             // Clean up and close modal
             setIsSwapModalOpen(false);
             setSwapTargetStaff('');
@@ -447,7 +650,10 @@ const RosterView = ({ user }) => {
             setSwapRoleChoice('');
         } catch (error) {
             console.error("🔥 Swap Request Failed:", error);
-            alert("Could not send request. Please check your connection.");
+            showStatus(
+                'error',
+                `Could not send the request (${error?.code || 'unknown error'}). Check your connection and try again.`,
+            );
         } finally {
             setIsSubmitting(false);
         }
@@ -463,6 +669,17 @@ const RosterView = ({ user }) => {
         const dateKey = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
         return { shifts: rosterData[dateKey] || [], dateKey };
     };
+
+    // 🌟 P8.3: ONE banner, mounted wherever the user is actually looking.
+    // The config wizard and the swap modal are full-screen fixed overlays, so a
+    // banner rendered in the roster card BEHIND them would be an invisible
+    // replacement for a blocking alert — strictly worse than the alert it
+    // replaced. Four of the eight messages fire with an overlay open (the
+    // pre-write refusal and the save failure keep the wizard open; the duty
+    // refusal and the send failure keep the swap modal open), so the highest
+    // open overlay claims the banner and the card takes it otherwise.
+    const statusSlot = isSwapModalOpen ? 'swap' : isConfigOpen ? 'config' : 'card';
+    const statusBanner = <StatusBanner status={status} onDismiss={dismissStatus} />;
 
     return (
         <div className="md:col-span-2 bg-white dark:bg-slate-800 p-6 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-700 animate-in fade-in relative z-10">
@@ -506,6 +723,8 @@ const RosterView = ({ user }) => {
                     </button>
                 </div>
             </div>
+
+            {statusSlot === 'card' && statusBanner}
 
             {/* 🛡️ M8 FIX: surface a listener failure. Without this an empty
                 calendar looked exactly like "no roster generated yet". */}
@@ -754,6 +973,8 @@ const RosterView = ({ user }) => {
                         </div>
 
                         <form onSubmit={submitSwapRequest} className="p-6">
+                            {statusSlot === 'swap' && statusBanner}
+
                             <div className="bg-slate-50 dark:bg-slate-800/50 p-4 rounded-xl border border-slate-200 dark:border-slate-700 mb-6">
                                 <p className="text-[10px] text-slate-500 dark:text-slate-400 font-bold uppercase tracking-widest mb-1">
                                     {/* 🛡️ M11: an admin is almost never looking at their
@@ -983,6 +1204,8 @@ const RosterView = ({ user }) => {
                                 Nothing is written to the live roster, and closing or reloading this page clears everything.
                             </p>
                         )}
+
+                        {statusSlot === 'config' && statusBanner}
 
                         {/* 🛡️ M3 FIX: tell the user why generation is unavailable. */}
                         {!configValidation.valid && (

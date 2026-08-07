@@ -1986,8 +1986,9 @@ describe('generateRoster (V1) is unaffected by V2', () => {
         generateRosterV2(departmentConfig());
 
         expect(JSON.stringify(generateRoster(config))).toBe(before);
-        // And its known Block B1 behaviour is still exactly what it was: the
-        // Sunday default is NOT snapped by the old engine.
-        expect(Object.keys(generateRoster(config)).sort()[0]).toBe('2026-02-01');
+        // Updated for P4 (post-mortem B1): the old engine now snaps a Sunday
+        // start to the Monday of that week, same as V2. Before P4 this pinned
+        // '2026-02-01' — the un-snapped Sunday — as a deliberate bug marker.
+        expect(Object.keys(generateRoster(config)).sort()[0]).toBe('2026-02-02');
     });
 });
