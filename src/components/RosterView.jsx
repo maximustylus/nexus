@@ -1128,9 +1128,10 @@ const RosterView = ({ user }) => {
                                 <p className="text-[10px] text-emerald-700 dark:text-emerald-300 mt-2 leading-relaxed">
                                     {DEMO_EXAMPLE_DEPARTMENT.label} — {DEMO_EXAMPLE_DEPARTMENT.staff.length} staff,
                                     {' '}{DEMO_EXAMPLE_DEPARTMENT.tasks.length} tasks, skill-gated duties, one
-                                    part-timer and one person on leave. Or just type your own team below: names
-                                    alone are enough. Everyone AURA is not told about defaults
-                                    to {ROSTER_V2_DEFAULTS.fte} FTE, no required skills and no leave.
+                                    part-timer and one person on leave. Or just type your own team below —
+                                    names alone are enough. Anyone you give no details for is assumed
+                                    full-time ({ROSTER_V2_DEFAULTS.fte} FTE), with no skill requirements
+                                    and no leave.
                                 </p>
                             </div>
                         )}
