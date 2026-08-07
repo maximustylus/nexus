@@ -7,14 +7,17 @@
 
 ## 1. What is LIVE right now
 
-Three releases shipped and verified today. `smartdashboard.web.app` is running **v1.7.0**.
+Four releases shipped and verified today. `smartdashboard.web.app` is running **v1.7.1**
+(bundle `index-Cznf5G-Y.js`, CI green, new-code markers confirmed present, retired strings
+confirmed absent).
 
 | Tag | What it fixed |
 |---|---|
 | `v1.5.0-pre-remediation` | *(rollback point — the original code, before any of today's work)* |
 | `v1.6.0` | Two one-click paths that destroyed the live roster (**M1** demo config leaking into live mode, **M3** cleared Weeks field wiping the document). Plus the first runnable test harness. |
 | `v1.6.1` | The shift-swap flow now actually works (**A1**), can no longer claim success it did not achieve (**A-RC4**), the coverage alert surfaces (**M5**), the ledger no longer approves before writing (**M9**), admin-initiated swaps work (**M11**). |
-| **`v1.7.0`** | **The constraint-aware engine, live in Sandbox.** Generate really generates; the staff field is editable so visitors can enter their own team; the result panel shows load, warnings and every unstaffable slot with its reason. |
+| `v1.7.0` | **The constraint-aware engine, live in Sandbox.** Generate really generates; the staff field is editable so visitors can enter their own team; the result panel shows load, warnings and every unstaffable slot with its reason. |
+| **`v1.7.1`** | **B1 fixed** — live-mode generation snaps to Monday, so core duties land Mon–Fri and the VC duties on their real Tuesday/Saturday (DST-proof, six timezones verified; Monday-start output byte-identical, stored rosters unaffected). Calendar opens on the current month. **M6 fixed** — ICS now escapes correctly, carries stable UIDs (re-import *updates* Outlook instead of duplicating) and DTSTAMP. **M10 fixed** — CSV quoting, formula-injection guard, CRLF + UTF-8 BOM. **Zero native `alert()` dialogs** remain in the roster view, and duplicate swap requests are blocked per session. **You may now generate in live mode on stage — from any start date.** |
 
 **Deploy verified, not assumed.** CI green end to end in 2m43s (including the test gate). The
 live bundle is `index-Ck4olkEf.js`, and I confirmed the new code is *in* it — `effectiveStart`,
