@@ -59,6 +59,24 @@ Firestore rule, blocked on decision D6.
 
 ---
 
+## [1.8.1] - 2026-08-08
+
+### Fixed
+
+- **The app header rendered on top of the open Configuration Wizard** (user
+  screenshot). Mechanism, not symptom: `RosterView`'s root carries `relative z-10`,
+  which caps every descendant — so the wizard's `z-[100]`, the swap modal's
+  `z-[120]` and the confirmation dialog could never out-stack the header's sibling
+  `z-50` context, no matter the number. Latent since the modals were written; it
+  became visible only when the v1.8.0 wizard grew tall enough to extend under the
+  header. All three overlays now render through a **React portal** to
+  `document.body`, escaping the trapped stacking context. Three structural
+  regression tests pin the portal (direct child of `body`, absent from the card's
+  own tree, no orphans on unmount) — jsdom cannot see painting, so the structure is
+  what gets tested.
+
+835 tests.
+
 ## [1.8.0] - 2026-08-08
 
 The roster master release: job grades, band-gated tasks, monthly clinics and

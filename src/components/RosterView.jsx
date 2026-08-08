@@ -1,4 +1,10 @@
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
+// 🛡️ Overlays render through a portal because this component's root carries
+// `relative z-10`, which caps EVERYTHING inside it — a child's z-[100] cannot
+// out-stack the app header's sibling z-50 context. The header visibly sliced
+// through the v1.8.0 wizard (user screenshot, 2026-08-08); portaling to
+// document.body is the fix, not bigger z-index numbers.
+import { createPortal } from 'react-dom';
 import { db } from '../firebase';
 // 🛡️ NEW: Imported collection, addDoc, and serverTimestamp for the Swap Engine
 import { doc, onSnapshot, setDoc, collection, addDoc, serverTimestamp } from 'firebase/firestore';
@@ -1065,8 +1071,8 @@ const RosterView = ({ user }) => {
             )}
 
             {/* --- MODAL: SWAP REQUEST --- */}
-            {isSwapModalOpen && selectedShift && (
-                <div className="fixed inset-0 z-[120] flex items-center justify-center p-4">
+            {isSwapModalOpen && selectedShift && createPortal(
+                <div data-overlay="swap-modal" className="fixed inset-0 z-[120] flex items-center justify-center p-4">
                     <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={() => setIsSwapModalOpen(false)}></div>
                     <div className="relative bg-white dark:bg-slate-900 w-full max-w-md rounded-2xl shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200 border border-slate-200 dark:border-slate-700">
                         
@@ -1203,11 +1209,12 @@ const RosterView = ({ user }) => {
                             </button>
                         </form>
                     </div>
-                </div>
+                </div>,
+                document.body,
             )}
 
-            {isConfigOpen && (
-                <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-md flex items-center justify-center z-[100] p-4">
+            {isConfigOpen && createPortal(
+                <div data-overlay="roster-config-wizard" className="fixed inset-0 bg-slate-900/60 backdrop-blur-md flex items-center justify-center z-[100] p-4">
                     {/* 🧪 The sandbox wizard is WIDER, and scrolls: two tables and a
                         band editor do not fit the live wizard's max-w-lg. Live mode
                         keeps that width, and every class on it, exactly as before. */}
@@ -1371,7 +1378,8 @@ const RosterView = ({ user }) => {
                             </button>
                         </div>
                     </div>
-                </div>
+                </div>,
+                document.body,
             )}
 
             {/* 🌟 CUSTOM GENERATE CONFIRMATION MODAL

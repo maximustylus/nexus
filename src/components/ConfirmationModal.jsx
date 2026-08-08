@@ -1,12 +1,16 @@
 import React from 'react';
+// 🛡️ Portaled: callers render this inside cards that carry their own stacking
+// context (RosterView is `relative z-10`), where no z-index can out-stack the
+// app header's sibling z-50. See the same note in RosterView.jsx.
+import { createPortal } from 'react-dom';
 
 const ConfirmationModal = ({ isOpen, title, message, onCancel, onConfirm }) => {
     // Return null if the modal is not open
     if (!isOpen) return null;
 
-    return (
+    return createPortal(
         // OVERLAY (Darkens the background)
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/90 backdrop-blur-sm animate-in fade-in duration-200">
+        <div data-overlay="confirmation-modal" className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/90 backdrop-blur-sm animate-in fade-in duration-200">
             
             {/* MODAL BOX (Styling mimicking your dark theme) */}
             <div className="relative w-[340px] max-w-[90%] bg-slate-950 dark:bg-slate-900 p-6 rounded-2xl shadow-2xl border border-slate-700/50 animate-in zoom-in-95 duration-200">
@@ -40,7 +44,8 @@ const ConfirmationModal = ({ isOpen, title, message, onCancel, onConfirm }) => {
                     </button>
                 </div>
             </div>
-        </div>
+        </div>,
+        document.body,
     );
 };
 
