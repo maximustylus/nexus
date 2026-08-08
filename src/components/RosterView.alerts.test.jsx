@@ -223,16 +223,37 @@ describe('demo mode raises no native dialog (P8.3)', () => {
         expectNoNativeDialogs();
     });
 
-    it('reports an engine refusal in the branded banner, not a native dialog', () => {
+    // 🧪 UPDATED for the grade-aware sandbox wizard: demo mode's two
+    // comma-separated textareas are now a staff table and a task table, so the
+    // duplicate name is typed into two ROWS rather than into one box. Live mode
+    // still has the textareas — asserted in `RosterView.wizard.test.jsx`.
+    //
+    // The refusal also arrives EARLIER than it used to: the sandbox Generate
+    // button is now gated by the engine's own `validateRosterV2Config`, so the
+    // reason is on screen beside a disabled button instead of landing in a banner
+    // once the click has happened. Either way the P8.3 claim this test exists for
+    // is unchanged and still checked: it is branded UI, never a native dialog.
+    it('reports an engine refusal in the branded wizard, not a native dialog', () => {
         render(<RosterView user={VISITOR} />);
         openConfigure();
-        fireEvent.change(screen.getByLabelText(/staff pool/i), {
-            target: { value: 'Sam Wilson, Sam Wilson' },
+        fireEvent.change(screen.getByLabelText('Staff row 1 name'), {
+            target: { value: 'Sam Wilson' },
         });
-        fireEvent.change(screen.getByLabelText(/core tasks/i), { target: { value: 'Ward Round' } });
-        fireEvent.click(screen.getByRole('button', { name: /generate sandbox roster/i }));
+        fireEvent.change(screen.getByLabelText('Staff row 2 name'), {
+            target: { value: 'Sam Wilson' },
+        });
+        fireEvent.change(screen.getByLabelText('Task row 1 name'), {
+            target: { value: 'Ward Round' },
+        });
 
-        expect(screen.getByText(/AURA did not generate a roster/i)).toBeTruthy();
+        // The engine's own wording, in the app's own markup.
+        expect(screen.getAllByText(/appears twice in the staff pool/i).length).toBeGreaterThan(0);
+        const generate = screen.getByRole('button', { name: /generate sandbox roster/i });
+        expect(generate.disabled).toBe(true);
+
+        fireEvent.click(generate);
+        // Nothing was generated, and nothing was said in a native dialog.
+        expect(screen.getByText(/no sandbox roster yet/i)).toBeTruthy();
         expectNoNativeDialogs();
     });
 

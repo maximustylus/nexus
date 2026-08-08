@@ -1867,8 +1867,11 @@ describe('scoreRoster — hard violations are measured, soft ones are counted', 
     });
 
     it('exposes its soft weights so they can be changed in one visible place', () => {
+        // Deliberately updated when `continuityBreaks` was merged in (the psych
+        // pack briefly kept it in a separate ALL_ table because this very pin
+        // was a gate its change could not edit; the orchestrator moved the pin).
         expect(Object.keys(SOFT_PENALTY_WEIGHTS).sort()).toEqual([
-            'isolatedDays', 'loadImbalance', 'taskRepetition', 'weekendImbalance',
+            'continuityBreaks', 'isolatedDays', 'loadImbalance', 'taskRepetition', 'weekendImbalance',
         ]);
         for (const weight of Object.values(SOFT_PENALTY_WEIGHTS)) {
             expect(typeof weight).toBe('number');

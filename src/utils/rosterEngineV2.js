@@ -71,6 +71,26 @@
 //      gate the LEAD only — any grade may co-lead, which is what makes a
 //      senior-lead / junior-shadow pairing expressible. Section 0b owns the
 //      scale, the band boundaries and their validation.
+//   7. A TASK'S CALENDAR IS EITHER WEEKLY OR MONTHLY, NEVER BOTH. `days` repeats
+//      a task on given weekdays every week; `recurrence: { ordinal, weekday }`
+//      repeats it on the nth (or last) given weekday of every calendar month.
+//      They are mutually exclusive per task and validation refuses a task
+//      carrying both, because there is no reading of "every Wednesday AND the 3rd
+//      Wednesday" that is not one of the two with extra words. Section 1b owns the
+//      month arithmetic, and the occurrence dates are derived ONCE — from
+//      `recurrenceDatesBetween` — so the day loop and a future preview UI cannot
+//      disagree about when a monthly task runs.
+//   8. CONTINUITY IS THE ONLY PREFERENCE IN THIS ENGINE, AND IT STILL LOSES TO
+//      EVERY HARD CONSTRAINT. `continuity: true` asks for the same LEAD on every
+//      occurrence of one task — the clinical reason being that a cohort seen
+//      monthly should meet the same clinician. It overrides FTE-weighted fairness
+//      for THAT TASK'S LEAD SLOT ONLY. It never overrides a gate: an incumbent on
+//      leave, at capacity or out of band loses the slot to the next candidate by
+//      the same rule, and continuity is never a reason to leave a slot empty that
+//      somebody eligible could have filled. Every resulting change of lead is
+//      COUNTED (`score.breakdown.continuityBreaks`) and NAMED (a `warnings` entry
+//      giving both dates and, where the engine knows it, the reason), because
+//      knowing WHEN continuity broke is the whole point of having asked for it.
 //
 // WHAT THIS ENGINE DELIBERATELY DOES NOT DO (left as clean seams, not oversights):
 // no local-search / hill-climbing improvement pass over the constructed roster;
@@ -84,6 +104,24 @@
 // one global FTE-weighted pool over whatever the gates leave. The scoring
 // functions are pure and take any candidate roster, so an optimisation pass can
 // be added without touching construction.
+//
+// Added by the psychology pack, and equally deliberate: ONE recurrence pattern per
+// task — no "every second Wednesday", no "the 1st AND 3rd Wednesday" (configure
+// two tasks, or wait for a `recurrence` that takes a list); no cross-run
+// continuity — `continuity` counts leads inside THIS generation run only, so a
+// department generating a month at a time restarts every incumbency from scratch,
+// which is the same border-data limit `consecutiveRunBefore` documents; and
+// continuity is expressed as "whoever has led this task most so far", which is a
+// proxy for incumbency and not a memory of it, so a genuine tie between two people
+// with equal counts is settled by the ordinary fairness tie-breakers rather than by
+// who held it most recently.
+//
+// A task whose `requiresSkill` and `leadBands` pools do not INTERSECT (enough
+// principals, enough skill holders, nobody who is both) is a VALIDATION REFUSAL,
+// the composed twin of the unknown-skill and empty-band rules. It was a warning
+// for one commit, pinned so by a compatibility gate; the orchestrator moved the
+// pin deliberately and landed the refusal — see `rosterEngineV2.grades.test.js`
+// ("refuses a task whose band and skill pools do not intersect").
 //
 // ==============================================================================
 
@@ -418,6 +456,126 @@ export const snapToMonday = (date) => {
     return addDays(date, day === 0 ? 1 : 1 - day);
 };
 
+// --- 1b. MONTHLY RECURRENCE ---------------------------------------------------
+//
+// A task repeats either WEEKLY (`days: [1,3]`, every Monday and Wednesday) or
+// MONTHLY (`recurrence: { ordinal: 3, weekday: 3 }`, the 3rd Wednesday of every
+// calendar month). The psychology department's specialised clinic runs monthly,
+// which no `days` list can express: `days: [3]` is EVERY Wednesday, four or five
+// times the intended workload, and the roster would look plausible while asking
+// four times the clinic time anybody agreed to.
+//
+// WHY `'last'` IS AN ORDINAL AND NOT `5`. Most months hold four of any given
+// weekday and some hold five, so a task configured as "the 5th Wednesday" would
+// silently vanish in most months — the class of quiet failure this engine exists
+// to refuse. `'last'` is the question departments actually ask, and it differs
+// from `4` exactly in the five-weekday months, which is where the tests bite.
+//
+// HORIZON, NOT CALENDAR. The occurrences of a monthly task are the matching dates
+// that fall INSIDE the generated run — `effectiveStart` through the last day of
+// the last week. A month whose nth weekday lies outside the run contributes
+// nothing, and a run too short to contain any occurrence generates nothing at all
+// for that task. Neither is an `unfilled` entry: no slot was ever demanded, so
+// there is nothing that could not be staffed. `generateRosterV2` does WARN about
+// the second case, because a monthly task that never appears in the calendar is
+// indistinguishable from a bug when you are looking at the calendar.
+
+const RECURRENCE_LAST = 'last';
+
+/** The ordinals a `recurrence` may name. Anything else is refused, loudly. */
+const RECURRENCE_ORDINALS = Object.freeze([1, 2, 3, 4, RECURRENCE_LAST]);
+
+/** `3` -> `'3rd'`, `'last'` -> `'last'`. For reasons and warnings only. */
+const ORDINAL_PROSE = Object.freeze({
+    1: '1st', 2: '2nd', 3: '3rd', 4: '4th', [RECURRENCE_LAST]: 'last',
+});
+
+/** How many days does the month containing local `(year, month)` hold? */
+const daysInMonth = (year, month) => new Date(year, month + 1, 0).getDate();
+
+/**
+ * `{ ordinal, weekday }` if this is a usable recurrence, `null` otherwise.
+ *
+ * Total, like `bandOfGrade`: the loud half of the pair is
+ * `validateRosterV2Config`, which says WHY. Extra keys on the object are ignored
+ * rather than refused, matching how the rest of the input contract treats them.
+ */
+const normaliseRecurrence = (value) => {
+    if (!isPlainObject(value)) return null;
+    const { ordinal, weekday } = value;
+    if (!RECURRENCE_ORDINALS.includes(ordinal)) return null;
+    if (typeof weekday !== 'number' || !Number.isInteger(weekday)) return null;
+    if (weekday < 0 || weekday > 6) return null;
+    return { ordinal, weekday };
+};
+
+/**
+ * The nth (or last) `weekday` of one calendar month, as a LOCAL date — or `null`
+ * when the month does not hold that many of that weekday.
+ *
+ * Built from `(year, month, day)` parts like every other date in this file, so a
+ * month boundary or a DST transition inside the month cannot slide the answer.
+ */
+const nthWeekdayOfMonth = (year, month, ordinal, weekday) => {
+    const total = daysInMonth(year, month);
+    const firstWeekday = new Date(year, month, 1).getDay();
+    // The first `weekday` of the month, 1-based: how far forward from the 1st.
+    const first = 1 + ((weekday - firstWeekday + DAYS_PER_WEEK) % DAYS_PER_WEEK);
+
+    if (ordinal === RECURRENCE_LAST) {
+        let day = first;
+        while (day + DAYS_PER_WEEK <= total) day += DAYS_PER_WEEK;
+        return new Date(year, month, day);
+    }
+
+    const day = first + (ordinal - 1) * DAYS_PER_WEEK;
+    return day <= total ? new Date(year, month, day) : null;
+};
+
+/**
+ * Every date this recurrence lands on between `startKey` and `endKey` inclusive,
+ * as sorted `'YYYY-MM-DD'` keys.
+ *
+ * THE ONE DEFINITION of "when does a monthly task run". `generateRosterV2` builds
+ * its day filter from this, and a preview UI should call it rather than reimplement
+ * the month arithmetic — post-mortem A-RC1's rule (one definition per displayed
+ * fact) applied to a set of dates instead of a string. Pure, and total: an
+ * unusable recurrence or a backwards range returns `[]` rather than throwing.
+ */
+export const recurrenceDatesBetween = (recurrence, startKey, endKey) => {
+    const spec = normaliseRecurrence(recurrence);
+    if (spec === null || !isDateKey(startKey) || !isDateKey(endKey)) return [];
+
+    const start = parseLocalDateKey(startKey);
+    const end = parseLocalDateKey(endKey);
+    if (end < start) return [];
+
+    const keys = [];
+    let year = start.getFullYear();
+    let month = start.getMonth();
+
+    // One iteration per calendar month touched. Bounded by the longest run this
+    // engine can generate (52 weeks is at most 14 months), with headroom.
+    for (let guard = 0; guard <= MAX_ROSTER_WEEKS; guard += 1) {
+        if (new Date(year, month, 1) > end) break;
+
+        const date = nthWeekdayOfMonth(year, month, spec.ordinal, spec.weekday);
+        if (date !== null && date >= start && date <= end) keys.push(toLocalDateKey(date));
+
+        month += 1;
+        if (month > 11) {
+            month = 0;
+            year += 1;
+        }
+    }
+
+    return keys;
+};
+
+/** `{ ordinal: 3, weekday: 3 }` -> `'3rd Wednesday of each month'`. */
+const recurrenceLabel = (recurrence) =>
+    `${ORDINAL_PROSE[recurrence.ordinal]} ${WEEKDAY_NAMES[recurrence.weekday]} of each month`;
+
 // --- 2. VALIDATION -----------------------------------------------------------
 //
 // Same style as `validateRosterConfig` in `auraEngine.js`: `{ valid, reason }`
@@ -616,6 +774,42 @@ export const validateRosterV2Config = (config) => {
             }
         }
 
+        // `recurrence` is the MONTHLY calendar, and it replaces `days` rather
+        // than refining it. A task carrying both is refused, not merged: there
+        // is no reading of "every Wednesday AND the 3rd Wednesday" that is not
+        // simply one of the two, and silently preferring one would make the
+        // ignored field a trap. Note that `days: []` counts as set — an empty
+        // weekly list next to a monthly pattern is a half-finished edit, and the
+        // roster master should be told rather than guessed at.
+        if (task.recurrence !== undefined && task.recurrence !== null) {
+            if (task.days !== undefined && task.days !== null) {
+                return invalid(`Task ${name} sets both days and recurrence — a task repeats either weekly (days) or monthly (recurrence), never both. Remove whichever one is not meant.`);
+            }
+            if (!isPlainObject(task.recurrence)) {
+                return invalid(`Task ${name}'s recurrence must be an object of the form { ordinal: 3, weekday: 3 } — the 3rd Wednesday of each month — or left out so that the task repeats weekly on its days.`);
+            }
+            if (!RECURRENCE_ORDINALS.includes(task.recurrence.ordinal)) {
+                // `5` is refused rather than treated as `'last'`: most months
+                // hold only four of a weekday, so a 5th-Wednesday task would
+                // silently skip most months.
+                return invalid(`Task ${name}'s recurrence ordinal is ${JSON.stringify(task.recurrence.ordinal)} — use 1, 2, 3, 4, or 'last' for the final one of the month (most months have no 5th weekday).`);
+            }
+            const { weekday } = task.recurrence;
+            if (typeof weekday !== 'number' || !Number.isInteger(weekday) || weekday < 0 || weekday > 6) {
+                return invalid(`Task ${name}'s recurrence weekday is ${JSON.stringify(weekday)} — use whole numbers 0 (Sunday) to 6 (Saturday).`);
+            }
+        }
+
+        // `continuity` is a preference and the only one in this engine, so it is
+        // spelled as a plain flag. A non-boolean is refused rather than coerced:
+        // `continuity: 'yes'` is truthy, and a typo must not be able to change
+        // who leads a clinic for a year.
+        if (task.continuity !== undefined && task.continuity !== null) {
+            if (typeof task.continuity !== 'boolean') {
+                return invalid(`Task ${name}'s continuity must be true or false — true asks for the same lead on every occurrence of the task.`);
+            }
+        }
+
         if (task.leads !== undefined && task.leads !== null) {
             if (!isNonNegativeInt(task.leads)) {
                 return invalid(`Task ${name}'s leads must be a whole number of 0 or more.`);
@@ -665,6 +859,27 @@ export const validateRosterV2Config = (config) => {
             );
             if (holders === 0) {
                 return invalid(`Task ${name} may only be led by ${bandSetLabel(wanted)}-band staff (${bandSetGradeLabel(wanted, bands)}), but nobody in the staff pool holds a grade in that band. Check the grades, widen the task's leadBands, or move the band boundaries.`);
+            }
+
+            // The composed twin of the two checks above: enough people in the
+            // band, enough people with the skill, but nobody who is BOTH —
+            // every lead slot of this task would still be unfilled. Loud, at
+            // configure time, like either gate alone.
+            if (isNonEmptyString(task.requiresSkill)) {
+                const bothCount = staff.reduce((sum, person) => {
+                    const grade = person?.grade;
+                    const gradeIsBlank = typeof grade === 'string' && grade.trim() === '';
+                    if (grade === undefined || grade === null || gradeIsBlank) return sum;
+                    const number = parseGradeNumber(grade);
+                    if (number === null) return sum;
+                    const band = bandOfGradeNumber(number, bands);
+                    if (band === null || !wanted.has(band)) return sum;
+                    const skills = Array.isArray(person?.skills) ? person.skills : [];
+                    return skills.includes(task.requiresSkill) ? sum + 1 : sum;
+                }, 0);
+                if (bothCount === 0) {
+                    return invalid(`Task ${name} may only be led by ${bandSetLabel(wanted)}-band staff (${bandSetGradeLabel(wanted, bands)}) who also hold skill ${task.requiresSkill}, and nobody in the staff pool is both. Check the grades and the skills, widen the task's leadBands, or move the band boundaries.`);
+                }
             }
         }
     }
@@ -755,15 +970,35 @@ const normaliseLeadBands = (value) => {
 };
 
 const normaliseTasks = (tasks) =>
-    tasks.map((task) => ({
-        name: task.name,
-        requiresSkill: isNonEmptyString(task.requiresSkill) ? task.requiresSkill : null,
-        days: Array.isArray(task.days) ? [...task.days] : [...ROSTER_V2_DEFAULTS.days],
-        leads: isPositiveInt(task.leads) ? task.leads : ROSTER_V2_DEFAULTS.leads,
-        coLeads: isNonNegativeInt(task.coLeads) ? task.coLeads : ROSTER_V2_DEFAULTS.coLeads,
-        category: isNonEmptyString(task.category) ? task.category : ROSTER_V2_DEFAULTS.category,
-        leadBands: normaliseLeadBands(task.leadBands),
-    }));
+    tasks.map((task) => {
+        // A monthly task has NO weekly days, and says so rather than carrying the
+        // default Mon–Fri list it will never use.
+        //
+        // BELT AND BRACES, honestly labelled: this emptying is not what stops a
+        // monthly task also running every weekday. Both readers of the normalised
+        // `days` — the "no days selected" warning and the day loop's filter —
+        // already test `recurrence === null` first, so a monthly task's `days` is
+        // never consulted and mutating this line changes no output. It is here so
+        // that a normalised task never DESCRIBES itself as running Mon–Fri when it
+        // runs monthly, which is a debugging and future-reader concern rather than
+        // a behavioural one. Validation has already refused a task that set both,
+        // so nothing a roster master typed is being discarded.
+        const recurrence = normaliseRecurrence(task.recurrence);
+
+        return {
+            name: task.name,
+            requiresSkill: isNonEmptyString(task.requiresSkill) ? task.requiresSkill : null,
+            days: recurrence !== null
+                ? []
+                : (Array.isArray(task.days) ? [...task.days] : [...ROSTER_V2_DEFAULTS.days]),
+            recurrence,
+            continuity: task.continuity === true,
+            leads: isPositiveInt(task.leads) ? task.leads : ROSTER_V2_DEFAULTS.leads,
+            coLeads: isNonNegativeInt(task.coLeads) ? task.coLeads : ROSTER_V2_DEFAULTS.coLeads,
+            category: isNonEmptyString(task.category) ? task.category : ROSTER_V2_DEFAULTS.category,
+            leadBands: normaliseLeadBands(task.leadBands),
+        };
+    });
 
 /**
  * `forbidPairs` as an adjacency map, so the pool filter is a set lookup rather
@@ -800,6 +1035,22 @@ const REJECT_ON_TASK = 'onTask';
 const REJECT_CAPACITY = 'capacity';
 const REJECT_PAIR = 'pair';
 const REJECT_CONSECUTIVE = 'consecutive';
+
+/**
+ * The same seven facts as a clause a roster master can read, for the one place
+ * that has to explain a rejection in prose rather than count it: the warning that
+ * says why a continuity task changed lead. Written in the past tense and without
+ * the date, because the sentence they are dropped into already carries it.
+ */
+const CONTINUITY_REJECTION_PROSE = Object.freeze({
+    [REJECT_SKILL]: 'no longer holds the skill the task requires',
+    [REJECT_BAND]: "no longer holds a grade in the task's lead bands",
+    [REJECT_LEAVE]: 'was on leave that day',
+    [REJECT_ON_TASK]: 'was already on that task that day',
+    [REJECT_CAPACITY]: 'was already at their daily duty limit',
+    [REJECT_PAIR]: 'was blocked by a forbidden pairing',
+    [REJECT_CONSECUTIVE]: 'was at the consecutive-day limit',
+});
 
 /**
  * How many days in an unbroken run ending the day BEFORE `dateKey` does `name`
@@ -966,6 +1217,48 @@ const compareCandidates = (a, b) => {
     return 0;
 };
 
+/**
+ * The LEAD comparator for a `continuity: true` task: whoever has led this task
+ * most often in this run wins, and everything else is the ordinary tie-break.
+ *
+ * This is the exact inverse of `compareCandidates`'s second key, and deliberately
+ * so: normal fairness spreads a task across the team, continuity concentrates it.
+ * The inversion is scoped to ONE task's lead slot — the same person's co-lead
+ * slots, and every other task they are eligible for, are still shared by
+ * FTE-weighted fairness, so asking for continuity on one clinic does not exempt
+ * anybody from the rest of the roster.
+ *
+ * On the FIRST occurrence every count is 0, so this degenerates to
+ * `compareCandidates` and the incumbent is chosen by ordinary fairness. That is
+ * the intended behaviour: the engine has no opinion about who SHOULD hold a
+ * clinic, only that whoever holds it should keep holding it.
+ *
+ * NOT A MEMORY OF INCUMBENCY. Two people with equally many previous leads (which
+ * happens as soon as one occurrence goes to a stand-in) are separated by
+ * `compareCandidates`, not by who led most recently. Deterministic, but it does
+ * mean an incumbency can move after a single interruption — see the header.
+ */
+const compareContinuityCandidates = (a, b) => {
+    if (a.taskLeads !== b.taskLeads) return b.taskLeads - a.taskLeads;
+    return compareCandidates(a, b);
+};
+
+/**
+ * "Who is leading this?" as one comparable string — THE definition of whether
+ * continuity held from one occurrence to the next.
+ *
+ * SORTED, so a task with two lead slots is compared as a SET: which shift object
+ * names whom first is an artefact of the order the slots were filled in, and a
+ * cohort meeting the same two clinicians has experienced no break.
+ *
+ * One definition, deliberately, because there are two callers — the generator's
+ * warning and `scoreRoster`'s count — and two definitions of "did continuity
+ * hold" would eventually disagree with each other in front of a roster master.
+ * That is post-mortem A-RC1's rule (one definition per displayed fact) applied to
+ * a predicate instead of a label.
+ */
+const continuitySignature = (leads) => [...leads].sort().join(' ');
+
 // --- 6. HARD VS SOFT CONSTRAINTS ---------------------------------------------
 //
 // The published Nurse Rostering Problem literature (INRC-II and its lineage)
@@ -1004,11 +1297,24 @@ const compareCandidates = (a, b) => {
  * so that a later optimisation pass, or a department with different priorities,
  * changes one visible constant rather than editing the scorer.
  */
+/*
+ * The weight of a continuity break is UNCALIBRATED, exactly as the other four
+ * are: 2 says "a broken incumbency matters more than one duty of load drift, and
+ * about as much as one duty of weekend drift". No clinician has been asked. The
+ * number to read is `breakdown.continuityBreaks` — a plain count of how many
+ * times a lead changed — and `softPenalty` is only ever a comparison between two
+ * configurations, never a quantity.
+ *
+ * (This table briefly existed as two constants — the original four keys plus an
+ * `ALL_SOFT_PENALTY_WEIGHTS` overlay — because a compatibility gate pinned the
+ * original key list. The gate was moved deliberately and the two were merged.)
+ */
 export const SOFT_PENALTY_WEIGHTS = Object.freeze({
     loadImbalance: 1,
     taskRepetition: 1,
     weekendImbalance: 2,
     isolatedDays: 1,
+    continuityBreaks: 2,
 });
 
 const HARD_RULE_SKILL = 'skill';
@@ -1229,10 +1535,25 @@ export const auditHardConstraints = (roster, config) => {
  *                     between two configurations that differ only in staffing;
  *                     it is not comparable between a banded and an unbanded
  *                     version of the same department.
+ *                     A `continuity: true` task is EXEMPT from this component
+ *                     entirely. Repetition of one task by one person is precisely
+ *                     what continuity asks for, so charging for it would make the
+ *                     scorer punish the configuration for doing as it was told —
+ *                     and would leave `softPenalty` unable to tell a department
+ *                     that got the continuity it wanted from one that did not.
  *   weekendImbalance  the same deviation measure, restricted to Saturday and
  *                     Sunday duties.
  *   isolatedDays      working days with no duty on either the day before or the
  *                     day after — a single day in, surrounded by days off.
+ *   continuityBreaks  how many times the lead of a `continuity: true` task
+ *                     CHANGED between one occurrence of it and the next. Present
+ *                     in `breakdown` only when the configuration actually asks
+ *                     for continuity somewhere, so a department that does not use
+ *                     the feature sees exactly the breakdown it saw before it
+ *                     existed. Occurrences whose lead slot went unfilled are
+ *                     skipped rather than counted as two breaks: the gap is
+ *                     already reported in `unfilled`, and the incumbent resuming
+ *                     after it is continuity holding, not breaking twice.
  *
  * Returns `{ ok: true, hardViolations, softPenalty, breakdown }`, or
  * `{ ok: false, reason }` for an invalid config.
@@ -1288,6 +1609,10 @@ export const scoreRoster = (roster, config) => {
 
     let taskRepetition = 0;
     for (const task of tasks) {
+        // The continuity exemption. Not a discount — a full exemption, because
+        // there is no defensible amount to charge for obeying an instruction.
+        if (task.continuity) continue;
+
         const counts = perTask.get(task.name);
         const total = [...counts.values()].reduce((sum, n) => sum + n, 0);
         if (total === 0) continue;
@@ -1313,11 +1638,41 @@ export const scoreRoster = (roster, config) => {
         }
     }
 
+    // Read back off the finished roster, exactly like `hardViolations`: the
+    // construction loop's own count is not trusted, and this function must give
+    // the same answer for a roster some future optimiser invented.
+    const continuityTasks = tasks.filter((task) => task.continuity);
+    let continuityBreaks = 0;
+    if (continuityTasks.length > 0) {
+        const dateKeys = Object.keys(roster).sort();
+        for (const task of continuityTasks) {
+            let previous = null;
+            for (const dateKey of dateKeys) {
+                const shifts = Array.isArray(roster[dateKey]) ? roster[dateKey] : [];
+                const leads = shifts
+                    .filter((shift) => shift.task === task.name)
+                    .map((shift) => shift.lead)
+                    .filter((name) => typeof name === 'string' && name !== '');
+                // No lead on this occurrence: nothing changed hands, so there is
+                // nothing to count. The unfilled slot is reported elsewhere.
+                if (leads.length === 0) continue;
+
+                const signature = continuitySignature(leads);
+                if (previous !== null && signature !== previous) continuityBreaks += 1;
+                previous = signature;
+            }
+        }
+    }
+
     const breakdown = {
         loadImbalance: round2(deviation(duties)),
         taskRepetition: round2(taskRepetition),
         weekendImbalance: round2(deviation(weekendDuties)),
         isolatedDays,
+        // Present only when something asked for continuity, so the breakdown of a
+        // configuration that does not use the feature is byte-identical to the
+        // one it produced before the feature existed.
+        ...(continuityTasks.length > 0 ? { continuityBreaks } : {}),
     };
 
     const softPenalty = round2(
@@ -1370,6 +1725,19 @@ export const scoreRoster = (roster, config) => {
  * scarcity). That ordering is what makes it impossible for a pairing group to
  * end up holding a co-lead with no lead to attach them to.
  *
+ * WHICH DAYS A TASK RUNS ON. A task with `days` runs on those weekdays of every
+ * week; a task with `recurrence` runs on the nth (or last) named weekday of each
+ * calendar month, restricted to dates inside this run. The two are mutually
+ * exclusive (validation refuses both), the occurrence dates come from
+ * `recurrenceDatesBetween`, and a monthly task with no occurrence in the horizon
+ * generates nothing and produces a WARNING rather than an `unfilled` entry — no
+ * slot was demanded, so there is nothing that failed to be staffed.
+ *
+ * CONTINUITY. `continuity: true` makes the lead slots of ONE task prefer whoever
+ * has led that task most in this run, ahead of FTE-weighted fairness. Every gate
+ * still applies first, so an unavailable incumbent loses the slot; the change is
+ * counted in `score.breakdown.continuityBreaks` and named in `warnings`.
+ *
  * A day on which every slot was unfilled gets NO key in `roster`; the record of
  * what could not be staffed lives in `unfilled`. That is the same convention
  * `generateRoster` follows (keys exist only where a shift was pushed) and it
@@ -1400,6 +1768,29 @@ export const generateRosterV2 = (config) => {
     const start = snapToMonday(requestedStart);
     const effectiveStart = toLocalDateKey(start);
 
+    /**
+     * The last day of the run. The day loop walks `weeks * 7` days from `start`,
+     * so this is that horizon written down once — a monthly task's occurrences are
+     * resolved against it before the loop rather than re-derived per day.
+     */
+    const horizonEndKey = toLocalDateKey(addDays(start, config.weeks * DAYS_PER_WEEK - 1));
+
+    /**
+     * taskName -> Set<dateKey>, for monthly tasks only.
+     *
+     * Derived from `recurrenceDatesBetween`, which is the one definition of when a
+     * monthly task runs. An empty set is legal and means the run is too short (or
+     * badly placed) to contain an occurrence — warned about below, never an error.
+     */
+    const occurrencesByTask = new Map(
+        tasks
+            .filter((task) => task.recurrence !== null)
+            .map((task) => [
+                task.name,
+                new Set(recurrenceDatesBetween(task.recurrence, effectiveStart, horizonEndKey)),
+            ]),
+    );
+
     const warnings = [];
     if (effectiveStart !== config.startDate) {
         warnings.push(
@@ -1413,6 +1804,18 @@ export const generateRosterV2 = (config) => {
     const dutiesByDate = new Map();
     /** name -> (taskName -> duty count), the second tie-breaker */
     const dutiesByTask = new Map(staff.map((person) => [person.name, new Map()]));
+    /**
+     * taskName -> (name -> LEAD count). Separate from `dutiesByTask`, which counts
+     * both roles: continuity is about who LEADS, and a person who has co-led a
+     * clinic six times has no incumbency in it.
+     */
+    const leadsByTask = new Map(tasks.map((task) => [task.name, new Map()]));
+    /**
+     * taskName -> { dateKey, leads } for the most recent occurrence of a
+     * continuity task that actually got a lead. The comparison point for both the
+     * break count and the warning.
+     */
+    const continuityHistory = new Map();
 
     const roster = {};
     const unfilled = [];
@@ -1433,9 +1836,18 @@ export const generateRosterV2 = (config) => {
     }
 
     for (const task of tasks) {
-        if (task.days.length === 0) {
+        if (task.recurrence === null && task.days.length === 0) {
             warnings.push(
                 `Task ${task.name} has no days selected, so it will never appear in the roster.`,
+            );
+        }
+        // The monthly twin of "no days selected", and a likelier mistake: a
+        // perfectly valid 3rd-Wednesday clinic simply does not intersect a
+        // fortnight that happens to fall the wrong side of it. Silence here would
+        // look exactly like the engine having dropped the task.
+        if (task.recurrence !== null && occurrencesByTask.get(task.name).size === 0) {
+            warnings.push(
+                `Task ${task.name} runs on the ${recurrenceLabel(task.recurrence)}, and no such date falls between ${effectiveStart} and ${horizonEndKey}, so it will never appear in this roster. Generate a longer run, or one that covers an occurrence.`,
             );
         }
         if (task.requiresSkill) {
@@ -1478,7 +1890,15 @@ export const generateRosterV2 = (config) => {
             // B1 is exactly the bug of trusting a fixed offset to be a weekday.
             const weekday = date.getDay();
 
-            const running = tasks.filter((task) => task.days.includes(weekday));
+            // Weekly tasks answer "is today one of my weekdays?"; monthly ones ask
+            // whether today is one of the occurrence dates resolved before the
+            // loop. `recurrence` is checked FIRST and `days` is empty for those
+            // tasks, so the two calendars can never both apply.
+            const running = tasks.filter((task) => (
+                task.recurrence === null
+                    ? task.days.includes(weekday)
+                    : occurrencesByTask.get(task.name).has(dateKey)
+            ));
             if (running.length === 0) continue;
 
             dutiesByDate.set(dateKey, new Map());
@@ -1500,12 +1920,32 @@ export const generateRosterV2 = (config) => {
             const dayUnfilled = [];
 
             /**
+             * taskName -> (incumbent name -> the rejection that stopped them, or
+             * `null` for "nothing did"), captured at the moment a continuity lead
+             * slot was decided. The only moment the engine knows WHY an incumbency
+             * moved; the warning below is written from it.
+             */
+            const incumbentRejections = new Map();
+
+            /**
              * Who could take this slot, the best of them, and — if nobody — the
              * tally the reason is written from.
              */
             const evaluateSlot = (slot) => {
                 const { task, role } = slot;
                 const { onTaskToday } = dayState.get(task.name);
+
+                // Continuity inverts the per-task tie-break, for this slot only.
+                const continuityLead = task.continuity && role === 'lead';
+                const compare = continuityLead ? compareContinuityCandidates : compareCandidates;
+
+                // Whoever led the previous occurrence is watched through the loop
+                // below, so that if the slot changes hands the warning can say
+                // whether a constraint took it or fairness did.
+                const incumbents = continuityLead && continuityHistory.has(task.name)
+                    ? continuityHistory.get(task.name).leads
+                    : null;
+                const watched = incumbents === null ? null : new Map();
 
                 const tally = {
                     [REJECT_SKILL]: 0,
@@ -1540,6 +1980,10 @@ export const generateRosterV2 = (config) => {
                         maxConsecutiveDays,
                     });
 
+                    if (watched !== null && incumbents.includes(person.name)) {
+                        watched.set(person.name, rejection);
+                    }
+
                     if (rejection) {
                         tally[rejection] += 1;
                         continue;
@@ -1551,13 +1995,16 @@ export const generateRosterV2 = (config) => {
                         fte: person.fte,
                         duties: duties.get(person.name),
                         taskDuties: dutiesByTask.get(person.name).get(task.name) || 0,
+                        // Read by `compareContinuityCandidates` only. Present on
+                        // every candidate so there is one candidate shape.
+                        taskLeads: leadsByTask.get(task.name).get(person.name) || 0,
                     };
-                    if (best === null || compareCandidates(candidate, best) < 0) {
+                    if (best === null || compare(candidate, best) < 0) {
                         best = candidate;
                     }
                 }
 
-                return { eligible, best, tally };
+                return { eligible, best, tally, watched };
             };
 
             const assign = (slot, name) => {
@@ -1571,8 +2018,13 @@ export const generateRosterV2 = (config) => {
                 byTask.set(task.name, (byTask.get(task.name) || 0) + 1);
 
                 state.onTaskToday.add(name);
-                if (slot.role === 'lead') state.leads.push(name);
-                else state.coLeads.push(name);
+                if (slot.role === 'lead') {
+                    state.leads.push(name);
+                    const leadCounts = leadsByTask.get(task.name);
+                    leadCounts.set(name, (leadCounts.get(name) || 0) + 1);
+                } else {
+                    state.coLeads.push(name);
+                }
             };
 
             /**
@@ -1618,6 +2070,18 @@ export const generateRosterV2 = (config) => {
 
                     pending.splice(chosenIndex, 1);
 
+                    if (chosenEvaluation.watched !== null) {
+                        // Merged rather than overwritten, so a task with two lead
+                        // slots keeps the FIRST reason learned for each incumbent —
+                        // the one measured before today's own assignments had
+                        // consumed anybody's capacity.
+                        const known = incumbentRejections.get(chosenSlot.task.name) || new Map();
+                        for (const [name, rejection] of chosenEvaluation.watched) {
+                            if (!known.has(name)) known.set(name, rejection);
+                        }
+                        incumbentRejections.set(chosenSlot.task.name, known);
+                    }
+
                     if (chosenEvaluation.eligible === 0) {
                         dayUnfilled.push({
                             order: chosenSlot.order,
@@ -1650,6 +2114,52 @@ export const generateRosterV2 = (config) => {
                 }
             }
             fillMostConstrainedFirst(leadSlots);
+
+            // --- continuity: did an incumbency change hands today? -------------
+            //
+            // Runs between the phases because leads are final after phase 1 and
+            // co-leads are irrelevant to continuity. An occurrence whose lead slot
+            // went unfilled updates nothing: the incumbent stays the incumbent, the
+            // gap is already in `unfilled`, and resuming afterwards is continuity
+            // holding rather than breaking twice.
+            for (const task of running) {
+                if (!task.continuity) continue;
+
+                const leads = [...dayState.get(task.name).leads];
+                if (leads.length === 0) continue;
+
+                const previous = continuityHistory.get(task.name);
+                continuityHistory.set(task.name, { dateKey, leads });
+
+                if (previous === undefined) continue;
+                // The SAME predicate `scoreRoster` counts with, so the warnings and
+                // `breakdown.continuityBreaks` can never disagree about whether
+                // continuity held. `leads` keeps its roster order for the message.
+                if (continuitySignature(previous.leads) === continuitySignature(leads)) continue;
+
+                const known = incumbentRejections.get(task.name);
+                const clauses = previous.leads
+                    .filter((name) => !leads.includes(name))
+                    .map((name) => {
+                        const rejection = known ? known.get(name) : undefined;
+                        const prose = rejection ? CONTINUITY_REJECTION_PROSE[rejection] : null;
+                        // `null` means the incumbent WAS eligible and simply lost.
+                        // Under the continuity comparator that can only happen to
+                        // somebody a candidate had matched or passed on previous
+                        // leads of this task — which is what the clause says, and no
+                        // more. It is the sentence that answers "why did the clinic
+                        // move when she was free that day?", and getting it wrong
+                        // (calling a returning incumbency a "tie-break") would be
+                        // worse than saying nothing.
+                        return prose === null
+                            ? `no constraint stopped ${name} that day; the slot went to somebody who had already led this task at least as often`
+                            : `${name} ${prose}`;
+                    });
+
+                warnings.push(
+                    `Continuity break: ${task.name} was led by ${previous.leads.join(' and ')} on ${previous.dateKey} but by ${leads.join(' and ')} on ${dateKey}${clauses.length === 0 ? '' : ` — ${clauses.join('; ')}`}.`,
+                );
+            }
 
             // --- phase 2: co-lead slots, scarcest first -----------------------
             const coLeadSlots = [];

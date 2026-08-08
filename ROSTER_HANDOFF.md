@@ -17,7 +17,8 @@ confirmed absent).
 | `v1.6.0` | Two one-click paths that destroyed the live roster (**M1** demo config leaking into live mode, **M3** cleared Weeks field wiping the document). Plus the first runnable test harness. |
 | `v1.6.1` | The shift-swap flow now actually works (**A1**), can no longer claim success it did not achieve (**A-RC4**), the coverage alert surfaces (**M5**), the ledger no longer approves before writing (**M9**), admin-initiated swaps work (**M11**). |
 | `v1.7.0` | **The constraint-aware engine, live in Sandbox.** Generate really generates; the staff field is editable so visitors can enter their own team; the result panel shows load, warnings and every unstaffable slot with its reason. |
-| **`v1.7.1`** | **B1 fixed** — live-mode generation snaps to Monday, so core duties land Mon–Fri and the VC duties on their real Tuesday/Saturday (DST-proof, six timezones verified; Monday-start output byte-identical, stored rosters unaffected). Calendar opens on the current month. **M6 fixed** — ICS now escapes correctly, carries stable UIDs (re-import *updates* Outlook instead of duplicating) and DTSTAMP. **M10 fixed** — CSV quoting, formula-injection guard, CRLF + UTF-8 BOM. **Zero native `alert()` dialogs** remain in the roster view, and duplicate swap requests are blocked per session. **You may now generate in live mode on stage — from any start date.** |
+| `v1.7.1` | **B1 fixed** — live-mode generation snaps to Monday, so core duties land Mon–Fri and the VC duties on their real Tuesday/Saturday (DST-proof, six timezones verified; Monday-start output byte-identical, stored rosters unaffected). Calendar opens on the current month. **M6 fixed** — ICS now escapes correctly, carries stable UIDs (re-import *updates* Outlook instead of duplicating) and DTSTAMP. **M10 fixed** — CSV quoting, formula-injection guard, CRLF + UTF-8 BOM. **Zero native `alert()` dialogs** remain in the roster view, and duplicate swap requests are blocked per session. **You may now generate in live mode on stage — from any start date.** |
+| **`v1.8.0`** | **The roster-master release, from the four AHP team interviews.** Engine: AH7–AH17 job grades with editable bands (eligibility-not-exclusion, lead-gated/co-open), monthly recurrence (the psychologists' 3rd-Wednesday clinic), continuity-of-care with counted-and-named breaks, and a composed skill∩band validation refusal. Sandbox wizard: staff and task **tables** (grades, FTE, leave; band chips with live grade ranges; band-boundary editor) replace the free-text boxes. 832 tests. Live mode untouched. |
 
 **Deploy verified, not assumed.** CI green end to end in 2m43s (including the test gate). The
 live bundle is `index-Ck4olkEf.js`, and I confirmed the new code is *in* it — `effectiveStart`,
@@ -123,6 +124,10 @@ Still open:
 ## 6. Before you present
 
 1. **Rehearse once in Sandbox on the live site.** I cannot log in, so nothing I did verifies how it *looks*. This is the one gap only you can close.
-2. The solo demo path: Configure → add your own name to the Staff Pool → close **without** Generate → click a colleague's shift → request cover from yourself → your AURA alert opens → Accept.
+2. The solo demo path (LIVE mode, whose wizard still has the Staff Pool textarea):
+   Configure → add your own name to the Staff Pool → close **without** Generate →
+   click a colleague's shift → request cover from yourself → your AURA alert opens →
+   Accept. *(In Sandbox the wizard is now the v1.8.0 staff/task tables — add a row
+   with your name instead; note the sandbox swap path only simulates.)*
 3. For the other departments: the platform transfers; **multi-team support does not exist yet** (one shared document, hardcoded login list, hardcoded team directory). Offer a pilot, not a handover.
 4. Your strongest material is `ROSTER_POSTMORTEM.md` + `ROSTER_QC_AUDIT.md` — an audit that found its own author's diagnosis wrong in five places. For colleagues deciding whether to trust their duty roster to your software, that is more persuasive than a clean demo.

@@ -1198,11 +1198,14 @@ describe('generateRosterV2 — band warnings', () => {
         );
     });
 
-    it('warns when the band and the skill do not overlap — validation only catches an empty band', () => {
+    it('refuses a task whose band and skill pools do not intersect — the composed twin of the unknown-skill rule', () => {
         // Enough principals, enough CPET holders, and no single person who is
-        // both. Validation passes; the roster would be all-unfilled leads, so
-        // the warning has to say so before anybody reads the calendar.
-        const result = generateRosterV2({
+        // both: every lead slot of the task would be unfilled, so this is a
+        // configuration error caught loudly at validation, not a roster with a
+        // warning. (It WAS a warning for one commit — the psych-pack change was
+        // barred from editing this pin, so the orchestrator moved it
+        // deliberately and landed the refusal in the same commit.)
+        const config = {
             startDate: MONDAY_START,
             weeks: 1,
             staff: [
@@ -1211,13 +1214,30 @@ describe('generateRosterV2 — band warnings', () => {
                 { name: 'Cy', grade: 'AH13', skills: ['CPET'] },
             ],
             tasks: [{ name: 'Paed', requiresSkill: 'CPET', leadBands: ['principal'], leads: 1, coLeads: 1 }],
-        });
+        };
+        const reason =
+            "Task Paed may only be led by Principal-band staff (AH15–AH17) who also hold skill CPET, and nobody in the staff pool is both. Check the grades and the skills, widen the task's leadBands, or move the band boundaries.";
 
-        expect(result.warnings).toContain(
-            'Task Paed needs 1 lead per day from the Principal band (AH15–AH17) who also hold skill CPET, but only 0 people qualify, so some lead slots cannot be filled on any day.',
-        );
-        expect(result.roster).toEqual({});
-        expect(result.unfilled[0].reason).toMatch(/\(2 qualified, 0 in band\)/);
+        expect(validateRosterV2Config(config)).toEqual({ valid: false, reason });
+
+        const result = generateRosterV2(config);
+        expect(result.ok).toBe(false);
+        expect(result.reason).toBe(reason);
+
+        // Control: give the principal the skill and the identical config
+        // generates cleanly, with her leading — so the refusal really is about
+        // the intersection and nothing else.
+        const fixed = {
+            ...config,
+            staff: [
+                { name: 'Ada', grade: 'AH15', skills: ['CPET'] },
+                ...config.staff.slice(1),
+            ],
+        };
+        const ok = generateRosterV2(fixed);
+        expect(ok.ok).toBe(true);
+        expect(ok.unfilled).toEqual([]);
+        expect(new Set(Object.values(ok.roster).flat().map((s) => s.lead))).toEqual(new Set(['Ada']));
     });
 
     it('says nothing when the band comfortably covers the demand', () => {

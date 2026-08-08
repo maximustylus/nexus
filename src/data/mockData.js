@@ -1,5 +1,11 @@
 // JG11-JG16 Sandbox Data: Marvel Universe Edition
 
+// The sandbox example department's grades are tuned against the engine's shipped
+// band boundaries (see DEMO_EXAMPLE_DEPARTMENT below). Imported rather than
+// retyped so the two cannot drift apart. READ-ONLY: nothing in this file edits
+// the engine.
+import { DEFAULT_GRADE_BANDS } from '../utils/rosterEngineV2.js';
+
 // 1. The Names List (CRITICAL for Universe Switching)
 export const MOCK_STAFF_NAMES = ['Steve', 'Peter', 'Charles', 'Jean', 'Tony'];
 
@@ -127,12 +133,13 @@ export const MOCK_TEAM_DATA = MOCK_STAFF_NAMES.map((name) => {
 // touched.
 //
 // SHAPE: this is `rosterEngineV2`'s input contract verbatim — `{ startDate,
-// weeks, staff: [{ name, fte, skills, unavailable }], tasks: [{ name,
-// requiresSkill, days, leads, coLeads, category }], rules }` — so the sandbox
-// loader hands it straight to `generateRosterV2` and a test can reproduce the
-// expected roster by calling the engine with this object.
+// weeks, staff: [{ name, fte, skills, unavailable, grade }], tasks: [{ name,
+// requiresSkill, days, leads, coLeads, category, leadBands }], rules: { …,
+// bands } }` — so the sandbox loader hands it straight to `generateRosterV2` and
+// a test can reproduce the expected roster by calling the engine with this
+// object.
 //
-// FOUR DESIGN CONSTRAINTS, each derived from a documented engine limit:
+// FIVE DESIGN CONSTRAINTS, each derived from a documented engine limit:
 //
 //   1. `coLeads` is never above 1. With `coLeads > 1` the engine puts the extra
 //      people in `assignees`, which `downloadCSV`/`downloadICS` do not read, so
@@ -150,31 +157,48 @@ export const MOCK_TEAM_DATA = MOCK_STAFF_NAMES.map((name) => {
 //      fills the lead (Bruce) and reports the co-lead as unfilled, saying why:
 //      "2 qualified, 1 on leave, 1 already on this task". Verified against the
 //      engine: 1 unfilled slot, 0 hard-constraint violations, 40 shifts.
+//   5. THE BAND GATES DO NOT COST A SINGLE EXTRA SLOT. Every one of the twelve
+//      has a grade, spread across the shipped boundaries — one principal (Carol
+//      Danvers, AH16), four seniors (Bruce Banner and T'Challa AH14, Shuri and
+//      Stephen Strange AH13) and seven juniors (AH7–AH12) — and two tasks are
+//      band-gated: Outpatient Clinic may only be LED by Senior/Principal
+//      (AH13–AH17) and Inpatient Rounds only by Junior (AH7–AH12), which is the
+//      supervision shape a real department has. Five senior-or-above people
+//      against one gated weekday lead, and seven juniors against the other, so
+//      neither gate can starve even with the skill-gated tasks competing for the
+//      same people. Re-verified against the engine with the grades in place:
+//      still 1 unfilled slot (the same CPET one), still 0 hard-constraint
+//      violations, still 40 shifts over 12 days, and 0 warnings.
 //
 // Scott Lang is the part-timer (0.6 FTE) — the load table shows him accruing
 // duties at roughly 60% of a full-timer's rate, which is the FTE weighting
 // doing visible work rather than being claimed in a caption.
+//
+// WHY `rules.bands` IS STATED RATHER THAN LEFT TO DEFAULT: the grades above were
+// tuned against these exact boundaries, and constraint 5 is only true while they
+// hold. Imported from the engine rather than retyped, so moving the department's
+// shipped cut moves this fixture with it instead of silently invalidating it.
 export const DEMO_EXAMPLE_DEPARTMENT = Object.freeze({
   label: 'Allied Health — Respiratory & Rehab (example)',
   startDate: '2026-09-07', // Monday
   weeks: 2,
   staff: Object.freeze([
-    { name: 'Carol Danvers', fte: 1.0, skills: ['SLEEP', 'REHAB'], unavailable: [] },
-    { name: 'Bruce Banner', fte: 1.0, skills: ['CPET', 'SLEEP'], unavailable: [] },
-    { name: 'Shuri', fte: 1.0, skills: ['CPET'], unavailable: ['2026-09-16'] },
-    { name: 'Sam Wilson', fte: 1.0, skills: ['REHAB'], unavailable: [] },
-    { name: 'Wanda Maximoff', fte: 1.0, skills: ['REHAB'], unavailable: [] },
-    { name: 'Stephen Strange', fte: 1.0, skills: ['SLEEP'], unavailable: [] },
-    { name: 'Natasha Romanoff', fte: 1.0, skills: [], unavailable: [] },
-    { name: "T'Challa", fte: 1.0, skills: ['REHAB'], unavailable: [] },
-    { name: 'Kamala Khan', fte: 1.0, skills: [], unavailable: [] },
-    { name: 'Scott Lang', fte: 0.6, skills: [], unavailable: [] },
-    { name: 'Riri Williams', fte: 1.0, skills: [], unavailable: [] },
-    { name: 'Monica Rambeau', fte: 1.0, skills: [], unavailable: [] },
+    { name: 'Carol Danvers', fte: 1.0, grade: 'AH16', skills: ['SLEEP', 'REHAB'], unavailable: [] },
+    { name: 'Bruce Banner', fte: 1.0, grade: 'AH14', skills: ['CPET', 'SLEEP'], unavailable: [] },
+    { name: 'Shuri', fte: 1.0, grade: 'AH13', skills: ['CPET'], unavailable: ['2026-09-16'] },
+    { name: 'Sam Wilson', fte: 1.0, grade: 'AH12', skills: ['REHAB'], unavailable: [] },
+    { name: 'Wanda Maximoff', fte: 1.0, grade: 'AH11', skills: ['REHAB'], unavailable: [] },
+    { name: 'Stephen Strange', fte: 1.0, grade: 'AH13', skills: ['SLEEP'], unavailable: [] },
+    { name: 'Natasha Romanoff', fte: 1.0, grade: 'AH10', skills: [], unavailable: [] },
+    { name: "T'Challa", fte: 1.0, grade: 'AH14', skills: ['REHAB'], unavailable: [] },
+    { name: 'Kamala Khan', fte: 1.0, grade: 'AH8', skills: [], unavailable: [] },
+    { name: 'Scott Lang', fte: 0.6, grade: 'AH9', skills: [], unavailable: [] },
+    { name: 'Riri Williams', fte: 1.0, grade: 'AH7', skills: [], unavailable: [] },
+    { name: 'Monica Rambeau', fte: 1.0, grade: 'AH10', skills: [], unavailable: [] },
   ]),
   tasks: Object.freeze([
-    { name: 'Inpatient Rounds', days: [1, 2, 3, 4, 5], leads: 1, coLeads: 1, category: 'Clinical' },
-    { name: 'Outpatient Clinic', days: [1, 2, 3, 4, 5], leads: 1, coLeads: 1, category: 'Clinical' },
+    { name: 'Inpatient Rounds', days: [1, 2, 3, 4, 5], leads: 1, coLeads: 1, category: 'Clinical', leadBands: ['junior'] },
+    { name: 'Outpatient Clinic', days: [1, 2, 3, 4, 5], leads: 1, coLeads: 1, category: 'Clinical', leadBands: ['senior', 'principal'] },
     { name: 'Paediatric CPET', days: [3], leads: 1, coLeads: 1, category: 'Clinical', requiresSkill: 'CPET' },
     { name: 'Pulmonary Rehab Group', days: [2, 4], leads: 1, coLeads: 1, category: 'Rehab', requiresSkill: 'REHAB' },
     { name: 'Cardiac Rehab Clinic', days: [1, 5], leads: 1, coLeads: 1, category: 'Rehab', requiresSkill: 'REHAB' },
@@ -182,5 +206,9 @@ export const DEMO_EXAMPLE_DEPARTMENT = Object.freeze({
     { name: 'Student Supervision', days: [2, 4], leads: 1, coLeads: 1, category: 'Education' },
     { name: 'Weekend Acute Cover', days: [6], leads: 1, coLeads: 1, category: 'On Call' },
   ]),
-  rules: Object.freeze({ maxConcurrentPerDay: 2, maxConsecutiveDays: 6 }),
+  rules: Object.freeze({
+    maxConcurrentPerDay: 2,
+    maxConsecutiveDays: 6,
+    bands: DEFAULT_GRADE_BANDS,
+  }),
 });

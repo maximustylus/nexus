@@ -6,7 +6,7 @@
  * Run:    npx vitest run src/components/RosterView.demo.test.jsx
  *
  * This file is the deploy gate for the demo rostering path. Nobody can log into
- * the app to click through it before it ships, so these three assertions are the
+ * the app to click through it before it ships, so these assertions are the
  * verification:
  *
  *   1. Configure → Generate really generates: the calendar renders shifts that
@@ -18,6 +18,13 @@
  *      on, so it is asserted directly on the mocked module.
  *   3. An unfillable configuration surfaces the slots it could not staff, with
  *      the constraint that bound, instead of a silently empty calendar.
+ *   4. THE GRADE GATES BIND IN THE RENDERED OUTPUT. A task restricted to
+ *      Senior/Principal is never shown with a junior as its lead, and the
+ *      converse gate holds too — checked by reading the lead's name out of the
+ *      calendar and looking its grade up in the fixture, not by trusting the
+ *      engine's own report.
+ *   5. A configuration the engine would refuse cannot be SUBMITTED: Generate is
+ *      disabled and the engine's own reason is on screen beside it.
  *
  * `firebase.js` is mocked because importing it for real calls `initializeApp`
  * and `getMessaging` at module scope, which cannot work in jsdom — and because a
@@ -62,7 +69,7 @@ vi.mock('../context/NexusContext', () => ({
 import { doc, collection, onSnapshot, setDoc, addDoc } from 'firebase/firestore';
 import RosterView from './RosterView';
 import { DEMO_EXAMPLE_DEPARTMENT } from '../data/mockData';
-import { generateRosterV2 } from '../utils/rosterEngineV2';
+import { generateRosterV2, bandOfGrade } from '../utils/rosterEngineV2';
 
 // --- HELPERS -----------------------------------------------------------------
 
@@ -72,8 +79,94 @@ const openConfigure = () => {
     fireEvent.click(screen.getByRole('button', { name: /configure/i }));
 };
 
+const loadExample = () => {
+    fireEvent.click(screen.getByRole('button', { name: /load example department/i }));
+};
+
+const generateButton = () => screen.getByRole('button', { name: /generate sandbox roster/i });
+
+/**
+ * `expect(...).toBeDisabled()` is a jest-dom matcher and this repo has no vitest
+ * setup file that registers them (`RosterView.alerts.test.jsx` uses plain
+ * matchers throughout). The DOM property is the same claim, without adding a
+ * global setup to the project as a side effect of this feature.
+ */
+const generateIsDisabled = () => generateButton().disabled === true;
+
+/**
+ * A validation message appears TWICE by design: once under the row it belongs to
+ * and once as the blocking reason above the Generate button. Asserting "at least
+ * one" keeps the test about the message being reachable rather than about which
+ * of the two places it is in.
+ */
+const expectOnScreen = (matcher) => {
+    const found = screen.getAllByText(matcher);
+    expect(found.length).toBeGreaterThan(0);
+    return found;
+};
+
 const clickGenerate = () => {
-    fireEvent.click(screen.getByRole('button', { name: /generate sandbox roster/i }));
+    fireEvent.click(generateButton());
+};
+
+/**
+ * The staff and task tables are driven through their per-cell `aria-label`s.
+ * Deliberately not through `getAllByRole('textbox')[n]`: an index into every
+ * input on screen would keep passing while pointing at a different column.
+ */
+const setStaffRow = (row, { name, grade, fte, away } = {}) => {
+    const cell = (label) => screen.getByLabelText(`Staff row ${row} ${label}`);
+    if (name !== undefined) fireEvent.change(cell('name'), { target: { value: name } });
+    if (grade !== undefined) fireEvent.change(cell('job grade'), { target: { value: grade } });
+    if (fte !== undefined) fireEvent.change(cell('FTE'), { target: { value: fte } });
+    if (away !== undefined) fireEvent.change(cell('away dates'), { target: { value: away } });
+};
+
+const setTaskName = (row, name) => {
+    fireEvent.change(screen.getByLabelText(`Task row ${row} name`), { target: { value: name } });
+};
+
+const clickBandChip = (row, band) => {
+    fireEvent.click(screen.getByLabelText(`Task row ${row}: ${band} may lead`));
+};
+
+const clickDay = (row, label) => {
+    fireEvent.click(screen.getByLabelText(`Task row ${row}: ${label}`));
+};
+
+/** [0] is the staff table's, [1] is the task table's — DOM order. */
+const addRow = (which) => {
+    const buttons = screen.getAllByRole('button', { name: /add row/i });
+    fireEvent.click(which === 'staff' ? buttons[0] : buttons[1]);
+};
+
+const setBandBound = (band, bound, value) => {
+    fireEvent.change(
+        screen.getByLabelText(`${band} band ${bound === 'min' ? 'lowest' : 'highest'} grade`),
+        { target: { value } },
+    );
+};
+
+/**
+ * Every rendered shift for `task`, as `{ lead, coLead }`, read out of the
+ * calendar's own display string (`buildShiftStaffLabel`'s "Lead: X, Co: Y").
+ *
+ * This is the point of the band assertions: it checks what a roster master would
+ * SEE, not what the engine says it did.
+ */
+const renderedLeadsFor = (task) =>
+    screen.getAllByText(task).map((label) => {
+        const text = label.closest('button').textContent;
+        const match = /Lead:\s*([^,]+)(?:,\s*Co:\s*(.+))?$/.exec(text);
+        if (!match) throw new Error(`No "Lead: …" label on the rendered ${task} shift: ${text}`);
+        return { lead: match[1].trim(), coLead: (match[2] || '').trim() };
+    });
+
+/** The fixture's own answer for "what band is this person in?" */
+const bandOf = (name) => {
+    const person = DEMO_EXAMPLE_DEPARTMENT.staff.find((entry) => entry.name === name);
+    if (!person) throw new Error(`${name} is not in the example department`);
+    return bandOfGrade(person.grade, DEMO_EXAMPLE_DEPARTMENT.rules.bands);
 };
 
 /** Every Firestore call site RosterView has, in one assertion. */
@@ -107,9 +200,9 @@ describe('demo mode: Configure → Load example department → Generate', () => 
     /**
      * The expected roster is the engine's own answer for the example
      * department. DEMO_EXAMPLE_DEPARTMENT is already in `generateRosterV2`'s
-     * input shape, so this is not a re-implementation of the component's form →
-     * config mapping: if that mapping drops a skill, an FTE or the rules, the
-     * two rosters diverge and these assertions fail.
+     * input shape, so this is not a re-implementation of the component's tables →
+     * config mapping: if that mapping drops a grade, a skill, an FTE, a lead band
+     * or the band boundaries, the two rosters diverge and these assertions fail.
      */
     const expected = generateRosterV2(DEMO_EXAMPLE_DEPARTMENT);
 
@@ -122,6 +215,31 @@ describe('demo mode: Configure → Load example department → Generate', () => 
         expect(Object.keys(expected.roster).length).toBeGreaterThan(0);
     });
 
+    it('the fixture is band-aware, and the band gates cost it nothing', () => {
+        // Every one of the twelve has a grade, so the sandbox's headline run does
+        // not open on an "N staff members have no job grade recorded" warning.
+        for (const person of DEMO_EXAMPLE_DEPARTMENT.staff) {
+            expect(bandOfGrade(person.grade, DEMO_EXAMPLE_DEPARTMENT.rules.bands)).toBeTruthy();
+        }
+        // At least one of each band, mostly juniors.
+        const bands = DEMO_EXAMPLE_DEPARTMENT.staff.map((person) => bandOf(person.name));
+        expect(bands.filter((band) => band === 'principal').length).toBeGreaterThanOrEqual(1);
+        expect(bands.filter((band) => band === 'senior').length).toBeGreaterThanOrEqual(2);
+        expect(bands.filter((band) => band === 'junior').length).toBeGreaterThan(bands.length / 2);
+
+        // Two tasks are band-gated, in both directions.
+        const gated = DEMO_EXAMPLE_DEPARTMENT.tasks.filter((task) => task.leadBands);
+        expect(gated.length).toBeGreaterThanOrEqual(2);
+        expect(gated.map((task) => task.leadBands)).toContainEqual(['senior', 'principal']);
+        expect(gated.map((task) => task.leadBands)).toContainEqual(['junior']);
+
+        // …and the gates did not create a single extra unfilled slot: still the
+        // ONE CPET-on-leave one, and no warnings.
+        expect(expected.unfilled).toHaveLength(1);
+        expect(expected.unfilled[0].task).toBe('Paediatric CPET');
+        expect(expected.warnings).toEqual([]);
+    });
+
     it('renders shifts derived from the engine, and never calls Firestore', () => {
         render(<RosterView user={VISITOR} />);
 
@@ -130,7 +248,7 @@ describe('demo mode: Configure → Load example department → Generate', () => 
         expect(screen.getByText(/no sandbox roster yet/i)).toBeTruthy();
 
         openConfigure();
-        fireEvent.click(screen.getByRole('button', { name: /load example department/i }));
+        loadExample();
         clickGenerate();
 
         // (a) The calendar renders the engine's shifts. Checked against every
@@ -163,10 +281,41 @@ describe('demo mode: Configure → Load example department → Generate', () => 
         expect(alertSpy).not.toHaveBeenCalled();
     });
 
+    it('never shows a junior leading the Senior/Principal-gated clinic', () => {
+        render(<RosterView user={VISITOR} />);
+        openConfigure();
+        loadExample();
+        clickGenerate();
+
+        // Read out of the CALENDAR, then looked up in the fixture. A grade that
+        // failed to travel from the table to the engine would show up here as a
+        // junior leading the clinic — the exact failure the gate exists to stop.
+        const clinics = renderedLeadsFor('Outpatient Clinic');
+        expect(clinics.length).toBeGreaterThan(0);
+        for (const { lead } of clinics) {
+            expect(['senior', 'principal']).toContain(bandOf(lead));
+        }
+
+        // The converse gate, so this is not passing because nothing is gated:
+        // Inpatient Rounds may only be led by a junior.
+        const rounds = renderedLeadsFor('Inpatient Rounds');
+        expect(rounds.length).toBeGreaterThan(0);
+        for (const { lead } of rounds) {
+            expect(bandOf(lead)).toBe('junior');
+        }
+
+        // Bands gate the LEAD only — a senior co-leading a junior-led round is
+        // the supervision shape, not a violation. Asserted so that a future
+        // change which starts gating co-leads has to come past this line.
+        expect(rounds.some(({ coLead }) => coLead !== '')).toBe(true);
+
+        expectNoFirestoreTraffic();
+    });
+
     it('reports the effective start date, the load table and the one unfilled slot', () => {
         render(<RosterView user={VISITOR} />);
         openConfigure();
-        fireEvent.click(screen.getByRole('button', { name: /load example department/i }));
+        loadExample();
         clickGenerate();
 
         // The Monday the engine actually started from.
@@ -185,6 +334,18 @@ describe('demo mode: Configure → Load example department → Generate', () => 
         expect(row).toBeTruthy();
         expect(within(row).getByText(String(partTimer.fte))).toBeTruthy();
         expect(within(row).getByText(String(expected.load[partTimer.name].duties))).toBeTruthy();
+        // …and now his grade and the band it resolves to, on the same row.
+        expect(within(row).getByText(partTimer.grade)).toBeTruthy();
+        expect(within(row).getByText(/junior/i)).toBeTruthy();
+
+        // The principal is reported as one, so the table is not just echoing the
+        // grade string back with a fixed label beside it.
+        const principal = DEMO_EXAMPLE_DEPARTMENT.staff.find(
+            (person) => bandOf(person.name) === 'principal',
+        );
+        const principalRow = screen.getByText(principal.name).closest('tr');
+        expect(within(principalRow).getByText(principal.grade)).toBeTruthy();
+        expect(within(principalRow).getByText(/principal/i)).toBeTruthy();
 
         // Requirement: `softPenalty` is never a headline — it is unnormalised and
         // not comparable between configurations, so it must not be on screen.
@@ -195,26 +356,76 @@ describe('demo mode: Configure → Load example department → Generate', () => 
 
         expectNoFirestoreTraffic();
     });
+
+    it('fills the tables from the fixture, including grades and the band editor', () => {
+        render(<RosterView user={VISITOR} />);
+        openConfigure();
+
+        // Before: five blank staff rows, three blank task rows.
+        expect(screen.getByLabelText('Staff row 5 name').value).toBe('');
+        expect(screen.queryByLabelText('Staff row 6 name')).toBeNull();
+
+        loadExample();
+
+        DEMO_EXAMPLE_DEPARTMENT.staff.forEach((person, index) => {
+            expect(screen.getByLabelText(`Staff row ${index + 1} name`).value).toBe(person.name);
+            expect(screen.getByLabelText(`Staff row ${index + 1} job grade`).value).toBe(person.grade);
+            expect(screen.getByLabelText(`Staff row ${index + 1} FTE`).value).toBe(String(person.fte));
+        });
+
+        // Shuri's leave date arrives as text in the Away column, not hidden in a
+        // parallel details object the visitor cannot see.
+        const shuriIndex = DEMO_EXAMPLE_DEPARTMENT.staff.findIndex((person) => person.name === 'Shuri');
+        expect(screen.getByLabelText(`Staff row ${shuriIndex + 1} away dates`).value).toBe('2026-09-16');
+
+        // The band editor holds the boundaries the fixture's grades were tuned
+        // against — this is what makes "exactly one unfilled slot" reproducible.
+        expect(screen.getByLabelText('Junior band lowest grade').value).toBe('7');
+        expect(screen.getByLabelText('Junior band highest grade').value).toBe('12');
+        expect(screen.getByLabelText('Senior band lowest grade').value).toBe('13');
+        expect(screen.getByLabelText('Principal band highest grade').value).toBe('17');
+
+        // The gated task's chips are ticked, and the grade range beside them is
+        // rendered from those boundaries.
+        const clinicIndex = DEMO_EXAMPLE_DEPARTMENT.tasks.findIndex(
+            (task) => task.name === 'Outpatient Clinic',
+        );
+        expect(screen.getByLabelText(`Task row ${clinicIndex + 1} name`).value).toBe('Outpatient Clinic');
+        expect(
+            screen.getByLabelText(`Task row ${clinicIndex + 1}: Senior may lead`).getAttribute('aria-pressed'),
+        ).toBe('true');
+        expect(
+            screen.getByLabelText(`Task row ${clinicIndex + 1}: Junior may lead`).getAttribute('aria-pressed'),
+        ).toBe('false');
+        expect(screen.getAllByText('AH13–AH17').length).toBeGreaterThan(0);
+
+        expectNoFirestoreTraffic();
+    });
 });
 
 // ─── 2. A TYPED-IN TEAM, NAMES ONLY ───────────────────────────────────────────
 
 describe('demo mode: a visitor types their own team', () => {
-    it('generates from names alone — no skills, FTE or leave required', () => {
+    it('generates from names alone — no grade, FTE or leave required', () => {
         render(<RosterView user={VISITOR} />);
         openConfigure();
 
-        fireEvent.change(screen.getByLabelText(/staff pool/i), {
-            target: { value: 'Aisha Rahman, Ben Carter, Chloe Ng, Daniel Osei' },
-        });
-        fireEvent.change(screen.getByLabelText(/core tasks/i), {
-            target: { value: 'Ward Round, Outpatient Clinic' },
-        });
+        setStaffRow(1, { name: 'Aisha Rahman' });
+        setStaffRow(2, { name: 'Ben Carter' });
+        setStaffRow(3, { name: 'Chloe Ng' });
+        setStaffRow(4, { name: 'Daniel Osei' });
+        setTaskName(1, 'Ward Round');
+        setTaskName(2, 'Outpatient Clinic');
         fireEvent.change(screen.getByLabelText(/^weeks$/i), { target: { value: '1' } });
         fireEvent.change(screen.getByLabelText(/start date/i), { target: { value: '2026-09-07' } });
 
         clickGenerate();
 
+        // Hand-written rather than built with the mapping function, so a mapping
+        // bug cannot cancel itself out: this is the config the tables above are
+        // claimed to mean, including the defaults the columns were left at
+        // (1.0 FTE, Mon–Fri, one co-lead, no lead-band restriction) and the
+        // band boundaries the editor is prefilled with.
         const expected = generateRosterV2({
             startDate: '2026-09-07',
             weeks: 1,
@@ -224,7 +435,11 @@ describe('demo mode: a visitor types their own team', () => {
                 { name: 'Chloe Ng', fte: 1.0, skills: [], unavailable: [] },
                 { name: 'Daniel Osei', fte: 1.0, skills: [], unavailable: [] },
             ],
-            tasks: [{ name: 'Ward Round' }, { name: 'Outpatient Clinic' }],
+            tasks: [
+                { name: 'Ward Round', days: [1, 2, 3, 4, 5], leads: 1, coLeads: 1 },
+                { name: 'Outpatient Clinic', days: [1, 2, 3, 4, 5], leads: 1, coLeads: 1 },
+            ],
+            rules: { bands: { junior: [7, 12], senior: [13, 14], principal: [15, 17] } },
         });
 
         expect(expected.ok).toBe(true);
@@ -232,7 +447,7 @@ describe('demo mode: a visitor types their own team', () => {
         expect(screen.getByText(/could not be staffed \(0\)/i)).toBeTruthy();
 
         // Four names typed, four names in the load table, every one of them
-        // rostered — the engine's defaults filled in the rest.
+        // rostered — the columns left blank fell through to the defaults.
         for (const name of Object.keys(expected.load)) {
             expect(screen.getByText(name)).toBeTruthy();
             expect(expected.load[name].duties).toBeGreaterThan(0);
@@ -242,6 +457,106 @@ describe('demo mode: a visitor types their own team', () => {
         for (const shift of expected.roster[firstDate]) {
             expect(screen.getAllByText(shift.staff).length).toBeGreaterThan(0);
         }
+
+        // Nobody's grade was invented for them: the load table says so in words.
+        expect(screen.getAllByText(/not recorded/i).length).toBeGreaterThan(0);
+
+        expectNoFirestoreTraffic();
+    });
+
+    it('takes a grade, a part-time FTE, leave dates and a weekend day from the table', () => {
+        render(<RosterView user={VISITOR} />);
+        openConfigure();
+
+        setStaffRow(1, { name: 'Aisha Rahman', grade: 'AH14' });
+        setStaffRow(2, { name: 'Ben Carter', grade: 'AH8', fte: '0.6', away: '2026-09-08' });
+        setStaffRow(3, { name: 'Chloe Ng', grade: 'AH13' });
+        setTaskName(1, 'Weekend Cover');
+        // Mon–Fri off, Saturday on — the 7-day strip, driven one chip at a time.
+        for (const day of ['Mon', 'Tue', 'Wed', 'Thu', 'Fri']) clickDay(1, day);
+        clickDay(1, 'Sat');
+        setTaskName(2, 'Outpatient Clinic');
+        clickBandChip(2, 'Senior');
+        clickBandChip(2, 'Principal');
+
+        fireEvent.change(screen.getByLabelText(/^weeks$/i), { target: { value: '1' } });
+        fireEvent.change(screen.getByLabelText(/start date/i), { target: { value: '2026-09-07' } });
+
+        // The chips report the grade span they imply, live, from the boundaries
+        // in the editor above.
+        expect(screen.getAllByText('AH13–AH17').length).toBeGreaterThan(0);
+
+        clickGenerate();
+
+        const expected = generateRosterV2({
+            startDate: '2026-09-07',
+            weeks: 1,
+            staff: [
+                { name: 'Aisha Rahman', fte: 1.0, skills: [], unavailable: [], grade: 'AH14' },
+                { name: 'Ben Carter', fte: 0.6, skills: [], unavailable: ['2026-09-08'], grade: 'AH8' },
+                { name: 'Chloe Ng', fte: 1.0, skills: [], unavailable: [], grade: 'AH13' },
+            ],
+            tasks: [
+                { name: 'Weekend Cover', days: [6], leads: 1, coLeads: 1 },
+                { name: 'Outpatient Clinic', days: [1, 2, 3, 4, 5], leads: 1, coLeads: 1, leadBands: ['senior', 'principal'] },
+            ],
+            rules: { bands: { junior: [7, 12], senior: [13, 14], principal: [15, 17] } },
+        });
+        expect(expected.ok).toBe(true);
+
+        // The Saturday task exists, which is only true if the day strip's chip
+        // carried engine day 6.
+        const saturdays = Object.keys(expected.roster).filter(
+            (key) => expected.roster[key].some((shift) => shift.task === 'Weekend Cover'),
+        );
+        expect(saturdays).toHaveLength(1);
+        expect(screen.getAllByText('Weekend Cover').length).toBe(1);
+
+        // Ben is a junior and was on leave on the 8th: he leads no clinic, and he
+        // holds no duty at all on 2026-09-08.
+        for (const { lead } of renderedLeadsFor('Outpatient Clinic')) {
+            expect(lead).not.toBe('Ben Carter');
+        }
+        for (const shift of expected.roster['2026-09-08'] || []) {
+            expect(shift.lead).not.toBe('Ben Carter');
+            expect(shift.coLead).not.toBe('Ben Carter');
+        }
+
+        // The part-time FTE reached the load table.
+        const benRow = screen.getByText('Ben Carter').closest('tr');
+        expect(within(benRow).getByText('0.6')).toBeTruthy();
+        expect(within(benRow).getByText('AH8')).toBeTruthy();
+
+        expectNoFirestoreTraffic();
+    });
+
+    it('warns by name when somebody has no grade and a task is band-gated', () => {
+        render(<RosterView user={VISITOR} />);
+        openConfigure();
+
+        setStaffRow(1, { name: 'Priya Nair', grade: 'AH15' });
+        setStaffRow(2, { name: 'Ungraded Locum' });
+        setStaffRow(3, { name: 'Chloe Ng', grade: 'AH9' });
+        setTaskName(1, 'Complex Airway Clinic');
+        clickBandChip(1, 'Principal');
+        setTaskName(2, 'Ward Round');
+        fireEvent.change(screen.getByLabelText(/^weeks$/i), { target: { value: '1' } });
+        fireEvent.change(screen.getByLabelText(/start date/i), { target: { value: '2026-09-07' } });
+
+        clickGenerate();
+
+        // The blank grade was NOT defaulted to AH7 — it was left absent, and the
+        // engine's own warning about it is in the warnings panel.
+        expect(screen.getByText(/warnings \(/i)).toBeTruthy();
+        expect(screen.getByText(/no job grade recorded \(Ungraded Locum\)/i)).toBeTruthy();
+
+        // …and the consequence is real: the locum leads nothing that is gated.
+        for (const { lead } of renderedLeadsFor('Complex Airway Clinic')) {
+            expect(lead).toBe('Priya Nair');
+        }
+        // They are still eligible for everything else, which is the other half of
+        // the engine's contract.
+        expect(screen.getByText('Ungraded Locum')).toBeTruthy();
 
         expectNoFirestoreTraffic();
     });
@@ -256,12 +571,12 @@ describe('demo mode: an unfillable configuration', () => {
 
         // One person, four tasks needing two people each: the engine can fill two
         // duties for them (the default daily limit) and refuses the rest.
-        fireEvent.change(screen.getByLabelText(/staff pool/i), {
-            target: { value: 'Solo Practitioner' },
-        });
-        fireEvent.change(screen.getByLabelText(/core tasks/i), {
-            target: { value: 'Ward Round, Outpatient Clinic, Home Visits, Group Therapy' },
-        });
+        setStaffRow(1, { name: 'Solo Practitioner' });
+        setTaskName(1, 'Ward Round');
+        setTaskName(2, 'Outpatient Clinic');
+        setTaskName(3, 'Home Visits');
+        addRow('task');
+        setTaskName(4, 'Group Therapy');
         fireEvent.change(screen.getByLabelText(/^weeks$/i), { target: { value: '1' } });
         fireEvent.change(screen.getByLabelText(/start date/i), { target: { value: '2026-09-07' } });
 
@@ -272,11 +587,12 @@ describe('demo mode: an unfillable configuration', () => {
             weeks: 1,
             staff: [{ name: 'Solo Practitioner', fte: 1.0, skills: [], unavailable: [] }],
             tasks: [
-                { name: 'Ward Round' },
-                { name: 'Outpatient Clinic' },
-                { name: 'Home Visits' },
-                { name: 'Group Therapy' },
+                { name: 'Ward Round', days: [1, 2, 3, 4, 5], leads: 1, coLeads: 1 },
+                { name: 'Outpatient Clinic', days: [1, 2, 3, 4, 5], leads: 1, coLeads: 1 },
+                { name: 'Home Visits', days: [1, 2, 3, 4, 5], leads: 1, coLeads: 1 },
+                { name: 'Group Therapy', days: [1, 2, 3, 4, 5], leads: 1, coLeads: 1 },
             ],
+            rules: { bands: { junior: [7, 12], senior: [13, 14], principal: [15, 17] } },
         });
 
         expect(expected.ok).toBe(true);
@@ -297,26 +613,168 @@ describe('demo mode: an unfillable configuration', () => {
         expectNoFirestoreTraffic();
     });
 
-    it('refuses a configuration the engine rejects, and says why, without writing', () => {
+    it('will not let a configuration the engine rejects be submitted at all', () => {
         render(<RosterView user={VISITOR} />);
         openConfigure();
 
         // Two rows, one name: every load figure and capacity check would be
         // ambiguous, so the engine refuses rather than generating.
-        fireEvent.change(screen.getByLabelText(/staff pool/i), {
-            target: { value: 'Sam Wilson, Sam Wilson' },
-        });
-        fireEvent.change(screen.getByLabelText(/core tasks/i), {
-            target: { value: 'Ward Round' },
-        });
+        setStaffRow(1, { name: 'Sam Wilson' });
+        setStaffRow(2, { name: 'Sam Wilson' });
+        setTaskName(1, 'Ward Round');
+
+        // The engine's OWN reason, verbatim, beside a disabled button — the
+        // refusal now happens BEFORE the click rather than into a banner behind
+        // the still-open wizard.
+        expectOnScreen(/appears twice in the staff pool/i);
+        expect(generateIsDisabled()).toBe(true);
 
         clickGenerate();
 
-        expect(screen.getByText(/AURA did not generate a roster/i)).toBeTruthy();
-        expect(screen.getByText(/appears twice in the staff pool/i)).toBeTruthy();
         // A refusal must not leave a half-built roster on screen.
         expect(screen.getByText(/no sandbox roster yet/i)).toBeTruthy();
-
         expectNoFirestoreTraffic();
+    });
+});
+
+// ─── 4. THE BAND BOUNDARY EDITOR ──────────────────────────────────────────────
+
+describe('demo mode: the band boundary editor', () => {
+    it('disables Generate and shows validateGradeBands\' reason on a gap', () => {
+        render(<RosterView user={VISITOR} />);
+        openConfigure();
+        loadExample();
+
+        // A generatable configuration to start from, so the only thing under test
+        // is the boundary edit.
+        expect(generateIsDisabled()).toBe(false);
+
+        // Junior now ends at AH11 while senior still starts at AH13 — AH12 is in
+        // no band at all, which is the dangerous case: Sam Wilson (AH12) would be
+        // silently unable to lead every band-gated task.
+        setBandBound('Junior', 'max', '11');
+
+        expect(generateIsDisabled()).toBe(true);
+        expectOnScreen(/leave AH12 in no band at all/i);
+
+        clickGenerate();
+        expect(screen.getByText(/no sandbox roster yet/i)).toBeTruthy();
+
+        // Put it back and the button returns.
+        setBandBound('Junior', 'max', '12');
+        expect(generateIsDisabled()).toBe(false);
+        expectNoFirestoreTraffic();
+    });
+
+    it('refuses an overlap, and an emptied box, with a reason about that box', () => {
+        render(<RosterView user={VISITOR} />);
+        openConfigure();
+        loadExample();
+
+        setBandBound('Senior', 'min', '11');
+        expectOnScreen(/overlap/i);
+        expect(generateIsDisabled()).toBe(true);
+
+        setBandBound('Senior', 'min', '13');
+        setBandBound('Senior', 'max', '');
+        // Not coerced to 0 and not silently defaulted — the reason is about the
+        // empty box the user is standing in.
+        expectOnScreen(/band bounds are whole grade numbers/i);
+        expect(generateIsDisabled()).toBe(true);
+        expectNoFirestoreTraffic();
+    });
+
+    it('moves the grade range shown beside a task\'s chips in the same keystroke', () => {
+        render(<RosterView user={VISITOR} />);
+        openConfigure();
+        loadExample();
+
+        expect(screen.getAllByText('AH13–AH17').length).toBeGreaterThan(0);
+
+        // Widen senior downwards: senior AH11–14, junior AH7–10. Still a valid
+        // partition, so the range beside the Senior/Principal chips must follow.
+        setBandBound('Junior', 'max', '10');
+        setBandBound('Senior', 'min', '11');
+
+        expect(screen.queryByText('AH13–AH17')).toBeNull();
+        expect(screen.getAllByText('AH11–AH17').length).toBeGreaterThan(0);
+        expect(screen.getAllByText('AH7–AH10').length).toBeGreaterThan(0);
+        expect(generateIsDisabled()).toBe(false);
+        expectNoFirestoreTraffic();
+    });
+});
+
+// ─── 5. PER-ROW REFUSALS ──────────────────────────────────────────────────────
+
+describe('demo mode: the tables refuse bad cells rather than dropping them', () => {
+    it('shows a per-row error for an unreadable leave date', () => {
+        render(<RosterView user={VISITOR} />);
+        openConfigure();
+
+        setStaffRow(1, { name: 'Shuri', away: '16 Sept' });
+        setTaskName(1, 'Ward Round');
+
+        // Quoted, so the visitor can see which token AURA could not read. A
+        // silently dropped leave date is somebody rostered on the day they are
+        // away, which is the one failure this app exists to prevent.
+        expectOnScreen(/"16 Sept"/);
+        expect(generateIsDisabled()).toBe(true);
+
+        setStaffRow(1, { away: '2026-09-16' });
+        expect(generateIsDisabled()).toBe(false);
+        expectNoFirestoreTraffic();
+    });
+
+    it('shows a per-row error for an out-of-range FTE, and does not clamp it', () => {
+        render(<RosterView user={VISITOR} />);
+        openConfigure();
+
+        setStaffRow(1, { name: 'Ben Carter', fte: '1.4' });
+        setTaskName(1, 'Ward Round');
+
+        expectOnScreen(/FTE 1.4 is outside 0.1–1/i);
+        expect(generateIsDisabled()).toBe(true);
+        expectNoFirestoreTraffic();
+    });
+
+    it('refuses a task with every day unticked', () => {
+        render(<RosterView user={VISITOR} />);
+        openConfigure();
+
+        setStaffRow(1, { name: 'Aisha Rahman' });
+        setTaskName(1, 'Ghost Clinic');
+        for (const day of ['Mon', 'Tue', 'Wed', 'Thu', 'Fri']) clickDay(1, day);
+
+        expectOnScreen(/Ghost Clinic has no days ticked/i);
+        expect(generateIsDisabled()).toBe(true);
+        expectNoFirestoreTraffic();
+    });
+
+    it('says out loud that two ticked bands are not a preference order', () => {
+        render(<RosterView user={VISITOR} />);
+        openConfigure();
+        // The top surprise in the engine's limits ledger, on screen where the
+        // surprise would happen.
+        expect(
+            screen.getByText(/Ticking two bands makes both equally eligible — it is not a preference order/i),
+        ).toBeTruthy();
+    });
+
+    it('adds and removes rows', () => {
+        render(<RosterView user={VISITOR} />);
+        openConfigure();
+
+        expect(screen.queryByLabelText('Staff row 6 name')).toBeNull();
+        addRow('staff');
+        expect(screen.getByLabelText('Staff row 6 name')).toBeTruthy();
+
+        setStaffRow(1, { name: 'First' });
+        setStaffRow(2, { name: 'Second' });
+        fireEvent.click(screen.getByLabelText('Remove staff row 1'));
+
+        // Row 1 is now what row 2 was — the rows are keyed by identity, so the
+        // remaining values did not shuffle into the wrong columns.
+        expect(screen.getByLabelText('Staff row 1 name').value).toBe('Second');
+        expect(screen.queryByLabelText('Staff row 6 name')).toBeNull();
     });
 });

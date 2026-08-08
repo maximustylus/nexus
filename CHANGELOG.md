@@ -59,6 +59,81 @@ Firestore rule, blocked on decision D6.
 
 ---
 
+## [1.8.0] - 2026-08-08
+
+The roster master release: job grades, band-gated tasks, monthly clinics and
+continuity of care — built from field interviews with four allied-health teams
+(medical lab scientists, embryologists, psychologists, physiotherapists). All of it
+is Sandbox-first; the live-mode wizard is untouched.
+
+### Added
+
+- **Job-grade bands in the engine (AH7–AH17).** Per-staff `grade`, per-task
+  `leadBands` (junior / senior / principal), and editable band boundaries defaulting
+  to Junior AH7–12 / Senior AH13–14 / Principal AH15–17. Decided semantics: bands are
+  **eligibility, not exclusion-with-fallback** (a juniors-only task reports an
+  unfilled slot rather than drafting a senior); the gate applies to the **lead only**,
+  so senior-leads/junior-shadows is expressible; a person with no recorded grade
+  fails every band gate and is named in a warning — the engine does not invent data.
+  Slot scarcity ordering counts the band gate, and a new hard-audit rule catches an
+  out-of-band lead on read-back. 149 tests, mutation-checked.
+- **Monthly recurrence.** A task can run on the nth (or last) named weekday of each
+  month — `recurrence: { ordinal: 3, weekday: 3 }` is the psychologists' 3rd-Wednesday
+  specialised clinic. `'last'` and `4` differ exactly in five-week months, and that
+  difference is pinned by test.
+- **Continuity of care.** `continuity: true` prefers the incumbent lead across a
+  task's occurrences — ahead of fairness, never ahead of a hard constraint. Every
+  break is counted (`score.breakdown.continuityBreaks`) and **named in a warning**
+  with the dates and, where knowable, why the incumbent was unavailable — because
+  knowing continuity broke is the clinical point of the rule. Continuity tasks are
+  exempt from the task-repetition penalty, which otherwise charges the roster for
+  doing as it was told. 133 tests, mutation-checked (16 mutations; one survivor
+  proven equivalent, one exposed and fixed a duplicate definition of "did continuity
+  hold").
+- **The grade-aware sandbox wizard.** The demo Configure dialog's two free-text boxes
+  are now structured tables: staff (Name / Grade / FTE / Away, five rows default,
+  add/remove) and tasks (name, who-may-lead band chips with the **implied grade range
+  rendered live**, a 7-day strip, co-lead toggle), plus a band-boundary editor that
+  revalidates on every change. Generate is disabled with the engine's verbatim reason
+  while the configuration is invalid — the engine's own validation runs *before* the
+  click. The example department is regraded across all three bands and band-gates two
+  tasks, still yielding exactly one deliberately unstaffable slot. One line of copy
+  carries the top surprise from the limits ledger: *"Ticking two bands makes both
+  equally eligible — it is not a preference order."*
+- **A composed validation refusal.** A task whose `requiresSkill` and `leadBands`
+  pools do not intersect (enough principals, enough skill-holders, nobody who is
+  both) is now refused at configure time with both constraints named — previously it
+  generated an all-unfilled roster with only a warning.
+
+### Changed
+
+- `SOFT_PENALTY_WEIGHTS` gains `continuityBreaks: 2` (uncalibrated, like the other
+  four — the number to read is the plain count in `score.breakdown`). A transitional
+  `ALL_SOFT_PENALTY_WEIGHTS` overlay existed for one commit and is gone.
+- `softPenalty` is now additionally **not comparable across the `continuity` flag**
+  on otherwise-identical configs (the exemption changes what is counted). It was
+  already documented as non-comparable across differently-shaped teams.
+
+### Notes — the honest limits that matter most
+
+- **Continuity cannot see across generation runs.** A department generating
+  month-by-month can get a different incumbent most months, with zero warnings —
+  measured, not guessed. Border data between runs is the standing deferred item.
+- **`continuity: true` on a weekly task means one person, every day, all year** —
+  measured: 260 of 260 duties to one name, reported as flawless. Use it for monthly
+  clinics, not daily duties, until a ceiling exists.
+- A part-timer can become the permanent incumbent (first occurrence goes by
+  FTE-weighted fairness, which favours low-FTE staff early).
+- The wizard's tables scroll horizontally on narrow screens and **nobody has seen
+  them rendered** — layout verification needs a human with a browser.
+- Engine capabilities still pending from the field interviews, in the user's chosen
+  order: true per-task hour durations (42-hour weeks), multi-slot shifts
+  (embryology's principal+senior+junior trios), pinned self-scheduling, minimum
+  Saturday floors (lab scientists).
+
+832 tests (was 499 at v1.7.1). Live mode still writes with the original engine,
+whose output is unchanged — verified byte-identical across 77 comparisons.
+
 ## [1.7.1] - 2026-08-06
 
 Every item is a fix. Live-mode generation now lands on the weekdays it claims, the

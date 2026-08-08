@@ -29,71 +29,25 @@ import { DEMO_EXAMPLE_DEPARTMENT } from '../data/mockData';
 import {
     generateRosterV2,
     parseLocalDateKey,
-    ROSTER_V2_DEFAULTS,
+    validateRosterV2Config,
+    bandOfGrade,
+    DEFAULT_GRADE_BANDS,
 } from '../utils/rosterEngineV2';
+// 🧪 SANDBOX WIZARD — the structured tables that replaced the two textareas in
+// demo mode, and the ONE pure function that turns them into an engine config.
+import RosterDemoWizardTables from './RosterDemoWizardTables';
+import {
+    buildDemoRosterV2ConfigFromTables,
+    createEmptyStaffRows,
+    createEmptyTaskRows,
+    createStaffRow,
+    createTaskRow,
+    bandsToInputs,
+    bandLabel,
+} from '../utils/rosterWizard';
 
 // 🌟 IMPORT THE CUSTOM MODAL
 import ConfirmationModal from './ConfirmationModal';
-
-/**
- * 🧪 SANDBOX: turn what the Configure wizard holds into a `generateRosterV2`
- * config.
- *
- * The wizard's two textareas are, and stay, plain comma-separated NAMES —
- * requirement 3 of this feature is that a visiting respiratory therapist can
- * type twelve names and eight task names and get a real roster. Everything the
- * engine also understands (FTE, skills, leave, per-task days/skills) arrives
- * through `details`, which "Load example department" fills, and is matched back
- * to the textarea contents BY NAME.
- *
- * That matching is deliberate: edit or delete a name and its extra detail simply
- * stops applying, so the form can never claim a skill for somebody who is no
- * longer in the pool. Anyone without detail gets the engine's own documented
- * defaults (`ROSTER_V2_DEFAULTS.fte`, no skills, no leave) — imported, not
- * re-guessed here.
- *
- * Pure, and exported so it can be reasoned about (and tested) without a DOM.
- */
-export const buildDemoRosterV2Config = ({ config, details }) => {
-    const cleanNames = (list) =>
-        (Array.isArray(list) ? list : [])
-            .map((entry) => (typeof entry === 'string' ? entry.trim() : ''))
-            .filter((entry) => entry !== '');
-
-    const staffDetail = new Map(
-        (details?.staff || []).map((person) => [person.name, person]),
-    );
-    const taskDetail = new Map(
-        (details?.tasks || []).map((task) => [task.name, task]),
-    );
-
-    return {
-        startDate: config.startDate,
-        weeks: config.weeks,
-        staff: cleanNames(config.staff).map((name) => {
-            const extra = staffDetail.get(name);
-            return {
-                name,
-                fte: typeof extra?.fte === 'number' ? extra.fte : ROSTER_V2_DEFAULTS.fte,
-                skills: Array.isArray(extra?.skills) ? [...extra.skills] : [],
-                unavailable: Array.isArray(extra?.unavailable) ? [...extra.unavailable] : [],
-                ...(typeof extra?.maxPerDay === 'number' ? { maxPerDay: extra.maxPerDay } : {}),
-            };
-        }),
-        tasks: cleanNames(config.tasks).map((name) => {
-            const extra = taskDetail.get(name);
-            return {
-                name,
-                ...(extra?.requiresSkill ? { requiresSkill: extra.requiresSkill } : {}),
-                ...(Array.isArray(extra?.days) ? { days: [...extra.days] } : {}),
-                ...(typeof extra?.leads === 'number' ? { leads: extra.leads } : {}),
-                ...(typeof extra?.coLeads === 'number' ? { coLeads: extra.coLeads } : {}),
-                ...(extra?.category ? { category: extra.category } : {}),
-            };
-        }),
-        ...(details?.rules ? { rules: { ...details.rules } } : {}),
-    };
-};
 
 /** How many unfilled slots the sandbox panel lists before it summarises. */
 const DEMO_UNFILLED_PREVIEW = 20;
@@ -216,15 +170,35 @@ const RosterView = ({ user }) => {
     const [status, setStatus] = useState(null);
     const statusTimerRef = useRef(null);
 
-    // 🧪 SANDBOX STATE — both fields exist only in demo mode and only in memory.
-    // `demoResult` is the whole `generateRosterV2` return value (effectiveStart,
-    // unfilled, load, warnings, score) so the panel below the calendar can report
-    // what the engine actually knew, rather than a summary of it.
+    // 🧪 SANDBOX STATE — every field below exists only in demo mode and only in
+    // memory. `demoResult` is the whole `generateRosterV2` return value
+    // (effectiveStart, unfilled, load, warnings, score) so the panel below the
+    // calendar can report what the engine actually knew, rather than a summary.
     const [demoResult, setDemoResult] = useState(null);
-    // The per-person / per-task detail the two name textareas cannot express.
-    // `null` until "Load example department" is pressed — a typed-in team runs on
-    // the engine's defaults, which is the point of requirement 3.
-    const [demoDetails, setDemoDetails] = useState(null);
+
+    // 🧪 THE GRADE-AWARE WIZARD'S TABLES. These replaced the two comma-separated
+    // textareas in demo mode; live mode still renders the textareas, unchanged.
+    //
+    // The rows hold RAW STRINGS for FTE and away-dates on purpose — a half-typed
+    // "0." or a cleared box must survive a keystroke rather than becoming NaN —
+    // and every parse, refusal and per-row error message is decided in ONE pure
+    // place, `buildDemoRosterV2ConfigFromTables`. Nothing here re-guesses it.
+    const [demoStaffRows, setDemoStaffRows] = useState(() => createEmptyStaffRows());
+    const [demoTaskRows, setDemoTaskRows] = useState(() => createEmptyTaskRows());
+    // The three band boundaries, as the editor's six text inputs. Prefilled with
+    // the engine's shipped cut (junior AH7–12, senior AH13–14, principal AH15–17)
+    // because that is this department's current policy, not a law of nature.
+    const [demoBandInputs, setDemoBandInputs] = useState(() => bandsToInputs(DEFAULT_GRADE_BANDS));
+    // Department policy the tables have no column for: maxConcurrentPerDay and
+    // maxConsecutiveDays. `null` for a typed-in team, which then gets the
+    // engine's own documented defaults; "Load example department" supplies the
+    // example's. `rules.bands` is NOT in here — it comes from the editor above.
+    const [demoExtraRules, setDemoExtraRules] = useState(null);
+    // Who held which grade in the run that is ON SCREEN, so the load table can
+    // report it. Captured at generate time rather than read from the live rows:
+    // editing a grade after generating must not silently relabel a finished
+    // roster's report.
+    const [demoRunGrades, setDemoRunGrades] = useState({});
 
     // 🌟 CUSTOM MODAL STATE
     const [isConfirmModalOpen, setIsConfirmModalOpen] = useState(false);
@@ -255,6 +229,37 @@ const RosterView = ({ user }) => {
     // 🛡️ Every write decision is made by pure functions, re-run on config change.
     const configValidation = useMemo(() => validateRosterConfig(config), [config]);
     const generationPlan = useMemo(() => describeGenerationRange(config), [config]);
+
+    // 🧪 SANDBOX: the tables, mapped and judged in one pure call per render.
+    // `demoWizard.config` is what Generate hands the engine; `staffErrors` /
+    // `taskErrors` / `bandsReason` are what the tables show. There is no second
+    // opinion anywhere in this component.
+    const demoWizard = useMemo(
+        () => buildDemoRosterV2ConfigFromTables({
+            startDate: config.startDate,
+            weeks: config.weeks,
+            staffRows: demoStaffRows,
+            taskRows: demoTaskRows,
+            bandInputs: demoBandInputs,
+            extraRules: demoExtraRules,
+        }),
+        [config.startDate, config.weeks, demoStaffRows, demoTaskRows, demoBandInputs, demoExtraRules],
+    );
+
+    // …and then the engine's OWN validator on the finished config, so the
+    // sandbox Generate button is disabled for exactly the reasons
+    // `generateRosterV2` would refuse for — start date, weeks, duplicate names,
+    // an unheld skill, a band nobody is in — with its wording, not a paraphrase.
+    const demoValidation = useMemo(
+        () => (demoWizard.ok
+            ? validateRosterV2Config(demoWizard.config)
+            : { valid: false, reason: demoWizard.reason }),
+        [demoWizard],
+    );
+
+    // Which gate the Generate button obeys. Live mode is untouched: it is still
+    // `validateRosterConfig` over the two textareas, exactly as before.
+    const generateGate = isDemo ? demoValidation : configValidation;
 
     // --- STATUS BANNER PLUMBING ---
     // A success message is transient and clears itself; an error or an info
@@ -313,7 +318,15 @@ const RosterView = ({ user }) => {
             setRosterData({});
             setRosterError(null);
             setDemoResult(null);
-            setDemoDetails(null);
+            setDemoRunGrades({});
+            // The tables start blank for the same reason the textareas did: in
+            // demo mode they are for the visitor's own team, and showing four
+            // real colleagues' names — now with their real pay grades — to a
+            // stranger would be worse than it was before grades existed.
+            setDemoStaffRows(createEmptyStaffRows());
+            setDemoTaskRows(createEmptyTaskRows());
+            setDemoBandInputs(bandsToInputs(DEFAULT_GRADE_BANDS));
+            setDemoExtraRules(null);
             setConfig(prev => ({ ...prev, staff: [], tasks: [] }));
             // 🛡️ A live "Generate?" confirmation must not survive into demo mode.
             // It is the ONE control whose OK button reaches setDoc, and both
@@ -329,7 +342,16 @@ const RosterView = ({ user }) => {
             // no snapshot ever replaces them.
             setRosterData({});
             setDemoResult(null);
-            setDemoDetails(null);
+            setDemoRunGrades({});
+            // The sandbox tables are dropped as well, so a fictional department
+            // (and its grades) cannot be sitting in the wizard the next time
+            // somebody opens it in LIVE mode. The wizard renders the textareas
+            // there, but the rows would still be the source Generate reads if the
+            // universe were toggled back.
+            setDemoStaffRows(createEmptyStaffRows());
+            setDemoTaskRows(createEmptyTaskRows());
+            setDemoBandInputs(bandsToInputs(DEFAULT_GRADE_BANDS));
+            setDemoExtraRules(null);
 
             // 🛡️ M1 FIX: the demo branch above rewrites config.staff/config.tasks
             // (it used to overwrite them with the Marvel dataset; it now clears
@@ -365,27 +387,56 @@ const RosterView = ({ user }) => {
     // --- ACTIONS ---
     
     /**
-     * 🧪 SANDBOX: fill the example department into the wizard.
+     * 🧪 SANDBOX: fill the example department into the wizard's tables.
      *
-     * Sets BOTH halves at once — the two name textareas (what the visitor can
-     * see and edit) and `demoDetails` (the FTE / skills / leave / per-task days
-     * the textareas cannot express). Fresh copies, so a later edit cannot mutate
-     * the frozen export through a shared reference.
+     * EVERYTHING the fixture holds now lands somewhere the visitor can see and
+     * change: names, grades, FTE and leave dates into the staff rows; days, lead
+     * bands and the co-lead toggle into the task rows; the three band boundaries
+     * into the editor above them. The fixture's grades were tuned against those
+     * boundaries (see `DEMO_EXAMPLE_DEPARTMENT`), so the editor is loaded from
+     * `rules.bands` rather than left at whatever the visitor last typed.
+     *
+     * Two things travel on the rows without a column of their own — staff
+     * `skills` and a task's `requiresSkill` — because the example's single
+     * unfillable slot exists precisely because only two people hold CPET. They
+     * are rendered read-only in the tables rather than hidden.
+     *
+     * Fresh copies throughout, so a later edit cannot mutate the frozen export
+     * through a shared array reference.
      */
     const loadExampleDepartment = () => {
-        setDemoDetails({
-            staff: DEMO_EXAMPLE_DEPARTMENT.staff.map(person => ({ ...person })),
-            tasks: DEMO_EXAMPLE_DEPARTMENT.tasks.map(task => ({ ...task })),
-            rules: { ...DEMO_EXAMPLE_DEPARTMENT.rules },
-        });
+        setDemoStaffRows(DEMO_EXAMPLE_DEPARTMENT.staff.map(person => createStaffRow(person)));
+        setDemoTaskRows(DEMO_EXAMPLE_DEPARTMENT.tasks.map(task => createTaskRow(task)));
+        setDemoBandInputs(bandsToInputs(DEMO_EXAMPLE_DEPARTMENT.rules?.bands || DEFAULT_GRADE_BANDS));
+        // Only the policy the tables have no column for. `bands` is stripped: the
+        // editor owns it from here, and two sources for one value is how a
+        // roster gets generated against boundaries nobody can see.
+        const exampleRules = { ...(DEMO_EXAMPLE_DEPARTMENT.rules || {}) };
+        delete exampleRules.bands;
+        setDemoExtraRules(exampleRules);
         setConfig(prev => ({
             ...prev,
             startDate: DEMO_EXAMPLE_DEPARTMENT.startDate,
             weeks: DEMO_EXAMPLE_DEPARTMENT.weeks,
-            staff: DEMO_EXAMPLE_DEPARTMENT.staff.map(person => person.name),
-            tasks: DEMO_EXAMPLE_DEPARTMENT.tasks.map(task => task.name),
         }));
     };
+
+    // --- SANDBOX TABLE EDITS ---
+    // Row-level plumbing, kept together so the tables themselves stay stateless.
+    // Every edit is a fresh array: mutating a row in place would leave React with
+    // the same reference and the `demoWizard` memo with a stale answer.
+    const patchStaffRow = (id, patch) =>
+        setDemoStaffRows(rows => rows.map(row => (row.id === id ? { ...row, ...patch } : row)));
+    const addStaffRow = () => setDemoStaffRows(rows => [...rows, createStaffRow()]);
+    const removeStaffRow = (id) => setDemoStaffRows(rows => rows.filter(row => row.id !== id));
+
+    const patchTaskRow = (id, patch) =>
+        setDemoTaskRows(rows => rows.map(row => (row.id === id ? { ...row, ...patch } : row)));
+    const addTaskRow = () => setDemoTaskRows(rows => [...rows, createTaskRow()]);
+    const removeTaskRow = (id) => setDemoTaskRows(rows => rows.filter(row => row.id !== id));
+
+    const patchBandInput = (band, bound, value) =>
+        setDemoBandInputs(prev => ({ ...prev, [band]: { ...prev[band], [bound]: value } }));
 
     const handleGenerateClick = () => {
         if (isDemo) {
@@ -404,7 +455,23 @@ const RosterView = ({ user }) => {
             // only reachable through the confirmation modal, which this early
             // return never opens. Demo mode therefore cannot touch live data
             // even if the configuration is valid, invalid, or malicious.
-            const demoConfig = buildDemoRosterV2Config({ config, details: demoDetails });
+            //
+            // The config comes from `buildDemoRosterV2ConfigFromTables` — the
+            // same pure call the disabled state of this button is computed from,
+            // so a press that gets here has already been mapped and judged once.
+            if (!demoWizard.ok) {
+                // Unreachable through the UI (the button is disabled and the
+                // reason is on screen beside it), and kept anyway: the table
+                // state and the button's disabled attribute are two separate
+                // pieces of DOM, and the sandbox's honesty is worth more than
+                // that ordering.
+                setDemoResult(null);
+                setRosterData({});
+                setRosterError(`AURA did not generate a roster: ${demoWizard.reason}`);
+                return;
+            }
+
+            const demoConfig = demoWizard.config;
             const result = generateRosterV2(demoConfig);
 
             if (!result.ok) {
@@ -421,6 +488,31 @@ const RosterView = ({ user }) => {
             setRosterError(null);
             setDemoResult(result);
             setRosterData(result.roster);
+
+            // What the load table reports as each person's grade and band. Taken
+            // from the config that was just GENERATED FROM, resolved against the
+            // boundaries that run used — not from the live table rows, which the
+            // visitor may edit next without regenerating.
+            setDemoRunGrades(Object.fromEntries(
+                demoConfig.staff.map(person => [
+                    person.name,
+                    {
+                        grade: person.grade || null,
+                        band: person.grade ? bandOfGrade(person.grade, demoConfig.rules.bands) : null,
+                    },
+                ]),
+            ));
+
+            // The swap modal's colleague list is `config.staff` (via
+            // `filterSwapCandidates`), so the pool that was actually rostered has
+            // to land there. Written HERE rather than on every keystroke in the
+            // table: a half-typed name is not a colleague anybody can be asked to
+            // cover for. `config.tasks` follows for the same reason.
+            setConfig(prev => ({
+                ...prev,
+                staff: demoConfig.staff.map(person => person.name),
+                tasks: demoConfig.tasks.map(task => task.name),
+            }));
 
             // Jump the calendar to the month the roster really starts in. The
             // engine snaps `startDate` back to its Monday and reports the result
@@ -817,8 +909,8 @@ const RosterView = ({ user }) => {
 
                     {!demoResult && (
                         <p className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed">
-                            No sandbox roster yet. Open <span className="font-bold">Configure</span>, type your
-                            own team (or load the example department) and press{' '}
+                            No sandbox roster yet. Open <span className="font-bold">Configure</span>, fill in the
+                            staff and task tables (or load the example department) and press{' '}
                             <span className="font-bold">Generate Sandbox Roster</span>. The calendar above is
                             empty because nothing has been generated — not because a roster failed.
                         </p>
@@ -927,6 +1019,8 @@ const RosterView = ({ user }) => {
                                         <thead>
                                             <tr className="text-left text-slate-400">
                                                 <th className="font-bold uppercase text-[10px] py-1 pr-3">Name</th>
+                                                <th className="font-bold uppercase text-[10px] py-1 pr-3">Grade</th>
+                                                <th className="font-bold uppercase text-[10px] py-1 pr-3">Band</th>
                                                 <th className="font-bold uppercase text-[10px] py-1 pr-3">FTE</th>
                                                 <th className="font-bold uppercase text-[10px] py-1 pr-3">Duties</th>
                                                 <th className="font-bold uppercase text-[10px] py-1 pr-3">Per FTE</th>
@@ -937,6 +1031,20 @@ const RosterView = ({ user }) => {
                                             {Object.entries(demoResult.load).map(([name, entry]) => (
                                                 <tr key={name} className="border-t border-slate-200 dark:border-slate-700">
                                                     <td className="py-1 pr-3 font-bold text-slate-700 dark:text-slate-200">{name}</td>
+                                                    {/* Requirement 6: the grade this run used, and the
+                                                        band it resolved to under that run's boundaries.
+                                                        "Not recorded" is said in words rather than left
+                                                        blank — a blank cell reads as a rendering bug,
+                                                        and "no grade" is a fact with consequences (it
+                                                        bars this person from every band-gated lead). */}
+                                                    <td className="py-1 pr-3 text-slate-500 dark:text-slate-400">
+                                                        {demoRunGrades[name]?.grade || <span className="italic">not recorded</span>}
+                                                    </td>
+                                                    <td className="py-1 pr-3 text-slate-500 dark:text-slate-400">
+                                                        {demoRunGrades[name]?.band
+                                                            ? bandLabel(demoRunGrades[name].band)
+                                                            : <span className="italic">—</span>}
+                                                    </td>
                                                     <td className="py-1 pr-3 text-slate-500 dark:text-slate-400">{entry.fte}</td>
                                                     <td className="py-1 pr-3 font-black text-slate-800 dark:text-white">{entry.duties}</td>
                                                     <td className="py-1 pr-3 text-slate-500 dark:text-slate-400">{entry.weighted}</td>
@@ -1100,7 +1208,12 @@ const RosterView = ({ user }) => {
 
             {isConfigOpen && (
                 <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-md flex items-center justify-center z-[100] p-4">
-                    <div className="bg-white dark:bg-slate-800 w-full max-w-lg rounded-2xl shadow-2xl p-6 border border-slate-200 dark:border-slate-700 animate-in zoom-in-95">
+                    {/* 🧪 The sandbox wizard is WIDER, and scrolls: two tables and a
+                        band editor do not fit the live wizard's max-w-lg. Live mode
+                        keeps that width, and every class on it, exactly as before. */}
+                    <div className={`bg-white dark:bg-slate-800 w-full rounded-2xl shadow-2xl p-6 border border-slate-200 dark:border-slate-700 animate-in zoom-in-95 ${
+                        isDemo ? 'max-w-3xl max-h-[90vh] overflow-y-auto' : 'max-w-lg'
+                    }`}>
                         
                         <div className="flex items-center gap-2 mb-4">
                             {isDemo && <span className="bg-emerald-100 text-emerald-700 text-[10px] font-bold px-2 py-0.5 rounded">SANDBOX MODE</span>}
@@ -1109,13 +1222,14 @@ const RosterView = ({ user }) => {
                             </h3>
                         </div>
                         
-                        {/* 🧪 SANDBOX: one press fills a whole fictional department —
-                            twelve staff, eight tasks, three skills, a 0.6 FTE
-                            part-timer and a day of leave. It is the only way to get
-                            skills/FTE/leave in from this wizard, and it is the
-                            configuration the unfilled-slot behaviour is demonstrated
-                            with. Typed-in names alone still work; they just run on the
-                            engine's defaults. */}
+                        {/* 🧪 SANDBOX: one press fills a whole fictional department into
+                            the tables below — twelve staff with AH grades and one 0.6
+                            FTE part-timer, eight tasks, three skills, one day of leave
+                            and two band-gated duties. It is the configuration the
+                            unfilled-slot behaviour is demonstrated with, and every part
+                            of it is now editable rather than carried invisibly. A
+                            typed-in team still works: a name alone is enough, and the
+                            columns beside it are all optional. */}
                         {isDemo && (
                             <div className="mb-4 p-3 rounded-xl bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800">
                                 <button
@@ -1126,12 +1240,12 @@ const RosterView = ({ user }) => {
                                     <Users size={14} /> Load example department
                                 </button>
                                 <p className="text-[10px] text-emerald-700 dark:text-emerald-300 mt-2 leading-relaxed">
-                                    {DEMO_EXAMPLE_DEPARTMENT.label} — {DEMO_EXAMPLE_DEPARTMENT.staff.length} staff,
-                                    {' '}{DEMO_EXAMPLE_DEPARTMENT.tasks.length} tasks, skill-gated duties, one
-                                    part-timer and one person on leave. Or just type your own team below —
-                                    names alone are enough. Anyone you give no details for is assumed
-                                    full-time ({ROSTER_V2_DEFAULTS.fte} FTE), with no skill requirements
-                                    and no leave.
+                                    {DEMO_EXAMPLE_DEPARTMENT.label} — {DEMO_EXAMPLE_DEPARTMENT.staff.length} staff
+                                    with job grades, {DEMO_EXAMPLE_DEPARTMENT.tasks.length} tasks, two of them
+                                    restricted by grade band, skill-gated duties, one part-timer and one person on
+                                    leave. Or fill in the tables below with your own team — a name alone is
+                                    enough, and anyone you leave blank is treated as full-time with no skills, no
+                                    leave and no grade recorded.
                                 </p>
                             </div>
                         )}
@@ -1169,33 +1283,55 @@ const RosterView = ({ user }) => {
                                     />
                                 </div>
                             </div>
-                            <div>
-                                <label className="text-xs font-bold text-slate-400 uppercase" htmlFor="roster-staff-pool">Staff Pool (Order Matters)</label>
-                                {/* 🧪 `readOnly={isDemo}` and the "Simulation Locked:
-                                    Using Marvel Dataset" caption are GONE. A visiting
-                                    respiratory therapist or psychologist types their own
-                                    team here and gets a roster for it — that is the
-                                    whole point of the sandbox, and a locked box that
-                                    always answers with the same five Marvel names
-                                    demonstrates nothing. */}
-                                <textarea
-                                    id="roster-staff-pool"
-                                    className="input-field w-full mt-1 h-20 font-mono text-xs bg-white dark:bg-slate-900 border dark:border-slate-700 rounded p-2 text-slate-800 dark:text-white"
-                                    value={config.staff.join(', ')}
-                                    placeholder={isDemo ? 'e.g. Aisha, Ben, Chloe, Daniel' : undefined}
-                                    onChange={(e) => setConfig({...config, staff: e.target.value.split(',').map(s => s.trim())})}
+                            {/* 🧪 THE ONE PLACE THE TWO UNIVERSES' WIZARDS DIFFER.
+                                Sandbox gets the grade-aware tables — a name alone still
+                                generates, but a grade, an FTE, leave dates, per-task
+                                days, a lead band and a co-lead toggle are all reachable
+                                without hand-editing a config object.
+                                LIVE gets the two comma-separated textareas, byte for
+                                byte as they were: they write straight into
+                                `config.staff` / `config.tasks`, which is what
+                                `prepareRosterWrite` reads, and this feature is not
+                                allowed anywhere near that path. */}
+                            {isDemo ? (
+                                <RosterDemoWizardTables
+                                    bandInputs={demoBandInputs}
+                                    bands={demoWizard.bands}
+                                    bandsReason={demoWizard.bandsReason}
+                                    onBandChange={patchBandInput}
+                                    staffRows={demoStaffRows}
+                                    staffErrors={demoWizard.staffErrors}
+                                    onStaffChange={patchStaffRow}
+                                    onStaffAdd={addStaffRow}
+                                    onStaffRemove={removeStaffRow}
+                                    taskRows={demoTaskRows}
+                                    taskErrors={demoWizard.taskErrors}
+                                    onTaskChange={patchTaskRow}
+                                    onTaskAdd={addTaskRow}
+                                    onTaskRemove={removeTaskRow}
                                 />
-                            </div>
-                            <div>
-                                <label className="text-xs font-bold text-slate-400 uppercase" htmlFor="roster-tasks">Core Tasks</label>
-                                <textarea
-                                    id="roster-tasks"
-                                    className="input-field w-full mt-1 h-20 font-mono text-xs bg-white dark:bg-slate-900 border dark:border-slate-700 rounded p-2 text-slate-800 dark:text-white"
-                                    value={config.tasks.join(', ')}
-                                    placeholder={isDemo ? 'e.g. Ward Round, Outpatient Clinic, Group Therapy' : undefined}
-                                    onChange={(e) => setConfig({...config, tasks: e.target.value.split(',').map(t => t.trim())})}
-                                />
-                            </div>
+                            ) : (
+                                <>
+                                    <div>
+                                        <label className="text-xs font-bold text-slate-400 uppercase" htmlFor="roster-staff-pool">Staff Pool (Order Matters)</label>
+                                        <textarea
+                                            id="roster-staff-pool"
+                                            className="input-field w-full mt-1 h-20 font-mono text-xs bg-white dark:bg-slate-900 border dark:border-slate-700 rounded p-2 text-slate-800 dark:text-white"
+                                            value={config.staff.join(', ')}
+                                            onChange={(e) => setConfig({...config, staff: e.target.value.split(',').map(s => s.trim())})}
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="text-xs font-bold text-slate-400 uppercase" htmlFor="roster-tasks">Core Tasks</label>
+                                        <textarea
+                                            id="roster-tasks"
+                                            className="input-field w-full mt-1 h-20 font-mono text-xs bg-white dark:bg-slate-900 border dark:border-slate-700 rounded p-2 text-slate-800 dark:text-white"
+                                            value={config.tasks.join(', ')}
+                                            onChange={(e) => setConfig({...config, tasks: e.target.value.split(',').map(t => t.trim())})}
+                                        />
+                                    </div>
+                                </>
+                            )}
                         </div>
 
                         {/* 🧪 Requirement 6, stated where the visitor is about to act. */}
@@ -1208,11 +1344,16 @@ const RosterView = ({ user }) => {
 
                         {statusSlot === 'config' && statusBanner}
 
-                        {/* 🛡️ M3 FIX: tell the user why generation is unavailable. */}
-                        {!configValidation.valid && (
+                        {/* 🛡️ M3 FIX: tell the user why generation is unavailable.
+                            In the sandbox the reason comes from the tables and then
+                            from `validateRosterV2Config` — including
+                            `validateGradeBands`' own wording when the three bands do
+                            not partition AH7–AH17, which is the state the band editor
+                            above can be left in mid-edit. */}
+                        {!generateGate.valid && (
                             <p className="-mt-4 mb-4 text-xs font-bold text-red-600 dark:text-red-400 flex items-start gap-1.5">
                                 <ShieldAlert size={14} className="shrink-0 mt-px" />
-                                <span>{configValidation.reason}</span>
+                                <span>{generateGate.reason}</span>
                             </p>
                         )}
 
@@ -1220,8 +1361,8 @@ const RosterView = ({ user }) => {
                             <button onClick={() => setIsConfigOpen(false)} className="flex-1 py-3 text-slate-500 dark:text-slate-400 font-bold hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg transition-colors">Cancel</button>
                             <button
                                 onClick={handleGenerateClick}
-                                disabled={!configValidation.valid}
-                                title={configValidation.valid ? undefined : configValidation.reason}
+                                disabled={!generateGate.valid}
+                                title={generateGate.valid ? undefined : generateGate.reason}
                                 className={`flex-1 py-3 text-white font-bold rounded-lg shadow-lg transition-colors flex justify-center items-center gap-2 disabled:bg-slate-300 dark:disabled:bg-slate-700 disabled:text-slate-500 disabled:shadow-none disabled:cursor-not-allowed ${isDemo ? 'bg-emerald-600 hover:bg-emerald-700' : 'bg-indigo-600 hover:bg-indigo-700'}`}
                             >
                                 {/* 🧪 It said "Simulate Check" while doing nothing at
