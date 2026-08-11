@@ -295,7 +295,6 @@ exports.chatWithAura = onCall({
     var history = request.data.history || [];
     var role = request.data.role || 'Staff';
     var prompt = request.data.prompt || '';
-    var isDemo = request.data.isDemo;
     var attachments = request.data.attachments || [];
 
     if (!API_KEY) throw new HttpsError('failed-precondition', 'AI service is not configured.');
@@ -474,7 +473,7 @@ exports.scheduledPulseNudge = onSchedule({
     timeZone: 'Asia/Singapore',
     timeoutSeconds: 60,
     memory: '256MiB'
-}, async (event) => {
+}, async (_event) => {
     var db = getFirestore();
     var messaging = getMessaging();
 

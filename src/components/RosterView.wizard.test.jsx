@@ -177,7 +177,15 @@ describe('live mode: the Configure wizard is exactly what it was', () => {
         expectNoSandboxTables();
         // Sandbox-only chrome, absent as before.
         expect(screen.queryByText(/sandbox mode/i)).toBeNull();
-        expect(screen.queryByRole('button', { name: /load example department/i })).toBeNull();
+        // CHANGED: was `/load example department/i`. The sandbox's one example button is
+        // now a picker of four arrangements, so that name matches nothing in EITHER
+        // universe and this assertion would have passed vacuously — the exact failure
+        // mode a "this control is absent" test has. Both names below DO exist in demo
+        // mode (asserted in the demo-mode test at the foot of this file), so their
+        // absence here is a claim about live mode rather than about a dead string.
+        expect(screen.queryByRole('button', { name: /^load respiratory & rehab$/i })).toBeNull();
+        expect(screen.queryByRole('button', { name: /^load psychology$/i })).toBeNull();
+        expect(screen.queryByText(/load an example arrangement/i)).toBeNull();
         expect(screen.getByRole('button', { name: /^generate roster$/i })).toBeTruthy();
     });
 
@@ -361,7 +369,15 @@ describe('demo mode: the wizard is the tables, and only the tables', () => {
         expect(screen.getByLabelText('Task row 1: Senior may lead')).toBeTruthy();
         expect(screen.getAllByRole('button', { name: /add row/i })).toHaveLength(2);
         expect(screen.getAllByText(/sandbox mode/i).length).toBeGreaterThan(0);
-        expect(screen.getByRole('button', { name: /load example department/i })).toBeTruthy();
+        // CHANGED: was one `/load example department/i` button. The sandbox now offers a
+        // picker of FOUR arrangements — this asserts the picker is the sandbox-only
+        // control the single button used to be, which is what the live-mode absence test
+        // above is the mirror of.
+        expect(screen.getByText(/load an example arrangement/i)).toBeTruthy();
+        expect(screen.getByRole('button', { name: /^load respiratory & rehab$/i })).toBeTruthy();
+        expect(screen.getByRole('button', { name: /^load psychology$/i })).toBeTruthy();
+        expect(screen.getByRole('button', { name: /^load embryology$/i })).toBeTruthy();
+        expect(screen.getByRole('button', { name: /^load medical laboratory$/i })).toBeTruthy();
 
         // Start date and Weeks are SHARED between the two universes and stay put.
         expect(screen.getByLabelText(/start date/i)).toBeTruthy();

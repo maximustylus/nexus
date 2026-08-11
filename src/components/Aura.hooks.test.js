@@ -267,7 +267,9 @@ describe('useInitGuard', () => {
 
         // First call throws
         await act(async () => {
-            try { await result.current.runOnce(failFn); } catch (_) {}
+            // The rejection is the point of this call; it is asserted by the
+            // second `runOnce` succeeding below, so the catch stays empty.
+            try { await result.current.runOnce(failFn); } catch (_) { /* expected */ }
         });
 
         // Lock should be released; second call should proceed

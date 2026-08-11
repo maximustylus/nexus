@@ -71,15 +71,21 @@
 //      gate the LEAD only — any grade may co-lead, which is what makes a
 //      senior-lead / junior-shadow pairing expressible. Section 0b owns the
 //      scale, the band boundaries and their validation.
-//   7. A TASK'S CALENDAR IS EITHER WEEKLY OR MONTHLY, NEVER BOTH. `days` repeats
-//      a task on given weekdays every week; `recurrence: { ordinal, weekday }`
-//      repeats it on the nth (or last) given weekday of every calendar month.
-//      They are mutually exclusive per task and validation refuses a task
-//      carrying both, because there is no reading of "every Wednesday AND the 3rd
-//      Wednesday" that is not one of the two with extra words. Section 1b owns the
-//      month arithmetic, and the occurrence dates are derived ONCE — from
-//      `recurrenceDatesBetween` — so the day loop and a future preview UI cannot
-//      disagree about when a monthly task runs.
+//   7. A TASK'S CALENDAR IS ONE PATTERN, AND `days` / `recurrence` ARE TWO
+//      SUGARS OVER IT. `days` repeats a task on given weekdays every week;
+//      `recurrence: { ordinal, weekday }` repeats it on the nth (or last) given
+//      weekday of every calendar month. THOSE TWO FIELDS remain mutually exclusive
+//      per task and validation refuses a task carrying both, because there is no
+//      reading of "every Wednesday AND the 3rd Wednesday" that is not one of the
+//      two with extra words. What is new since v1.9.0 is that neither is a
+//      MECHANISM: both compile to a TEMPORAL PATTERN (section 1b), the day loop
+//      asks one question of every task — is today one of your dates? — and the
+//      occurrence dates are derived ONCE, from `temporalOccurrences`, so the day
+//      loop and a future preview UI cannot disagree about when anything runs.
+//      A task may also carry the pattern DIRECTLY, as `temporal`, which is how
+//      "the 1st AND the 3rd Wednesday", "alternate weeks", "these four dates" and
+//      "only between these two dates" are expressible today. That field is
+//      VALIDATED like every other (section 2) and has no wizard — see rule 11.
 //   8. CONTINUITY IS THE ONLY PREFERENCE IN THIS ENGINE, AND IT STILL LOSES TO
 //      EVERY HARD CONSTRAINT. `continuity: true` asks for the same LEAD on every
 //      occurrence of one task — the clinical reason being that a cohort seen
@@ -139,6 +145,90 @@
 //      PER-TASK AND THEREFORE INERT: a task with no `slots` key reads and writes
 //      exactly what it did before this section existed. There is no global
 //      switch to get wrong.
+//  11. THE NAMED FEATURES ARE INSTANCES OF SIX PRIMITIVES, AND THE ENGINE READS
+//      ONLY THE PRIMITIVES. Rules 1–10 were built one profession at a time, and by
+//      the sixth the engine carried one named flag per profession: `days`,
+//      `recurrence`, `continuity`, `leadBands`, `requiresSkill`, `slots`, `hours`,
+//      `forbidPairs`, `maxConsecutiveDays`, `maxPerDay`. The seventh profession
+//      would have wanted a seventh code change. It does not, because every one of
+//      those fields is now SUGAR that `normaliseTasks` compiles down:
+//
+//        TEMPORAL     (1b) when does this occur. `days` and `recurrence` are two
+//                     patterns; a pattern is a UNION OF CLAUSES over a bounded
+//                     window, and the clause kinds are weekly (with an `every`/
+//                     `offset` cadence), monthly (with a LIST of ordinals) and an
+//                     explicit date list.
+//        ELIGIBILITY  (0e) may this person fill this position. `requiresSkill` and
+//                     `leadBands` are two REQUIREMENT KINDS combined by AND. The
+//                     kinds are a table; a third is a row, and the candidate loop
+//                     does not change. THE THIRD ROW IS NOW WRITTEN — a COHORT
+//                     WINDOW (rule 12) — and the candidate loop did not change,
+//                     which is the claim this table existed to make good on.
+//        CAPACITY     (1c) how much of a METER may one person hold over a PERIOD.
+//                     `maxPerDay`, `maxConcurrentPerDay`, "already on this task
+//                     today", `maxConsecutiveDays` and the two hours caps are five
+//                     rows of one table.
+//        AFFINITY     (1d) pairwise and cross-occurrence preferences WITH POLARITY.
+//                     `forbidPairs` is pair/forbid; `continuity` is
+//                     occurrence/prefer. `require` (must-pair-with) and `avoid`
+//                     (rotate-away) are DECLARED and unimplemented, so they are a
+//                     polarity a later agent fills in rather than a seventh flag.
+//        STRUCTURE    (0f) a shift is a LIST OF POSITIONS. `leads`/`coLeads` and
+//                     `slots` both compile to positions, and how filled positions
+//                     become shift objects is a COMPOSITION chosen from a table.
+//        QUOTA        (1e) how many occurrences of a CLASS OF WORK one person takes
+//                     over a PERIOD, as a FLOOR and/or a CEILING. `task.quota` and
+//                     `rules.quotas` are the two sugars. IMPLEMENTED as of rule 12
+//                     below — this bullet said "declared, not enforced" for one
+//                     release and the sentence that said so has been deleted rather
+//                     than adapted, because a warning claiming quotas were ignored
+//                     would now be false.
+//
+//      ZERO BEHAVIOUR CHANGE WAS THE BAR, and it is measured rather than claimed:
+//      1213 tests untouched, and `generateRosterV2`, `validateRosterV2Config`,
+//      `scoreRoster`, `auditHardConstraints` and `measureRosterLoad` compared
+//      JSON-for-JSON against the pre-refactor engine over 30 configurations
+//      spanning every named feature and 90 invalid ones for refusal-string
+//      identity. The one intentionally ADDITIVE surface is the `temporal` field of
+//      rule 7 — no configuration in the repository carries it, so nothing moved.
+//      The honest cost, and every judgment call, is in section 11's ledger.
+//  12. THE FIRST FLOOR, AND THE FIRST GATE THAT KNOWS WHAT MONTH IT IS. Rules 1–11
+//      are, without exception, CEILINGS and standing facts: nobody may exceed a cap,
+//      hold a duty they are not qualified for, or work a day they are away. Two field
+//      interviews asked for neither.
+//
+//      QUOTAS (1e). "Each staff member works at least two Saturdays per month" was
+//      inexpressible. It is now `quota: { per, min, max, scope }` on a task, or
+//      `rules.quotas: [{ category, … }]` over a class of them. A `max` is HARD and is
+//      a CAPACITY LIMIT of exactly section 1c's shape, built per quota because a
+//      configuration may declare several; a slot that would breach one is `unfilled`
+//      naming the quota, the period and the count. A `min` CANNOT be hard, and that is
+//      the whole difficulty rather than a shortcut: a ceiling is answerable when a slot
+//      is offered, a floor is only knowable when the period is FULL, and refusing a
+//      slot to protect somebody else's minimum would leave the slot EMPTY. So a floor
+//      does the only two honest things available to it — it PREFERS whoever is furthest
+//      behind, ahead of FTE-weighted fairness and ahead of continuity (section 5's
+//      comparator chain, with the precedence decided and warned about), and then it
+//      MEASURES the finished roster and NAMES every shortfall by person, class, period
+//      and amount. An ARITHMETICALLY IMPOSSIBLE floor — five people needing two
+//      Saturdays each in a month holding four — is a VALIDATION REFUSAL with the
+//      arithmetic shown, in the same voice as the unknown-skill refusal.
+//
+//      COHORT WINDOWS (0e(ii)). The embryologists' teams A/B/C each take a four-month
+//      block of weekend duty; the same shape is a rotation, a secondment, a student
+//      placement, a six-week locum. `staff.windows: [{ from, to, tasks, label }]` bounds
+//      a person's eligibility in time, as a UNION: with windows, they may fill (task,
+//      date) if SOME window admits both. No windows means always eligible, so the
+//      feature is ADDITIVE. It is NOT a branch in the day loop — it is the third
+//      ELIGIBILITY KIND, which is why it reaches the candidate gate, the scarcity
+//      ordering, the `unfilled` prose and the read-back audit without any of them
+//      learning the word "cohort".
+//
+//      BOTH ARE MEASURED, NOT ASSERTED: the ceiling has a `HARD_RULE_QUOTA_MAX`
+//      read-back rule and the window a `HARD_RULE_WINDOW` one, both computed off the
+//      finished roster, and the floor report is written from the same
+//      `measureQuotaCounts` the ceiling audit uses. Section 12's ledger has the costs
+//      and every judgment call.
 //
 // WHAT THIS ENGINE DELIBERATELY DOES NOT DO (left as clean seams, not oversights):
 // no local-search / hill-climbing improvement pass over the constructed roster;
@@ -159,9 +249,17 @@
 // functions are pure and take any candidate roster, so an optimisation pass can
 // be added without touching construction.
 //
-// Added by the psychology pack, and equally deliberate: ONE recurrence pattern per
-// task — no "every second Wednesday", no "the 1st AND 3rd Wednesday" (configure
-// two tasks, or wait for a `recurrence` that takes a list); no cross-run
+// Added by the psychology pack, and equally deliberate — WITH ONE ITEM NOW
+// SUPERSEDED, left visible rather than quietly deleted because a header that
+// rewrites its own history is worth less than one that dates itself. The
+// psychology pack said: "ONE recurrence pattern per task — no 'every second
+// Wednesday', no 'the 1st AND 3rd Wednesday' (configure two tasks, or wait for a
+// `recurrence` that takes a list)". SUPERSEDED by the primitive layer: the engine
+// expresses all three through `temporal` and there is a test driving each of them
+// through `generateRosterV2`. What is still missing is a FIELD A ROSTER MASTER CAN
+// TYPE — `recurrence` still takes exactly one ordinal, and the wizard writes only
+// `days` — so the limitation is now a UI one and is recorded as such in section 11.
+// Still true and still deliberate: no cross-run
 // continuity — `continuity` counts leads inside THIS generation run only, so a
 // department generating a month at a time restarts every incumbency from scratch,
 // which is the same border-data limit `consecutiveRunBefore` documents; and
@@ -321,43 +419,350 @@ const isPositiveInt = (value) =>
 const isNonNegativeInt = (value) =>
     typeof value === 'number' && Number.isInteger(value) && value >= 0;
 
-// --- 0b. JOB GRADES AND BANDS -------------------------------------------------
+// --- 0b. THE SCALE PRIMITIVE: AN ORDERED SCALE WITH NAMED REGIONS -------------
 //
-// The department's allied-health scale runs AH7 (entry) to AH17 (head), and the
-// tasks a clinician may LEAD are set by which of three bands their grade falls
-// in. Everything in this section is PURE and exported for the UI that will edit
-// these boundaries, because the boundaries are a departmental policy decision —
-// `knowledgeBase.js` describes the JD framework the scale comes from, and no two
-// institutions cut it in the same place.
+// A department's seniority ladder is TWO facts and no more: an ORDERED LIST OF
+// RANKS, and a set of NAMED REGIONS that partition it. The allied-health scale
+// AH7 (entry) → AH17 (head), cut into junior / senior / principal, is ONE
+// INSTANCE of that. Nursing bands differently, doctors run MO → Registrar →
+// Consultant, a two-tier team has two regions and a flat team has one; none of
+// those is a different mechanism, only a different instance.
 //
-// WHY THE PARTITION IS ENFORCED RATHER THAN TOLERATED. The three bands must
-// cover AH7–AH17 exactly, with no gap and no overlap. A gap is the dangerous
-// case: a grade that falls into one would be in NO band, and therefore silently
-// ineligible to lead every band-restricted task in the department — a roster
+// So this section owns the MECHANISM — `defineGradeScale`, `rankOfGrade`,
+// `regionOfRank`, `validateScaleRegions` — and then declares the allied-health
+// instance beneath it. `GRADE_SCALE`, `DEFAULT_GRADE_BANDS`, `bandOfGrade` and
+// `validateGradeBands` are that instance's four public faces, unchanged in name,
+// signature, return value and refusal wording, because `rosterWizard.js`,
+// `RosterDemoWizardTables.jsx` and 149 tests read them.
+//
+// WHAT A SCALE OWNS, and why each piece has to be the scale's rather than this
+// file's:
+//
+//   firstRank / rankCount   The ordinals. Regions are declared as inclusive
+//                           `[min, max]` ORDINAL pairs, so `{ junior: [7, 12] }`
+//                           is the AH scale's ordinals and not a magic number.
+//   labelOfRank             Ordinal -> the label a human reads (`13` -> `'AH13'`).
+//   parseRank               THE SCALE'S OWN LEXICON, and the reason this is a
+//                           function rather than a lookup over `labels`: the
+//                           allied-health scale accepts `'ah13'`, `' AH13 '` AND
+//                           `'AH07'` (a padded number — pinned by a test), which
+//                           no label-set match would ever produce. A scale whose
+//                           labels are words supplies a label matcher instead.
+//   regions                 The DEFAULT cut, lowest region first. `Object.keys`
+//                           of it is the region order, so there is one definition
+//                           of "the regions, in order" for a caller to read.
+//   prose                   The nouns the refusal sentences are built from
+//                           (`band`, `grade`, `unbanded`, …). Refusals are read
+//                           verbatim by a roster master, so the words are DATA
+//                           and not string literals scattered through a
+//                           validator that knows only one profession.
+//
+// WHY THE PARTITION IS ENFORCED RATHER THAN TOLERATED. The regions must cover
+// the scale exactly, with no gap and no overlap. A gap is the dangerous case: a
+// rank that falls into one would be in NO region, and therefore silently
+// ineligible to lead every region-restricted task in the department — a roster
 // with unfilled slots and no obvious cause. That is the class of failure this
-// engine exists to refuse, so `validateGradeBands` rejects it at configure time
-// with a reason naming the unbanded grades.
+// engine exists to refuse, so `validateScaleRegions` rejects it at configure time
+// with a reason naming the unbanded ranks.
 //
-// ABSENT IS NOT ZERO. A staff member with no `grade` is not "AH7"; their grade
-// is UNKNOWN. They therefore fail every band gate (membership cannot be
-// verified) and remain fully eligible for everything that is not band-gated,
-// including co-leading a band-gated task. `generateRosterV2` warns, by name,
+// ABSENT IS NOT ZERO. A staff member with no `grade` is not the bottom rank;
+// their rank is UNKNOWN. They therefore fail every region gate (membership cannot
+// be verified) and remain fully eligible for everything that is not region-gated,
+// including co-leading a region-gated task. `generateRosterV2` warns, by name,
 // when that situation is actually load-bearing.
+//
+// NOT YET REACHABLE FROM A CONFIGURATION, and that is deliberate: `rules` carries
+// `bands` (a region cut for the allied-health scale) and no `scale` key, so every
+// roster this engine generates today is judged against `ALLIED_HEALTH_SCALE`.
+// Exposing a second scale through `rules` is additive, needs its own refusal
+// wording and its own tests, and is the next agent's step —
+// `resolveGradeScale` below is the one seam it has to open.
 
-const GRADE_MIN = 7;
-const GRADE_MAX = 17;
+/** Zero to twelve as words, for the prose that has to count regions. */
+const COUNT_WORDS = Object.freeze([
+    'zero', 'one', 'two', 'three', 'four', 'five', 'six',
+    'seven', 'eight', 'nine', 'ten', 'eleven', 'twelve',
+]);
 
-/** `'AH7' … 'AH17'`, in scale order. The UI's dropdown, and the only valid set. */
-export const GRADE_SCALE = Object.freeze(
-    Array.from({ length: GRADE_MAX - GRADE_MIN + 1 }, (_, i) => `AH${GRADE_MIN + i}`),
-);
+/** `3` -> `'three'`; anything past the table -> the digits, which still reads. */
+const countWord = (n) =>
+    (Number.isInteger(n) && n >= 0 && n < COUNT_WORDS.length ? COUNT_WORDS[n] : String(n));
 
 /**
- * The three band names, lowest first. Not exported: `Object.keys` of
- * `DEFAULT_GRADE_BANDS` is the same list in the same order, so there is one
- * definition of "the bands, in order" for a caller to read.
+ * `['a','b','c']` -> `'the three regions are a, b and c'`-shaped fragments, in the
+ * two grammars the refusals need. Split out because "all two of" and "the one
+ * bands are" are the sentences a two-region or one-region scale would otherwise
+ * get, and a refusal a roster master cannot read is a refusal that gets ignored.
  */
-const BAND_ORDER = Object.freeze(['junior', 'senior', 'principal']);
+const areAllOf = (names, noun, nounPlural) => (names.length === 1
+    ? `the ${countWord(1)} ${noun} is ${names[0]}`
+    : `the ${countWord(names.length)} ${nounPlural} are ${joinWithAnd(names)}`);
+
+const mustAllBeGiven = (names) => {
+    if (names.length === 1) return names[0];
+    if (names.length === 2) return `both of ${joinWithAnd(names)}`;
+    return `all ${countWord(names.length)} of ${joinWithAnd(names)}`;
+};
+
+/** `['a','b','c']` -> `'a, b and c'`; one item -> itself; none -> `''`. */
+const joinWithAnd = (items) => {
+    if (items.length === 0) return '';
+    if (items.length === 1) return items[0];
+    return `${items.slice(0, -1).join(', ')} and ${items[items.length - 1]}`;
+};
+
+/**
+ * Declare a seniority scale. Pure, frozen, and the ONLY way a scale is made — so
+ * every scale in this engine carries the same fields and the validator never has
+ * to ask which profession it is looking at.
+ *
+ * `regions` is an object in LOWEST-FIRST order; its `Object.keys` becomes
+ * `regionOrder`, and it is deep-frozen so that a UI holding the default cut
+ * cannot edit the department's policy by mutating an array it was handed.
+ */
+export const defineGradeScale = ({
+    id,
+    firstRank,
+    rankCount,
+    labelOfRank,
+    parseRank,
+    regions,
+    prose,
+}) => {
+    const lastRank = firstRank + rankCount - 1;
+    const regionOrder = Object.freeze(Object.keys(regions));
+    const defaultRegions = Object.freeze(Object.fromEntries(
+        regionOrder.map((name) => [name, Object.freeze([regions[name][0], regions[name][1]])]),
+    ));
+
+    return Object.freeze({
+        id,
+        firstRank,
+        lastRank,
+        rankCount,
+        /** `'AH7' … 'AH17'`, in scale order. A UI's dropdown, and the valid set. */
+        labels: Object.freeze(Array.from({ length: rankCount }, (_, i) => labelOfRank(firstRank + i))),
+        labelOfRank,
+        parseRank,
+        regionOrder,
+        defaultRegions,
+        /**
+         * The rank an unrecorded grade sorts at: STRICTLY BELOW the bottom of the
+         * scale, so a graded colleague always outranks an ungraded one and a team
+         * shift's lead is never somebody whose rank the department has not
+         * recorded. `-Infinity` would have been the obvious sentinel and is a
+         * trap: two ungraded people would compare `-Infinity - -Infinity` = `NaN`,
+         * and a comparator returning `NaN` sorts arbitrarily — the one thing this
+         * engine may not do.
+         */
+        unknownRank: firstRank - 1,
+        /** `'AH7–AH17'`, for the sentence that has to name the whole scale. */
+        span: `${labelOfRank(firstRank)}–${labelOfRank(lastRank)}`,
+        prose: Object.freeze({ ...prose }),
+    });
+};
+
+/**
+ * Any accepted spelling of a rank -> its ordinal, or `null`. The scale's own
+ * lexicon, so `'AH07'` and `'ah13'` are the allied-health scale's business and
+ * not this function's.
+ */
+const rankOfGrade = (value, scale) => scale.parseRank(value);
+
+/** Any accepted spelling -> the canonical label, or `null`. */
+const canonicalGrade = (value, scale) => {
+    const rank = rankOfGrade(value, scale);
+    return rank === null ? null : scale.labelOfRank(rank);
+};
+
+/** Which region does ORDINAL `n` sit in? Assumes `regions` already validated. */
+export const regionOfRank = (n, regions, scale) => {
+    for (const name of scale.regionOrder) {
+        const range = regions[name];
+        if (!Array.isArray(range)) continue;
+        if (n >= range[0] && n <= range[1]) return name;
+    }
+    return null;
+};
+
+/**
+ * Are these region boundaries usable? `{ valid, reason }`, same contract as
+ * `validateRosterV2Config`, so a UI can show `reason` verbatim.
+ *
+ * Requires every region the scale names, each an inclusive `[min, max]` of whole
+ * ordinals on the scale, together partitioning it: the lowest region starts at
+ * the bottom, the highest ends at the top, every min <= max, and each region
+ * starts exactly one rank above where the one below it ended.
+ *
+ * Every sentence is built from the scale's `prose` nouns and its own labels, so
+ * a two-tier nursing scale is refused in its own words rather than in
+ * allied health's.
+ */
+export const validateScaleRegions = (regions, scale) => {
+    const invalid = (reason) => ({ valid: false, reason });
+    const { regionOrder, defaultRegions, firstRank, lastRank } = scale;
+    const { subject, subjectPlural, regionNoun, regionNounPlural, rankNoun, rankNounPlural, unassigned } = scale.prose;
+    const total = regionOrder.length;
+    const lowest = regionOrder[0];
+    const highest = regionOrder[total - 1];
+
+    if (!isPlainObject(regions)) {
+        const shape = regionOrder
+            .map((name) => `${name}: [${defaultRegions[name][0]}, ${defaultRegions[name][1]}]`)
+            .join(', ');
+        return invalid(`${subjectPlural} must be an object of the form { ${shape} }.`);
+    }
+
+    for (const key of Object.keys(regions)) {
+        if (!regionOrder.includes(key)) {
+            return invalid(`${subjectPlural} include an unknown ${regionNoun} ${JSON.stringify(key)} — ${areAllOf([...regionOrder], regionNoun, regionNounPlural)}.`);
+        }
+    }
+    for (const name of regionOrder) {
+        if (regions[name] === undefined) {
+            return invalid(`${subjectPlural} are missing the ${name} ${regionNoun} — ${mustAllBeGiven([...regionOrder])} must be given, so that every ${rankNoun} lands in exactly one.`);
+        }
+    }
+
+    const range = {};
+    for (const name of regionOrder) {
+        const value = regions[name];
+        if (!Array.isArray(value) || value.length !== 2) {
+            return invalid(`${subject} ${name} must be a two-number range [min, max], e.g. [${defaultRegions[name][0]}, ${defaultRegions[name][1]}].`);
+        }
+        for (const bound of value) {
+            if (typeof bound !== 'number' || !Number.isInteger(bound)) {
+                return invalid(`${subject} ${name} has the bound ${JSON.stringify(bound)} — ${regionNoun} bounds are whole ${rankNoun} numbers between ${firstRank} and ${lastRank}.`);
+            }
+            if (bound < firstRank || bound > lastRank) {
+                return invalid(`${subject} ${name} has the bound ${bound}, which is outside the ${scale.span} scale.`);
+            }
+        }
+        if (value[0] > value[1]) {
+            return invalid(`${subject} ${name} runs from ${value[0]} down to ${value[1]} — its minimum must not be above its maximum.`);
+        }
+        range[name] = [value[0], value[1]];
+    }
+
+    if (range[lowest][0] !== firstRank) {
+        return invalid(`${subject} ${lowest} must start at ${firstRank} (${scale.labelOfRank(firstRank)}), the bottom of the scale — otherwise the ${rankNounPlural} below it would be in no ${regionNoun} at all.`);
+    }
+    if (range[highest][1] !== lastRank) {
+        return invalid(`${subject} ${highest} must end at ${lastRank} (${scale.labelOfRank(lastRank)}), the top of the scale — otherwise the ${rankNounPlural} above it would be in no ${regionNoun} at all.`);
+    }
+
+    for (let i = 1; i < total; i += 1) {
+        const lower = regionOrder[i - 1];
+        const upper = regionOrder[i];
+        const expected = range[lower][1] + 1;
+        const actual = range[upper][0];
+        if (actual === expected) continue;
+
+        if (actual > expected) {
+            // The gap named exactly: one rank, two ranks, or a span.
+            const last = actual - 1;
+            let gap;
+            if (last === expected) gap = scale.labelOfRank(expected);
+            else if (last === expected + 1) gap = `${scale.labelOfRank(expected)} and ${scale.labelOfRank(last)}`;
+            else gap = `${scale.labelOfRank(expected)}–${scale.labelOfRank(last)}`;
+
+            return invalid(`${subjectPlural} leave ${gap} in no ${regionNoun} at all — ${lower} ends at ${scale.labelOfRank(range[lower][1])} and ${upper} starts at ${scale.labelOfRank(actual)}. Anybody on an ${unassigned} ${rankNoun} would be silently unable to lead every ${regionNoun}-restricted task, so the ${regionNounPlural} must be contiguous.`);
+        }
+        return invalid(`${subjectPlural} ${lower} (${scale.labelOfRank(range[lower][0])}–${scale.labelOfRank(range[lower][1])}) and ${upper} (${scale.labelOfRank(range[upper][0])}–${scale.labelOfRank(range[upper][1])}) overlap — no ${rankNoun} may belong to two ${regionNounPlural}.`);
+    }
+
+    return { valid: true, reason: null };
+};
+
+/**
+ * A set of region names as prose, always in scale order:
+ * `Set{'principal','senior'}` -> `'Senior/Principal'`.
+ */
+const regionSetLabel = (names, scale) =>
+    scale.regionOrder
+        .filter((name) => names.has(name))
+        .map((name) => name.charAt(0).toUpperCase() + name.slice(1))
+        .join('/');
+
+/**
+ * The same set as rank labels: `'AH13–AH17'`. Adjacent regions are merged into
+ * one span, and a deliberately non-contiguous selection reads honestly as
+ * `'AH7–AH12, AH15–AH17'` rather than pretending to be a single range.
+ */
+const regionSetRankLabel = (names, regions, scale) => {
+    const spans = [];
+    for (const name of scale.regionOrder) {
+        if (!names.has(name)) continue;
+        const [min, max] = regions[name];
+        const last = spans[spans.length - 1];
+        if (last && last[1] + 1 === min) last[1] = max;
+        else spans.push([min, max]);
+    }
+    return spans
+        .map(([min, max]) => (min === max
+            ? scale.labelOfRank(min)
+            : `${scale.labelOfRank(min)}–${scale.labelOfRank(max)}`))
+        .join(', ');
+};
+
+// --- 0b(ii). THE ALLIED-HEALTH INSTANCE ---------------------------------------
+//
+// Everything above is profession-agnostic. THIS is the department's scale, and
+// the four exports beneath it are the faces the rest of the repository already
+// reads. Nothing here adds a behaviour: it names the instance that was hardcoded.
+
+const AH_GRADE_MIN = 7;
+const AH_GRADE_MAX = 17;
+
+/** `'ah13'`, `'AH13'`, `' AH13 '`, `'AH07'` -> `13`; anything else -> `null`. */
+const parseAlliedHealthRank = (value) => {
+    if (typeof value !== 'string') return null;
+    const match = /^ah(\d{1,2})$/i.exec(value.trim());
+    if (!match) return null;
+    const number = Number(match[1]);
+    return number >= AH_GRADE_MIN && number <= AH_GRADE_MAX ? number : null;
+};
+
+/**
+ * The department's allied-health scale, as an instance of the general thing.
+ *
+ * Exported so that a UI, a test or a second profession's scale can read the shape
+ * it has to match — and so that "the department's scale" is a value with a name
+ * rather than eleven string literals and two integers spread over a validator.
+ */
+export const ALLIED_HEALTH_SCALE = defineGradeScale({
+    id: 'allied-health',
+    firstRank: AH_GRADE_MIN,
+    rankCount: AH_GRADE_MAX - AH_GRADE_MIN + 1,
+    labelOfRank: (rank) => `AH${rank}`,
+    parseRank: parseAlliedHealthRank,
+    /**
+     * The shipped boundaries, as `[min, max]` grade numbers inclusive.
+     *
+     * These are the department's current cut and nothing more — `rules.bands`
+     * overrides them per configuration, subject to `validateGradeBands`.
+     */
+    regions: {
+        junior: [7, 12],
+        senior: [13, 14],
+        principal: [15, 17],
+    },
+    prose: {
+        subject: 'Grade band',
+        subjectPlural: 'Grade bands',
+        regionNoun: 'band',
+        regionNounPlural: 'bands',
+        rankNoun: 'grade',
+        rankNounPlural: 'grades',
+        /** The adjective for a rank in no region: `'unbanded'`. */
+        unassigned: 'unbanded',
+        /** How a refusal names the scale to somebody who typed a bad grade. */
+        scaleTitle: 'the allied-health scale',
+    },
+});
+
+/** `'AH7' … 'AH17'`, in scale order. The UI's dropdown, and the only valid set. */
+export const GRADE_SCALE = ALLIED_HEALTH_SCALE.labels;
 
 /**
  * The shipped boundaries, as `[min, max]` grade numbers inclusive.
@@ -365,39 +770,34 @@ const BAND_ORDER = Object.freeze(['junior', 'senior', 'principal']);
  * These are the department's current cut and nothing more — `rules.bands`
  * overrides them per configuration, subject to `validateGradeBands`.
  */
-export const DEFAULT_GRADE_BANDS = Object.freeze({
-    junior: Object.freeze([7, 12]),
-    senior: Object.freeze([13, 14]),
-    principal: Object.freeze([15, 17]),
-});
+export const DEFAULT_GRADE_BANDS = ALLIED_HEALTH_SCALE.defaultRegions;
+
+/**
+ * The three band names, lowest first. Not exported: `Object.keys` of
+ * `DEFAULT_GRADE_BANDS` is the same list in the same order, so there is one
+ * definition of "the bands, in order" for a caller to read.
+ */
+const BAND_ORDER = ALLIED_HEALTH_SCALE.regionOrder;
+
+/**
+ * `rules` -> the SCALE in force. Always the allied-health one today; this is the
+ * single seam a second profession's scale is threaded through, and every reader
+ * below already takes its scale as an argument rather than reaching for a
+ * module constant.
+ */
+const resolveGradeScale = () => ALLIED_HEALTH_SCALE;
 
 /**
  * `'ah13'`, `'AH13'`, `' AH13 '` -> `13`; anything else, or a number off the
  * scale, -> `null`. Case-insensitive on input, per the input contract.
  */
-const parseGradeNumber = (value) => {
-    if (typeof value !== 'string') return null;
-    const match = /^ah(\d{1,2})$/i.exec(value.trim());
-    if (!match) return null;
-    const number = Number(match[1]);
-    return number >= GRADE_MIN && number <= GRADE_MAX ? number : null;
-};
+const parseGradeNumber = (value) => rankOfGrade(value, ALLIED_HEALTH_SCALE);
 
 /** Any accepted spelling of a grade -> the canonical `'AH' + int`, or `null`. */
-const normaliseGrade = (value) => {
-    const number = parseGradeNumber(value);
-    return number === null ? null : `AH${number}`;
-};
+const normaliseGrade = (value) => canonicalGrade(value, ALLIED_HEALTH_SCALE);
 
 /** Which band does grade NUMBER `n` sit in? Assumes `bands` already validated. */
-const bandOfGradeNumber = (n, bands) => {
-    for (const name of BAND_ORDER) {
-        const range = bands[name];
-        if (!Array.isArray(range)) continue;
-        if (n >= range[0] && n <= range[1]) return name;
-    }
-    return null;
-};
+const bandOfGradeNumber = (n, bands) => regionOfRank(n, bands, ALLIED_HEALTH_SCALE);
 
 /**
  * Are these band boundaries usable? `{ valid, reason }`, same contract as
@@ -407,72 +807,11 @@ const bandOfGradeNumber = (n, bands) => {
  * the scale, together partitioning AH7–AH17: junior starts at 7, principal ends
  * at 17, every min <= max, and each band starts exactly one grade above where
  * the one below it ended.
+ *
+ * The allied-health instance of `validateScaleRegions` — identical wording,
+ * identical refusals, one profession's nouns filled in.
  */
-export const validateGradeBands = (bands) => {
-    const invalid = (reason) => ({ valid: false, reason });
-
-    if (!isPlainObject(bands)) {
-        return invalid('Grade bands must be an object of the form { junior: [7, 12], senior: [13, 14], principal: [15, 17] }.');
-    }
-
-    for (const key of Object.keys(bands)) {
-        if (!BAND_ORDER.includes(key)) {
-            return invalid(`Grade bands include an unknown band ${JSON.stringify(key)} — the three bands are junior, senior and principal.`);
-        }
-    }
-    for (const name of BAND_ORDER) {
-        if (bands[name] === undefined) {
-            return invalid(`Grade bands are missing the ${name} band — all three of junior, senior and principal must be given, so that every grade lands in exactly one.`);
-        }
-    }
-
-    const range = {};
-    for (const name of BAND_ORDER) {
-        const value = bands[name];
-        if (!Array.isArray(value) || value.length !== 2) {
-            return invalid(`Grade band ${name} must be a two-number range [min, max], e.g. [${DEFAULT_GRADE_BANDS[name][0]}, ${DEFAULT_GRADE_BANDS[name][1]}].`);
-        }
-        for (const bound of value) {
-            if (typeof bound !== 'number' || !Number.isInteger(bound)) {
-                return invalid(`Grade band ${name} has the bound ${JSON.stringify(bound)} — band bounds are whole grade numbers between ${GRADE_MIN} and ${GRADE_MAX}.`);
-            }
-            if (bound < GRADE_MIN || bound > GRADE_MAX) {
-                return invalid(`Grade band ${name} has the bound ${bound}, which is outside the AH${GRADE_MIN}–AH${GRADE_MAX} scale.`);
-            }
-        }
-        if (value[0] > value[1]) {
-            return invalid(`Grade band ${name} runs from ${value[0]} down to ${value[1]} — its minimum must not be above its maximum.`);
-        }
-        range[name] = [value[0], value[1]];
-    }
-
-    if (range.junior[0] !== GRADE_MIN) {
-        return invalid(`Grade band junior must start at ${GRADE_MIN} (AH${GRADE_MIN}), the bottom of the scale — otherwise the grades below it would be in no band at all.`);
-    }
-    if (range.principal[1] !== GRADE_MAX) {
-        return invalid(`Grade band principal must end at ${GRADE_MAX} (AH${GRADE_MAX}), the top of the scale — otherwise the grades above it would be in no band at all.`);
-    }
-
-    for (const [lower, upper] of [['junior', 'senior'], ['senior', 'principal']]) {
-        const expected = range[lower][1] + 1;
-        const actual = range[upper][0];
-        if (actual === expected) continue;
-
-        if (actual > expected) {
-            // The gap named exactly: one grade, two grades, or a span.
-            const last = actual - 1;
-            let gap;
-            if (last === expected) gap = `AH${expected}`;
-            else if (last === expected + 1) gap = `AH${expected} and AH${last}`;
-            else gap = `AH${expected}–AH${last}`;
-
-            return invalid(`Grade bands leave ${gap} in no band at all — ${lower} ends at AH${range[lower][1]} and ${upper} starts at AH${actual}. Anybody on an unbanded grade would be silently unable to lead every band-restricted task, so the bands must be contiguous.`);
-        }
-        return invalid(`Grade bands ${lower} (AH${range[lower][0]}–AH${range[lower][1]}) and ${upper} (AH${range[upper][0]}–AH${range[upper][1]}) overlap — no grade may belong to two bands.`);
-    }
-
-    return { valid: true, reason: null };
-};
+export const validateGradeBands = (bands) => validateScaleRegions(bands, ALLIED_HEALTH_SCALE);
 
 /**
  * Which band is this grade in? `'junior' | 'senior' | 'principal' | null`.
@@ -496,30 +835,15 @@ const resolveGradeBands = (rules) =>
  * A set of band names as prose, always in scale order:
  * `Set{'principal','senior'}` -> `'Senior/Principal'`.
  */
-const bandSetLabel = (bandNames) =>
-    BAND_ORDER
-        .filter((name) => bandNames.has(name))
-        .map((name) => name.charAt(0).toUpperCase() + name.slice(1))
-        .join('/');
+const bandSetLabel = (bandNames) => regionSetLabel(bandNames, ALLIED_HEALTH_SCALE);
 
 /**
  * The same set as grade numbers: `'AH13–AH17'`. Adjacent bands are merged into
  * one span, and a deliberately non-contiguous selection reads honestly as
  * `'AH7–AH12, AH15–AH17'` rather than pretending to be a single range.
  */
-const bandSetGradeLabel = (bandNames, bands) => {
-    const spans = [];
-    for (const name of BAND_ORDER) {
-        if (!bandNames.has(name)) continue;
-        const [min, max] = bands[name];
-        const last = spans[spans.length - 1];
-        if (last && last[1] + 1 === min) last[1] = max;
-        else spans.push([min, max]);
-    }
-    return spans
-        .map(([min, max]) => (min === max ? `AH${min}` : `AH${min}–AH${max}`))
-        .join(', ');
-};
+const bandSetGradeLabel = (bandNames, bands) =>
+    regionSetRankLabel(bandNames, bands, ALLIED_HEALTH_SCALE);
 
 // --- 0c. THE HOURS MODEL ------------------------------------------------------
 //
@@ -638,7 +962,405 @@ const resolveHoursRules = (rules) => {
  */
 const formatHours = (value) => `${round2(value)}h`;
 
-// --- 0d. MULTI-SLOT SHIFTS ----------------------------------------------------
+// --- 0d. REJECTION CODES ------------------------------------------------------
+//
+// Requirement 5 of this engine's brief: never silently double-book, never
+// silently drop a slot. That means an empty candidate pool has to be
+// EXPLAINABLE, not merely detectable — so every excluded person is classified
+// by the FIRST constraint they fail, in a fixed order, and the tally is what
+// the `unfilled` reason is written from.
+//
+// The CODES live up here, above the primitives, because each primitive names the
+// code it produces (an eligibility requirement carries `REJECT_SKILL`, a capacity
+// limit carries `REJECT_CAPACITY`, and so on) and those tables are built at module
+// load. Section 4 still owns the TAXONOMY — the fixed order, the tally and the
+// prose written from it.
+
+const REJECT_SKILL = 'skill';
+/**
+ * Out of band for this task's LEAD slot. Sits immediately after `REJECT_SKILL`
+ * because it is the same KIND of fact — a standing property of the person, not
+ * something today happens to have used up — and the reason string reads in this
+ * order. Co-lead slots never produce this rejection: bands gate leads only.
+ */
+const REJECT_BAND = 'band';
+const REJECT_LEAVE = 'leave';
+const REJECT_ON_TASK = 'onTask';
+const REJECT_CAPACITY = 'capacity';
+/**
+ * Adding this task's `hours` to what they already hold today would pass their
+ * effective daily ceiling. Sits immediately after `REJECT_CAPACITY` because it is
+ * the same KIND of fact — a resource today has consumed — and it is the finer of
+ * the two: `REJECT_CAPACITY` counts duties, this one measures them. Both are
+ * reported, and never merged, because "two duties is your limit" and "twelve hours
+ * is over your limit" are different sentences to the person reading the roster.
+ */
+const REJECT_DAILY_HOURS = 'dailyHours';
+/** The same, over the Monday–Sunday week `weekStartOf` defines. */
+const REJECT_WEEKLY_HOURS = 'weeklyHours';
+const REJECT_PAIR = 'pair';
+const REJECT_CONSECUTIVE = 'consecutive';
+/**
+ * Today is outside every COHORT WINDOW this person has, or their windows do not
+ * cover this task at all. An ELIGIBILITY rejection like `REJECT_SKILL` and
+ * `REJECT_BAND` — a standing fact about the person, asked of one date — and it is
+ * reported BEFORE leave for the same reason a lacked skill is: somebody whose
+ * four-month block has not opened yet was never a candidate for that Saturday,
+ * and "3 on leave" would be the wrong sentence.
+ */
+const REJECT_WINDOW = 'window';
+/**
+ * Taking this would pass a QUOTA CEILING — the `max` of a quota over its period.
+ * Last of the codes because it is the last gate asked (section 4's `SLOT_GATES`):
+ * every day-level fact is more immediate, and "Ada already holds her 4 Saturdays
+ * this month" is the answer only once none of them applies.
+ */
+const REJECT_QUOTA = 'quota';
+
+// --- 0e. THE ELIGIBILITY PRIMITIVE --------------------------------------------
+//
+// A standing FACT about a person, asked about one position: may they fill it at
+// all, on any date, before today's capacity is considered? `requiresSkill` and
+// `leadBands` were two named flags checked by two hand-written `if`s inside the
+// candidate loop. They are the SAME primitive: a PREDICATE OVER A PERSON,
+// combined by AND.
+//
+// A REQUIREMENT is `{ kind, … }`. A position carries an ordered LIST of them, and
+// a person is eligible when they satisfy every one. The list is ordered because
+// the FIRST unmet requirement is what the roster master is told about, and the
+// documented order (skill before band) is the order the reason sentence reads in.
+//
+// THE KINDS, and the whole point of the table: adding a third kind is adding a
+// row here plus a rejection code. The candidate loop, the audit's read-back
+// matching, the scarcity count and the reason strings all walk the list through
+// `firstUnmetRequirement` / `meetsEligibility` and know nothing about what a kind
+// means. Nothing in section 7 changes.
+//
+//   skill   `{ kind: 'skill', skill }`    — holds a named competency.
+//   region  `{ kind: 'region', regions }` — their RANK sits in one of a set of
+//                                           named regions of the scale (the
+//                                           `leadBands` gate, and a slot's own
+//                                           `band`). An unrecorded rank never
+//                                           satisfies it: membership that cannot
+//                                           be verified is not membership.
+//   window  `{ kind: 'window', task }`    — one of their COHORT WINDOWS admits
+//                                           this task on this date (section 0e(ii)).
+//                                           THE THIRD KIND, and it is the proof the
+//                                           table was worth building: a four-month
+//                                           team block, a six-week locum and a
+//                                           student placement all reach the
+//                                           candidate loop, the scarcity count, the
+//                                           reason strings and the read-back audit
+//                                           through this one row.
+//
+// A REQUIREMENT MAY DEPEND ON THE DATE, and `met` therefore takes a third
+// argument: the day's context, or `null`. The first two kinds ignore it — a skill
+// and a grade are the same on every date — and the window kind reads `ctx.dateKey`.
+// Three callers ask three different questions, and each says which by what it
+// passes:
+//
+//   full ctx          the day loop. "May they fill it TODAY?"
+//   { dateKey: null } the pre-loop shortfall warnings. "Could they EVER fill it?"
+//                     — a window that never names this task fails; a date does not
+//                     enter into it.
+//   nothing           the audit's slot matching. Windows are not part of the
+//                     question there: `HARD_RULE_WINDOW` reads them off the
+//                     finished roster with the date in hand, and answering here
+//                     too would report one breach twice.
+//
+// Kinds a later agent can add without touching the candidate loop: a `not`
+// wrapper (nobody has asked), `{ kind: 'rankAtLeast' }` (a floor rather than a
+// region), `{ kind: 'attribute' }` for a boolean flag on a person, or
+// `{ kind: 'anyOf', requirements }` for the disjunction the multi-slot ledger's
+// item 4 says is not expressible today. Each is a row plus, if it needs its own
+// sentence, a rejection code.
+
+const ELIGIBILITY_SKILL = 'skill';
+const ELIGIBILITY_REGION = 'region';
+const ELIGIBILITY_WINDOW = 'window';
+
+/** The requirement kinds, as a value. Adding a kind adds a name here. */
+export const ELIGIBILITY_KIND_NAMES = Object.freeze({
+    skill: ELIGIBILITY_SKILL,
+    region: ELIGIBILITY_REGION,
+    window: ELIGIBILITY_WINDOW,
+});
+
+/**
+ * The kinds, as data: how to test one, which rejection code a person who fails it
+ * is counted under, and when two requirements of the kind are THE SAME
+ * requirement.
+ *
+ * `same` exists because `eligibilityOf` deduplicates, and what "duplicate" means
+ * is the kind's business rather than the builder's: two skill requirements agree
+ * on a name, two region requirements on a set, two window requirements on a task.
+ * It was an implicit `existing.regions === part.regions` until the third kind
+ * arrived and made the implication wrong-by-accident rather than wrong.
+ */
+export const ELIGIBILITY_KINDS = Object.freeze({
+    [ELIGIBILITY_SKILL]: Object.freeze({
+        rejection: REJECT_SKILL,
+        met: (person, requirement) => person.skills.has(requirement.skill),
+        same: (a, b) => a.skill === b.skill,
+        key: (requirement) => `s:${requirement.skill}`,
+    }),
+    [ELIGIBILITY_REGION]: Object.freeze({
+        rejection: REJECT_BAND,
+        // `person.band === null` (no grade recorded) fails: see section 0b's
+        // "absent is not zero".
+        met: (person, requirement) => person.band !== null && requirement.regions.has(person.band),
+        same: (a, b) => a.regions === b.regions,
+        key: (requirement) => `r:${[...requirement.regions].sort().join('+')}`,
+    }),
+    [ELIGIBILITY_WINDOW]: Object.freeze({
+        rejection: REJECT_WINDOW,
+        met: (person, requirement, ctx = null) => {
+            // NO CONTEXT: the caller is asking a question windows cannot answer —
+            // see the section header's table of the three callers.
+            if (ctx === null || ctx === undefined) return true;
+            if (!isNonEmptyString(ctx.dateKey)) {
+                return windowsCouldAdmit(person.windows, requirement.task);
+            }
+            return windowsAdmit(person.windows, requirement.task, ctx.dateKey);
+        },
+        same: (a, b) => a.task === b.task,
+        key: (requirement) => `w:${requirement.task}`,
+    }),
+});
+
+/** A skill requirement, or `null` for "this adds no skill". */
+export const skillRequirement = (skill) =>
+    (isNonEmptyString(skill) ? Object.freeze({ kind: ELIGIBILITY_SKILL, skill }) : null);
+
+/**
+ * A region requirement over a SET of region names, or `null` for "any rank,
+ * including an unrecorded one".
+ */
+export const regionRequirement = (regions) =>
+    (regions instanceof Set && regions.size > 0
+        ? Object.freeze({ kind: ELIGIBILITY_REGION, regions })
+        : null);
+
+/**
+ * A COHORT WINDOW requirement for one named task, or `null` for "this
+ * configuration declares no windows, so nothing is bounded in time".
+ *
+ * It carries the TASK NAME rather than reading it from context because a position
+ * belongs to exactly one task and the date-less question ("could they ever fill
+ * this?") has to be answerable from the requirement alone.
+ */
+export const windowRequirement = (taskName) =>
+    (isNonEmptyString(taskName) ? Object.freeze({ kind: ELIGIBILITY_WINDOW, task: taskName }) : null);
+
+/**
+ * Build a requirement list from parts, dropping the absent ones and any exact
+ * duplicate of a requirement already in it.
+ *
+ * DEDUPLICATED, and it is load-bearing rather than tidy: a slot entry that
+ * repeats the task's own `requiresSkill` says nothing new, and the reason
+ * sentence must not name the same skill twice ("skills CPET and CPET"). Testing
+ * it twice would give the same answer, so the dedupe is invisible to the gate and
+ * visible only in the prose.
+ */
+export const eligibilityOf = (...parts) => {
+    const out = [];
+    for (const part of parts) {
+        if (part === null || part === undefined) continue;
+        const already = out.some((existing) => (
+            existing.kind === part.kind && ELIGIBILITY_KINDS[part.kind].same(existing, part)
+        ));
+        if (!already) out.push(part);
+    }
+    return Object.freeze(out);
+};
+
+/**
+ * The FIRST requirement `person` does not satisfy, or `null` if they satisfy all.
+ *
+ * `ctx` is the day's context for the kinds that need one (the window kind, today).
+ * Absent means "no date is in play" — see the kind table's three callers.
+ */
+export const firstUnmetRequirement = (person, eligibility, ctx = null) => {
+    for (const requirement of eligibility) {
+        if (!ELIGIBILITY_KINDS[requirement.kind].met(person, requirement, ctx)) return requirement;
+    }
+    return null;
+};
+
+/** Could this person fill a position with this eligibility, ignoring capacity? */
+export const meetsEligibility = (person, eligibility, ctx = null) =>
+    firstUnmetRequirement(person, eligibility, ctx) === null;
+
+/** Every skill this eligibility demands, in list order. The reason string's input. */
+export const skillsRequiredBy = (eligibility) =>
+    eligibility.filter((r) => r.kind === ELIGIBILITY_SKILL).map((r) => r.skill);
+
+/**
+ * A comparable string for one eligibility list, so two positions asking for the
+ * SAME thing can be grouped and reported once. Kind-tagged, and region sets are
+ * sorted, so the key cannot depend on set insertion order.
+ */
+const eligibilityKey = (eligibility) => eligibility
+    .map((requirement) => ELIGIBILITY_KINDS[requirement.kind].key(requirement))
+    .join('|');
+
+/**
+ * The region set this eligibility gates on, or `null` for "any rank". A position
+ * carries at most one region requirement today (a task's `leadBands`, or a slot
+ * entry's single `band`); if a later kind adds a second, the FIRST is the one the
+ * sentence names and that is the order the list was built in.
+ */
+export const regionsRequiredBy = (eligibility) => {
+    const found = eligibility.find((r) => r.kind === ELIGIBILITY_REGION);
+    return found === undefined ? null : found.regions;
+};
+
+// --- 0e(ii). THE COHORT WINDOW: ELIGIBILITY BOUNDED IN TIME -------------------
+//
+// The embryologists run three teams and each takes a FOUR-MONTH BLOCK of weekend
+// duty. The same shape covers every rotation the field interviews turned up: a
+// six-week locum, a student on placement, a secondment, a registrar's rotation
+// through a service. None of them is expressible by `unavailable`, which is a LIST
+// OF DATES OFF — team A's block is eight months of "not you", and typing 240 dates
+// per person per year is not a configuration, it is a data-entry accident waiting
+// to happen.
+//
+// SO A PERSON MAY DECLARE WINDOWS:
+//
+//   windows: [
+//     { from: '2026-09-01', to: '2026-12-31', label: 'team B block' },
+//     { from: '2027-01-01', to: '2027-01-31', tasks: ['Supervised Clinic'] },
+//   ]
+//
+//   from / to  inclusive date keys, either may be absent — `{ to: '2026-03-31' }`
+//              is "until the end of March", `{ from: '2026-03-01' }` is "from
+//              March onwards".
+//   tasks      the tasks this window admits, or absent for "all of them".
+//   label      what the department CALLS this block, carried only so that an
+//              `unfilled` reason can say "outside their team B block" instead of
+//              "outside their cohort window". A label, never matched on.
+//
+// THE SEMANTICS ARE A UNION, AND THIS IS THE LOAD-BEARING SENTENCE: a person with
+// windows is eligible for (task, date) if SOME window of theirs admits BOTH. So
+// `windows: [{ from, to, tasks: ['X'] }]` says "X, in that range, and nothing else
+// at all, ever" — not "X is restricted and everything else is untouched". A student
+// whose only window names the supervised clinic is on the supervised clinic or on
+// nothing, which is what a placement is. The alternative reading (each window
+// restricts only the tasks it names, and unnamed tasks are unbounded) is a real
+// reading that somebody will expect; it is not this one, and the ledger says so.
+//
+// NO WINDOWS AT ALL means always eligible, so the feature is ADDITIVE: a
+// department that has never heard of cohorts is judged by exactly the gates that
+// existed before this section did. `windows: []` is REFUSED rather than read as
+// "always" — an empty list would make somebody eligible for nothing, which is a
+// half-finished edit and not a policy (the same call `slots: []` gets).
+//
+// AND IT IS NOT A SPECIAL CASE IN THE DAY LOOP. A window compiles to an
+// ELIGIBILITY REQUIREMENT (section 0e's third kind), so the candidate gate, the
+// scarcity ordering MRV reads, the `unfilled` tally and the read-back audit all see
+// it through machinery that knows nothing about cohorts.
+
+/**
+ * Did this configuration ASK for cohort windows? The one predicate, read by the
+ * validator, the generator and the audit, so the three cannot disagree about
+ * whether eligibility is time-bounded.
+ *
+ * A MENTION TEST, exactly as `hoursModelRequested` is: a staff entry carrying a
+ * `windows` key switches the model on for the whole configuration, because that is
+ * how a roster master says "our teams rotate". What it switches on is only whether
+ * `normaliseTasks` compiles the window requirement onto positions — a person who
+ * declares no windows is admitted by every one of them.
+ */
+const cohortWindowsRequested = (config) => {
+    if (!isPlainObject(config)) return false;
+    if (!Array.isArray(config.staff)) return false;
+    for (const person of config.staff) {
+        if (!isPlainObject(person)) continue;
+        if (isStated(person.windows)) return true;
+    }
+    return false;
+};
+
+/** The noun an unlabelled window is known by, in every sentence that names one. */
+const COHORT_WINDOW_NOUN = 'cohort window';
+
+/**
+ * `staff.windows` -> the normalised list, or `null` for "no windows, always
+ * eligible".
+ *
+ * `tasks` becomes a `Set` (the gate is a membership test) or `null` for "every
+ * task". Validation has already refused every shape this cannot read.
+ */
+const normaliseWindows = (value) => {
+    if (!Array.isArray(value) || value.length === 0) return null;
+    return Object.freeze(value.map((window) => Object.freeze({
+        from: isDateKey(window?.from) ? window.from : null,
+        to: isDateKey(window?.to) ? window.to : null,
+        tasks: Array.isArray(window?.tasks) && window.tasks.length > 0
+            ? new Set(window.tasks)
+            : null,
+        label: isNonEmptyString(window?.label) ? window.label.trim() : COHORT_WINDOW_NOUN,
+    })));
+};
+
+/** Does this window admit this task at all, whatever the date? */
+const windowAdmitsTask = (window, taskName) => window.tasks === null || window.tasks.has(taskName);
+
+/**
+ * Is `dateKey` inside this window's range?
+ *
+ * STRING COMPARISON, deliberately: `'2026-09-14' <= '2026-12-31'` is true for
+ * every well-formed `YYYY-MM-DD` pair because the format is fixed-width and
+ * big-endian, and validation has already refused anything else. No `Date` is
+ * constructed, so there is no timezone, no DST and no parse to get wrong —
+ * post-mortem Block B's whole lesson, applied by not needing it.
+ */
+const windowCoversDate = (window, dateKey) =>
+    (window.from === null || dateKey >= window.from) &&
+    (window.to === null || dateKey <= window.to);
+
+/** May somebody with these windows fill this task on this date? */
+const windowsAdmit = (windows, taskName, dateKey) => {
+    if (!Array.isArray(windows) || windows.length === 0) return true;
+    return windows.some((window) => windowAdmitsTask(window, taskName) && windowCoversDate(window, dateKey));
+};
+
+/** Could somebody with these windows EVER fill this task, on any date? */
+const windowsCouldAdmit = (windows, taskName) => {
+    if (!Array.isArray(windows) || windows.length === 0) return true;
+    return windows.some((window) => windowAdmitsTask(window, taskName));
+};
+
+/** `2026-09-01`/`2026-12-31` -> `2026-09-01 to 2026-12-31`, either end optional. */
+const windowRangeLabel = (window) => {
+    if (window.from !== null && window.to !== null) return `${window.from} to ${window.to}`;
+    if (window.from !== null) return `from ${window.from} onwards`;
+    if (window.to !== null) return `until ${window.to}`;
+    return 'any date';
+};
+
+/**
+ * Why exactly is this ONE person outside their windows for this ONE task today?
+ * The sentence the aggregate tally cannot say, and the reason a window carries a
+ * label at all.
+ *
+ * Reads, for example:
+ *   Cara is outside their team B block, which runs 2026-09-01 to 2026-12-31
+ *   Dan has no cohort window covering Weekend Witnessing
+ */
+const windowExclusionClause = (person, taskName) => {
+    const forTask = person.windows.filter((window) => windowAdmitsTask(window, taskName));
+
+    if (forTask.length === 0) {
+        return `${person.name} has no ${COHORT_WINDOW_NOUN} covering ${taskName}`;
+    }
+    if (forTask.length === 1) {
+        return `${person.name} is outside their ${forTask[0].label}, which runs ${windowRangeLabel(forTask[0])}`;
+    }
+    return `${person.name} is outside all ${forTask.length} of their ${COHORT_WINDOW_NOUN}s for ${taskName} (${forTask.map(windowRangeLabel).join(', ')})`;
+};
+
+// --- 0f. THE STRUCTURE PRIMITIVE: A SHIFT IS A LIST OF POSITIONS --------------
 //
 // `leads` + `coLeads` describes a shift as ONE person in charge plus a helper.
 // The embryologists' weekend service is not that shape: a witnessing session
@@ -662,12 +1384,48 @@ const formatHours = (value) => `${round2(value)}h`;
 // a co-lead today), and `role` is a LABEL, carried only so that an `unfilled`
 // entry can say WHICH of three otherwise identical slots failed.
 //
-// WHAT THIS SECTION OWNS: the shape, the labels, and the two gate predicates that
-// the construction gate (section 4), the reason strings (section 4) and the
-// read-back audit (section 6) all read, so those three can never disagree about
-// whether somebody may fill an entry. The lead-ranking rule lives in section 5,
-// beside the tie-break it defers to; the assignment loop's use of all of it is in
-// section 7; the honest limits are at the foot of the file.
+// AND THAT LIST IS THE ONLY INTERNAL SHIFT SHAPE. `leads: 1, coLeads: 1` is not a
+// second mechanism — it is SUGAR that compiles to two POSITIONS, and everything
+// past `normaliseTasks` reads `task.positions` and nothing else. A POSITION is:
+//
+//   { index, role, phase, label, eligibility, entry }
+//
+//   index        configuration order within the task. The tie-break for equally
+//                scarce positions, so it has to be stable and it has to be data.
+//   role         'lead' | 'coLead' | 'slot'. What the position IS in the shift,
+//                and what an `unfilled` entry reports for the two sugar roles.
+//   phase        PHASE_PRIMARY or PHASE_ATTACHED. A primary position stands on its
+//                own; an attached one is only worth filling if its shift has an
+//                anchor, which is what stops a co-lead being staffed with no lead.
+//   label        the name this position is refused under. `'lead'`, `'coLead'`, or
+//                a slot entry's `role`/band label made unique.
+//   eligibility  the requirement list of section 0e. THE ONLY GATE. The task's own
+//                `requiresSkill`, a `leadBands` set and a slot entry's `band` and
+//                `requiresSkill` are all compiled into it, in the documented order
+//                (skill before region), so `rejectionFor` has no per-feature `if`
+//                left and a new eligibility kind reaches every position for free.
+//   entry        the `slots` entry this came from, or `null`. Kept only so the
+//                sugar-specific WARNINGS can group identical slot gates; no gate,
+//                no reason string and no audit rule reads it.
+//
+// AND ONE COMPOSITION STEP, chosen per task rather than branched on per feature:
+//
+//   COMPOSE_PAIRING   one shift per filled anchor ('lead') position, with the
+//                     attached positions dealt round-robin across them. The shape
+//                     `leads`/`coLeads` has always produced.
+//   COMPOSE_TEAM      one shift holding everybody, ordered by RANK and then by the
+//                     fairness tie-break, so the lead is the highest grade present.
+//
+// A third strategy is a third row in `COMPOSITIONS`. Nothing in the day loop
+// branches on which one a task uses.
+//
+// WHAT THIS SECTION OWNS: the position shape, the labels, the compositions, and
+// the compilation of both sugars into positions — so the construction gate
+// (section 4), the reason strings (section 4) and the read-back audit (section 6)
+// all read one structure and can never disagree about whether somebody may fill
+// a position. The rank-ranking rule lives in section 5, beside the tie-break it
+// defers to; the assignment loop's use of all of it is in section 7; the honest
+// limits are at the foot of the file.
 //
 // LABELS ARE MADE UNIQUE, because "which slot?" is the whole point of the reason
 // string. Two entries that would both read `junior slot` become `junior slot 1`
@@ -675,115 +1433,101 @@ const formatHours = (value) => `${round2(value)}h`;
 // — it goes into a sentence rather than being matched against anything), and an
 // entry with neither `role` nor `band` reads `slot 1`.
 
-/**
- * The rank an assignee with no recorded grade sorts at. BELOW AH7, so a graded
- * assignee always outranks an ungraded one and the trio's lead is never somebody
- * whose grade the department has not recorded. `-Infinity` would have been the
- * obvious sentinel and is a trap: two ungraded assignees would compare
- * `-Infinity - -Infinity` = `NaN`, and a comparator returning `NaN` sorts
- * arbitrarily — the one thing this engine may not do.
- */
-const GRADE_UNKNOWN_RANK = 0;
+/** The two roles the paired sugar produces, and the shift fields they publish. */
+const ROLE_LEAD = 'lead';
+const ROLE_CO_LEAD = 'coLead';
 
 /**
- * The `role` a slot carries INSIDE the assignment loop while it is being filled.
+ * The `role` a slot position carries INSIDE the assignment loop while it is being
+ * filled.
  *
- * Not `'lead'` and not `'coLead'`, because it is neither until the day's entries
+ * Not `'lead'` and not `'coLead'`, because it is neither until the day's positions
  * are resolved and section 5 ranks them — the two existing roles are branched on
  * in four places, and quietly reusing one of them is how a field comes to mean two
- * things (post-mortem A-RC1). What reaches `unfilled` is the entry's LABEL, not
+ * things (post-mortem A-RC1). What reaches `unfilled` is the position's LABEL, not
  * this token; nothing outside the loop reads it.
  */
 const MULTI_SLOT_ROLE = 'slot';
 
 /**
+ * WHEN a position is filled relative to the others on its shift.
+ *
+ * PRIMARY positions of every running task compete with each other, scarcest
+ * first, across the whole day. ATTACHED positions wait for their shift to have an
+ * anchor and are then filled in a second pass — which is what makes it impossible
+ * for a pairing group to hold a co-lead with no lead to attach them to.
+ */
+const PHASE_PRIMARY = 1;
+const PHASE_ATTACHED = 2;
+
+/** How filled positions become shift objects. See the section header. */
+const COMPOSE_PAIRING = 'pairing';
+const COMPOSE_TEAM = 'team';
+
+/** The compositions and the two phases, as values a caller can name. */
+export const SHIFT_COMPOSITIONS = Object.freeze({ pairing: COMPOSE_PAIRING, team: COMPOSE_TEAM });
+export const POSITION_PHASES = Object.freeze({ primary: PHASE_PRIMARY, attached: PHASE_ATTACHED });
+
+/**
+ * The compositions, as data: which role anchors a shift, and how the day's fills
+ * are turned into shift objects.
+ *
+ * `anchorRole: null` means every position stands alone — there is nothing an
+ * attached position could hang off, and a TEAM task therefore has none.
+ */
+const COMPOSITIONS = Object.freeze({
+    [COMPOSE_PAIRING]: Object.freeze({ anchorRole: ROLE_LEAD }),
+    [COMPOSE_TEAM]: Object.freeze({ anchorRole: null }),
+});
+
+/** `task` -> the role that anchors its shifts, or `null`. */
+const anchorRoleOf = (task) => COMPOSITIONS[task.composition].anchorRole;
+
+/**
  * A canonical grade as a sortable number. Called ONCE per person, in
  * `normaliseStaff`, so that ranking a trio's assignees never re-parses a grade
  * string and the audit and the generator cannot disagree about who outranks whom.
- */
-const gradeRankOf = (grade) => {
-    const number = parseGradeNumber(grade);
-    return number === null ? GRADE_UNKNOWN_RANK : number;
-};
-
-/**
- * Does this person meet the SKILL this one entry adds? An entry with no
- * `requiresSkill` adds nothing, which is not the same as adding "no skill".
  *
- * THE task's own `requiresSkill` is not checked here — it is checked once, for
- * every slot of every kind, where it always was.
+ * An unrecorded grade sorts at the scale's `unknownRank`, which is strictly below
+ * its bottom rank — see `defineGradeScale`.
  */
-const slotSkillMet = (person, entry) =>
-    entry.requiresSkill === null || person.skills.has(entry.requiresSkill);
-
-/**
- * Does this person's BAND satisfy this entry? An entry with no `band` accepts any
- * grade INCLUDING an unrecorded one; an entry with a band never accepts an
- * unrecorded grade, exactly as `leadBands` never does (section 0b: absent is not
- * zero, and membership that cannot be verified is not membership).
- */
-const slotBandMet = (person, entry) =>
-    entry.bandSet === null || (person.band !== null && entry.bandSet.has(person.band));
-
-/**
- * Could this person fill this entry AT ALL — both of the entry's own gates and
- * the task's skill? The composition, in one place, for the two callers that need
- * the boolean rather than the reason: the structural warnings and the audit's
- * read-back matching.
- */
-const canFillSlot = (person, task, entry) =>
-    (!task.requiresSkill || person.skills.has(task.requiresSkill)) &&
-    slotSkillMet(person, entry) &&
-    slotBandMet(person, entry);
-
-/**
- * Every skill an entry's holder must have, task-wide first, deduplicated — the
- * list the `unfilled` reason reads from. Repeating the task's own skill on an
- * entry is legal and says nothing new, so it is not said twice in the sentence.
- */
-const slotSkillsRequired = (task, entry) => {
-    const skills = [];
-    if (task.requiresSkill) skills.push(task.requiresSkill);
-    if (entry !== null && entry.requiresSkill !== null && entry.requiresSkill !== task.requiresSkill) {
-        skills.push(entry.requiresSkill);
-    }
-    return skills;
+const gradeRankOf = (grade, scale = ALLIED_HEALTH_SCALE) => {
+    const number = rankOfGrade(grade, scale);
+    return number === null ? scale.unknownRank : number;
 };
 
-/** `['CPET']` -> `'skill CPET'`; `['CPET','ICSI']` -> `'skills CPET and ICSI'`. */
-const skillsPhrase = (skills) =>
-    skills.length === 1 ? `skill ${skills[0]}` : `skills ${skills.join(' and ')}`;
-
 /**
- * The label an entry is known by in prose, BEFORE deduplication: its `role` if it
- * has one, else its band, else the bare word. One definition, read by
- * `normaliseSlots` and by the validator's refusal strings, so the name a roster
- * master is refused over is the name they would have seen in `unfilled`.
+ * The label a slot entry is known by in prose, BEFORE deduplication: its `role`
+ * if it has one, else its band, else the bare word. One definition, read by
+ * `compileSlotPositions` and by the validator's refusal strings, so the name a
+ * roster master is refused over is the name they would have seen in `unfilled`.
  */
-const slotBaseLabel = (entry) => {
+const slotBaseLabel = (entry, scale = ALLIED_HEALTH_SCALE) => {
     if (isNonEmptyString(entry?.role)) return entry.role.trim();
-    if (typeof entry?.band === 'string' && BAND_ORDER.includes(entry.band)) return `${entry.band} slot`;
+    if (typeof entry?.band === 'string' && scale.regionOrder.includes(entry.band)) return `${entry.band} slot`;
     return 'slot';
 };
 
 /**
- * `slots` -> the engine's internal entries, or `null` for "this task is staffed
- * the old way". Validation has already refused every shape this cannot read.
+ * `slots` -> POSITIONS, or `null` for "this task is staffed the other way".
+ * Validation has already refused every shape this cannot read.
  *
- * `bandSet` exists beside `band` because the band LABEL helpers of section 0b
- * take a set, and building one per candidate inside the assignment loop would be
- * a set allocation per person per slot per day.
+ * Every entry becomes ONE primary position whose eligibility is the task's skill,
+ * then the entry's own skill, then the entry's band — the order the reason
+ * sentence reads in, and the order `firstUnmetRequirement` reports.
  */
-const normaliseSlots = (value) => {
+const compileSlotPositions = (value, task, scale = ALLIED_HEALTH_SCALE, windowsActive = false) => {
     if (!Array.isArray(value) || value.length === 0) return null;
 
-    const bases = value.map(slotBaseLabel);
+    const cohortWindow = windowsActive ? windowRequirement(task.name) : null;
+    const bases = value.map((entry) => slotBaseLabel(entry, scale));
     const total = new Map();
     for (const base of bases) total.set(base, (total.get(base) || 0) + 1);
     const seen = new Map();
+    const taskSkill = skillRequirement(task.requiresSkill);
 
     return value.map((raw, index) => {
-        const band = typeof raw?.band === 'string' && BAND_ORDER.includes(raw.band) ? raw.band : null;
+        const band = typeof raw?.band === 'string' && scale.regionOrder.includes(raw.band) ? raw.band : null;
         const base = bases[index];
         // Numbered ONLY when it would otherwise be ambiguous: a lone junior slot
         // reads `junior slot`, and three of them read `junior slot 1..3`.
@@ -794,25 +1538,85 @@ const normaliseSlots = (value) => {
             label = `${base} ${nth}`;
         }
 
-        return {
+        const entry = Object.freeze({
             index,
             band,
-            bandSet: band === null ? null : new Set([band]),
             requiresSkill: isNonEmptyString(raw?.requiresSkill) ? raw.requiresSkill : null,
             role: isNonEmptyString(raw?.role) ? raw.role.trim() : null,
             label,
-        };
+        });
+
+        return Object.freeze({
+            index,
+            role: MULTI_SLOT_ROLE,
+            phase: PHASE_PRIMARY,
+            label,
+            eligibility: eligibilityOf(
+                taskSkill,
+                skillRequirement(entry.requiresSkill),
+                // A single band, as a set, because a region requirement is a set —
+                // which is what makes "senior or principal" a one-line change here
+                // rather than a new mechanism (multi-slot ledger item 4).
+                band === null ? null : regionRequirement(new Set([band])),
+                // LAST, because it is the most specific fact and therefore the
+                // last sentence a roster master wants: somebody who lacks the
+                // skill is not also told their block has not opened.
+                cohortWindow,
+            ),
+            entry,
+        });
     });
 };
 
 /**
- * How many people does one occurrence of this task need? The slot count for a
- * multi-slot task, and the lead+co-lead count for every other. Read by the
- * demand counters and by the skill-shortfall warning, so a `slots` task is
- * counted in the same currency as the tasks beside it.
+ * `leads` + `coLeads` -> POSITIONS. The other sugar, compiled to the same shape.
+ *
+ * A lead position carries the task's skill and then its `leadBands`; a co-lead
+ * position carries the task's skill and nothing else, because bands gate leads
+ * only and that is what makes a senior-lead / junior-shadow pairing expressible
+ * (section 0b's rule 6).
  */
-const perDayDemand = (task) =>
-    (task.slots === null ? task.leads + task.coLeads : task.slots.length);
+const compilePairedPositions = (task, leadRegions, windowsActive = false) => {
+    const taskSkill = skillRequirement(task.requiresSkill);
+    const cohortWindow = windowsActive ? windowRequirement(task.name) : null;
+    const leadEligibility = eligibilityOf(taskSkill, regionRequirement(leadRegions), cohortWindow);
+    const coLeadEligibility = eligibilityOf(taskSkill, cohortWindow);
+    const positions = [];
+
+    for (let i = 0; i < task.leads; i += 1) {
+        positions.push(Object.freeze({
+            index: positions.length,
+            role: ROLE_LEAD,
+            phase: PHASE_PRIMARY,
+            label: ROLE_LEAD,
+            eligibility: leadEligibility,
+            entry: null,
+        }));
+    }
+    for (let i = 0; i < task.coLeads; i += 1) {
+        positions.push(Object.freeze({
+            index: positions.length,
+            role: ROLE_CO_LEAD,
+            phase: PHASE_ATTACHED,
+            label: ROLE_CO_LEAD,
+            eligibility: coLeadEligibility,
+            entry: null,
+        }));
+    }
+    return positions;
+};
+
+/**
+ * How many people does one occurrence of this task need? The position count, for
+ * every task of every shape. Read by the demand counters and by the skill
+ * shortfall warning, so a slotted task is counted in the same currency as the
+ * tasks beside it.
+ */
+const perDayDemand = (task) => task.positions.length;
+
+/** `['CPET']` -> `'skill CPET'`; `['CPET','ICSI']` -> `'skills CPET and ICSI'`. */
+const skillsPhrase = (skills) =>
+    skills.length === 1 ? `skill ${skills[0]}` : `skills ${skills.join(' and ')}`;
 
 // --- 1. DATE PRIMITIVES (post-mortem Block B) --------------------------------
 //
@@ -922,33 +1726,80 @@ export const weekStartOf = (date) => {
 /** The same answer as a key: `'2026-09-13'` (a Sunday) -> `'2026-09-07'`. */
 const weekStartKeyOf = (dateKey) => toLocalDateKey(weekStartOf(parseLocalDateKey(dateKey)));
 
-// --- 1b. MONTHLY RECURRENCE ---------------------------------------------------
+// --- 1b. THE TEMPORAL PRIMITIVE: ONE GRAMMAR FOR "WHEN DOES THIS OCCUR" -------
 //
-// A task repeats either WEEKLY (`days: [1,3]`, every Monday and Wednesday) or
-// MONTHLY (`recurrence: { ordinal: 3, weekday: 3 }`, the 3rd Wednesday of every
-// calendar month). The psychology department's specialised clinic runs monthly,
-// which no `days` list can express: `days: [3]` is EVERY Wednesday, four or five
-// times the intended workload, and the roster would look plausible while asking
-// four times the clinic time anybody agreed to.
+// A task used to answer that question in one of TWO mutually exclusive
+// mechanisms: `days: [1,3]` (every Monday and Wednesday) or
+// `recurrence: { ordinal: 3, weekday: 3 }` (the 3rd Wednesday of every calendar
+// month). Two fields, two code paths, two warnings, and a validation refusal
+// holding them apart. The seventh profession would have wanted a third.
+//
+// They are ONE THING: a PATTERN, resolved against the run's horizon into a SET OF
+// DATES. Both named fields are now SUGAR that compiles to a pattern, and the day
+// loop asks exactly one question of every task, whatever it was written as:
+// is today one of your dates?
+//
+//   PATTERN   { clauses: [clause, …], window: { from, to } | null }
+//
+// A date occurs when ANY clause matches it and the window (if any) contains it —
+// a UNION of clauses, so "the 1st AND the 3rd Wednesday" is two ordinals in one
+// clause and "every Tuesday plus these four dates" is two clauses.
+//
+//   CLAUSES
+//     { kind: 'weekly',  weekdays: [0..6], every: n, offset: k }
+//         Those weekdays, in every nth week of the run counting from its start
+//         (`every: 1, offset: 0` is every week; `every: 2, offset: 0` is alternate
+//         weeks; `offset: 1` is the other alternate weeks).
+//     { kind: 'monthly', weekday: 0..6, ordinals: [1|2|3|4|'last', …] }
+//         The nth (or last) such weekday of each calendar month, one date per
+//         ordinal, so a list expresses "1st and 3rd Wednesday".
+//     { kind: 'dates',   dates: [dateKey, …] }
+//         Exactly these dates, and nothing derived.
+//
+// WHAT IS EXPRESSIBLE TODAY BUT HAS NO SUGAR — and this is the point of the
+// refactor rather than a promise about later work: `1st AND 3rd Wednesday`
+// (`ordinals: [1, 3]`), `alternate weeks` (`every: 2`), `an explicit date list`
+// (a `dates` clause), and `a bounded date range` (`window`) all already work
+// through the general path, because there is only one path. What is missing is a
+// FIELD a roster master can type, which is validation plus a wizard column and
+// deliberately not taken here — `src/utils/rosterEngineV2.primitives.test.js`
+// drives each of them through `generateRosterV2` to prove the engine half is real.
+//
+// WHY THE OCCURRENCES ARE RESOLVED ONCE, BEFORE THE DAY LOOP. `temporalOccurrences`
+// is THE definition of when a task runs. The day loop reads the resolved set and a
+// preview UI calls the same function rather than reimplementing month arithmetic —
+// post-mortem A-RC1's rule (one definition per displayed fact) applied to a set of
+// dates instead of a string.
+//
+// HORIZON, NOT CALENDAR. The occurrences of a task are the matching dates that
+// fall INSIDE the generated run — `effectiveStart` through the last day of the
+// last week. A month whose nth weekday lies outside the run contributes nothing,
+// and a run too short to contain any occurrence generates nothing at all for that
+// task. Neither is an `unfilled` entry: no slot was ever demanded, so there is
+// nothing that could not be staffed. `generateRosterV2` does WARN about the second
+// case, because a task that never appears in the calendar is indistinguishable
+// from a bug when you are looking at the calendar.
 //
 // WHY `'last'` IS AN ORDINAL AND NOT `5`. Most months hold four of any given
 // weekday and some hold five, so a task configured as "the 5th Wednesday" would
 // silently vanish in most months — the class of quiet failure this engine exists
 // to refuse. `'last'` is the question departments actually ask, and it differs
 // from `4` exactly in the five-weekday months, which is where the tests bite.
-//
-// HORIZON, NOT CALENDAR. The occurrences of a monthly task are the matching dates
-// that fall INSIDE the generated run — `effectiveStart` through the last day of
-// the last week. A month whose nth weekday lies outside the run contributes
-// nothing, and a run too short to contain any occurrence generates nothing at all
-// for that task. Neither is an `unfilled` entry: no slot was ever demanded, so
-// there is nothing that could not be staffed. `generateRosterV2` does WARN about
-// the second case, because a monthly task that never appears in the calendar is
-// indistinguishable from a bug when you are looking at the calendar.
+
+const TEMPORAL_WEEKLY = 'weekly';
+const TEMPORAL_MONTHLY = 'monthly';
+const TEMPORAL_DATES = 'dates';
+
+/** The clause kinds, as a value, so a caller names them rather than spelling them. */
+export const TEMPORAL_KINDS = Object.freeze({
+    weekly: TEMPORAL_WEEKLY,
+    monthly: TEMPORAL_MONTHLY,
+    dates: TEMPORAL_DATES,
+});
 
 const RECURRENCE_LAST = 'last';
 
-/** The ordinals a `recurrence` may name. Anything else is refused, loudly. */
+/** The ordinals a monthly clause may name. Anything else is refused, loudly. */
 const RECURRENCE_ORDINALS = Object.freeze([1, 2, 3, 4, RECURRENCE_LAST]);
 
 /** `3` -> `'3rd'`, `'last'` -> `'last'`. For reasons and warnings only. */
@@ -958,22 +1809,6 @@ const ORDINAL_PROSE = Object.freeze({
 
 /** How many days does the month containing local `(year, month)` hold? */
 const daysInMonth = (year, month) => new Date(year, month + 1, 0).getDate();
-
-/**
- * `{ ordinal, weekday }` if this is a usable recurrence, `null` otherwise.
- *
- * Total, like `bandOfGrade`: the loud half of the pair is
- * `validateRosterV2Config`, which says WHY. Extra keys on the object are ignored
- * rather than refused, matching how the rest of the input contract treats them.
- */
-const normaliseRecurrence = (value) => {
-    if (!isPlainObject(value)) return null;
-    const { ordinal, weekday } = value;
-    if (!RECURRENCE_ORDINALS.includes(ordinal)) return null;
-    if (typeof weekday !== 'number' || !Number.isInteger(weekday)) return null;
-    if (weekday < 0 || weekday > 6) return null;
-    return { ordinal, weekday };
-};
 
 /**
  * The nth (or last) `weekday` of one calendar month, as a LOCAL date — or `null`
@@ -998,49 +1833,1095 @@ const nthWeekdayOfMonth = (year, month, ordinal, weekday) => {
     return day <= total ? new Date(year, month, day) : null;
 };
 
+/** A weekly clause. `every`/`offset` default to "every week". */
+export const weeklyClause = (weekdays, every = 1, offset = 0) =>
+    Object.freeze({ kind: TEMPORAL_WEEKLY, weekdays: Object.freeze([...weekdays]), every, offset });
+
+/** A monthly clause over one or more ordinals of one weekday. */
+export const monthlyClause = (weekday, ordinals) =>
+    Object.freeze({ kind: TEMPORAL_MONTHLY, weekday, ordinals: Object.freeze([...ordinals]) });
+
+/** An explicit-dates clause. */
+export const datesClause = (dates) =>
+    Object.freeze({ kind: TEMPORAL_DATES, dates: Object.freeze([...dates]) });
+
+/** A pattern from clauses, with an optional bounded window. */
+export const temporalPattern = (clauses, window = null) =>
+    Object.freeze({ clauses: Object.freeze([...clauses]), window });
+
 /**
- * Every date this recurrence lands on between `startKey` and `endKey` inclusive,
- * as sorted `'YYYY-MM-DD'` keys.
+ * Can this pattern ever produce a date, for any horizon? A clause with no
+ * weekdays, no ordinals or no dates is VACUOUS.
  *
- * THE ONE DEFINITION of "when does a monthly task run". `generateRosterV2` builds
- * its day filter from this, and a preview UI should call it rather than reimplement
- * the month arithmetic — post-mortem A-RC1's rule (one definition per displayed
- * fact) applied to a set of dates instead of a string. Pure, and total: an
- * unusable recurrence or a backwards range returns `[]` rather than throwing.
+ * The distinction the two "this task will never appear" warnings turn on: a
+ * vacuous pattern is a half-finished configuration, while a non-vacuous pattern
+ * with no occurrence is a horizon that simply misses it. Two different sentences.
  */
-export const recurrenceDatesBetween = (recurrence, startKey, endKey) => {
-    const spec = normaliseRecurrence(recurrence);
-    if (spec === null || !isDateKey(startKey) || !isDateKey(endKey)) return [];
+export const temporalIsVacuous = (pattern) => !pattern.clauses.some((clause) => {
+    if (clause.kind === TEMPORAL_WEEKLY) return clause.weekdays.length > 0;
+    if (clause.kind === TEMPORAL_MONTHLY) return clause.ordinals.length > 0;
+    return clause.dates.length > 0;
+});
+
+/**
+ * Every date this pattern lands on between `startKey` and `endKey` inclusive, as
+ * sorted, deduplicated `'YYYY-MM-DD'` keys.
+ *
+ * Pure, and total: an empty pattern or a backwards range returns `[]` rather than
+ * throwing. Bounded in both arms by the longest run this engine can generate
+ * (`MAX_ROSTER_WEEKS`), so a caller passing a decade-wide range gets the first
+ * year of it rather than a hang — the same bound the monthly walk has always had.
+ */
+export const temporalOccurrences = (pattern, startKey, endKey) => {
+    if (!isDateKey(startKey) || !isDateKey(endKey)) return [];
 
     const start = parseLocalDateKey(startKey);
     const end = parseLocalDateKey(endKey);
     if (end < start) return [];
 
-    const keys = [];
+    const from = pattern.window === null || !isDateKey(pattern.window.from)
+        ? start
+        : (parseLocalDateKey(pattern.window.from) > start ? parseLocalDateKey(pattern.window.from) : start);
+    const to = pattern.window === null || !isDateKey(pattern.window.to)
+        ? end
+        : (parseLocalDateKey(pattern.window.to) < end ? parseLocalDateKey(pattern.window.to) : end);
+    if (to < from) return [];
+
+    const keys = new Set();
+
+    for (const clause of pattern.clauses) {
+        if (clause.kind === TEMPORAL_WEEKLY) {
+            if (clause.weekdays.length === 0) continue;
+            // One iteration per day of the run. `week` counts whole 7-day blocks
+            // from `start` — the run's own week index, which is what makes
+            // `every: 2` mean "alternate weeks OF THIS ROSTER" rather than
+            // "alternate ISO weeks", a distinction a roster master would have to
+            // look up a calendar to resolve.
+            for (let i = 0; i < MAX_ROSTER_WEEKS * DAYS_PER_WEEK; i += 1) {
+                const date = addDays(start, i);
+                if (date > to) break;
+                if (date < from) continue;
+                if (!clause.weekdays.includes(date.getDay())) continue;
+                if (Math.floor(i / DAYS_PER_WEEK) % clause.every !== clause.offset) continue;
+                keys.add(toLocalDateKey(date));
+            }
+            continue;
+        }
+
+        if (clause.kind === TEMPORAL_MONTHLY) {
+            let year = from.getFullYear();
+            let month = from.getMonth();
+
+            // One iteration per calendar month touched. Bounded by the longest run
+            // this engine can generate (52 weeks is at most 14 months), with
+            // headroom.
+            for (let guard = 0; guard <= MAX_ROSTER_WEEKS; guard += 1) {
+                if (new Date(year, month, 1) > to) break;
+
+                for (const ordinal of clause.ordinals) {
+                    const date = nthWeekdayOfMonth(year, month, ordinal, clause.weekday);
+                    if (date !== null && date >= from && date <= to) keys.add(toLocalDateKey(date));
+                }
+
+                month += 1;
+                if (month > 11) {
+                    month = 0;
+                    year += 1;
+                }
+            }
+            continue;
+        }
+
+        for (const key of clause.dates) {
+            if (!isDateKey(key)) continue;
+            const date = parseLocalDateKey(key);
+            if (date >= from && date <= to) keys.add(key);
+        }
+    }
+
+    return [...keys].sort();
+};
+
+/**
+ * Is this a usable TEMPORAL PATTERN? `{ valid, reason }`, same contract as
+ * `validateRosterV2Config`, so a refusal can be shown to a roster master verbatim.
+ *
+ * This is the validator for the PRIMITIVE FORM — the shape a task may carry as
+ * `temporal` instead of `days` or `recurrence`. It exists because the primitive is
+ * accepted from a configuration (see `compileTemporal`) and this engine does not
+ * accept input it has not checked: a malformed pattern must be REFUSED by name and
+ * never silently ignored, which is the failure mode the whole file is built against.
+ *
+ * An EMPTY weekday list is legal, exactly as `days: []` is: it is a half-finished
+ * configuration rather than a malformed one, and it is reported as the "no days
+ * selected" warning instead of a refusal.
+ */
+export const validateTemporalPattern = (pattern, where = 'temporal') => {
+    const invalid = (reason) => ({ valid: false, reason });
+
+    if (!isPlainObject(pattern) || !Array.isArray(pattern.clauses)) {
+        return invalid(`${where} must be an object of the form { clauses: [ … ] } — one clause per rule about when the task occurs.`);
+    }
+    if (pattern.clauses.length === 0) {
+        return invalid(`${where} has no clauses, so the task would never occur. Give at least one clause, or leave temporal out and use days or recurrence.`);
+    }
+
+    for (let i = 0; i < pattern.clauses.length; i += 1) {
+        const clause = pattern.clauses[i];
+        const at = `${where} clause ${i + 1}`;
+
+        if (!isPlainObject(clause)) {
+            return invalid(`${at} is not a clause object — expected { kind: '${TEMPORAL_WEEKLY}' | '${TEMPORAL_MONTHLY}' | '${TEMPORAL_DATES}', … }.`);
+        }
+
+        if (clause.kind === TEMPORAL_WEEKLY) {
+            if (!Array.isArray(clause.weekdays)) {
+                return invalid(`${at} is weekly, so it needs weekdays: an array of whole numbers 0 (Sunday) to 6 (Saturday).`);
+            }
+            for (const day of clause.weekdays) {
+                if (typeof day !== 'number' || !Number.isInteger(day) || day < 0 || day > 6) {
+                    return invalid(`${at} has an invalid weekday ${JSON.stringify(day)} — use whole numbers 0 (Sunday) to 6 (Saturday).`);
+                }
+            }
+            if (clause.every !== undefined && !isPositiveInt(clause.every)) {
+                return invalid(`${at} has every: ${JSON.stringify(clause.every)} — it must be a whole number of at least 1 (1 is every week, 2 is alternate weeks).`);
+            }
+            const every = clause.every === undefined ? 1 : clause.every;
+            if (clause.offset !== undefined) {
+                if (!isNonNegativeInt(clause.offset)) {
+                    return invalid(`${at} has offset: ${JSON.stringify(clause.offset)} — it must be a whole number of 0 or more.`);
+                }
+                if (clause.offset >= every) {
+                    return invalid(`${at} has offset ${clause.offset} with every ${every}, so it can never match — the offset must be below every (with every: 2, use offset 0 or 1).`);
+                }
+            }
+            continue;
+        }
+
+        if (clause.kind === TEMPORAL_MONTHLY) {
+            if (typeof clause.weekday !== 'number' || !Number.isInteger(clause.weekday) || clause.weekday < 0 || clause.weekday > 6) {
+                return invalid(`${at} has the weekday ${JSON.stringify(clause.weekday)} — use whole numbers 0 (Sunday) to 6 (Saturday).`);
+            }
+            if (!Array.isArray(clause.ordinals) || clause.ordinals.length === 0) {
+                return invalid(`${at} is monthly, so it needs ordinals: a non-empty array of 1, 2, 3, 4, or 'last'.`);
+            }
+            for (const ordinal of clause.ordinals) {
+                if (!RECURRENCE_ORDINALS.includes(ordinal)) {
+                    return invalid(`${at} has the ordinal ${JSON.stringify(ordinal)} — use 1, 2, 3, 4, or 'last' for the final one of the month (most months have no 5th weekday).`);
+                }
+            }
+            continue;
+        }
+
+        if (clause.kind === TEMPORAL_DATES) {
+            if (!Array.isArray(clause.dates)) {
+                return invalid(`${at} lists explicit dates, so it needs dates: an array of YYYY-MM-DD dates.`);
+            }
+            for (const key of clause.dates) {
+                if (!isDateKey(key)) {
+                    return invalid(`${at} has a date that is not a real YYYY-MM-DD date: ${JSON.stringify(key)}.`);
+                }
+            }
+            continue;
+        }
+
+        return invalid(`${at} has the kind ${JSON.stringify(clause.kind)}, which is not a temporal kind — use '${TEMPORAL_WEEKLY}', '${TEMPORAL_MONTHLY}' or '${TEMPORAL_DATES}'.`);
+    }
+
+    if (isStated(pattern.window)) {
+        const { window } = pattern;
+        if (!isPlainObject(window) || !isDateKey(window.from) || !isDateKey(window.to)) {
+            return invalid(`${where}.window must be an object of the form { from: 'YYYY-MM-DD', to: 'YYYY-MM-DD' }, or left out so the pattern runs for the whole roster.`);
+        }
+        if (parseLocalDateKey(window.to) < parseLocalDateKey(window.from)) {
+            return invalid(`${where}.window runs from ${window.from} back to ${window.to}, so it contains no dates at all.`);
+        }
+    }
+
+    return { valid: true, reason: null };
+};
+
+/**
+ * `{ ordinal: 3, weekday: 3 }` -> a monthly pattern, or `null`.
+ *
+ * Total, like `bandOfGrade`: the loud half of the pair is
+ * `validateRosterV2Config`, which says WHY. Extra keys on the object are ignored
+ * rather than refused, matching how the rest of the input contract treats them.
+ */
+const normaliseRecurrence = (value) => {
+    if (!isPlainObject(value)) return null;
+    const { ordinal, weekday } = value;
+    if (!RECURRENCE_ORDINALS.includes(ordinal)) return null;
+    if (typeof weekday !== 'number' || !Number.isInteger(weekday)) return null;
+    if (weekday < 0 || weekday > 6) return null;
+    return { ordinal, weekday };
+};
+
+/**
+ * Every date this recurrence lands on between `startKey` and `endKey` inclusive,
+ * as sorted `'YYYY-MM-DD'` keys.
+ *
+ * The `recurrence` sugar's face on `temporalOccurrences`, kept exported and
+ * unchanged because a preview UI and 128 tests read it.
+ */
+export const recurrenceDatesBetween = (recurrence, startKey, endKey) => {
+    const spec = normaliseRecurrence(recurrence);
+    if (spec === null) return [];
+    return temporalOccurrences(
+        temporalPattern([monthlyClause(spec.weekday, [spec.ordinal])]),
+        startKey,
+        endKey,
+    );
+};
+
+/**
+ * The pattern a task's TEMPORAL SUGAR compiles to.
+ *
+ * `recurrence` wins over `days` — validation refuses a task that sets both, so
+ * this ordering is belt and braces rather than a preference — and an absent
+ * `days` means the shipped Mon–Fri default.
+ */
+const compileTemporal = (task) => {
+    // THE PRIMITIVE FORM, accepted directly. This is what makes "the 1st AND the
+    // 3rd Wednesday", "alternate weeks", "these four dates" and "only until the end
+    // of March" reachable TODAY rather than after a wizard lands: there is no sugar
+    // for any of them, and none is needed, because the general form is a field.
+    //
+    // JUDGMENT CALL, FLAGGED: `days` and `recurrence` remain the fields a roster
+    // master types and the only ones the wizard writes, so `temporal` is an
+    // engine-level input with no UI. It is VALIDATED rather than tolerated (see
+    // `validateTemporalPattern`) because silently ignoring a malformed one is the
+    // exact failure this engine exists to refuse. Combining it with `days` or
+    // `recurrence` is a refusal, for the same reason those two refuse each other.
+    if (isStated(task.temporal) && validateTemporalPattern(task.temporal).valid) {
+        return temporalPattern(
+            task.temporal.clauses.map((clause) => {
+                if (clause.kind === TEMPORAL_MONTHLY) return monthlyClause(clause.weekday, clause.ordinals);
+                if (clause.kind === TEMPORAL_DATES) return datesClause(clause.dates);
+                return weeklyClause(
+                    clause.weekdays,
+                    clause.every === undefined ? 1 : clause.every,
+                    clause.offset === undefined ? 0 : clause.offset,
+                );
+            }),
+            isStated(task.temporal.window)
+                ? { from: task.temporal.window.from, to: task.temporal.window.to }
+                : null,
+        );
+    }
+
+    const recurrence = normaliseRecurrence(task.recurrence);
+    if (recurrence !== null) {
+        return temporalPattern([monthlyClause(recurrence.weekday, [recurrence.ordinal])]);
+    }
+    return temporalPattern([
+        weeklyClause(Array.isArray(task.days) ? task.days : ROSTER_V2_DEFAULTS.days),
+    ]);
+};
+
+/**
+ * A pattern as prose: `'the 3rd Wednesday of each month'`, `'every Monday and
+ * Wednesday'`, `'Wednesday of every two weeks'`, `'the dates 2026-02-03,
+ * 2026-02-17'`.
+ *
+ * EACH CLAUSE CARRIES ITS OWN ARTICLE, because "every" and "the" are not
+ * interchangeable and the sentence this drops into cannot know which it needs. The
+ * caller writes `runs on ${temporalLabel(pattern)}` — so a monthly pattern reads
+ * "runs on the 3rd Wednesday of each month" exactly as it always has, and a weekly
+ * one reads "runs on every Monday and Wednesday" rather than "the every Monday".
+ * MEASURED: that double article is what the first weekly-pattern warning printed.
+ *
+ * Used by the "this task will never appear in this roster" warning. Before the
+ * primitive layer only the monthly branch was reachable (a weekly pattern with
+ * weekdays always occurs inside a run of whole weeks, and a vacuous pattern gets
+ * the other sentence); a `temporal` pattern with a `window` reaches the others.
+ */
+export const temporalLabel = (pattern) => pattern.clauses.map((clause) => {
+    if (clause.kind === TEMPORAL_MONTHLY) {
+        const ordinals = joinWithAnd(clause.ordinals.map((o) => ORDINAL_PROSE[o]));
+        return `the ${ordinals} ${WEEKDAY_NAMES[clause.weekday]} of each month`;
+    }
+    if (clause.kind === TEMPORAL_WEEKLY) {
+        const days = joinWithAnd(clause.weekdays.map((d) => WEEKDAY_NAMES[d]));
+        return clause.every === 1
+            ? `every ${days}`
+            : `${days} of every ${countWord(clause.every)} weeks`;
+    }
+    return `the dates ${clause.dates.join(', ')}`;
+}).join(', and ');
+
+/**
+ * `taskName -> Set<dateKey>` for every task over one horizon — the day loop's
+ * calendar, resolved once.
+ *
+ * Extracted from the generator when the quota arithmetic needed the same map at
+ * VALIDATE time: "how many Saturdays does this run hold" has to be the same number
+ * for the refusal and for the roster, or the engine refuses a configuration it would
+ * have staffed (or, worse, the other way round).
+ */
+const resolveOccurrences = (tasks, startKey, endKey) => new Map(
+    tasks.map((task) => [task.name, new Set(temporalOccurrences(task.temporal, startKey, endKey))]),
+);
+
+// --- 1c. THE CAPACITY PRIMITIVE: A CEILING ON A METER OVER A PERIOD -----------
+//
+// Five named limits had grown up separately: `maxPerDay` (duties in a day),
+// `maxConcurrentPerDay` (the department default for it), "already on this task
+// today", `maxConsecutiveDays` (working days in a row) and the two hours caps.
+// Each had its own `if` in the candidate loop and its own reason clause.
+//
+// They are ONE THING: HOW MUCH OF A METER ONE PERSON MAY HOLD OVER ONE PERIOD.
+//
+//   LIMIT   { id, meter, period, rejection, mode, limitOf, usedBy, exempt }
+//
+//   meter    what is being counted — `'duties'`, `'hours'`, `'days'`.
+//   period   over what — `'day'`, `'taskDay'` (this task, today), `'week'`,
+//            `'run'` (the unbroken run of days ending yesterday).
+//   mode     MODE_DISCRETE compares `used >= limit`: whole things, so holding the
+//            limit already means one more would exceed it. MODE_CONTINUOUS
+//            compares `used + cost > limit + HOURS_EPSILON`: a measured quantity,
+//            so a duty that exactly fills a day is allowed (see the constant for
+//            why an exact `>` would refuse `5.04 > 5.04`).
+//   limitOf  the person's ceiling, already FTE-scaled where scaling applies —
+//            `normaliseStaff` does that once, so this only reads it.
+//   usedBy   what they already hold over the period, read from the running state
+//            the day loop keeps.
+//   exempt   a period-specific "this does not apply today" (the consecutive-day
+//            limit's only such rule: somebody already working today is not
+//            lengthening their run by taking another duty — the day is spoken for
+//            either way, and how much they may do on one day is the DAY limit's
+//            question).
+//
+// THE ORDER IS DATA, and it is the order the `unfilled` reason reads in:
+// duty-count before hours, because "two duties is your limit" and "twelve hours is
+// over your limit" are different sentences and the coarser one comes first; and
+// the consecutive-day limit LAST, after the affinity gate, because it is the only
+// one about days rather than about today. `SLOT_GATES` in section 4 is where that
+// order is written down.
+//
+// A SIXTH LIMIT IS A SIXTH ROW. `maxPerWeek` (duties in a week), a monthly hours
+// ceiling, or an ENFORCED rolling window (the four-week total this engine measures
+// and warns about, section 7) are each a row plus a rejection code plus a running
+// counter — no new branch in the candidate loop.
+
+const METER_DUTIES = 'duties';
+const METER_HOURS = 'hours';
+const METER_DAYS = 'days';
+
+const PERIOD_DAY = 'day';
+const PERIOD_TASK_DAY = 'taskDay';
+const PERIOD_WEEK = 'week';
+const PERIOD_RUN = 'run';
+
+/** Whole things: holding the limit already means one more would exceed it. */
+const MODE_DISCRETE = 'discrete';
+/** A measured quantity: the sum is compared, with a tolerance on the cap side. */
+const MODE_CONTINUOUS = 'continuous';
+
+/**
+ * How many days in an unbroken run ending the day BEFORE `date` does `name`
+ * already hold at least one duty?
+ *
+ * Walks backwards through the dates this run has already written. Days on which
+ * no task runs (a weekend, for a Mon–Fri task list) break the run, which is
+ * what makes `maxConsecutiveDays` meaningful rather than decorative.
+ *
+ * KNOWN LIMIT: the walk starts inside this generation run, so duties from a
+ * PREVIOUS run — a roster generated a month at a time — are invisible to it. A
+ * clinician can therefore finish one run on a Saturday and open the next on a
+ * Sunday without the limit noticing.
+ */
+const consecutiveRunBefore = (dutiesByDate, name, date) => {
+    let run = 0;
+    let cursor = addDays(date, -1);
+
+    // Bounded by the longest run this engine can generate (52 weeks).
+    for (let guard = 0; guard < MAX_ROSTER_WEEKS * DAYS_PER_WEEK; guard += 1) {
+        const day = dutiesByDate.get(toLocalDateKey(cursor));
+        if (!day || !day.get(name)) break;
+        run += 1;
+        cursor = addDays(cursor, -1);
+    }
+
+    return run;
+};
+
+/**
+ * The capacity limits this engine enforces, in the order they are asked.
+ *
+ * Every one is HARD: a position that would breach one goes to `unfilled` naming
+ * the constraint, never to somebody the roster would have worked past it.
+ *
+ * `active` gates the two hours limits on the opt-in predicate — see section 0c.
+ * When it is false the maps are never even read, so a configuration that has
+ * never mentioned an hour is judged by exactly the limits that existed before
+ * hours did.
+ */
+export const CAPACITY_LIMITS = Object.freeze([
+    Object.freeze({
+        id: 'taskPerDay',
+        meter: METER_DUTIES,
+        period: PERIOD_TASK_DAY,
+        rejection: REJECT_ON_TASK,
+        mode: MODE_DISCRETE,
+        /**
+         * ONE occurrence of one task per person per day, and this is also what stops
+         * one person taking two positions of the same team shift: the state it reads
+         * is per task per day, so the trio rule needs no separate machinery.
+         */
+        limitOf: () => 1,
+        usedBy: (person, ctx) => (ctx.onTaskToday.has(person.name) ? 1 : 0),
+        cost: () => 1,
+    }),
+    Object.freeze({
+        id: 'dutiesPerDay',
+        meter: METER_DUTIES,
+        period: PERIOD_DAY,
+        rejection: REJECT_CAPACITY,
+        mode: MODE_DISCRETE,
+        limitOf: (person) => person.maxPerDay,
+        usedBy: (person, ctx) => ctx.dutiesOnDate.get(person.name) || 0,
+        cost: () => 1,
+    }),
+    Object.freeze({
+        id: 'hoursPerDay',
+        meter: METER_HOURS,
+        period: PERIOD_DAY,
+        rejection: REJECT_DAILY_HOURS,
+        mode: MODE_CONTINUOUS,
+        active: (ctx) => ctx.hoursActive,
+        limitOf: (person) => person.dailyHoursCap,
+        usedBy: (person, ctx) => ctx.hoursOnDate.get(person.name) || 0,
+        cost: (ctx) => ctx.task.hours,
+    }),
+    Object.freeze({
+        id: 'hoursPerWeek',
+        meter: METER_HOURS,
+        period: PERIOD_WEEK,
+        rejection: REJECT_WEEKLY_HOURS,
+        mode: MODE_CONTINUOUS,
+        active: (ctx) => ctx.hoursActive,
+        limitOf: (person) => person.weeklyHoursCap,
+        usedBy: (person, ctx) => ctx.hoursThisWeek.get(person.name) || 0,
+        cost: (ctx) => ctx.task.hours,
+    }),
+    Object.freeze({
+        id: 'consecutiveDays',
+        meter: METER_DAYS,
+        period: PERIOD_RUN,
+        rejection: REJECT_CONSECUTIVE,
+        mode: MODE_DISCRETE,
+        limitOf: (person, ctx) => ctx.maxConsecutiveDays,
+        usedBy: (person, ctx) => consecutiveRunBefore(ctx.dutiesByDate, person.name, ctx.date),
+        cost: () => 1,
+        // Already working today? Then this duty does not lengthen their run.
+        exempt: (person, ctx) => (ctx.dutiesOnDate.get(person.name) || 0) > 0,
+    }),
+]);
+
+/** The limits keyed by id, so `SLOT_GATES` names them rather than indexing them. */
+const CAPACITY_BY_ID = Object.freeze(Object.fromEntries(
+    CAPACITY_LIMITS.map((limit) => [limit.id, limit]),
+));
+
+/** Would taking this position breach `limit`? The one comparison, both modes. */
+export const capacityBreached = (limit, person, ctx) => {
+    if (limit.active !== undefined && !limit.active(ctx)) return false;
+    if (limit.exempt !== undefined && limit.exempt(person, ctx)) return false;
+
+    const ceiling = limit.limitOf(person, ctx);
+    const used = limit.usedBy(person, ctx);
+    if (limit.mode === MODE_DISCRETE) return used >= ceiling;
+    return used + limit.cost(ctx) > ceiling + HOURS_EPSILON;
+};
+
+// --- 1d. THE AFFINITY PRIMITIVE: PREFERENCES WITH POLARITY --------------------
+//
+// `forbidPairs` says "never these two together". `continuity` says "the same
+// person on every occurrence". They were a hard gate and a comparator inversion,
+// with nothing in common but a name in `rules`.
+//
+// They are ONE THING with TWO AXES: a SHAPE and a POLARITY.
+//
+//   SHAPES
+//     pair        two named people, considered against each other on one shift.
+//     occurrence  one ROLE of one task, considered across its occurrences.
+//
+//   POLARITIES
+//     forbid   HARD, negative. Never. (`forbidPairs`.)
+//     require  HARD, positive. Only together. — NOT IMPLEMENTED.
+//     prefer   SOFT, positive. Same again if the gates allow. (`continuity`.)
+//     avoid    SOFT, negative. Somebody else this time. — NOT IMPLEMENTED.
+//
+// SO THE FOUR CELLS OF THE GRID ARE:
+//
+//              pair                         occurrence
+//   forbid     forbidPairs        (built)   never the same person twice running
+//   require    must-pair-with   (declared)  —
+//   prefer     preferred partner            continuity          (built)
+//   avoid      rotate-away      (declared)  deliberate variety
+//
+// TWO ARE BUILT AND TWO ARE DECLARED, and the declared two are declared HONESTLY:
+// the constants exist, `resolveAffinities` will carry them, and NOTHING READS
+// THEM. No configuration can produce one (validation accepts `forbidPairs` and a
+// boolean `continuity`, and nothing else), so declaring them changes no roster.
+// What they buy is that "must-pair-with" and "rotate-away" are a polarity and a
+// reader rather than a seventh named flag: `require` joins `forbid` in
+// `affinityForbids`, and `avoid` joins `prefer` in the comparator chooser.
+//
+// WHY POLARITY RATHER THAN TWO LISTS. A department that says "Ann and Bob always
+// together" and one that says "Ann and Bob never together" are stating the same
+// KIND of fact about the same pair, and the engine that keeps them in two
+// differently-shaped fields will eventually apply one and forget the other. One
+// shape, one reader, one place to be wrong.
+
+const AFFINITY_PAIR = 'pair';
+const AFFINITY_OCCURRENCE = 'occurrence';
+
+/** HARD, negative: never. */
+const POLARITY_FORBID = 'forbid';
+/** HARD, positive: only together. DECLARED, NOT IMPLEMENTED. */
+const POLARITY_REQUIRE = 'require';
+/** SOFT, positive: the same again where the gates allow. */
+const POLARITY_PREFER = 'prefer';
+/** SOFT, negative: somebody else this time. DECLARED, NOT IMPLEMENTED. */
+const POLARITY_AVOID = 'avoid';
+
+/**
+ * The four polarities, as a value — the grid in the section header, as data.
+ *
+ * `require` and `avoid` are DECLARED AND UNIMPLEMENTED: nothing produces one and
+ * nothing reads one. They are here so that "must pair with" and "rotate away" are a
+ * polarity a later agent fills in, rather than a seventh named flag.
+ */
+export const AFFINITY_POLARITIES = Object.freeze({
+    forbid: POLARITY_FORBID,
+    require: POLARITY_REQUIRE,
+    prefer: POLARITY_PREFER,
+    avoid: POLARITY_AVOID,
+});
+
+/** The two shapes an affinity can take. */
+export const AFFINITY_SHAPES = Object.freeze({
+    pair: AFFINITY_PAIR,
+    occurrence: AFFINITY_OCCURRENCE,
+});
+
+/** Which polarities are a HARD gate rather than a preference. */
+const HARD_POLARITIES = Object.freeze([POLARITY_FORBID, POLARITY_REQUIRE]);
+/** Which polarities a candidate COMPARATOR reads. */
+const SOFT_POLARITIES = Object.freeze([POLARITY_PREFER, POLARITY_AVOID]);
+
+/**
+ * `rules.forbidPairs` -> pairwise affinities of negative polarity.
+ *
+ * The sugar's only shape today. `[['Ann','Bob']]` is
+ * `{ shape: 'pair', polarity: 'forbid', people: ['Ann','Bob'] }`.
+ */
+const compilePairAffinities = (forbidPairs) =>
+    forbidPairs.map(([a, b]) => Object.freeze({
+        shape: AFFINITY_PAIR,
+        polarity: POLARITY_FORBID,
+        people: Object.freeze([a, b]),
+    }));
+
+/**
+ * `task.continuity` -> a positive cross-occurrence affinity on the task's ANCHOR
+ * role, or nothing.
+ *
+ * `target` is the role the preference follows. It is the anchor rather than
+ * literally `'lead'` because that is what continuity means — "the person the
+ * cohort meets" — and a composition whose anchor is some other role would want
+ * the same preference to follow it.
+ */
+const compileOccurrenceAffinities = (tasks) => tasks
+    .filter((task) => task.continuity)
+    .map((task) => Object.freeze({
+        shape: AFFINITY_OCCURRENCE,
+        polarity: POLARITY_PREFER,
+        task: task.name,
+        target: anchorRoleOf(task),
+    }));
+
+/**
+ * Every affinity in force, from both sugars, in one list.
+ *
+ * `pairsByPerson` is the adjacency map the gate reads — built here rather than in
+ * the loop so that the pool filter is a set lookup instead of a scan of the pair
+ * list per candidate — and it holds only the HARD polarities, because a
+ * preference is not a gate.
+ */
+export const resolveAffinities = (forbidPairs, tasks, staffNames) => {
+    const list = [...compilePairAffinities(forbidPairs), ...compileOccurrenceAffinities(tasks)];
+
+    const pairsByPerson = new Map();
+    for (const name of staffNames) pairsByPerson.set(name, new Set());
+    for (const affinity of list) {
+        if (affinity.shape !== AFFINITY_PAIR) continue;
+        if (!HARD_POLARITIES.includes(affinity.polarity)) continue;
+        if (affinity.polarity !== POLARITY_FORBID) continue;
+        const [a, b] = affinity.people;
+        pairsByPerson.get(a).add(b);
+        pairsByPerson.get(b).add(a);
+    }
+
+    /** taskName -> the positive cross-occurrence affinity on it, if any. */
+    const preferSameByTask = new Map();
+    for (const affinity of list) {
+        if (affinity.shape !== AFFINITY_OCCURRENCE) continue;
+        // Two steps, deliberately, and the same shape as the hard filter above:
+        // "this is a preference rather than a gate", and then "and it is the one
+        // preference polarity that is BUILT". `avoid` (rotate-away) falls out at the
+        // second step, so implementing it is a reader here rather than a new branch.
+        if (!SOFT_POLARITIES.includes(affinity.polarity)) continue;
+        if (affinity.polarity !== POLARITY_PREFER) continue;
+        preferSameByTask.set(affinity.task, affinity);
+    }
+
+    return { list, pairsByPerson, preferSameByTask };
+};
+
+/**
+ * Does an affinity forbid `person` from joining the people already on this shift?
+ *
+ * Reads the adjacency map, so it is one set lookup per colleague already there.
+ */
+const affinityForbids = (person, ctx) => {
+    const forbidden = ctx.affinities.pairsByPerson.get(person.name);
+    for (const other of ctx.onTaskToday) {
+        if (forbidden.has(other)) return true;
+    }
+    return false;
+};
+
+/**
+ * Does a POSITIVE cross-occurrence affinity apply to this position? `true` makes
+ * the candidate comparator prefer whoever has held it most in this run.
+ *
+ * Scoped to the position's ROLE, so asking for continuity on a clinic's lead does
+ * not concentrate its co-lead slots on one person too.
+ */
+const affinityPrefersIncumbent = (task, position, affinities) => {
+    const affinity = affinities.preferSameByTask.get(task.name);
+    return affinity !== undefined && affinity.target === position.role;
+};
+
+// --- 1e. THE QUOTA PRIMITIVE: A FLOOR AS WELL AS A CEILING -------------------
+//
+// The sixth primitive, and until v1.10.1 the only one that was declared and not
+// enforced. Everything else in this engine is a CAP. The medical lab scientists'
+// rule is not a cap:
+//
+//   "each staff member works at least two Saturdays a month"
+//
+// and there was no field in which to say it. A `maxPerDay` of 2 does not say it, a
+// `weeklyHours` of 42 does not say it, and `unavailable` says the opposite.
+//
+// A QUOTA is a floor and/or a ceiling on HOW MANY OCCURRENCES of a CLASS OF WORK
+// one person takes over a PERIOD:
+//
+//   QUOTA  { subject, taskClass, period, min, max }
+//
+//   subject    whose count — `'person'` today. `'region'` (a whole band, which is
+//              what "every junior does two Saturdays a month" actually says) is
+//              DECLARED AND REFUSED: `scope: 'region'` is a validation refusal
+//              naming the omission, never a value that is quietly dropped. That is
+//              primitive-layer ledger item 11's lesson — an unimplemented value
+//              that validates is worse than one that does not exist.
+//   taskClass  which work counts. `{ kind: 'task', name }` or
+//              `{ kind: 'category', category }` — the embryologists' "witnessing"
+//              is a name and the lab's "Saturdays" may be either, depending on
+//              whether the weekend is one task or three.
+//   period     `'run'`, `'week'`, `'month'`. The same vocabulary CAPACITY uses,
+//              deliberately, because a ceiling quota IS a capacity limit read from
+//              the other end.
+//   min / max  inclusive, either may be absent — but not both, because a quota
+//              with neither bound says nothing.
+//
+// THE TWO SUGARS, and they are the only surfaces:
+//
+//   task.quota    = { per, min, max, scope }        — this task's own quota.
+//   rules.quotas  = [{ category, per, min, max, scope }] — one quota over every
+//                   task carrying that category, POOLED: three weekend tasks and a
+//                   floor of two means two weekend duties, not two of each.
+//
+// FLOORS AND CEILINGS ARE NOT SYMMETRIC, AND THAT IS THE WHOLE DIFFICULTY.
+//
+//   A MAX IS HARD, and it is a capacity limit: `quotaCeilingLimit` builds a row of
+//   exactly the shape section 1c's table holds — a meter (duties of a class) over a
+//   period — and `capacityBreached` is the same comparison. It is built PER QUOTA
+//   rather than listed in `CAPACITY_LIMITS` because a configuration may declare
+//   several and the static table has five fixed rows; the gate walks them. A slot
+//   that would breach one goes to `unfilled` with a reason naming the quota, the
+//   period and the count, exactly as an hours breach does.
+//
+//   A MIN IS SOFT, PREFERRED, AND THEN WARNED ABOUT — never hard, and this is a
+//   decision rather than a shortcut. A ceiling is answerable when a slot is
+//   offered: yes or no. A floor is only knowable when the PERIOD IS FULL, and by
+//   then there is nothing left to refuse. Refusing a slot because giving it to Ada
+//   would leave Ben short would leave the slot EMPTY, which serves nobody: a floor
+//   cannot be met by inventing capacity. So the engine does the only two honest
+//   things:
+//
+//     1. PREFERS people who are behind, ahead of ordinary FTE-weighted fairness,
+//        the way a positive occurrence affinity prefers the incumbent (section 5's
+//        comparator chain). Every hard gate still comes first.
+//     2. MEASURES the finished roster and NAMES every unmet floor in `warnings` —
+//        the person, the task class, the period and the shortfall. Measured off the
+//        roster rather than tracked during construction, for the same reason
+//        `score.hardViolations` is (post-mortem A-RC4).
+//
+//   AND AN IMPOSSIBLE FLOOR IS REFUSED AT CONFIGURE TIME, WITH THE ARITHMETIC
+//   SHOWN. Five people needing two Saturdays each in a month with four Saturdays
+//   and one slot per Saturday is 10 duties demanded against 4 that exist. That is
+//   not a roster that comes out slightly short — it is a typo or a policy nobody
+//   costed, and it is refused in the same voice as the unknown-skill and
+//   skill-times-band refusals (section 2).
+//
+// WHAT IS DELIBERATELY NOT HERE: no floor on a REGION (see `subject`); no floor
+// that reaches across generation runs, so a month split over two runs is two
+// partial months and the engine says so rather than pretending; and no
+// hours-denominated quota — `min: 2` counts DUTIES, because "two Saturdays" is a
+// count of Saturdays and an hours floor is a different sentence nobody has said.
+
+const QUOTA_SUBJECT_PERSON = 'person';
+const QUOTA_SUBJECT_REGION = 'region';
+const QUOTA_PERIOD_RUN = 'run';
+const QUOTA_PERIOD_WEEK = 'week';
+const QUOTA_PERIOD_MONTH = 'month';
+
+/** The quota vocabulary, as a value. `region` is declared and refused — see above. */
+export const QUOTA_SUBJECTS = Object.freeze({ person: QUOTA_SUBJECT_PERSON, region: QUOTA_SUBJECT_REGION });
+export const QUOTA_PERIODS = Object.freeze({
+    run: QUOTA_PERIOD_RUN,
+    week: QUOTA_PERIOD_WEEK,
+    month: QUOTA_PERIOD_MONTH,
+});
+
+const QUOTA_CLASS_TASK = 'task';
+const QUOTA_CLASS_CATEGORY = 'category';
+
+/** The class kinds, as a value. A third kind (a predicate) is a row below. */
+export const QUOTA_CLASS_KINDS = Object.freeze({ task: QUOTA_CLASS_TASK, category: QUOTA_CLASS_CATEGORY });
+
+/**
+ * The class kinds, as data: does a task belong to this class, and what is the
+ * class called in a sentence?
+ *
+ * `label` is what every quota warning and every quota refusal names, so a task
+ * quota reads `Saturday Bench` and a category quota reads `category WEEKEND` —
+ * one definition, because a roster master matching a warning against their own
+ * configuration is matching on this string.
+ */
+const QUOTA_CLASSES = Object.freeze({
+    [QUOTA_CLASS_TASK]: Object.freeze({
+        matches: (task, taskClass) => task.name === taskClass.name,
+        label: (taskClass) => taskClass.name,
+    }),
+    [QUOTA_CLASS_CATEGORY]: Object.freeze({
+        matches: (task, taskClass) => task.category === taskClass.category,
+        label: (taskClass) => `category ${taskClass.category}`,
+    }),
+});
+
+/** `'Saturday Bench'` -> the class of that one task. */
+const quotaClassOfTask = (name) => Object.freeze({ kind: QUOTA_CLASS_TASK, name });
+/** `'WEEKEND'` -> the class of every task carrying that category. */
+const quotaClassOfCategory = (category) => Object.freeze({ kind: QUOTA_CLASS_CATEGORY, category });
+
+/** Does this quota count this task? One table lookup, no per-kind branch. */
+export const quotaCountsTask = (quota, task) =>
+    QUOTA_CLASSES[quota.taskClass.kind].matches(task, quota.taskClass);
+
+/** What this quota's class is CALLED, in every sentence about it. */
+export const quotaClassLabel = (quota) => QUOTA_CLASSES[quota.taskClass.kind].label(quota.taskClass);
+
+/**
+ * How a date is bucketed into a period, as data.
+ *
+ * `week` reads `weekStartKeyOf` — the Monday that OPENED the calendar week — and
+ * NOT the generation loop's own week index, even though the two always agree
+ * (`generateRosterV2` snaps to a Monday and walks whole 7-day blocks). One
+ * definition, because the audit re-reads a finished roster and has no loop index to
+ * consult, and two definitions of "which week is this" would eventually disagree in
+ * front of a roster master.
+ *
+ * `month` slices the date KEY rather than constructing a `Date`: `'2027-02-13'` is
+ * in `'2027-02'` by inspection, with no timezone to get wrong (post-mortem B2's
+ * lesson applied by not needing it).
+ */
+const QUOTA_PERIOD_KEYS = Object.freeze({
+    [QUOTA_PERIOD_RUN]: () => QUOTA_PERIOD_RUN,
+    [QUOTA_PERIOD_WEEK]: (dateKey) => weekStartKeyOf(dateKey),
+    [QUOTA_PERIOD_MONTH]: (dateKey) => dateKey.slice(0, 7),
+});
+
+/** Which bucket of this quota's period does `dateKey` fall in? */
+export const quotaPeriodKey = (quota, dateKey) => QUOTA_PERIOD_KEYS[quota.period](dateKey);
+
+/** `'2027-02'` -> `2027-02`; a week -> `the week of 2027-02-01`; the run -> `the run`. */
+const quotaPeriodLabel = (quota, periodKey) => {
+    if (quota.period === QUOTA_PERIOD_RUN) return 'the run';
+    if (quota.period === QUOTA_PERIOD_WEEK) return `the week of ${periodKey}`;
+    return periodKey;
+};
+
+/**
+ * `config` -> the quotas in force, in a fixed order: every `task.quota` in task
+ * order, then every `rules.quotas` entry in declaration order.
+ *
+ * ORDER IS OUTPUT, not housekeeping: it decides the order the ceiling gate asks
+ * the questions in and therefore which quota a reason string names when two would
+ * both refuse, and it decides the order the unmet-floor warnings appear in.
+ *
+ * Returns a FROZEN EMPTY LIST for a configuration that declares none — which is
+ * every configuration written before this section existed, and is why the whole
+ * feature is inert rather than opt-in.
+ */
+export const resolveQuotas = (config) => {
+    if (!isPlainObject(config)) return Object.freeze([]);
+    const out = [];
+
+    if (Array.isArray(config.tasks)) {
+        for (const task of config.tasks) {
+            if (!isPlainObject(task) || !isPlainObject(task.quota)) continue;
+            if (!isNonEmptyString(task.name)) continue;
+            out.push(compileQuota(task.quota, quotaClassOfTask(task.name)));
+        }
+    }
+    if (isPlainObject(config.rules) && Array.isArray(config.rules.quotas)) {
+        for (const entry of config.rules.quotas) {
+            if (!isPlainObject(entry) || !isNonEmptyString(entry.category)) continue;
+            out.push(compileQuota(entry, quotaClassOfCategory(entry.category)));
+        }
+    }
+
+    return Object.freeze(out);
+};
+
+/**
+ * One sugar entry -> the primitive. `per` becomes `period` and `scope` becomes
+ * `subject`, because the sugar is written in a roster master's words and the
+ * primitive in the engine's; absent bounds become `null` rather than 0, since 0 is
+ * a real ceiling ("nobody may take this") and absence is not.
+ */
+const compileQuota = (raw, taskClass) => Object.freeze({
+    subject: isNonEmptyString(raw.scope) ? raw.scope : QUOTA_SUBJECT_PERSON,
+    taskClass,
+    period: isNonEmptyString(raw.per) ? raw.per : QUOTA_PERIOD_RUN,
+    min: isNonNegativeInt(raw.min) ? raw.min : null,
+    max: isNonNegativeInt(raw.max) ? raw.max : null,
+});
+
+/** The shape `resolveQuotas` returns. Pure documentation with a type. */
+export const quotaOf = ({ subject = QUOTA_SUBJECT_PERSON, taskClass, period = QUOTA_PERIOD_RUN, min = null, max = null }) =>
+    Object.freeze({ subject, taskClass, period, min, max });
+
+/**
+ * A quota's CEILING as a CAPACITY LIMIT — the same eight-field row section 1c's
+ * table holds, compared by the same `capacityBreached`.
+ *
+ * Built per quota instead of listed in `CAPACITY_LIMITS` because a configuration
+ * may declare any number of quotas and that table is five fixed department-wide
+ * rows. `usedBy` is injected rather than reached for, so the same row shape serves
+ * the generator (reading the running counters) and the audit (reading the finished
+ * roster).
+ */
+const quotaCeilingLimit = (quota, index, usedBy) => Object.freeze({
+    id: `quotaMax:${index}`,
+    meter: METER_DUTIES,
+    period: quota.period,
+    rejection: REJECT_QUOTA,
+    mode: MODE_DISCRETE,
+    limitOf: () => quota.max,
+    usedBy,
+    cost: () => 1,
+    quota,
+});
+
+/**
+ * Every ceiling quota as a capacity limit, reading `counts` — the
+ * `quotaIndex -> (periodKey -> (name -> duties))` ledger both the generator and
+ * the audit build.
+ */
+const quotaCeilingLimits = (quotas, counts) => quotas
+    .map((quota, index) => (quota.max === null ? null : quotaCeilingLimit(quota, index, (person, ctx) => (
+        counts[index].get(quotaPeriodKey(quota, ctx.dateKey))?.get(person.name) || 0
+    ))))
+    .filter((limit) => limit !== null);
+
+/** An empty `quotaIndex -> (periodKey -> (name -> duties))` ledger. */
+const emptyQuotaCounts = (quotas) => quotas.map(() => new Map());
+
+/** Add one duty of `dateKey` to every quota that counts `task`. */
+const countQuotaDuty = (quotas, counts, task, name, dateKey) => {
+    for (let i = 0; i < quotas.length; i += 1) {
+        if (!quotaCountsTask(quotas[i], task)) continue;
+        const periodKey = quotaPeriodKey(quotas[i], dateKey);
+        if (!counts[i].has(periodKey)) counts[i].set(periodKey, new Map());
+        const bucket = counts[i].get(periodKey);
+        bucket.set(name, (bucket.get(name) || 0) + 1);
+    }
+};
+
+/**
+ * MEASURE a finished roster against the quotas: how many duties of each class did
+ * each person hold in each period bucket?
+ *
+ * One definition, read by the unmet-floor warnings AND by the read-back audit, so
+ * the sentence a roster master gets and the violation count cannot disagree. A
+ * shift naming a task the configuration does not have is skipped — nothing knows
+ * what class it belongs to, exactly as nothing knows its hours.
+ */
+const measureQuotaCounts = (roster, quotas, byTask) => {
+    const counts = emptyQuotaCounts(quotas);
+    if (quotas.length === 0) return counts;
+
+    for (const dateKey of Object.keys(roster).sort()) {
+        for (const shift of roster[dateKey]) {
+            const task = byTask.get(shift.task);
+            if (!task) continue;
+            for (const name of shiftAssignees(shift)) {
+                countQuotaDuty(quotas, counts, task, name, dateKey);
+            }
+        }
+    }
+    return counts;
+};
+
+/** How many duties of this quota's class does `name` hold in this bucket? */
+const quotaHeld = (counts, index, periodKey, name) =>
+    counts[index].get(periodKey)?.get(name) || 0;
+
+/**
+ * The PERIOD BUCKETS of one quota that a run from `startKey` to `endKey` touches,
+ * in chronological order, each carrying whether the run holds the WHOLE of it.
+ *
+ * `whole` is the load-bearing field, and it is why the impossible-floor refusal is
+ * not simply arithmetic over the run. A four-week run from a Monday almost never
+ * lines up with a calendar month, so a monthly floor of two will meet a March that
+ * the run holds three days of. That is a HORIZON artefact and not a broken policy:
+ * a partial bucket is never refused and never reported as a shortfall — it gets one
+ * warning saying the run holds only part of it, and the floor is judged where it
+ * can be judged.
+ */
+const quotaPeriodBuckets = (quota, startKey, endKey) => {
+    if (quota.period === QUOTA_PERIOD_RUN) {
+        return [{ key: QUOTA_PERIOD_RUN, from: startKey, to: endKey, whole: true }];
+    }
+
+    if (quota.period === QUOTA_PERIOD_WEEK) {
+        // The run is whole 7-day blocks from a Monday, so every week of it is whole.
+        const buckets = [];
+        const start = parseLocalDateKey(startKey);
+        for (let offset = 0; ; offset += DAYS_PER_WEEK) {
+            const from = toLocalDateKey(addDays(start, offset));
+            if (from > endKey) break;
+            buckets.push({
+                key: from,
+                from,
+                to: toLocalDateKey(addDays(start, offset + DAYS_PER_WEEK - 1)),
+                whole: true,
+            });
+        }
+        return buckets;
+    }
+
+    const buckets = [];
+    const start = parseLocalDateKey(startKey);
     let year = start.getFullYear();
     let month = start.getMonth();
-
-    // One iteration per calendar month touched. Bounded by the longest run this
-    // engine can generate (52 weeks is at most 14 months), with headroom.
+    // Bounded by the longest run this engine accepts (52 weeks -> 14 months).
     for (let guard = 0; guard <= MAX_ROSTER_WEEKS; guard += 1) {
-        if (new Date(year, month, 1) > end) break;
-
-        const date = nthWeekdayOfMonth(year, month, spec.ordinal, spec.weekday);
-        if (date !== null && date >= start && date <= end) keys.push(toLocalDateKey(date));
-
+        const firstKey = toLocalDateKey(new Date(year, month, 1));
+        if (firstKey > endKey) break;
+        const lastKey = toLocalDateKey(new Date(year, month, daysInMonth(year, month)));
+        buckets.push({
+            key: firstKey.slice(0, 7),
+            from: firstKey < startKey ? startKey : firstKey,
+            to: lastKey > endKey ? endKey : lastKey,
+            whole: firstKey >= startKey && lastKey <= endKey,
+        });
         month += 1;
         if (month > 11) {
             month = 0;
             year += 1;
         }
     }
-
-    return keys;
+    return buckets;
 };
 
-/** `{ ordinal: 3, weekday: 3 }` -> `'3rd Wednesday of each month'`. */
-const recurrenceLabel = (recurrence) =>
-    `${ORDINAL_PROSE[recurrence.ordinal]} ${WEEKDAY_NAMES[recurrence.weekday]} of each month`;
+/** The tasks this quota counts, in configuration order. */
+const quotaTasks = (quota, tasks) => tasks.filter((task) => quotaCountsTask(quota, task));
+
+/** How is this quota's period written in a sentence? `per month`, `over the run`. */
+const quotaPeriodPhrase = (quota) =>
+    (quota.period === QUOTA_PERIOD_RUN ? 'over the run' : `per ${quota.period}`);
+
+/** Where a roster master DECLARED this quota, so a refusal names the field they typed. */
+const quotaSource = (quota) => (quota.taskClass.kind === QUOTA_CLASS_TASK
+    ? `Task ${quota.taskClass.name}'s quota`
+    : `The rules.quotas entry for category ${quota.taskClass.category}`);
+
+/**
+ * Who is SUBJECT to this quota: everybody who could fill SOME position of SOME task
+ * it counts, judged on STANDING eligibility only — the skill they hold, the band
+ * they are in, and whether any cohort window of theirs names the task at all.
+ *
+ * PLUS ONE CAPACITY FACT, and only one: when the hours model is in force, somebody
+ * whose FTE-scaled day cannot hold a single occurrence of any task in the class is
+ * not subject to the floor either. That is not tidiness — it is the difference
+ * between a true refusal and a false one. The impossible-floor arithmetic multiplies
+ * this population by `min`, so counting a 0.6-FTE colleague whose 5.04-hour day
+ * cannot hold an 8-hour Saturday would REFUSE a configuration that is in fact
+ * perfectly staffable. Measured: three people, four Saturdays, one slot each and a
+ * floor of two refuses at 6 > 4, and it should not when one of the three could never
+ * take one.
+ *
+ * A JUDGMENT CALL, and the ledger flags it. The alternative reading is that a
+ * `scope: 'person'` floor applies to every person in the pool full stop, which would
+ * make a floor on a skill-gated task refuse in every mixed team — a floor on
+ * somebody who can never do the work is a contradiction rather than a policy. The
+ * cost is that shrinking the population is SILENT unless something says so, which is
+ * why the generator names the excluded people in a warning rather than leaving them
+ * to be noticed.
+ *
+ * The line drawn here is PERMANENT inability, never a day's worth of it: leave, a
+ * full day, a consecutive-day run and a forbidden pairing are all things that happen
+ * to somebody who could otherwise do the work, and the floor still applies to them —
+ * which is exactly when it is reported unmet.
+ */
+const quotaSubjects = (quota, tasks, staff, hoursActive = false) => {
+    const counted = quotaTasks(quota, tasks);
+    return staff.filter((person) => counted.some((task) => {
+        if (hoursActive && task.hours > person.dailyHoursCap + HOURS_EPSILON) return false;
+        return task.positions.some(
+            (position) => meetsEligibility(person, position.eligibility, { dateKey: null }),
+        );
+    }));
+};
+
+/** The dates of `task` inside one period bucket, in order. */
+const bucketDatesOf = (task, bucket, occurrencesByTask) =>
+    [...occurrencesByTask.get(task.name)]
+        .filter((dateKey) => dateKey >= bucket.from && dateKey <= bucket.to)
+        .sort();
+
+/**
+ * How many duties of this quota's class EXIST in one period bucket: occurrences
+ * times people per occurrence, summed over every task the quota counts.
+ *
+ * This is the supply side of the impossible-floor arithmetic, and it counts
+ * POSITIONS rather than shifts because that is what a person can be given: one
+ * Saturday needing a lead and a co-lead is two Saturdays' worth of quota.
+ */
+const quotaSupplyIn = (quota, tasks, bucket, occurrencesByTask) => quotaTasks(quota, tasks)
+    .reduce((sum, task) => sum + bucketDatesOf(task, bucket, occurrencesByTask).length * task.positions.length, 0);
+
+/** Could this person's cohort windows let them take ANY of the class's work here? */
+const quotaReachableIn = (quota, tasks, bucket, occurrencesByTask, person) => quotaTasks(quota, tasks)
+    .some((task) => bucketDatesOf(task, bucket, occurrencesByTask)
+        .some((dateKey) => windowsAdmit(person.windows, task.name, dateKey)));
 
 // --- 2. VALIDATION -----------------------------------------------------------
 //
@@ -1066,6 +2947,13 @@ export const validateRosterV2Config = (config) => {
     }
 
     const { startDate, weeks, staff, tasks, rules } = config;
+
+    /**
+     * The seniority SCALE this configuration is judged against. One seam, read
+     * once, so that every refusal below names ranks and regions in the scale's own
+     * words instead of hardcoding one profession's.
+     */
+    const scale = resolveGradeScale(rules);
 
     /**
      * Whether the hours model is in force at all. Every hours FIELD is validated
@@ -1163,6 +3051,59 @@ export const validateRosterV2Config = (config) => {
             }
         }
 
+        // --- COHORT WINDOWS (section 0e(ii)) ----------------------------------
+        //
+        // Shape only, here. Whether the tasks a window names EXIST, and whether a
+        // task is left with nobody whose window covers the run at all, are
+        // cross-checks that need the task list and live below it.
+        if (isStated(person.windows)) {
+            if (!Array.isArray(person.windows)) {
+                return invalid(`${name}'s windows must be an array of cohort windows, e.g. [{ from: '2026-09-01', to: '2026-12-31' }] — or left out so that they are eligible on every date.`);
+            }
+            if (person.windows.length === 0) {
+                // The same call `slots: []` gets: an empty list would leave them
+                // eligible for nothing at all, which is a half-finished edit rather
+                // than a policy. "Always available" is said by omitting the field.
+                return invalid(`${name} has windows: [], which would make them eligible for nothing at all. Leave windows out so that they are eligible on every date, or give at least one window.`);
+            }
+            for (let w = 0; w < person.windows.length; w += 1) {
+                const window = person.windows[w];
+                const at = `${name}'s window ${w + 1}`;
+
+                if (!isPlainObject(window)) {
+                    return invalid(`${at} is not a window object — expected { from, to, tasks, label }, e.g. { from: '2026-09-01', to: '2026-12-31', label: 'team B block' }.`);
+                }
+                for (const edge of ['from', 'to']) {
+                    if (isStated(window[edge]) && !isDateKey(window[edge])) {
+                        return invalid(`${at} has a ${edge} that is not a real YYYY-MM-DD date: ${JSON.stringify(window[edge])}.`);
+                    }
+                }
+                if (isStated(window.from) && isStated(window.to) && window.from > window.to) {
+                    return invalid(`${at} runs from ${window.from} to ${window.to}, which ends before it starts. Swap the two dates.`);
+                }
+                if (isStated(window.tasks)) {
+                    if (!Array.isArray(window.tasks) || window.tasks.length === 0) {
+                        return invalid(`${at}'s tasks must be a non-empty array of task names — or left out so the window admits every task.`);
+                    }
+                    for (const taskName of window.tasks) {
+                        if (!isNonEmptyString(taskName)) {
+                            return invalid(`${at} names a task that is not a name: ${JSON.stringify(taskName)}.`);
+                        }
+                    }
+                }
+                if (isStated(window.label) && !isNonEmptyString(window.label)) {
+                    return invalid(`${at} has a label that is not a label — give it a name such as 'team B block', or leave it out.`);
+                }
+                // A window with no bound of any kind admits everything on every date,
+                // which is what having no windows already means. Refused rather than
+                // ignored, because in a LIST of windows it silently cancels every
+                // other window the person has — the loudest possible surprise.
+                if (!isStated(window.from) && !isStated(window.to) && !isStated(window.tasks)) {
+                    return invalid(`${at} has no from, no to and no tasks, so it admits every task on every date and cancels every other window ${name} has. Give it a date range, a task list, or remove it.`);
+                }
+            }
+        }
+
         // Hours are OPTIONAL, and stating either of them switches the whole hours
         // model on for the configuration (`hoursModelRequested`). Both are checked
         // whenever they are present, so a typo cannot be silently ignored on its
@@ -1198,7 +3139,7 @@ export const validateRosterV2Config = (config) => {
         if (person.grade !== undefined && person.grade !== null && !gradeIsBlank) {
             const number = parseGradeNumber(person.grade);
             if (number === null) {
-                return invalid(`${name}'s grade is ${JSON.stringify(person.grade)}, which is not on the allied-health scale — use one of AH${GRADE_MIN}–AH${GRADE_MAX} (case does not matter), or leave it out if it is not recorded.`);
+                return invalid(`${name}'s grade is ${JSON.stringify(person.grade)}, which is not on ${scale.prose.scaleTitle} — use one of ${scale.span} (case does not matter), or leave it out if it is not recorded.`);
             }
             gradeNumbers.push(number);
         }
@@ -1215,8 +3156,13 @@ export const validateRosterV2Config = (config) => {
     }
     const bands = rawBands === undefined || rawBands === null ? DEFAULT_GRADE_BANDS : rawBands;
 
-    /** How many people hold a grade in each band — the eligibility floor. */
-    const inBandCount = { junior: 0, senior: 0, principal: 0 };
+    /**
+     * How many people hold a grade in each band — the eligibility floor.
+     *
+     * Built from the scale's own region order rather than written out, so a scale
+     * with two regions or five counts them all instead of three by name.
+     */
+    const inBandCount = Object.fromEntries(scale.regionOrder.map((name) => [name, 0]));
     for (const number of gradeNumbers) {
         const band = bandOfGradeNumber(number, bands);
         if (band !== null) inBandCount[band] += 1;
@@ -1276,12 +3222,58 @@ export const validateRosterV2Config = (config) => {
         return { name: person.name, fte, cap: cap * fte };
     });
 
+    /**
+     * ONE quota shape check, read by both sugars — `task.quota` and each
+     * `rules.quotas` entry — so a floor typed in either place is refused in the same
+     * words. Returns a reason, or `null` for "this quota is well-formed".
+     *
+     * `where` is the field the roster master typed, so the sentence names their own
+     * configuration rather than the primitive it compiles to.
+     */
+    const quotaShapeReason = (raw, where) => {
+        if (!isPlainObject(raw)) {
+            return `${where} must be an object of the form { per: 'month', min: 2 } — a floor, a ceiling, or both.`;
+        }
+        if (isStated(raw.per) && !Object.values(QUOTA_PERIODS).includes(raw.per)) {
+            return `${where} has per: ${JSON.stringify(raw.per)}, which is not a period — use ${Object.values(QUOTA_PERIODS).join(', ')}.`;
+        }
+        if (isStated(raw.scope) && raw.scope !== QUOTA_SUBJECTS.person) {
+            // DECLARED AND REFUSED, never quietly counted per person: a band-wide
+            // quota ("every junior does two Saturdays a month") is a different
+            // constraint with a different arithmetic, and primitive-layer ledger item
+            // 11's lesson is that an unimplemented value which validates is worse
+            // than one that does not exist.
+            if (raw.scope === QUOTA_SUBJECTS.region) {
+                return `${where} has scope: 'region'. A quota over a whole band — "every junior does two Saturdays a month" — is declared in this engine and NOT implemented, so it is refused rather than silently counted per person. Use scope: 'person', or say it per person and check the band yourself.`;
+            }
+            return `${where} has scope: ${JSON.stringify(raw.scope)}, which is not a quota subject — use 'person', or leave scope out.`;
+        }
+        for (const bound of ['min', 'max']) {
+            if (!isStated(raw[bound])) continue;
+            if (!isPositiveInt(raw[bound])) {
+                // `min: 0` is met by doing nothing and `max: 0` says the task may
+                // never be staffed; both are a field left half-edited rather than a
+                // policy, so both are refused instead of being obeyed literally.
+                return `${where} has ${bound}: ${JSON.stringify(raw[bound])} — it must be a whole number of at least 1. A ${bound} of 0 ${bound === 'min' ? 'is met by doing nothing' : 'would mean the work may never be staffed at all'}, so leave it out instead.`;
+            }
+        }
+        if (!isStated(raw.min) && !isStated(raw.max)) {
+            return `${where} has neither min nor max, so it asks for nothing. Give a floor (min), a ceiling (max), or both.`;
+        }
+        if (isStated(raw.min) && isStated(raw.max) && raw.min > raw.max) {
+            return `${where} has min ${raw.min} and max ${raw.max} — a floor above a ceiling cannot be satisfied by any roster.`;
+        }
+        return null;
+    };
+
     // --- tasks ----------------------------------------------------------------
     if (!Array.isArray(tasks) || tasks.length === 0) {
         return invalid('The task list is empty — add at least one task.');
     }
 
     const seenTasks = new Set();
+    /** Every category a task carries, for `rules.quotas` to be checked against. */
+    const seenCategories = new Set();
 
     for (let i = 0; i < tasks.length; i += 1) {
         const task = tasks[i];
@@ -1322,6 +3314,22 @@ export const validateRosterV2Config = (config) => {
                     return invalid(`Task ${name} has an invalid day ${JSON.stringify(day)} — use whole numbers 0 (Sunday) to 6 (Saturday).`);
                 }
             }
+        }
+
+        // `temporal` is the PRIMITIVE both of the two named calendars compile to,
+        // and it is accepted directly (see `compileTemporal`) — so it is validated
+        // directly, and it is mutually exclusive with both of them for exactly the
+        // reason they are mutually exclusive with each other: there is no reading of
+        // "these clauses AND every Wednesday" that is not one of the two with extra
+        // words, and silently preferring one would make the ignored field a trap.
+        if (isStated(task.temporal)) {
+            for (const field of ['days', 'recurrence']) {
+                if (isStated(task[field])) {
+                    return invalid(`Task ${name} sets both temporal and ${field} — temporal IS the general form that ${field} compiles to, so giving both says the same thing twice and disagrees with itself. Remove whichever one is not meant.`);
+                }
+            }
+            const patternCheck = validateTemporalPattern(task.temporal, `Task ${name}'s temporal`);
+            if (!patternCheck.valid) return invalid(patternCheck.reason);
         }
 
         // `recurrence` is the MONTHLY calendar, and it replaces `days` rather
@@ -1414,8 +3422,8 @@ export const validateRosterV2Config = (config) => {
                 if (!isPlainObject(entry)) {
                     return invalid(`${at} is not a slot object — expected { band, requiresSkill, role }, e.g. { band: 'senior', role: 'Witness' }.`);
                 }
-                if (isStated(entry.band) && (typeof entry.band !== 'string' || !BAND_ORDER.includes(entry.band))) {
-                    return invalid(`${at} names the band ${JSON.stringify(entry.band)}, which is not a band — use ${BAND_ORDER.join(', ')} (lower case), or leave band out so that any grade may fill the slot.`);
+                if (isStated(entry.band) && (typeof entry.band !== 'string' || !scale.regionOrder.includes(entry.band))) {
+                    return invalid(`${at} names the band ${JSON.stringify(entry.band)}, which is not a band — use ${scale.regionOrder.join(', ')} (lower case), or leave band out so that any grade may fill the slot.`);
                 }
                 if (isStated(entry.role) && !isNonEmptyString(entry.role)) {
                     return invalid(`${at} has a role that is not a label — give it a name such as 'Principal embryologist', or leave it out.`);
@@ -1455,19 +3463,31 @@ export const validateRosterV2Config = (config) => {
                     if (wantedBand !== null) {
                         needs.push(`a grade in the ${bandSetLabel(wantedBand)} band (${bandSetGradeLabel(wantedBand, bands)})`);
                     }
-                    for (const skill of slotSkillsRequired(
-                        { requiresSkill: isNonEmptyString(task.requiresSkill) ? task.requiresSkill : null },
-                        { requiresSkill: entrySkill },
-                    )) {
+                    // The same requirement list the ENGINE will build for this
+                    // entry, read through the same deduplicating helper, so the
+                    // refusal cannot name a skill the gate would not check.
+                    for (const skill of skillsRequiredBy(eligibilityOf(
+                        skillRequirement(task.requiresSkill),
+                        skillRequirement(entrySkill),
+                    ))) {
                         needs.push(`skill ${skill}`);
                     }
-                    return invalid(`${at} (${slotBaseLabel(entry)}) needs ${needs.join(' and ')}, and nobody in the staff pool qualifies, so that slot would be unfilled on every date. Check the grades and the skills, widen the slot, or move the band boundaries.`);
+                    return invalid(`${at} (${slotBaseLabel(entry, scale)}) needs ${needs.join(' and ')}, and nobody in the staff pool qualifies, so that slot would be unfilled on every date. Check the grades and the skills, widen the slot, or move the band boundaries.`);
                 }
             }
         }
 
         if (task.category !== undefined && task.category !== null && !isNonEmptyString(task.category)) {
             return invalid(`Task ${name}'s category must be a non-empty label.`);
+        }
+        seenCategories.add(isNonEmptyString(task.category) ? task.category : ROSTER_V2_DEFAULTS.category);
+
+        // --- QUOTA (section 1e) -----------------------------------------------
+        // Shape only, here. Whether a FLOOR is arithmetically reachable needs the
+        // horizon, the occurrences and the whole staff pool, and is checked below.
+        if (isStated(task.quota)) {
+            const reason = quotaShapeReason(task.quota, `Task ${name}'s quota`);
+            if (reason !== null) return invalid(reason);
         }
 
         // `hours` is how long ONE occurrence takes. Absent means
@@ -1512,7 +3532,7 @@ export const validateRosterV2Config = (config) => {
         // which is every task that existed before grades did.
         if (task.leadBands !== undefined && task.leadBands !== null) {
             if (!Array.isArray(task.leadBands)) {
-                return invalid(`Task ${name}'s leadBands must be an array of band names — any of ${BAND_ORDER.join(', ')} — or left out so that any grade may lead it.`);
+                return invalid(`Task ${name}'s leadBands must be an array of band names — any of ${scale.regionOrder.join(', ')} — or left out so that any grade may lead it.`);
             }
             if (task.leadBands.length === 0) {
                 return invalid(`Task ${name} has leadBands: [], which no grade can satisfy, so every one of its lead slots would be unfilled. Leave leadBands out to let any grade lead it.`);
@@ -1520,8 +3540,8 @@ export const validateRosterV2Config = (config) => {
 
             const wanted = new Set();
             for (const band of task.leadBands) {
-                if (typeof band !== 'string' || !BAND_ORDER.includes(band)) {
-                    return invalid(`Task ${name} names the lead band ${JSON.stringify(band)}, which is not a band — use ${BAND_ORDER.join(', ')} (lower case).`);
+                if (typeof band !== 'string' || !scale.regionOrder.includes(band)) {
+                    return invalid(`Task ${name} names the lead band ${JSON.stringify(band)}, which is not a band — use ${scale.regionOrder.join(', ')} (lower case).`);
                 }
                 wanted.add(band);
             }
@@ -1529,7 +3549,7 @@ export const validateRosterV2Config = (config) => {
             // The band twin of the unknown-skill rule: loud, at configure time.
             // Generating a roster in which every lead slot of this task is
             // unfilled is how a mis-set band boundary reaches a clinician.
-            const holders = BAND_ORDER.reduce(
+            const holders = scale.regionOrder.reduce(
                 (sum, band) => sum + (wanted.has(band) ? inBandCount[band] : 0),
                 0,
             );
@@ -1595,6 +3615,136 @@ export const validateRosterV2Config = (config) => {
                 }
             }
         }
+
+        // --- rules.quotas: a quota over a CATEGORY of tasks --------------------
+        if (isStated(rules.quotas)) {
+            if (!Array.isArray(rules.quotas)) {
+                return invalid("rules.quotas must be an array of category quotas, e.g. [{ category: 'WEEKEND', per: 'month', min: 2 }].");
+            }
+            for (let q = 0; q < rules.quotas.length; q += 1) {
+                const entry = rules.quotas[q];
+                const at = `rules.quotas entry ${q + 1}`;
+
+                if (!isPlainObject(entry)) {
+                    return invalid(`${at} is not a quota object — expected { category, per, min, max }, e.g. { category: 'WEEKEND', per: 'month', min: 2 }.`);
+                }
+                if (!isNonEmptyString(entry.category)) {
+                    return invalid(`${at} has no category. A rules-level quota counts every task carrying one category — name it, or put the quota on the task itself.`);
+                }
+                // The category twin of the unknown-skill refusal, and loud for the
+                // same reason: a misspelled category counts NOTHING, so a floor of
+                // two would be reported unmet on every period for every person and a
+                // ceiling would never bind. Silently useless is the one thing a
+                // constraint may not be.
+                if (!seenCategories.has(entry.category)) {
+                    return invalid(`${at} counts category ${entry.category}, which no task carries (the categories in use are ${[...seenCategories].sort().join(', ')}). Check the spelling, or set that category on the tasks it should count.`);
+                }
+                const reason = quotaShapeReason(entry, at);
+                if (reason !== null) return invalid(reason);
+            }
+        }
+    }
+
+    // --- the cross-checks: quotas and cohort windows against the whole run -----
+    //
+    // These are LAST because each of them needs everything above it: the horizon, the
+    // occurrence dates every task actually has inside it, the staff pool as the engine
+    // normalises it, and the positions each task compiles to. They are the composed
+    // twins of the unknown-skill and skill-times-band refusals — a constraint that
+    // could not be satisfied on any date of any run is a typo or an uncosted policy,
+    // and finding it at configure time is the whole point of having a validator.
+    //
+    // COMPILED ONLY WHEN SOMETHING NEEDS IT. A configuration with no windows and no
+    // quotas walks straight past this block and pays nothing (primitive-layer ledger
+    // item 20 counts the compilations, so this one is counted too: it is a FOURTH
+    // `normaliseTasks` per generation, and only for a configuration that asked).
+    const windowsActive = cohortWindowsRequested(config);
+    const declaredQuotas = resolveQuotas(config);
+
+    if (windowsActive || declaredQuotas.length > 0) {
+        const normalisedStaff = normaliseStaff(
+            staff,
+            isPlainObject(rules) && isPositiveInt(rules.maxConcurrentPerDay)
+                ? rules.maxConcurrentPerDay
+                : ROSTER_V2_DEFAULTS.maxConcurrentPerDay,
+            bands,
+            hoursRules,
+        );
+        const normalisedTasks = normaliseTasks(tasks, scale, windowsActive);
+        const start = snapToMonday(parseLocalDateKey(startDate));
+        const effectiveStart = toLocalDateKey(start);
+        const horizonEndKey = toLocalDateKey(addDays(start, weeks * DAYS_PER_WEEK - 1));
+        const occurrencesByTask = resolveOccurrences(normalisedTasks, effectiveStart, horizonEndKey);
+        const taskNames = new Set(normalisedTasks.map((task) => task.name));
+
+        if (windowsActive) {
+            for (const person of normalisedStaff) {
+                if (person.windows === null) continue;
+                for (let w = 0; w < person.windows.length; w += 1) {
+                    const window = person.windows[w];
+                    if (window.tasks === null) continue;
+                    for (const named of window.tasks) {
+                        if (taskNames.has(named)) continue;
+                        return invalid(`${person.name}'s window ${w + 1} names the task ${named}, which is not in the task list (the tasks are ${[...taskNames].join(', ')}). Check the spelling, or remove it from the window.`);
+                    }
+                }
+            }
+
+            // A TASK NOBODY'S WINDOW COVERS IS A REFUSAL. Every one of its slots would
+            // be unfilled on every date of the run — the same outcome as a skill
+            // nobody holds, and the same call. Somebody with NO windows is eligible
+            // always, so this can only fire when every staff member has windows and
+            // none of them reaches this task inside the horizon.
+            for (const task of normalisedTasks) {
+                if (occurrencesByTask.get(task.name).size === 0) continue;
+                const dates = [...occurrencesByTask.get(task.name)].sort();
+                const reachable = normalisedStaff.filter(
+                    (person) => dates.some((dateKey) => windowsAdmit(person.windows, task.name, dateKey)),
+                );
+                if (reachable.length > 0) continue;
+
+                const byTaskName = normalisedStaff.filter(
+                    (person) => windowsCouldAdmit(person.windows, task.name),
+                );
+                return invalid(byTaskName.length === 0
+                    ? `Task ${task.name} runs on ${dates.length} ${dates.length === 1 ? 'date' : 'dates'} between ${effectiveStart} and ${horizonEndKey}, and no staff member has a cohort window that covers it at all, so every one of its slots would be unfilled on every date. Add ${task.name} to somebody's window, or remove the task.`
+                    : `Task ${task.name} runs on ${dates.length} ${dates.length === 1 ? 'date' : 'dates'} between ${effectiveStart} and ${horizonEndKey} (${dates[0]} to ${dates[dates.length - 1]}), and the ${byTaskName.length === 1 ? 'one staff member whose cohort windows cover it is' : `${byTaskName.length} staff members whose cohort windows cover it are`} outside ${byTaskName.length === 1 ? 'their window' : 'their windows'} on every one of those dates (${byTaskName.map((person) => `${person.name}: ${person.windows.filter((window) => windowAdmitsTask(window, task.name)).map(windowRangeLabel).join(', ')}`).join('; ')}), so every one of its slots would be unfilled. Widen a window, move the run, or change the task's dates.`);
+            }
+        }
+
+        // THE IMPOSSIBLE FLOOR, WITH THE ARITHMETIC SHOWN. Five people needing two
+        // Saturdays each in a month holding four Saturdays and one slot per Saturday
+        // is 10 demanded against 4 that exist. Judged per WHOLE period only: a run
+        // that ends three days into a month is a horizon artefact and is warned about
+        // at generation instead (section 7), because refusing it would make a monthly
+        // floor unusable for every run that does not happen to align with a calendar.
+        for (const quota of declaredQuotas) {
+            if (quota.min === null) continue;
+            const subjects = quotaSubjects(quota, normalisedTasks, normalisedStaff, hoursActive);
+            if (subjects.length === 0) continue;
+
+            for (const bucket of quotaPeriodBuckets(quota, effectiveStart, horizonEndKey)) {
+                if (!bucket.whole) continue;
+                const reachable = subjects.filter(
+                    (person) => quotaReachableIn(quota, normalisedTasks, bucket, occurrencesByTask, person),
+                );
+                if (reachable.length === 0) continue;
+
+                const demand = reachable.length * quota.min;
+                const supply = quotaSupplyIn(quota, normalisedTasks, bucket, occurrencesByTask);
+                if (demand <= supply) continue;
+
+                const counted = quotaTasks(quota, normalisedTasks);
+                const arithmetic = counted
+                    .map((task) => {
+                        const dates = bucketDatesOf(task, bucket, occurrencesByTask);
+                        return `${task.name} runs on ${dates.length} ${dates.length === 1 ? 'date' : 'dates'} needing ${task.positions.length} ${task.positions.length === 1 ? 'person' : 'people'} each`;
+                    })
+                    .join(', ');
+
+                return invalid(`${quotaSource(quota)} asks for at least ${quota.min} ${quotaClassLabel(quota)} ${quota.min === 1 ? 'duty' : 'duties'} ${quotaPeriodPhrase(quota)}, and ${reachable.length} ${reachable.length === 1 ? 'staff member is' : 'staff members are'} subject to it, so ${quotaPeriodLabel(quota, bucket.key)} needs ${reachable.length} × ${quota.min} = ${demand} duties — but only ${supply} exist there (${arithmetic}). A floor cannot be met by inventing capacity: lower the minimum, add dates, add people to each date, or narrow who the quota applies to.`);
+            }
+        }
     }
 
     return { valid: true, reason: null };
@@ -1644,6 +3794,13 @@ const normaliseStaff = (
             fte,
             skills: new Set(Array.isArray(person.skills) ? person.skills : []),
             unavailable: new Set(Array.isArray(person.unavailable) ? person.unavailable : []),
+            /**
+             * The COHORT WINDOWS bounding their eligibility in time, or `null` for
+             * "always eligible" — which is every staff entry written before section
+             * 0e(ii) existed. Resolved ONCE, here, so the gate, the audit and the
+             * reason strings read one list.
+             */
+            windows: normaliseWindows(person.windows),
             maxPerDay: isPositiveInt(person.maxPerDay) ? person.maxPerDay : defaultMaxPerDay,
             grade,
             band: grade === null ? null : bandOfGradeNumber(parseGradeNumber(grade), bands),
@@ -1662,118 +3819,100 @@ const normaliseStaff = (
         };
     });
 
+
 /**
- * `leadBands` becomes a `Set` of band names, or `null` for "any grade may lead".
+ * `leadBands` becomes a `Set` of region names, or `null` for "any grade may lead".
  * An empty or all-unknown list normalises to `null` only because validation has
  * already refused it; this is belt and braces, not a fallback.
  */
-const normaliseLeadBands = (value) => {
+const normaliseLeadBands = (value, scale = ALLIED_HEALTH_SCALE) => {
     if (!Array.isArray(value) || value.length === 0) return null;
     const wanted = new Set();
     for (const band of value) {
-        if (typeof band === 'string' && BAND_ORDER.includes(band)) wanted.add(band);
+        if (typeof band === 'string' && scale.regionOrder.includes(band)) wanted.add(band);
     }
     return wanted.size === 0 ? null : wanted;
 };
 
-const normaliseTasks = (tasks) =>
-    tasks.map((task) => {
+/**
+ * One pass over the configured tasks, compiling every named field into the
+ * PRIMITIVES the engine actually reads: a TEMPORAL pattern, a POSITION list and a
+ * COMPOSITION. Everything past this function is feature-blind.
+ *
+ * The named fields are kept beside them — `days`, `recurrence`, `leads`,
+ * `coLeads`, `leadBands`, `slots` — because the WARNINGS and the audit's
+ * sugar-specific sentences name them, and because a normalised task that
+ * describes itself honestly is worth the four extra keys. Nothing gates on them.
+ */
+const normaliseTasks = (tasks, scale = ALLIED_HEALTH_SCALE, windowsActive = false) =>
+    tasks.map((rawTask) => {
         // A monthly task has NO weekly days, and says so rather than carrying the
         // default Mon–Fri list it will never use.
         //
         // BELT AND BRACES, honestly labelled: this emptying is not what stops a
-        // monthly task also running every weekday. Both readers of the normalised
-        // `days` — the "no days selected" warning and the day loop's filter —
-        // already test `recurrence === null` first, so a monthly task's `days` is
-        // never consulted and mutating this line changes no output. It is here so
-        // that a normalised task never DESCRIBES itself as running Mon–Fri when it
-        // runs monthly, which is a debugging and future-reader concern rather than
-        // a behavioural one. Validation has already refused a task that set both,
-        // so nothing a roster master typed is being discarded.
-        const recurrence = normaliseRecurrence(task.recurrence);
-        const slots = normaliseSlots(task.slots);
+        // monthly task also running every weekday. Nothing reads the normalised
+        // `days` except the debugger and this file's own prose — the day loop reads
+        // `temporal`, which `compileTemporal` built from `recurrence` when there was
+        // one — so mutating this line changes no output. Validation has already
+        // refused a task that set both, so nothing a roster master typed is being
+        // discarded.
+        const recurrence = normaliseRecurrence(rawTask.recurrence);
+        const requiresSkill = isNonEmptyString(rawTask.requiresSkill) ? rawTask.requiresSkill : null;
+        const leadBands = normaliseLeadBands(rawTask.leadBands, scale);
+        const slotted = Array.isArray(rawTask.slots) && rawTask.slots.length > 0;
 
-        return {
-            name: task.name,
-            requiresSkill: isNonEmptyString(task.requiresSkill) ? task.requiresSkill : null,
+        // A MULTI-SLOT TASK HAS NEITHER, and says so rather than carrying the
+        // defaults it will never use. Both zeros are now purely descriptive:
+        // `compileSlotPositions` produces the positions for a slotted task and
+        // `compilePairedPositions` is not called at all, so neither number reaches
+        // a loop. They are here so that a normalised task never DESCRIBES itself as
+        // needing a lead it does not have.
+        const leads = slotted ? 0 : (isPositiveInt(rawTask.leads) ? rawTask.leads : ROSTER_V2_DEFAULTS.leads);
+        const coLeads = slotted ? 0 : (isNonNegativeInt(rawTask.coLeads) ? rawTask.coLeads : ROSTER_V2_DEFAULTS.coLeads);
+
+        const task = {
+            name: rawTask.name,
+            requiresSkill,
             days: recurrence !== null
                 ? []
-                : (Array.isArray(task.days) ? [...task.days] : [...ROSTER_V2_DEFAULTS.days]),
+                : (Array.isArray(rawTask.days) ? [...rawTask.days] : [...ROSTER_V2_DEFAULTS.days]),
             recurrence,
-            continuity: task.continuity === true,
-            // A MULTI-SLOT TASK HAS NEITHER, and says so rather than carrying the
-            // defaults it will never use.
-            //
-            // `coLeads: 0` is LOAD-BEARING and pinned by a test: phase 2 of the
-            // assignment loop opens `task.coLeads` co-lead slots for every running
-            // task, so a 1 here would hang a fourth, ungated person off the
-            // embryologists' trio. `leads: 0` is belt and braces in the same spirit
-            // as `days: []` above and honestly labelled as such — phase 1 branches
-            // on `slots` before it ever looks at `leads`, and `perDayDemand` reads
-            // the slot count, so mutating this zero changes no output. It is here so
-            // that a normalised task never DESCRIBES itself as needing a lead it
-            // does not have.
-            leads: slots !== null ? 0 : (isPositiveInt(task.leads) ? task.leads : ROSTER_V2_DEFAULTS.leads),
-            coLeads: slots !== null ? 0 : (isNonNegativeInt(task.coLeads) ? task.coLeads : ROSTER_V2_DEFAULTS.coLeads),
-            slots,
-            category: isNonEmptyString(task.category) ? task.category : ROSTER_V2_DEFAULTS.category,
-            leadBands: normaliseLeadBands(task.leadBands),
+            /** THE calendar. One question, one answer, whichever sugar was used. */
+            temporal: compileTemporal(rawTask),
+            continuity: rawTask.continuity === true,
+            leads,
+            coLeads,
+            category: isNonEmptyString(rawTask.category) ? rawTask.category : ROSTER_V2_DEFAULTS.category,
+            leadBands,
             // Always present, always a number, whether or not the hours model is
             // in force — one task shape, and the value a future always-on model
             // would use is already visible in a debugger today. What the OPT-IN
             // predicate decides is whether anything reads it.
-            hours: isUsableHours(task.hours, MAX_HOURS_PER_DAY_CEILING)
-                ? task.hours
+            hours: isUsableHours(rawTask.hours, MAX_HOURS_PER_DAY_CEILING)
+                ? rawTask.hours
                 : ROSTER_V2_DEFAULTS.taskHours,
         };
-    });
 
-/**
- * `forbidPairs` as an adjacency map, so the pool filter is a set lookup rather
- * than a scan of the pair list per candidate.
- */
-const buildForbidMap = (forbidPairs, staffNames) => {
-    const map = new Map();
-    for (const name of staffNames) map.set(name, new Set());
-    for (const [a, b] of forbidPairs) {
-        map.get(a).add(b);
-        map.get(b).add(a);
-    }
-    return map;
-};
+        // THE ONE INTERNAL SHIFT SHAPE. Both sugars compile to positions here and
+        // nowhere else; `composition` says how the filled ones become shifts.
+        const slotPositions = compileSlotPositions(rawTask.slots, task, scale, windowsActive);
+        // `positions` and `composition` ARE the description of how this task is
+        // staffed. The raw `slots` array is deliberately NOT copied onto the
+        // normalised task: a field nobody reads is a second source of truth waiting
+        // to disagree with the first (post-mortem A-RC1).
+        task.composition = slotPositions === null ? COMPOSE_PAIRING : COMPOSE_TEAM;
+        task.positions = slotPositions === null
+            ? compilePairedPositions(task, leadBands, windowsActive)
+            : slotPositions;
+
+        return task;
+    });
 
 // --- 4. THE REJECTION TAXONOMY -----------------------------------------------
 //
-// Requirement 5 of this engine's brief: never silently double-book, never
-// silently drop a slot. That means an empty candidate pool has to be
-// EXPLAINABLE, not merely detectable — so every excluded person is classified
-// by the FIRST constraint they fail, in a fixed order, and the tally is what
-// the `unfilled` reason is written from.
-
-const REJECT_SKILL = 'skill';
-/**
- * Out of band for this task's LEAD slot. Sits immediately after `REJECT_SKILL`
- * because it is the same KIND of fact — a standing property of the person, not
- * something today happens to have used up — and the reason string reads in this
- * order. Co-lead slots never produce this rejection: bands gate leads only.
- */
-const REJECT_BAND = 'band';
-const REJECT_LEAVE = 'leave';
-const REJECT_ON_TASK = 'onTask';
-const REJECT_CAPACITY = 'capacity';
-/**
- * Adding this task's `hours` to what they already hold today would pass their
- * effective daily ceiling. Sits immediately after `REJECT_CAPACITY` because it is
- * the same KIND of fact — a resource today has consumed — and it is the finer of
- * the two: `REJECT_CAPACITY` counts duties, this one measures them. Both are
- * reported, and never merged, because "two duties is your limit" and "twelve hours
- * is over your limit" are different sentences to the person reading the roster.
- */
-const REJECT_DAILY_HOURS = 'dailyHours';
-/** The same, over the Monday–Sunday week `weekStartOf` defines. */
-const REJECT_WEEKLY_HOURS = 'weeklyHours';
-const REJECT_PAIR = 'pair';
-const REJECT_CONSECUTIVE = 'consecutive';
+// The CODES are declared in section 0d, beside the primitives that produce them.
+// What lives here is the ORDER they are asked in, the tally that order produces,
+// and the prose written from it.
 
 /**
  * The same nine facts as a clause a roster master can read, for the one place
@@ -1796,131 +3935,112 @@ const CONTINUITY_REJECTION_PROSE = Object.freeze({
     [REJECT_WEEKLY_HOURS]: 'would have gone over their weekly hours limit',
     [REJECT_PAIR]: 'was blocked by a forbidden pairing',
     [REJECT_CONSECUTIVE]: 'was at the consecutive-day limit',
+    [REJECT_WINDOW]: 'was outside their cohort window that day',
+    [REJECT_QUOTA]: 'was already at their quota ceiling for that period',
 });
 
 /**
- * How many days in an unbroken run ending the day BEFORE `dateKey` does `name`
- * already hold at least one duty?
+ * What does ONE configured task compile to? The normalised task — its TEMPORAL
+ * pattern, its POSITIONS with their ELIGIBILITY, and its COMPOSITION.
  *
- * Walks backwards through the dates this run has already written. Days on which
- * no task runs (a weekend, for a Mon–Fri task list) break the run, which is
- * what makes `maxConsecutiveDays` meaningful rather than decorative.
- *
- * KNOWN LIMIT: the walk starts inside this generation run, so duties from a
- * PREVIOUS run — a roster generated a month at a time — are invisible to it. A
- * clinician can therefore finish one run on a Saturday and open the next on a
- * Sunday without the limit noticing.
+ * The same function the engine uses, on one task, exported for three readers: a
+ * preview UI that wants to show a roster master what their task means, a debugger,
+ * and `rosterEngineV2.primitives.test.js`, which asserts that each named feature
+ * compiles to the expected primitive. Pure, and it never validates — pass it a task
+ * `validateRosterV2Config` has already accepted.
  */
-const consecutiveRunBefore = (dutiesByDate, name, date) => {
-    let run = 0;
-    let cursor = addDays(date, -1);
-
-    // Bounded by the longest run this engine can generate (52 weeks).
-    for (let guard = 0; guard < MAX_ROSTER_WEEKS * DAYS_PER_WEEK; guard += 1) {
-        const day = dutiesByDate.get(toLocalDateKey(cursor));
-        if (!day || !day.get(name)) break;
-        run += 1;
-        cursor = addDays(cursor, -1);
-    }
-
-    return run;
-};
+export const compileTaskPrimitives = (task, rules = null, windowsActive = false) =>
+    normaliseTasks([task], resolveGradeScale(rules), windowsActive)[0];
 
 /**
- * Why can `person` NOT take this slot? `null` means they can.
+ * THE GATES, IN ORDER — one row per primitive that can refuse a position.
  *
- * Order matters: it is the order the reason string reads in, and it is chosen so
- * the most fundamental fact wins. Somebody who lacks the skill is not also
- * reported as "on leave" — they were never a candidate for this task at all.
+ * This list IS the rejection taxonomy's order: the reason string reads in it, and
+ * it is chosen so the most fundamental fact wins. Somebody who lacks the skill is
+ * not also reported as "on leave" — they were never a candidate for this task at
+ * all. Somebody at their duty limit is not also reported as over their hours.
+ *
+ * `evaluate` returns a rejection code or `null`. ELIGIBILITY returns whichever
+ * code its first unmet requirement carries, which is how one row covers both the
+ * skill and the region gates and how a third eligibility kind reaches the loop
+ * without a sixth row.
+ *
+ * A NEW CONSTRAINT IS A NEW ROW, and the row is the only place its order is
+ * decided. Nothing downstream — not `evaluateSlot`, not the scarcity count, not
+ * `unfilled` — knows how many gates there are.
  */
-const rejectionFor = ({
-    person,
-    task,
-    role,
-    // MULTI-SLOT: the ONE entry of `task.slots` being filled, or `null` for a
-    // `leads`/`coLeads` slot. Every gate below is unchanged when it is `null`,
-    // which is every slot of every task that does not use the field.
-    entry = null,
-    dateKey,
-    date,
-    dutiesOnDate,
-    onTaskToday,
-    forbidMap,
-    dutiesByDate,
-    maxConsecutiveDays,
-    // The hours model, passed in rather than reached for: `hoursActive` false
-    // makes this function byte-for-byte the function it was before hours existed,
-    // and the two maps are then never even read.
-    hoursActive = false,
-    hoursOnDate = null,
-    hoursThisWeek = null,
-}) => {
-    if (task.requiresSkill && !person.skills.has(task.requiresSkill)) {
-        return REJECT_SKILL;
-    }
-    // MULTI-SLOT: this ENTRY's own skill, on top of the task-wide one directly
-    // above. Reported as the same fact — a missing competency — because that is
-    // what it is, and the reason string names both skills.
-    if (entry !== null && !slotSkillMet(person, entry)) {
-        return REJECT_SKILL;
-    }
-    // The band gate, and ONLY on the lead slot. `person.band === null` (no grade
-    // recorded) fails it: band membership cannot be verified, and guessing is
-    // how somebody ends up leading a duty their grade does not carry. The two
-    // gates COMPOSE — a lead of a skill-gated, band-gated task must pass both.
-    if (role === 'lead' && task.leadBands !== null) {
-        if (person.band === null || !task.leadBands.has(person.band)) {
-            return REJECT_BAND;
-        }
-    }
-    // MULTI-SLOT: the band gate of THIS ENTRY, on exactly the terms `leadBands`
-    // gates a lead. A `slots` task can never also carry `leadBands` (validation
-    // refuses the pair), so the two branches are mutually exclusive rather than
-    // composed.
-    if (entry !== null && !slotBandMet(person, entry)) {
-        return REJECT_BAND;
-    }
-    if (person.unavailable.has(dateKey)) {
-        return REJECT_LEAVE;
-    }
-    if (onTaskToday.has(person.name)) {
-        return REJECT_ON_TASK;
-    }
-    if ((dutiesOnDate.get(person.name) || 0) >= person.maxPerDay) {
-        return REJECT_CAPACITY;
-    }
+const SLOT_GATES = Object.freeze([
+    Object.freeze({
+        id: 'eligibility',
+        // `ctx` is handed straight to the requirement kinds, because one of them —
+        // the COHORT WINDOW — is a fact about a person ON A DATE. The skill and
+        // region kinds ignore it. This is the whole reason a fourth eligibility kind
+        // needs no row here: the gate asks one question of one list.
+        evaluate: (person, ctx) => {
+            const unmet = firstUnmetRequirement(person, ctx.position.eligibility, ctx);
+            return unmet === null ? null : ELIGIBILITY_KINDS[unmet.kind].rejection;
+        },
+    }),
+    Object.freeze({
+        id: 'availability',
+        evaluate: (person, ctx) => (person.unavailable.has(ctx.dateKey) ? REJECT_LEAVE : null),
+    }),
+    // The capacity limits, named rather than spread, so that the affinity gate can
+    // sit between the hours limits and the consecutive-day one — which is where it
+    // has always sat, and which no amount of iterating `CAPACITY_LIMITS` in order
+    // would have produced.
+    ...['taskPerDay', 'dutiesPerDay', 'hoursPerDay', 'hoursPerWeek'].map((id) => Object.freeze({
+        id,
+        evaluate: (person, ctx) =>
+            (capacityBreached(CAPACITY_BY_ID[id], person, ctx) ? CAPACITY_BY_ID[id].rejection : null),
+    })),
+    Object.freeze({
+        id: 'affinity',
+        evaluate: (person, ctx) => (affinityForbids(person, ctx) ? REJECT_PAIR : null),
+    }),
+    Object.freeze({
+        id: 'consecutiveDays',
+        evaluate: (person, ctx) =>
+            (capacityBreached(CAPACITY_BY_ID.consecutiveDays, person, ctx)
+                ? CAPACITY_BY_ID.consecutiveDays.rejection
+                : null),
+    }),
+    // LAST, and it is a genuine choice rather than an afterthought. A quota CEILING
+    // is a capacity limit like the five above (`quotaCeilingLimit` builds the same
+    // row shape and `capacityBreached` is the same comparison), but it is the least
+    // immediate fact in the list: "she is on leave", "he is at his second duty of
+    // the day" and "that would be a seventh day running" are all answers about
+    // today, and "she has already done her four Saturdays this month" is the answer
+    // only once none of them applies. `ctx.quotaCeilings` is the day's list, already
+    // filtered to the quotas that count THIS task, so a configuration declaring none
+    // walks an empty array.
+    Object.freeze({
+        id: 'quotaCeiling',
+        evaluate: (person, ctx) =>
+            (ctx.quotaCeilings.some((limit) => capacityBreached(limit, person, ctx))
+                ? REJECT_QUOTA
+                : null),
+    }),
+]);
 
-    // SAME-DAY DURATIONS SUM, then the week's do. Both against FTE-scaled
-    // ceilings, both HARD: the slot is left unfilled rather than staffed by
-    // somebody the roster would have worked past their contract. `+ HOURS_EPSILON`
-    // is on the CAP side, so a duty that exactly fills a day is allowed — see the
-    // constant for why an exact `>` would refuse `5.04 > 5.04`.
-    if (hoursActive) {
-        const already = hoursOnDate.get(person.name) || 0;
-        if (already + task.hours > person.dailyHoursCap + HOURS_EPSILON) {
-            return REJECT_DAILY_HOURS;
-        }
-        const thisWeek = hoursThisWeek.get(person.name) || 0;
-        if (thisWeek + task.hours > person.weeklyHoursCap + HOURS_EPSILON) {
-            return REJECT_WEEKLY_HOURS;
-        }
+/**
+ * Why can `person` NOT take this position? `null` means they can.
+ *
+ * One walk down `SLOT_GATES`, first refusal wins. There is no per-feature branch
+ * left in here: a task's skill, a lead's bands, a slot entry's own gates, leave,
+ * the four capacity ceilings and the forbidden pairings all arrive as data on
+ * `ctx` and are asked in the order the table declares.
+ *
+ * `ctx` is the day's running state, passed in rather than reached for — so a
+ * configuration that never mentioned hours leaves `hoursActive` false and the two
+ * hours limits never read their maps at all, exactly as before the model existed.
+ */
+const rejectionFor = (ctx) => {
+    const { person } = ctx;
+    for (const gate of SLOT_GATES) {
+        const rejection = gate.evaluate(person, ctx);
+        if (rejection !== null) return rejection;
     }
-
-    const forbidden = forbidMap.get(person.name);
-    for (const other of onTaskToday) {
-        if (forbidden.has(other)) return REJECT_PAIR;
-    }
-
-    // Already working today? Then this duty does not lengthen their run — the
-    // day is spoken for either way, and how much they may do on one day is
-    // `maxPerDay`'s question, not this one.
-    const alreadyWorkingToday = (dutiesOnDate.get(person.name) || 0) > 0;
-    if (!alreadyWorkingToday) {
-        if (consecutiveRunBefore(dutiesByDate, person.name, date) >= maxConsecutiveDays) {
-            return REJECT_CONSECUTIVE;
-        }
-    }
-
     return null;
 };
 
@@ -1979,24 +4099,63 @@ const hoursBreachClause = ({ person, task, kind, dateKey, weekStartKey, assigned
     return `${person.name} would reach ${formatHours(hoursToday + task.hours)} on ${dateKey}, over their ${formatHours(person.dailyHoursCap)} daily limit (${held})`;
 };
 
-const describeEmptyPool = ({ task, role, dateKey, tally, poolSize, hoursDetail = [], entry = null }) => {
+/**
+ * The same, for a QUOTA CEILING: which quota, over which period, and how many they
+ * already hold.
+ *
+ * Reads, for example:
+ *   Ada already holds their quota ceiling of 4 Saturday Bench duties in 2027-02
+ *   Ben already holds their quota ceiling of 2 category WEEKEND duties in the run
+ */
+const quotaBreachClause = (person, limit, dateKey) => {
+    const { quota } = limit;
+    const periodKey = quotaPeriodKey(quota, dateKey);
+    return `${person.name} already holds their quota ceiling of ${quota.max} ${quotaClassLabel(quota)} ${quota.max === 1 ? 'duty' : 'duties'} in ${quotaPeriodLabel(quota, periodKey)}`;
+};
+
+/**
+ * How many people a DETAIL segment names before it stops counting them instead.
+ *
+ * The hours limit's judgment call (see `HOURS_DETAIL_LIMIT`), applied to the two
+ * later detail segments for the same reason and with the same honesty: the total is
+ * always stated, so a truncated segment never reads as a complete list.
+ */
+const renderDetailSegment = (clauses, noun, limit) => {
+    const shown = clauses.slice(0, limit);
+    const hidden = clauses.length - shown.length;
+    const tail = hidden === 0
+        ? ''
+        : `; and ${hidden} other${hidden === 1 ? '' : 's'} ${noun}`;
+    return `${shown.join('; ')}${tail}`;
+};
+
+const describeEmptyPool = ({
+    task, position, dateKey, tally, poolSize,
+    hoursDetail = [], windowDetail = [], quotaDetail = [],
+}) => {
     const qualified = poolSize - tally[REJECT_SKILL];
-    // Only the lead slot is band-gated, so only the lead slot may say "band" —
-    // and, since multi-slot shifts, only a slot entry that carries a band.
-    const bandGated = entry === null
-        ? (role === 'lead' && task.leadBands !== null)
-        : entry.bandSet !== null;
-    const gatingBands = entry === null ? task.leadBands : entry.bandSet;
+    // WHICH GATES THIS POSITION ACTUALLY CARRIES, read off its eligibility rather
+    // than re-derived from the fields it was written with. A co-lead position has
+    // no region requirement, so it cannot say "band"; a lead position of an
+    // unbanded task has none either. One source, so the sentence and the gate can
+    // never disagree about what was being asked for.
+    const gatingBands = regionsRequiredBy(position.eligibility);
+    const bandGated = gatingBands !== null;
     const inBand = qualified - tally[REJECT_BAND];
-    // The task's skill plus, for a multi-slot entry, its own — so a trio's senior
+    // The task's skill plus, for a slot position, its own — so a trio's senior
     // slot reads "skills Witnessing and ICSI" rather than naming only one of them.
-    const skills = slotSkillsRequired(task, entry);
+    const skills = skillsRequiredBy(position.eligibility);
 
     const parts = [];
     if (skills.length > 0) parts.push(`${qualified} qualified`);
     else if (!bandGated) parts.push(`${poolSize} in pool`);
     if (bandGated) parts.push(`${inBand} in band`);
 
+    // BEFORE leave, because that is the order the gates ask: a cohort window is
+    // eligibility (section 0e's third kind), and somebody whose block has not opened
+    // was never a candidate for today rather than a candidate who happened to be
+    // away. `outside their cohort window` is deliberately not `unavailable`.
+    if (tally[REJECT_WINDOW]) parts.push(`${tally[REJECT_WINDOW]} outside their cohort window`);
     if (tally[REJECT_LEAVE]) parts.push(`${tally[REJECT_LEAVE]} on leave`);
     if (tally[REJECT_CAPACITY]) parts.push(`${tally[REJECT_CAPACITY]} at daily limit`);
     // Worded to be unmistakably the HOURS limit and not `at daily limit`, which is
@@ -2006,13 +4165,14 @@ const describeEmptyPool = ({ task, role, dateKey, tally, poolSize, hoursDetail =
     if (tally[REJECT_ON_TASK]) parts.push(`${tally[REJECT_ON_TASK]} already on this task`);
     if (tally[REJECT_PAIR]) parts.push(`${tally[REJECT_PAIR]} blocked by a forbidden pairing`);
     if (tally[REJECT_CONSECUTIVE]) parts.push(`${tally[REJECT_CONSECUTIVE]} at the consecutive-day limit`);
+    if (tally[REJECT_QUOTA]) parts.push(`${tally[REJECT_QUOTA]} at a quota ceiling`);
 
     const bandLabel = bandGated ? bandSetLabel(gatingBands) : '';
     // WHICH SLOT FAILED, and this is the whole reason a slot entry carries a
     // label: `Weekend Witnessing junior slot` says which third of the trio could
     // not be staffed, where `Weekend Witnessing slot` would leave a roster master
     // reading three identical sentences.
-    const which = entry === null ? `${task.name} ${role}` : `${task.name} ${entry.label}`;
+    const which = `${task.name} ${position.label}`;
 
     let head;
     if (skills.length > 0 && bandGated) {
@@ -2025,18 +4185,25 @@ const describeEmptyPool = ({ task, role, dateKey, tally, poolSize, hoursDetail =
         head = `no available staff for ${which} on ${dateKey}`;
     }
 
-    // The hours detail hangs off the end rather than inside the tally, because the
-    // tally is a set of counts that narrow left to right and these are whole
-    // sentences about named people. Absent entirely when hours bound nobody, so a
-    // reason that has nothing to do with hours never mentions them.
-    if (hoursDetail.length === 0) return `${head} (${parts.join(', ')})`;
+    // The DETAIL hangs off the end rather than inside the tally, because the tally is
+    // a set of counts that narrow left to right and these are whole sentences about
+    // named people. Each segment is absent entirely when its constraint bound
+    // nobody, so a reason that has nothing to do with hours, cohorts or quotas never
+    // mentions them — and a reason bound only by hours reads exactly as it did
+    // before the other two segments existed.
+    const segments = [];
+    if (hoursDetail.length > 0) {
+        segments.push(renderDetailSegment(hoursDetail, 'over an hours limit', HOURS_DETAIL_LIMIT));
+    }
+    if (windowDetail.length > 0) {
+        segments.push(renderDetailSegment(windowDetail, 'outside their cohort window', HOURS_DETAIL_LIMIT));
+    }
+    if (quotaDetail.length > 0) {
+        segments.push(renderDetailSegment(quotaDetail, 'at a quota ceiling', HOURS_DETAIL_LIMIT));
+    }
 
-    const shown = hoursDetail.slice(0, HOURS_DETAIL_LIMIT);
-    const hidden = hoursDetail.length - shown.length;
-    const tail = hidden === 0
-        ? ''
-        : `; and ${hidden} other${hidden === 1 ? '' : 's'} over an hours limit`;
-    return `${head} (${parts.join(', ')}) — ${shown.join('; ')}${tail}`;
+    if (segments.length === 0) return `${head} (${parts.join(', ')})`;
+    return `${head} (${parts.join(', ')}) — ${segments.join(' — ')}`;
 };
 
 // --- 5. CANDIDATE SELECTION --------------------------------------------------
@@ -2093,6 +4260,39 @@ const compareContinuityCandidates = (a, b) => {
 };
 
 /**
+ * THE FLOOR COMPARATOR: whoever is furthest BEHIND a quota `min` for this period
+ * wins, and everything else is the comparator that would have decided it.
+ *
+ * This is the only way a floor can be honoured at all. A ceiling is a gate — offer
+ * a slot, get yes or no — but a floor is not knowable until the period is full, and
+ * refusing a slot to protect somebody else's minimum would leave the slot EMPTY,
+ * which serves nobody (section 1e). So the floor buys its way in HERE, ahead of
+ * FTE-weighted fairness, exactly as a positive occurrence affinity does.
+ *
+ * `quotaDeficit` is the MAXIMUM shortfall across every floor that counts this task
+ * in the current period, not the sum: a person two Saturdays short of one quota and
+ * one short of another is two behind, because the two quotas overlap on the same
+ * duties and adding them would double-count the same work. Zero for everybody when
+ * no floor applies, which is why this chain degenerates exactly to the two
+ * comparators that existed before it.
+ *
+ * PRECEDENCE, decided and stated rather than emergent: FLOOR, then INCUMBENCY, then
+ * fairness. A quota floor is a contractual obligation to a person ("you will get two
+ * Saturdays") while continuity is a clinical preference for a cohort, and where a
+ * task carries both, the engine says so in `warnings` rather than quietly picking.
+ * Every HARD gate still runs first — a floor never buys somebody a slot they are not
+ * eligible for, on leave for, or over a ceiling for.
+ */
+const candidateComparator = (prefersIncumbent, floorApplies) => {
+    const tail = prefersIncumbent ? compareContinuityCandidates : compareCandidates;
+    if (!floorApplies) return tail;
+    return (a, b) => {
+        if (a.quotaDeficit !== b.quotaDeficit) return b.quotaDeficit - a.quotaDeficit;
+        return tail(a, b);
+    };
+};
+
+/**
  * "Who is leading this?" as one comparable string — THE definition of whether
  * continuity held from one occurrence to the next.
  *
@@ -2109,7 +4309,7 @@ const compareContinuityCandidates = (a, b) => {
 const continuitySignature = (leads) => [...leads].sort().join(' ');
 
 /**
- * MULTI-SLOT: the order a shift's assignees are published in — LEAD FIRST.
+ * TEAM COMPOSITION: the order a shift's assignees are published in — LEAD FIRST.
  *
  *   1. highest grade first, because that is the decided rule for who leads a
  *      team shift (`GRADE_UNKNOWN_RANK` puts an assignee with no recorded grade
@@ -2126,13 +4326,93 @@ const continuitySignature = (leads) => [...leads].sort().join(' ');
  * ranked by fairness, not by which entry named them, because the entries are
  * requirements and not a hierarchy.
  */
-const orderMultiSlotFills = (fills) =>
+const orderTeamFills = (fills) =>
     [...fills].sort((a, b) => {
         if (a.candidate.gradeRank !== b.candidate.gradeRank) {
             return b.candidate.gradeRank - a.candidate.gradeRank;
         }
         return compareCandidates(a.candidate, b.candidate);
     });
+
+/**
+ * THE COMPOSITION STEP: a task's filled POSITIONS -> its shift objects for one
+ * date. One entry per strategy, and the emission loop dispatches on the task's
+ * `composition` rather than branching on which named field it was written with.
+ *
+ * Both strategies produce the SAME shift shape — `{ task, lead, coLead?, staff,
+ * category, week, assignees }` with `staff` from `buildShiftStaffLabel` — because
+ * the calendar, the CSV export, the ICS export and the swap flow all read it and
+ * there is one definition of the display string (post-mortem A-RC1).
+ *
+ * A third strategy is a third row. Nothing else changes.
+ */
+const COMPOSERS = Object.freeze({
+    /**
+     * One shift per filled ANCHOR position, with the attached fills dealt
+     * round-robin across them — the shape `leads`/`coLeads` has always produced.
+     *
+     * Where a group holds more than one attached person, `coLead` is the first of
+     * them and `assignees` carries everybody. A group with no anchor cannot exist:
+     * phase 2 never opens attached positions for an anchorless shift.
+     */
+    [COMPOSE_PAIRING]: (task, fills, week) => {
+        const anchorRole = anchorRoleOf(task);
+        const anchors = fills.filter((fill) => fill.position.role === anchorRole);
+        if (anchors.length === 0) return [];
+
+        const groups = anchors.map((fill) => ({ lead: fill.candidate.name, coLeads: [] }));
+        fills
+            .filter((fill) => fill.position.role !== anchorRole)
+            .forEach((fill, i) => {
+                groups[i % groups.length].coLeads.push(fill.candidate.name);
+            });
+
+        return groups.map((group) => {
+            const coLead = group.coLeads.length > 0 ? group.coLeads[0] : undefined;
+            return {
+                task: task.name,
+                lead: group.lead,
+                // A solo task must not carry `coLead: undefined` — an absent
+                // co-lead is an ABSENT FIELD. `undefined` here is what put the
+                // string "undefined" in the CSV export (audit M7), and
+                // `buildShiftStaffLabel` already treats it as "no co-lead" when
+                // building the display string.
+                ...(coLead === undefined ? {} : { coLead }),
+                staff: buildShiftStaffLabel(group.lead, coLead),
+                category: task.category,
+                week: week + 1,
+                assignees: [group.lead, ...group.coLeads],
+            };
+        });
+    },
+    /**
+     * ONE shift holding everybody — which is the whole point, since the
+     * department's rule is that the three of them are on the same shift. The lead
+     * is the highest grade present and `coLead` the next (`orderTeamFills`).
+     *
+     * A shift is emitted for a PARTIALLY filled trio: two of three staffed is a
+     * real shift plus one `unfilled` entry naming the third, not a cancelled day.
+     * If NO position filled there is no shift at all, which is the same convention
+     * the paired strategy above follows.
+     */
+    [COMPOSE_TEAM]: (task, fills, week) => {
+        if (fills.length === 0) return [];
+
+        const assignees = orderTeamFills(fills).map((fill) => fill.candidate.name);
+        const [lead] = assignees;
+        const coLead = assignees.length > 1 ? assignees[1] : undefined;
+
+        return [{
+            task: task.name,
+            lead,
+            ...(coLead === undefined ? {} : { coLead }),
+            staff: buildShiftStaffLabel(lead, coLead),
+            category: task.category,
+            week: week + 1,
+            assignees,
+        }];
+    },
+});
 
 // --- 6. HARD VS SOFT CONSTRAINTS ---------------------------------------------
 //
@@ -2270,6 +4550,29 @@ const HARD_RULE_SLOT_GATE = 'slotGate';
  * leaves a principal beside them.
  */
 const HARD_RULE_LEAD_GRADE = 'leadGrade';
+/**
+ * COHORT WINDOW: somebody is on a shift on a date no window of theirs admits — a
+ * locum before their start date, a team A embryologist in team B's block.
+ *
+ * A rule of its own rather than a case of `HARD_RULE_SLOT_GATE`, and deliberately:
+ * the slot-gate rule is a MATCHING over standing eligibility and applies only to
+ * `slots` tasks, while a window binds every assignee of every task shape. The
+ * matching therefore asks its question with no date (section 0e's caller table) and
+ * this rule asks the dated one, so one breach is reported once.
+ */
+const HARD_RULE_WINDOW = 'cohortWindow';
+/**
+ * QUOTA CEILING: somebody holds more duties of a quota's class in one period than
+ * its `max` allows. The ceiling half of section 1e, read back off the finished
+ * roster against the same counts the unmet-floor warnings are written from.
+ *
+ * There is deliberately NO read-back rule for a quota FLOOR. A floor is soft by
+ * construction — it cannot be met by inventing capacity — so an unmet one is a
+ * WARNING naming the person, the class, the period and the shortfall, and counting
+ * it as a hard violation would make `score.hardViolations` non-zero for a roster
+ * that broke no rule and would drown the one signal this engine treats as a defect.
+ */
+const HARD_RULE_QUOTA_MAX = 'quotaCeiling';
 
 /**
  * MULTI-SLOT, THE READ-BACK: which of these assignees can NO valid assignment of
@@ -2290,19 +4593,19 @@ const HARD_RULE_LEAD_GRADE = 'leadGrade';
  * and the availability rule has already reported them.
  */
 const unmatchableAssignees = (names, task, byName) => {
-    const slots = task.slots;
+    const positions = task.positions;
     const eligible = names.map((name) => {
         const person = byName.get(name);
         if (!person) return null;
         const indices = [];
-        for (let i = 0; i < slots.length; i += 1) {
-            if (canFillSlot(person, task, slots[i])) indices.push(i);
+        for (let i = 0; i < positions.length; i += 1) {
+            if (meetsEligibility(person, positions[i].eligibility)) indices.push(i);
         }
         return indices;
     });
 
-    /** slot index -> the assignee index currently holding it, or -1. */
-    const owner = new Array(slots.length).fill(-1);
+    /** position index -> the assignee index currently holding it, or -1. */
+    const owner = new Array(positions.length).fill(-1);
 
     const seat = (personIndex, visited) => {
         for (const slotIndex of eligible[personIndex]) {
@@ -2423,10 +4726,16 @@ export const auditHardConstraints = (roster, config) => {
         resolveGradeBands(rules),
         resolveHoursRules(rules),
     );
-    const tasks = normaliseTasks(config.tasks);
+    // COMPILED WITH THE WINDOW REQUIREMENT OFF, and that is not the same as ignoring
+    // windows: the only reader of a position's eligibility in here is
+    // `unmatchableAssignees`, whose question is the date-less one, and the dated
+    // question is `HARD_RULE_WINDOW`'s below. See section 0e's table of the three
+    // callers — this is the third row, spelled out at the call site.
+    const tasks = normaliseTasks(config.tasks, resolveGradeScale(rules));
     const byName = new Map(staff.map((person) => [person.name, person]));
     const byTask = new Map(tasks.map((task) => [task.name, task]));
-    const forbidMap = buildForbidMap(forbidPairs, staff.map((person) => person.name));
+    const affinities = resolveAffinities(forbidPairs, tasks, staff.map((person) => person.name));
+    const quotas = resolveQuotas(config);
 
     const violations = [];
     const add = (rule, detail, date, task) => violations.push({ rule, date, task, detail });
@@ -2479,13 +4788,13 @@ export const auditHardConstraints = (roster, config) => {
             // lead beside a senior co-lead — that is the shadowing arrangement
             // section 0b's rule 6 exists to make expressible — so neither rule may
             // leak onto one.
-            if (task && task.slots !== null) {
+            if (task && task.composition === COMPOSE_TEAM) {
                 const known = people.filter((name) => byName.has(name));
 
                 for (const name of unmatchableAssignees(people, task, byName)) {
                     add(
                         HARD_RULE_SLOT_GATE,
-                        `${name} is on ${shift.task} but no slot of it that they qualify for is free (its slots are ${task.slots.map((entry) => entry.label).join(', ')})`,
+                        `${name} is on ${shift.task} but no slot of it that they qualify for is free (its slots are ${task.positions.map((position) => position.label).join(', ')})`,
                         dateKey,
                         shift.task,
                     );
@@ -2526,6 +4835,17 @@ export const auditHardConstraints = (roster, config) => {
                 if (person.unavailable.has(dateKey)) {
                     add(HARD_RULE_AVAILABILITY, `${name} is unavailable on ${dateKey}`, dateKey, shift.task);
                 }
+                // The COHORT WINDOW, read back with the date in hand. Only for a task
+                // the configuration knows: a shift naming an unknown task has no
+                // window question to answer, exactly as it has no hours and no skill.
+                if (task && !windowsAdmit(person.windows, shift.task, dateKey)) {
+                    add(
+                        HARD_RULE_WINDOW,
+                        `${windowExclusionClause(person, shift.task)}, but is on it on ${dateKey}`,
+                        dateKey,
+                        shift.task,
+                    );
+                }
                 dutiesToday.set(name, (dutiesToday.get(name) || 0) + 1);
                 // A shift whose task is not in the configuration has no knowable
                 // duration, so it contributes no hours rather than a guessed 4 —
@@ -2549,7 +4869,7 @@ export const auditHardConstraints = (roster, config) => {
             }
             for (const name of seen) {
                 for (const other of seen) {
-                    if (name < other && forbidMap.get(name)?.has(other)) {
+                    if (name < other && affinities.pairsByPerson.get(name)?.has(other)) {
                         add(HARD_RULE_FORBID_PAIR, `${name} and ${other} are a forbidden pairing`, dateKey, taskName);
                     }
                 }
@@ -2599,6 +4919,34 @@ export const auditHardConstraints = (roster, config) => {
                         HARD_RULE_WEEKLY_HOURS,
                         `${name} holds ${formatHours(hours)} in the week of ${weekStartKey}, limit ${formatHours(person.weeklyHoursCap)}`,
                         weekStartKey,
+                        null,
+                    );
+                }
+            }
+        }
+    }
+
+    // THE QUOTA CEILING, read back off the finished roster — the half of section 1e
+    // that is HARD. Measured through `measureQuotaCounts`, which is also what the
+    // unmet-floor warnings read, so the violation and the sentence can never disagree
+    // about how many Saturdays somebody actually worked.
+    //
+    // Iterated quota by quota, then period key in sorted order, then name in sorted
+    // order, so the violation list is deterministic for a Map whose insertion order is
+    // whatever the roster happened to be in.
+    if (quotas.length > 0) {
+        const counts = measureQuotaCounts(roster, quotas, byTask);
+        for (let i = 0; i < quotas.length; i += 1) {
+            const quota = quotas[i];
+            if (quota.max === null) continue;
+            for (const periodKey of [...counts[i].keys()].sort()) {
+                const bucket = counts[i].get(periodKey);
+                for (const name of [...bucket.keys()].sort()) {
+                    if (bucket.get(name) <= quota.max) continue;
+                    add(
+                        HARD_RULE_QUOTA_MAX,
+                        `${name} holds ${bucket.get(name)} ${quotaClassLabel(quota)} duties in ${quotaPeriodLabel(quota, periodKey)}, quota ceiling ${quota.max}`,
+                        null,
                         null,
                     );
                 }
@@ -2698,7 +5046,7 @@ export const scoreRoster = (roster, config) => {
         resolveGradeBands(rules),
         resolveHoursRules(rules),
     );
-    const tasks = normaliseTasks(config.tasks);
+    const tasks = normaliseTasks(config.tasks, resolveGradeScale(rules));
     const byTaskName = new Map(tasks.map((task) => [task.name, task]));
 
     const duties = new Map(staff.map((person) => [person.name, 0]));
@@ -2928,13 +5276,36 @@ export const generateRosterV2 = (config) => {
         ? rules.maxConsecutiveDays
         : ROSTER_V2_DEFAULTS.maxConsecutiveDays;
     const forbidPairs = Array.isArray(rules.forbidPairs) ? rules.forbidPairs : [];
+    const scale = resolveGradeScale(rules);
     const bands = resolveGradeBands(rules);
     const hoursActive = hoursModelRequested(config);
     const hoursRules = resolveHoursRules(rules);
+    /**
+     * Are COHORT WINDOWS in play? Read once and passed to `normaliseTasks`, which is
+     * the only thing that changes: with windows the positions carry the window
+     * requirement (section 0e's third kind), and without them they carry exactly the
+     * requirement list they carried before section 0e(ii) existed.
+     */
+    const windowsActive = cohortWindowsRequested(config);
 
-    const staff = normaliseStaff(config.staff, maxConcurrentPerDay, bands, hoursRules);
-    const tasks = normaliseTasks(config.tasks);
-    const forbidMap = buildForbidMap(forbidPairs, staff.map((person) => person.name));
+    const staff = normaliseStaff(config.staff, maxConcurrentPerDay, bands, hoursRules, scale);
+    const tasks = normaliseTasks(config.tasks, scale, windowsActive);
+    const affinities = resolveAffinities(forbidPairs, tasks, staff.map((person) => person.name));
+    const quotas = resolveQuotas(config);
+    /**
+     * `quotaIndex -> (periodKey -> (name -> duties))`, the running ledger the CEILING
+     * gate reads and `assign` writes. The FLOOR reads it too, through
+     * `quotaDeficitOf`, because "how far behind is this person right now" is the same
+     * question from the other end.
+     *
+     * Re-measured off the finished roster at the end of the run rather than published
+     * from here — post-mortem A-RC4: the counter that decided the roster is not
+     * evidence about the roster.
+     */
+    const quotaCounts = emptyQuotaCounts(quotas);
+    const quotaCeilings = quotaCeilingLimits(quotas, quotaCounts);
+    /** The floors, in resolution order. Empty for every configuration without one. */
+    const quotaFloors = quotas.filter((quota) => quota.min !== null);
 
     // --- dates ----------------------------------------------------------------
     const requestedStart = parseLocalDateKey(config.startDate);
@@ -2949,22 +5320,23 @@ export const generateRosterV2 = (config) => {
     const horizonEndKey = toLocalDateKey(addDays(start, config.weeks * DAYS_PER_WEEK - 1));
 
     /**
-     * taskName -> Set<dateKey>, for monthly tasks only.
+     * taskName -> Set<dateKey>. EVERY task, whichever sugar it was written with.
      *
-     * Derived from `recurrenceDatesBetween`, which is the one definition of when a
-     * monthly task runs. An empty set is legal and means the run is too short (or
-     * badly placed) to contain an occurrence — warned about below, never an error.
+     * Derived from `temporalOccurrences`, which is the one definition of when a
+     * task runs, so the day loop asks a single question of a single structure and a
+     * preview UI can resolve the same dates without re-deriving a calendar. An
+     * empty set is legal and means either a vacuous pattern (no days selected) or a
+     * run too short — or badly placed — to contain an occurrence. Both are warned
+     * about below, in their own words; neither is an error.
      */
-    const occurrencesByTask = new Map(
-        tasks
-            .filter((task) => task.recurrence !== null)
-            .map((task) => [
-                task.name,
-                new Set(recurrenceDatesBetween(task.recurrence, effectiveStart, horizonEndKey)),
-            ]),
-    );
+    const occurrencesByTask = resolveOccurrences(tasks, effectiveStart, horizonEndKey);
 
     const warnings = [];
+    // (Until v1.10.1 a warning stood here saying that declared quotas had been
+    // IGNORED, unreachable because `resolveQuotas` returned an empty list by
+    // construction. It is gone rather than adapted: quotas are enforced now, and a
+    // sentence claiming otherwise would be the exact inverse of post-mortem A-RC4 —
+    // a false report about work that was in fact done.)
     if (effectiveStart !== config.startDate) {
         warnings.push(
             `${config.startDate} is a ${WEEKDAY_NAMES[requestedStart.getDay()]}; the roster was snapped to the Monday of that week, ${effectiveStart}.`,
@@ -3033,9 +5405,10 @@ export const generateRosterV2 = (config) => {
     // a BANDED SLOT ENTRY either, and there is no "may still co-lead" consolation
     // to offer them — every entry of a multi-slot task is a slot in its own right,
     // so what is left to them is the entries that carry no band.
-    const bandGatedSlotTasks = tasks.filter(
-        (task) => task.slots !== null && task.slots.some((entry) => entry.band !== null),
-    );
+    const bandGatedSlotTasks = tasks.filter((task) => (
+        task.composition === COMPOSE_TEAM &&
+        task.positions.some((position) => regionsRequiredBy(position.eligibility) !== null)
+    ));
     if (bandGatedSlotTasks.length > 0) {
         const ungraded = staff.filter((person) => person.grade === null).map((person) => person.name);
         if (ungraded.length > 0) {
@@ -3046,18 +5419,20 @@ export const generateRosterV2 = (config) => {
     }
 
     for (const task of tasks) {
-        if (task.recurrence === null && task.days.length === 0) {
+        // TWO SENTENCES FOR TWO DIFFERENT MISTAKES, and the pattern tells them
+        // apart rather than the field it was written with: a VACUOUS pattern can
+        // never produce a date for any horizon (a weekday list with nothing in it),
+        // while a pattern that simply misses this run is a horizon problem.
+        if (temporalIsVacuous(task.temporal)) {
             warnings.push(
                 `Task ${task.name} has no days selected, so it will never appear in the roster.`,
             );
-        }
-        // The monthly twin of "no days selected", and a likelier mistake: a
-        // perfectly valid 3rd-Wednesday clinic simply does not intersect a
-        // fortnight that happens to fall the wrong side of it. Silence here would
-        // look exactly like the engine having dropped the task.
-        if (task.recurrence !== null && occurrencesByTask.get(task.name).size === 0) {
+        } else if (occurrencesByTask.get(task.name).size === 0) {
+            // A perfectly valid 3rd-Wednesday clinic simply does not intersect a
+            // fortnight that happens to fall the wrong side of it. Silence here
+            // would look exactly like the engine having dropped the task.
             warnings.push(
-                `Task ${task.name} runs on the ${recurrenceLabel(task.recurrence)}, and no such date falls between ${effectiveStart} and ${horizonEndKey}, so it will never appear in this roster. Generate a longer run, or one that covers an occurrence.`,
+                `Task ${task.name} runs on ${temporalLabel(task.temporal)}, and no such date falls between ${effectiveStart} and ${horizonEndKey}, so it will never appear in this roster. Generate a longer run, or one that covers an occurrence.`,
             );
         }
         if (task.requiresSkill) {
@@ -3110,28 +5485,95 @@ export const generateRosterV2 = (config) => {
         // rather than a refusal for the same reason its `leadBands` twin is — the
         // roster is still worth generating, with the shortfall visible in
         // `unfilled` on every date.
-        if (task.slots !== null) {
-            /** gate signature -> the labels of the entries sharing it. */
+        if (task.composition === COMPOSE_TEAM) {
+            /** eligibility signature -> the labels of the positions sharing it. */
             const byGate = new Map();
-            for (const entry of task.slots) {
-                const key = `${entry.band === null ? '' : entry.band}|${entry.requiresSkill === null ? '' : entry.requiresSkill}`;
-                if (!byGate.has(key)) byGate.set(key, { entry, labels: [] });
-                byGate.get(key).labels.push(entry.label);
+            for (const position of task.positions) {
+                const key = eligibilityKey(position.eligibility);
+                if (!byGate.has(key)) byGate.set(key, { position, labels: [] });
+                byGate.get(key).labels.push(position.label);
             }
 
-            for (const { entry, labels } of byGate.values()) {
-                const qualified = staff.filter((person) => canFillSlot(person, task, entry));
+            for (const { position, labels } of byGate.values()) {
+                // `{ dateKey: null }` asks the DATE-LESS question — "could they ever
+                // fill this?" — which is the right one for a warning about the whole
+                // run: a cohort window that never names this task disqualifies
+                // somebody from it permanently, while one that simply has not opened
+                // yet does not (section 0e's caller table).
+                const qualified = staff.filter(
+                    (person) => meetsEligibility(person, position.eligibility, { dateKey: null }),
+                );
                 if (qualified.length >= labels.length) continue;
 
                 const gate = [];
-                if (entry.bandSet !== null) {
-                    gate.push(`from the ${bandSetLabel(entry.bandSet)} band (${bandSetGradeLabel(entry.bandSet, bands)})`);
+                const gateRegions = regionsRequiredBy(position.eligibility);
+                if (gateRegions !== null) {
+                    gate.push(`from the ${bandSetLabel(gateRegions)} band (${bandSetGradeLabel(gateRegions, bands)})`);
                 }
-                const gateSkills = slotSkillsRequired(task, entry);
+                const gateSkills = skillsRequiredBy(position.eligibility);
                 if (gateSkills.length > 0) gate.push(`holding ${skillsPhrase(gateSkills)}`);
 
                 warnings.push(
                     `Task ${task.name} needs ${labels.length} ${labels.length === 1 ? 'person' : 'people'} ${gate.length === 0 ? 'per day' : `${gate.join(' ')} per day`} (${labels.join(', ')}), but only ${qualified.length} ${qualified.length === 1 ? 'person qualifies' : 'people qualify'}, so some of those slots cannot be filled on any day.`,
+                );
+            }
+        }
+    }
+
+    /**
+     * QUOTA STRAIN, reported before a slot is filled — the three things a roster
+     * master cannot see from the roster itself.
+     *
+     * `quotaBuckets` is computed once here and read again by the unmet-floor report at
+     * the end of the run, so the periods the floor is JUDGED in and the periods it is
+     * WARNED about are the same periods by construction.
+     */
+    const quotaBuckets = quotas.map((quota) => quotaPeriodBuckets(quota, effectiveStart, horizonEndKey));
+    const quotaSubjectsOf = quotas.map((quota) => quotaSubjects(quota, tasks, staff, hoursActive));
+
+    for (let i = 0; i < quotas.length; i += 1) {
+        const quota = quotas[i];
+
+        // 1. WHO THE QUOTA DOES NOT APPLY TO. `scope: 'person'` reads as "everybody",
+        //    and for a skill-gated or band-gated class it cannot be: a floor on
+        //    somebody who could never do the work is a contradiction rather than a
+        //    policy, so they are outside the population (`quotaSubjects`). That
+        //    narrowing decides both the arithmetic refusal and the shortfall report,
+        //    so it is said out loud rather than left to be inferred from a warning
+        //    that never arrives.
+        const outside = staff
+            .filter((person) => !quotaSubjectsOf[i].includes(person))
+            .map((person) => person.name);
+        if (outside.length > 0) {
+            warnings.push(
+                `${quotaSource(quota)} counts ${quotaClassLabel(quota)}, which ${outside.length === 1 ? '1 staff member' : `${outside.length} staff members`} can never be rostered on (${outside.join(', ')}) — the skill, the band, the length of a session against their day, or their cohort windows rule them out — so the quota does not apply to ${outside.length === 1 ? 'them' : 'any of them'}.`,
+            );
+        }
+
+        // 2. A PARTIAL PERIOD IS NOT JUDGED. A four-week run from a Monday almost
+        //    never holds a whole calendar month, and a floor of two Saturdays cannot
+        //    be met in the three days of March a run happens to end on. That is a
+        //    HORIZON artefact, not a broken policy: it is neither refused (see
+        //    validation) nor counted as a shortfall, and this is the sentence that
+        //    stops the silence being mistaken for compliance.
+        if (quota.min !== null) {
+            for (const bucket of quotaBuckets[i].filter((b) => !b.whole)) {
+                warnings.push(
+                    `${quotaSource(quota)} asks for at least ${quota.min} ${quotaPeriodPhrase(quota)}, and this run covers only ${bucket.from} to ${bucket.to} of ${quotaPeriodLabel(quota, bucket.key)}, so the floor is not judged there.`,
+                );
+            }
+        }
+
+        // 3. TWO PREFERENCES ON ONE TASK, PULLING OPPOSITE WAYS. Continuity
+        //    concentrates a task on one person; a floor spreads it across everybody.
+        //    Both outrank FTE-weighted fairness, so one of them has to outrank the
+        //    other, and section 5 says which. Not a refusal — a department may
+        //    legitimately want both and accept the outcome — but never silent.
+        if (quota.min !== null) {
+            for (const task of quotaTasks(quota, tasks)) {
+                if (!task.continuity) continue;
+                warnings.push(
+                    `Task ${task.name} asks for continuity of care AND is counted by a quota floor (${quotaSource(quota)}, at least ${quota.min} ${quotaPeriodPhrase(quota)}). The two pull opposite ways — continuity keeps one lead, a floor spreads the work — and the FLOOR WINS: somebody short of their minimum takes the lead ahead of the incumbent, and every such change is counted as a continuity break.`,
                 );
             }
         }
@@ -3151,15 +5593,13 @@ export const generateRosterV2 = (config) => {
             // B1 is exactly the bug of trusting a fixed offset to be a weekday.
             const weekday = date.getDay();
 
-            // Weekly tasks answer "is today one of my weekdays?"; monthly ones ask
-            // whether today is one of the occurrence dates resolved before the
-            // loop. `recurrence` is checked FIRST and `days` is empty for those
-            // tasks, so the two calendars can never both apply.
-            const running = tasks.filter((task) => (
-                task.recurrence === null
-                    ? task.days.includes(weekday)
-                    : occurrencesByTask.get(task.name).has(dateKey)
-            ));
+            // ONE QUESTION, asked of every task in the same words: is today one of
+            // your dates? `occurrencesByTask` was resolved from each task's TEMPORAL
+            // pattern before the loop, so a weekly task, a monthly one and a
+            // pattern with no sugar at all are indistinguishable here — which is
+            // what makes a seventh calendar shape a change to section 1b and to
+            // nothing else.
+            const running = tasks.filter((task) => occurrencesByTask.get(task.name).has(dateKey));
             if (running.length === 0) continue;
 
             dutiesByDate.set(dateKey, new Map());
@@ -3181,25 +5621,29 @@ export const generateRosterV2 = (config) => {
             for (const task of running) totalDemandHours += perDayDemand(task) * task.hours;
 
             /**
-             * taskName -> { onTaskToday, leads, coLeads, slotFills } for this date.
+             * taskName -> { onTaskToday, fills } for this date.
              *
-             * `slotFills` is the multi-slot half and stays SEPARATE from
-             * `leads`/`coLeads` rather than reusing them: a slot entry is neither
-             * until the day's entries are all resolved and section 5 ranks them, and
-             * pushing one into `leads` would make the continuity machinery, the
-             * co-lead round-robin and the orphan guard all read a lead that does not
-             * exist yet.
+             * ONE list of fills per task, in assignment order, each
+             * `{ position, candidate }`. Not three lists keyed by role: a filled
+             * position is a filled position, and WHICH of them ends up being the
+             * shift's `lead` is the composition step's decision (section 5) taken
+             * once the day is resolved. `onTaskToday` is the set the per-task-per-day
+             * capacity limit reads.
              */
             const dayState = new Map(
-                running.map((task) => [
-                    task.name,
-                    { onTaskToday: new Set(), leads: [], coLeads: [], slotFills: [] },
-                ]),
+                running.map((task) => [task.name, { onTaskToday: new Set(), fills: [] }]),
             );
 
-            // `unfilled` is collected per day and emitted in READING order (lead
-            // slots by task, then co-lead slots by task) rather than in the
-            // scarcity order the slots were resolved in.
+            /** The fills of `task` that hold its ANCHOR role, in assignment order. */
+            const anchorFillsOf = (task) => {
+                const anchorRole = anchorRoleOf(task);
+                if (anchorRole === null) return [];
+                return dayState.get(task.name).fills.filter((fill) => fill.position.role === anchorRole);
+            };
+
+            // `unfilled` is collected per day and emitted in READING order (primary
+            // positions by task, then attached ones by task) rather than in the
+            // scarcity order the positions were resolved in.
             const dayUnfilled = [];
 
             /**
@@ -3211,29 +5655,69 @@ export const generateRosterV2 = (config) => {
             const incumbentRejections = new Map();
 
             /**
+             * taskName -> the incumbents who lost a lead slot today to somebody further
+             * behind their QUOTA FLOOR. The second half of "why did the clinic move?",
+             * and the reason the sentence below can distinguish a floor from a
+             * tie-break instead of guessing.
+             */
+            const incumbentFloorLosses = new Map();
+
+            /**
              * Who could take this slot, the best of them, and — if nobody — the
              * tally the reason is written from.
              */
             const evaluateSlot = (slot) => {
-                const { task, role } = slot;
-                // MULTI-SLOT: which entry of `task.slots` this slot is, or `null`
-                // for a lead or co-lead slot. Every gate, tally and reason string
-                // below behaves exactly as it did before `slots` existed when it is
-                // `null`, which is every slot of every task that does not use it.
-                const entry = slot.entry === undefined ? null : slot.entry;
+                const { task, position } = slot;
                 const { onTaskToday } = dayState.get(task.name);
 
-                // Continuity inverts the per-task tie-break, for this slot only.
-                const continuityLead = task.continuity && role === 'lead';
-                const compare = continuityLead ? compareContinuityCandidates : compareCandidates;
+                // A POSITIVE cross-occurrence affinity inverts the per-task
+                // tie-break, for this position only — section 1d. `continuity: true`
+                // is the only sugar that produces one today.
+                const prefersIncumbent = affinityPrefersIncumbent(task, position, affinities);
+                // THE FLOORS THAT COUNT THIS TASK, and the CEILINGS, resolved once per
+                // slot. Both are empty lists for every configuration that declares no
+                // quota, which is why the comparator below degenerates to exactly the
+                // two comparators that existed before section 1e was implemented.
+                const floorsHere = quotaFloors.filter((quota) => quotaCountsTask(quota, task));
+                const ceilingsHere = quotaCeilings.filter((limit) => quotaCountsTask(limit.quota, task));
+                const compare = candidateComparator(prefersIncumbent, floorsHere.length > 0);
 
-                // Whoever led the previous occurrence is watched through the loop
-                // below, so that if the slot changes hands the warning can say
+                /**
+                 * How far behind their FLOOR is this person, right now, in the period
+                 * this date falls in? The MAXIMUM over the applicable floors — see
+                 * `candidateComparator` for why a maximum and not a sum.
+                 */
+                const quotaDeficitOf = (person) => {
+                    let worst = 0;
+                    for (const quota of floorsHere) {
+                        const index = quotas.indexOf(quota);
+                        const held = quotaHeld(quotaCounts, index, quotaPeriodKey(quota, dateKey), person.name);
+                        const short = quota.min - held;
+                        if (short > worst) worst = short;
+                    }
+                    return worst;
+                };
+
+                // Whoever held the previous occurrence is watched through the loop
+                // below, so that if the position changes hands the warning can say
                 // whether a constraint took it or fairness did.
-                const incumbents = continuityLead && continuityHistory.has(task.name)
-                    ? continuityHistory.get(task.name).leads
+                const incumbents = prefersIncumbent && continuityHistory.has(task.name)
+                    ? continuityHistory.get(task.name).holders
                     : null;
                 const watched = incumbents === null ? null : new Map();
+                /**
+                 * The watched incumbents' FLOOR DEFICITS, measured at the same moment
+                 * as their rejections.
+                 *
+                 * Kept because the continuity warning has to be able to tell two
+                 * different stories apart: "nobody stopped her, she simply lost the
+                 * tie-break" and "nobody stopped her, but the person who took it was
+                 * further behind their quota floor". Before quotas existed only the
+                 * first could happen, and printing it for the second would be a
+                 * sentence that is measurably false — the file's own rule about this
+                 * clause is that getting it wrong is worse than saying nothing.
+                 */
+                const watchedDeficits = incumbents === null ? null : new Map();
 
                 const tally = {
                     [REJECT_SKILL]: 0,
@@ -3245,6 +5729,8 @@ export const generateRosterV2 = (config) => {
                     [REJECT_WEEKLY_HOURS]: 0,
                     [REJECT_PAIR]: 0,
                     [REJECT_CONSECUTIVE]: 0,
+                    [REJECT_WINDOW]: 0,
+                    [REJECT_QUOTA]: 0,
                 };
 
                 /**
@@ -3254,47 +5740,51 @@ export const generateRosterV2 = (config) => {
                  * from a tally that has thrown them away.
                  */
                 const hoursDetail = [];
+                /**
+                 * The same, for the two constraints whose tally count is equally
+                 * useless on its own: "3 outside their cohort window" does not say
+                 * WHOSE block is closed, and "1 at a quota ceiling" does not say which
+                 * quota or which period.
+                 */
+                const windowDetail = [];
+                const quotaDetail = [];
 
                 let eligible = 0;
                 let best = null;
 
                 for (const person of staff) {
+                    // EVERY GATE IS COUNTED HERE, inside the eligibility count MRV
+                    // orders by, and that is the whole reason the gates are a table:
+                    // a band-gated lead position, a skill-gated one, the principal
+                    // entry of a weekend trio and an hours-tight 6-hour clinic are
+                    // all scarce for the SAME reason, and a scarcity measure blind to
+                    // any one of them would spend the department's only qualified
+                    // person on the loose position beside it and then report the
+                    // tight one as unstaffable — a shortage the engine manufactured,
+                    // indistinguishable in `unfilled` from a real one.
                     const rejection = rejectionFor({
                         person,
                         task,
-                        // The band gate is counted HERE, inside the eligibility
-                        // count MRV orders by. A band-gated lead slot is scarce
-                        // precisely because of the gate, and a scarcity measure
-                        // that ignored it would let an ungated slot spend the
-                        // department's only in-band clinician — the stranding
-                        // failure MRV exists to prevent, in a new costume.
-                        role,
-                        // A slot entry's own band and skill are counted here for the
-                        // third time in the same argument: the principal entry of a
-                        // weekend trio is the scarce one, and a scarcity measure
-                        // blind to it would spend the department's only free
-                        // principal on the ungated entry beside it and then report
-                        // the principal slot as unstaffable — a shortage the engine
-                        // manufactured.
-                        entry,
+                        position,
                         dateKey,
                         date,
                         dutiesOnDate,
                         onTaskToday,
-                        forbidMap,
+                        affinities,
                         dutiesByDate,
                         maxConsecutiveDays,
-                        // And the hours gate is counted here for the same reason,
-                        // one constraint later: an hours-tight slot must be
-                        // recognised as the scarce one, or it loses its candidates
-                        // to a slot anybody's remaining day could have absorbed.
                         hoursActive,
                         hoursOnDate,
                         hoursThisWeek,
+                        // The day's CEILINGS, already filtered to the quotas that count
+                        // this task, so the gate walks an empty array for every
+                        // configuration that declares none.
+                        quotaCeilings: ceilingsHere,
                     });
 
                     if (watched !== null && incumbents.includes(person.name)) {
                         watched.set(person.name, rejection);
+                        watchedDeficits.set(person.name, quotaDeficitOf(person));
                     }
 
                     if (rejection === REJECT_DAILY_HOURS || rejection === REJECT_WEEKLY_HOURS) {
@@ -3310,6 +5800,19 @@ export const generateRosterV2 = (config) => {
                         }));
                     }
 
+                    if (rejection === REJECT_WINDOW) {
+                        windowDetail.push(windowExclusionClause(person, task.name));
+                    }
+
+                    if (rejection === REJECT_QUOTA) {
+                        // WHICH quota bound, found the same way the gate found it, so
+                        // the sentence cannot name a ceiling the gate did not apply.
+                        const bound = ceilingsHere.find((limit) => capacityBreached(limit, person, {
+                            person, task, position, dateKey, quotaCeilings: ceilingsHere,
+                        }));
+                        if (bound !== undefined) quotaDetail.push(quotaBreachClause(person, bound, dateKey));
+                    }
+
                     if (rejection) {
                         tally[rejection] += 1;
                         continue;
@@ -3321,10 +5824,17 @@ export const generateRosterV2 = (config) => {
                         fte: person.fte,
                         duties: duties.get(person.name),
                         taskDuties: dutiesByTask.get(person.name).get(task.name) || 0,
+                        /**
+                         * How far behind a quota FLOOR they are, at this moment, in this
+                         * period. Read by `candidateComparator` only, and present on
+                         * every candidate — 0 when no floor applies — so there is one
+                         * candidate shape and the comparator never reads `undefined`.
+                         */
+                        quotaDeficit: quotaDeficitOf(person),
                         // Read by `compareContinuityCandidates` only. Present on
                         // every candidate so there is one candidate shape.
                         taskLeads: leadsByTask.get(task.name).get(person.name) || 0,
-                        // Read by `orderMultiSlotFills` only, and present here for
+                        // Read by `orderTeamFills` only, and present here for
                         // the same reason `taskLeads` is: one candidate shape, and
                         // the snapshot the lead ranking reads is the snapshot the
                         // fairness comparator ranked.
@@ -3335,7 +5845,20 @@ export const generateRosterV2 = (config) => {
                     }
                 }
 
-                return { eligible, best, tally, watched, hoursDetail };
+                /**
+                 * Which watched incumbents lost this position TO A FLOOR: eligible,
+                 * not stopped by anything, and beaten by somebody further behind their
+                 * quota minimum. Empty unless a floor counts this task.
+                 */
+                const floorLosers = new Set();
+                if (watched !== null && floorsHere.length > 0 && best !== null) {
+                    for (const [name, rejection] of watched) {
+                        if (rejection !== null) continue;
+                        if (best.quotaDeficit > (watchedDeficits.get(name) || 0)) floorLosers.add(name);
+                    }
+                }
+
+                return { eligible, best, tally, watched, floorLosers, hoursDetail, windowDetail, quotaDetail };
             };
 
             const assign = (slot, candidate) => {
@@ -3361,21 +5884,28 @@ export const generateRosterV2 = (config) => {
                 const byTask = dutiesByTask.get(name);
                 byTask.set(task.name, (byTask.get(task.name) || 0) + 1);
 
+                // The QUOTA ledger, kept up to date on EVERY assignment for the same
+                // reason the hours ledger is: the flag decides whether a gate consults
+                // it, never whether it is true. One call, and it walks the quotas that
+                // count this task — a configuration with none walks nothing.
+                countQuotaDuty(quotas, quotaCounts, task, name, dateKey);
+
                 state.onTaskToday.add(name);
                 // `onTaskToday` above is also what stops one person taking two
-                // entries of the same multi-slot shift: it is per task per day, and
-                // `rejectionFor` reads it as `REJECT_ON_TASK` for every slot of any
+                // positions of the same shift: it is the per-task-per-day capacity
+                // limit's state, read as `REJECT_ON_TASK` for every position of any
                 // kind. The trio rule needs no separate machinery.
-                if (slot.role === MULTI_SLOT_ROLE) {
-                    // Neither a lead nor a co-lead yet — see `dayState`. Section 5
-                    // decides which of them is which once the day is resolved.
-                    state.slotFills.push({ entry: slot.entry, candidate });
-                } else if (slot.role === 'lead') {
-                    state.leads.push(name);
-                    const leadCounts = leadsByTask.get(task.name);
-                    leadCounts.set(name, (leadCounts.get(name) || 0) + 1);
-                } else {
-                    state.coLeads.push(name);
+                //
+                // ONE list, in assignment order. The composition step decides who
+                // leads; nothing here does.
+                state.fills.push({ position: slot.position, candidate });
+
+                // The incumbency ledger a POSITIVE cross-occurrence affinity reads,
+                // counted on the ANCHOR role only: somebody who has co-led a clinic
+                // six times has no incumbency in it.
+                if (slot.position.role === anchorRoleOf(task)) {
+                    const anchorCounts = leadsByTask.get(task.name);
+                    anchorCounts.set(name, (anchorCounts.get(name) || 0) + 1);
                 }
             };
 
@@ -3422,6 +5952,12 @@ export const generateRosterV2 = (config) => {
 
                     pending.splice(chosenIndex, 1);
 
+                    if (chosenEvaluation.floorLosers.size > 0) {
+                        const known = incumbentFloorLosses.get(chosenSlot.task.name) || new Set();
+                        for (const name of chosenEvaluation.floorLosers) known.add(name);
+                        incumbentFloorLosses.set(chosenSlot.task.name, known);
+                    }
+
                     if (chosenEvaluation.watched !== null) {
                         // Merged rather than overwritten, so a task with two lead
                         // slots keeps the FIRST reason learned for each incumbent —
@@ -3440,21 +5976,20 @@ export const generateRosterV2 = (config) => {
                             entry: {
                                 date: dateKey,
                                 task: chosenSlot.task.name,
-                                // MULTI-SLOT: the entry's LABEL, so that a roster
-                                // master reading three unfilled lines for one trio
-                                // can tell which of the three failed. `'lead'` and
-                                // `'coLead'` are unchanged for every other task.
-                                role: chosenSlot.role === MULTI_SLOT_ROLE
-                                    ? chosenSlot.entry.label
-                                    : chosenSlot.role,
+                                // THE POSITION'S LABEL, so that a roster master
+                                // reading three unfilled lines for one trio can tell
+                                // which of the three failed. For the paired sugar the
+                                // label IS `'lead'` / `'coLead'`, unchanged.
+                                role: chosenSlot.position.label,
                                 reason: describeEmptyPool({
                                     task: chosenSlot.task,
-                                    role: chosenSlot.role,
+                                    position: chosenSlot.position,
                                     dateKey,
                                     tally: chosenEvaluation.tally,
                                     poolSize: staff.length,
                                     hoursDetail: chosenEvaluation.hoursDetail,
-                                    entry: chosenSlot.role === MULTI_SLOT_ROLE ? chosenSlot.entry : null,
+                                    windowDetail: chosenEvaluation.windowDetail,
+                                    quotaDetail: chosenEvaluation.quotaDetail,
                                 }),
                             },
                         });
@@ -3465,57 +6000,62 @@ export const generateRosterV2 = (config) => {
                 }
             };
 
-            // --- phase 1: every lead slot on this day, scarcest first ---------
+            // --- phase 1: every PRIMARY position on this day, scarcest first ---
             //
-            // And every SLOT ENTRY of every multi-slot task, in the same phase and
-            // the same scarcity ordering: an entry is a staffing requirement that
-            // stands on its own, not a co-lead hanging off somebody else's slot, so
-            // it competes with the day's lead slots rather than queueing behind
-            // them. Filling all of them together is also what lets a trio lose its
-            // junior and keep its principal and senior.
+            // Every lead slot and every slot entry, in ONE pass and ONE scarcity
+            // ordering, because that is what they are: staffing requirements that
+            // stand on their own, none of them dependent on another being filled
+            // first. So the department's one principal is not spent on an ungated
+            // duty while a principal-gated position waits, and — the case the team
+            // composition exists for — a trio whose junior entry cannot be staffed
+            // still fills the other two and reports ONE `unfilled` entry naming the
+            // junior slot.
             let order = 0;
-            const leadSlots = [];
+            const primaryPositions = [];
             for (const task of running) {
-                if (task.slots !== null) {
-                    for (const entry of task.slots) {
-                        leadSlots.push({ task, role: MULTI_SLOT_ROLE, entry, order: order += 1 });
-                    }
-                    continue;
-                }
-                for (let i = 0; i < task.leads; i += 1) {
-                    leadSlots.push({ task, role: 'lead', order: order += 1 });
+                for (const position of task.positions) {
+                    if (position.phase !== PHASE_PRIMARY) continue;
+                    primaryPositions.push({ task, position, order: order += 1 });
                 }
             }
-            fillMostConstrainedFirst(leadSlots);
+            fillMostConstrainedFirst(primaryPositions);
 
             // --- continuity: did an incumbency change hands today? -------------
             //
-            // Runs between the phases because leads are final after phase 1 and
-            // co-leads are irrelevant to continuity. An occurrence whose lead slot
-            // went unfilled updates nothing: the incumbent stays the incumbent, the
-            // gap is already in `unfilled`, and resuming afterwards is continuity
-            // holding rather than breaking twice.
+            // Runs between the phases because the anchor positions are final after
+            // phase 1 and the attached ones are irrelevant to continuity. An
+            // occurrence whose anchor went unfilled updates nothing: the incumbent
+            // stays the incumbent, the gap is already in `unfilled`, and resuming
+            // afterwards is continuity holding rather than breaking twice.
             for (const task of running) {
-                if (!task.continuity) continue;
+                if (!affinities.preferSameByTask.has(task.name)) continue;
 
-                const leads = [...dayState.get(task.name).leads];
-                if (leads.length === 0) continue;
+                const holders = anchorFillsOf(task).map((fill) => fill.candidate.name);
+                if (holders.length === 0) continue;
 
                 const previous = continuityHistory.get(task.name);
-                continuityHistory.set(task.name, { dateKey, leads });
+                continuityHistory.set(task.name, { dateKey, holders });
 
                 if (previous === undefined) continue;
                 // The SAME predicate `scoreRoster` counts with, so the warnings and
                 // `breakdown.continuityBreaks` can never disagree about whether
-                // continuity held. `leads` keeps its roster order for the message.
-                if (continuitySignature(previous.leads) === continuitySignature(leads)) continue;
+                // continuity held. `holders` keeps its roster order for the message.
+                if (continuitySignature(previous.holders) === continuitySignature(holders)) continue;
 
                 const known = incumbentRejections.get(task.name);
-                const clauses = previous.leads
-                    .filter((name) => !leads.includes(name))
+                const lostToFloor = incumbentFloorLosses.get(task.name) || new Set();
+                const clauses = previous.holders
+                    .filter((name) => !holders.includes(name))
                     .map((name) => {
                         const rejection = known ? known.get(name) : undefined;
                         const prose = rejection ? CONTINUITY_REJECTION_PROSE[rejection] : null;
+                        // A QUOTA FLOOR took it, which is a different sentence from a
+                        // tie-break and is measured rather than assumed: the winner's
+                        // deficit was strictly larger than theirs at the moment the
+                        // slot was decided.
+                        if (prose === null && lostToFloor.has(name)) {
+                            return `no constraint stopped ${name} that day; the slot went to somebody further behind their quota floor, which outranks continuity`;
+                        }
                         // `null` means the incumbent WAS eligible and simply lost.
                         // Under the continuity comparator that can only happen to
                         // somebody a candidate had matched or passed on previous
@@ -3530,33 +6070,33 @@ export const generateRosterV2 = (config) => {
                     });
 
                 warnings.push(
-                    `Continuity break: ${task.name} was led by ${previous.leads.join(' and ')} on ${previous.dateKey} but by ${leads.join(' and ')} on ${dateKey}${clauses.length === 0 ? '' : ` — ${clauses.join('; ')}`}.`,
+                    `Continuity break: ${task.name} was led by ${previous.holders.join(' and ')} on ${previous.dateKey} but by ${holders.join(' and ')} on ${dateKey}${clauses.length === 0 ? '' : ` — ${clauses.join('; ')}`}.`,
                 );
             }
 
-            // --- phase 2: co-lead slots, scarcest first -----------------------
+            // --- phase 2: ATTACHED positions, scarcest first -------------------
             //
-            // A multi-slot task passes through both arms of this loop without
-            // effect, and that is `normaliseTasks` forcing its `coLeads` to 0
-            // rather than a special case here: it has no lead, so it takes the
-            // orphan arm, and it asks for no co-leads, so the arm's loop runs zero
-            // times. Every entry it needed was filled in phase 1.
-            const coLeadSlots = [];
+            // A team-composed task has none — its composition declares no anchor, so
+            // there is nothing an attached position could hang off — and it therefore
+            // passes through this loop without effect rather than being special-cased
+            // out of it. Every position it needed was filled in phase 1.
+            const attachedPositions = [];
             for (const task of running) {
-                const state = dayState.get(task.name);
+                const attached = task.positions.filter((position) => position.phase === PHASE_ATTACHED);
+                if (attached.length === 0) continue;
 
-                if (state.leads.length === 0) {
-                    // Assigning co-leads now would orphan them: there is no lead
-                    // to pair them with, and promoting one would be the very
-                    // fallback this engine refuses to make. Record the co-lead
-                    // slots as unfilled and say why.
-                    for (let i = 0; i < task.coLeads; i += 1) {
+                if (anchorFillsOf(task).length === 0) {
+                    // Assigning them now would orphan them: there is no anchor to
+                    // pair them with, and promoting one would be the very fallback
+                    // this engine refuses to make. Record them as unfilled and say
+                    // why.
+                    for (const position of attached) {
                         dayUnfilled.push({
                             order: order += 1,
                             entry: {
                                 date: dateKey,
                                 task: task.name,
-                                role: 'coLead',
+                                role: position.label,
                                 reason: `no lead could be assigned to ${task.name} on ${dateKey}, so its co-lead slots were left unfilled rather than staffed without a lead`,
                             },
                         });
@@ -3564,83 +6104,25 @@ export const generateRosterV2 = (config) => {
                     continue;
                 }
 
-                for (let i = 0; i < task.coLeads; i += 1) {
-                    coLeadSlots.push({ task, role: 'coLead', order: order += 1 });
+                for (const position of attached) {
+                    attachedPositions.push({ task, position, order: order += 1 });
                 }
             }
-            fillMostConstrainedFirst(coLeadSlots);
+            fillMostConstrainedFirst(attachedPositions);
 
             // --- emit the day's shift objects, in task order ------------------
+            //
+            // ONE line of dispatch, on the task's declared COMPOSITION. Which
+            // assignee is the shift's `lead`, whether there is one shift or several,
+            // and what `assignees` holds are all section 5's business — there is no
+            // per-feature branch here, and a third composition needs no edit to this
+            // loop.
             for (const task of running) {
-                const state = dayState.get(task.name);
+                const shifts = COMPOSERS[task.composition](task, dayState.get(task.name).fills, week);
+                if (shifts.length === 0) continue;
 
-                // MULTI-SLOT: ONE shift object holding every entry that filled —
-                // which is the whole point, since the department's rule is that the
-                // three of them are on the same shift. The lead is the highest grade
-                // present and `coLead` the next (section 5), so `staff`,
-                // `buildShiftStaffLabel` and every consumer of the two-name shape
-                // keep working; `assignees` carries the full team in the same order.
-                //
-                // A shift is emitted for a PARTIALLY filled trio: two of three
-                // staffed is a real shift plus one `unfilled` entry naming the third,
-                // not a cancelled day. If NO entry filled there is no shift at all,
-                // which is the same convention the lead-less branch below follows.
-                if (task.slots !== null) {
-                    if (state.slotFills.length === 0) continue;
-
-                    const assignees = orderMultiSlotFills(state.slotFills)
-                        .map((fill) => fill.candidate.name);
-                    const [lead] = assignees;
-                    const coLead = assignees.length > 1 ? assignees[1] : undefined;
-
-                    const shift = {
-                        task: task.name,
-                        lead,
-                        ...(coLead === undefined ? {} : { coLead }),
-                        staff: buildShiftStaffLabel(lead, coLead),
-                        category: task.category,
-                        week: week + 1,
-                        assignees,
-                    };
-
-                    if (!roster[dateKey]) roster[dateKey] = [];
-                    roster[dateKey].push(shift);
-                    continue;
-                }
-
-                if (state.leads.length === 0) continue;
-
-                // One shift object per pairing group, so the two-name shape the
-                // ICS and CSV exports interpolate is never broken. Co-leads are
-                // dealt round-robin across the groups that actually HAVE a lead;
-                // where a group holds more than one co-lead, `coLead` is the
-                // first of them and `assignees` carries everybody.
-                const groups = state.leads.map((lead) => ({ lead, coLeads: [] }));
-                state.coLeads.forEach((name, i) => {
-                    groups[i % groups.length].coLeads.push(name);
-                });
-
-                for (const group of groups) {
-                    const coLead = group.coLeads.length > 0 ? group.coLeads[0] : undefined;
-
-                    const shift = {
-                        task: task.name,
-                        lead: group.lead,
-                        // A solo task must not carry `coLead: undefined` — an
-                        // absent co-lead is an ABSENT FIELD. `undefined` here is
-                        // what put the string "undefined" in the CSV export
-                        // (audit M7), and `buildShiftStaffLabel` already treats
-                        // it as "no co-lead" when building the display string.
-                        ...(coLead === undefined ? {} : { coLead }),
-                        staff: buildShiftStaffLabel(group.lead, coLead),
-                        category: task.category,
-                        week: week + 1,
-                        assignees: [group.lead, ...group.coLeads],
-                    };
-
-                    if (!roster[dateKey]) roster[dateKey] = [];
-                    roster[dateKey].push(shift);
-                }
+                if (!roster[dateKey]) roster[dateKey] = [];
+                for (const shift of shifts) roster[dateKey].push(shift);
             }
 
             dayUnfilled.sort((a, b) => a.order - b.order);
@@ -3715,6 +6197,47 @@ export const generateRosterV2 = (config) => {
                         `${person.name} is rostered ${formatHours(worst.total)} in the ${windowDays} days from ${dayKeys[worst.from]} to ${dayKeys[worst.from + windowDays - 1]}, above the ${formatHours(ceiling)} a ${formatHours(person.contractedWeeklyHours)} week at ${person.fte} FTE implies over ${ROLLING_WINDOW_WEEKS} weeks. Every individual week is inside its limit — this is the rolling total, which this engine reports and does not enforce.`,
                     );
                 }
+            }
+        }
+    }
+
+    // --- the quota FLOORS: MEASURED off the finished roster, and NAMED ---------
+    //
+    // A floor cannot be enforced, so the only honest thing left is to say, in words, who
+    // did not get theirs. Post-mortem A-RC4 is the whole shape of this block: the
+    // engine does NOT report the running counters it made its decisions from, it
+    // re-reads the roster it actually produced (`measureQuotaCounts` — the same
+    // function `auditHardConstraints` uses for the ceilings) and compares that.
+    //
+    // ONE WARNING PER PERSON PER QUOTA, listing every period they came up short in and
+    // by how much. Per person rather than per period because "Ada was short in March
+    // and again in May" is one conversation, and a 52-week run with a monthly floor
+    // would otherwise produce a wall of near-identical sentences.
+    //
+    // JUDGED ONLY WHERE IT CAN BE: whole periods (a partial month is warned about
+    // above), and only for people the quota applies to and whose cohort windows put
+    // the work within reach in that period.
+    if (quotaFloors.length > 0) {
+        const measured = measureQuotaCounts(roster, quotas, new Map(tasks.map((task) => [task.name, task])));
+
+        for (let i = 0; i < quotas.length; i += 1) {
+            const quota = quotas[i];
+            if (quota.min === null) continue;
+
+            for (const person of quotaSubjectsOf[i]) {
+                const shortfalls = [];
+                for (const bucket of quotaBuckets[i]) {
+                    if (!bucket.whole) continue;
+                    if (!quotaReachableIn(quota, tasks, bucket, occurrencesByTask, person)) continue;
+                    const held = quotaHeld(measured, i, bucket.key, person.name);
+                    if (held >= quota.min) continue;
+                    shortfalls.push(`${quotaPeriodLabel(quota, bucket.key)} (${held} of ${quota.min}, ${quota.min - held} short)`);
+                }
+                if (shortfalls.length === 0) continue;
+
+                warnings.push(
+                    `Quota floor not met: ${person.name} is short of ${quotaSource(quota)} — at least ${quota.min} ${quotaClassLabel(quota)} ${quota.min === 1 ? 'duty' : 'duties'} ${quotaPeriodPhrase(quota)} — in ${shortfalls.join(', ')}. A floor cannot be met by inventing capacity: the engine preferred them for every occurrence it could and this is what was left.`,
+                );
             }
         }
     }
@@ -3926,11 +6449,18 @@ export const measureRosterLoad = (roster, staffNames) => {
 //     through `describeShiftRole`, which knows only `lead` and `coLead`. The reason
 //     string beneath it names the slot correctly. → One line of UI, deliberately
 //     not taken here: this change touches the engine only.
-//  4. A SLOT'S BAND IS ONE BAND. `{ band: 'senior' }` cannot be widened to
-//     "senior or principal"; leaving the band off means ANY grade, including an
-//     unrecorded one. So "a second senior, or a principal if no senior is free" is
-//     not expressible — and expressing it as two tasks changes which shift the two
-//     people are on, which is the thing this feature exists to control.
+//  4. A SLOT'S BAND IS ONE BAND — IN THE FIELD, not in the engine. `{ band:
+//     'senior' }` cannot be widened to "senior or principal"; leaving the band off
+//     means ANY grade, including an unrecorded one. So "a second senior, or a
+//     principal if no senior is free" is not expressible from a configuration, and
+//     expressing it as two tasks changes which shift the two people are on, which
+//     is the thing this feature exists to control. WHAT CHANGED IN v1.9.0: the
+//     ELIGIBILITY primitive's region requirement takes a SET of regions (it is the
+//     same requirement `leadBands` produces, and `leadBands` has always taken a
+//     list), so widening the field is `new Set(entry.bands)` in
+//     `compileSlotPositions` plus a validation branch. It is one line and a refusal
+//     string, not a mechanism. Still not taken, because nobody has asked and a
+//     field with no wizard is a field nobody uses.
 //  5. `slots` REFUSES `leadBands` AND `continuity`, and both refusals are JUDGMENT
 //     CALLS rather than facts. `leadBands` gates a configured lead slot that no
 //     longer exists, and `continuity` follows one; the alternatives were to gate
@@ -4006,3 +6536,289 @@ export const measureRosterLoad = (roster, staffNames) => {
 //     task table writes `days`, `leadBands` and a co-lead toggle, so a roster
 //     master cannot configure a trio from the UI, and `DEMO_EXAMPLE_DEPARTMENT`
 //     does not use one. Until that lands, the feature is reachable only from code.
+
+// --- 11. THE PRIMITIVE LAYER'S LIMITS LEDGER ---------------------------------
+//
+// The same ledger, for the refactor above: what a roster master can type today and
+// get a surprising result from, and where a JUDGMENT CALL was made rather than a
+// fact found. Every item is a real behaviour of the code above, measured where it
+// says measured. A judgment call buried in a comment is a decision nobody made.
+//
+//  1. `temporal` IS AN ENGINE FIELD WITH NO WIZARD AND NO SUGAR, AND THAT IS THE
+//     BIGGEST JUDGMENT CALL IN THIS CHANGE. The brief asked that the unified form
+//     be ABLE to express 1st-and-3rd, alternate weeks, explicit dates and a bounded
+//     range "even if no sugar exposes them yet". It is exposed anyway — as the
+//     PRIMITIVE itself, validated by `validateTemporalPattern` — because a
+//     capability that cannot be driven through `generateRosterV2` cannot be
+//     PROVEN, and this repository's rule is that nothing is claimed that is not
+//     measured. The cost: a field a roster master cannot reach from the UI, which
+//     is a shape of dead surface this file otherwise avoids. → FLAGGED FOR THE
+//     ROSTER OWNER: either give `recurrence` an `ordinals` list and the weekday
+//     strip an "every other week" toggle, or hide `temporal` again and accept that
+//     the four combinations are pinned only at the resolver.
+//  2. A CONFIGURATION CARRYING `temporal` DOES NOT SURVIVE THE WIZARD. `rosterWizard.js`
+//     maps its task table to `days`, and `buildDemoRosterV2ConfigFromTables` writes
+//     no `temporal`, so loading such a config into the sandbox tables and
+//     regenerating silently reverts it to Mon–Fri. Nothing warns. Consequence of
+//     item 1 and closed by the same fix.
+//  3. `every` COUNTS THE RUN'S WEEKS, NOT THE CALENDAR'S. `{ every: 2, offset: 0 }`
+//     is "alternate weeks of THIS generation", anchored at `effectiveStart`. Two
+//     six-week runs generated back to back therefore both start on their own
+//     week 0, and a department generating a month at a time can get the same
+//     fortnightly clinic twice in eight days across the seam. This is the same
+//     border-data limit `consecutiveRunBefore` and the weekly hours window already
+//     carry, and it is why the clause is documented as run-relative rather than
+//     ISO-week-relative: an ISO anchor would have made the phase depend on a
+//     calendar nobody typed.
+//  4. A `window` THAT MISSES THE RUN IS WARNED ABOUT IN THE PATTERN'S WORDS AND
+//     NOT THE WINDOW'S. `temporalLabel` renders the CLAUSES, so a task whose window
+//     falls entirely outside the horizon is reported as "runs on every Monday and
+//     Wednesday, and no such date falls between 2026-09-07 and 2026-09-13" — true,
+//     but it does not say that the WINDOW is what excluded them. MEASURED, and the
+//     same measurement caught a double article ("runs on the every Monday"), which
+//     is fixed: each clause now carries its own article and the sentence does not.
+//     → Flagged: the sentence still wants the window in it, which is a further prose
+//     change in `temporalLabel` and no more.
+//  5. A VACUOUS CLAUSE INSIDE A NON-VACUOUS PATTERN IS SILENT. `clauses:
+//     [{ kind: 'weekly', weekdays: [] }, { kind: 'dates', dates: […] }]` is not
+//     vacuous — the dates clause can occur — so the "no days selected" warning does
+//     not fire, and nobody is told the weekly half of the pattern does nothing. The
+//     warning is per PATTERN, not per clause.
+//  6. BOTH RESOLVERS TRUNCATE SILENTLY PAST A YEAR. `temporalOccurrences` walks at
+//     most `MAX_ROSTER_WEEKS * 7` days for a weekly clause and `MAX_ROSTER_WEEKS`
+//     months for a monthly one. Inside this engine that is unreachable — `weeks` is
+//     capped at 52 — but the function is exported, and a caller passing a decade
+//     gets the first year with no error. The bound is the one the monthly walk has
+//     always had; the weekly one is new and matches it.
+//  7. ELIGIBILITY IS AN AND AND NOTHING ELSE. There is no OR, no NOT, and no
+//     `anyOf`. "A senior, or a principal if no senior is free" is still not
+//     expressible — see multi-slot ledger item 4 for why it is now a one-line
+//     change rather than a mechanism, and why it was still not taken.
+//  8. A POSITION'S SENTENCE NAMES ONLY ITS FIRST REGION REQUIREMENT.
+//     `regionsRequiredBy` returns the first one it finds. Nothing builds two today
+//     (a position gets at most one, from `leadBands` or from a slot's `band`), and
+//     the GATE would handle two correctly; the REASON STRING would name one of
+//     them. A second region kind must fix the prose as well as the table.
+//  9. THE GATE ORDER IS WRITTEN OUT IN `SLOT_GATES`, NOT DERIVED FROM
+//     `CAPACITY_LIMITS`. The affinity gate sits BETWEEN the hours limits and the
+//     consecutive-day one — which is where it has always sat, and no amount of
+//     iterating the capacity table in order would produce it — so a new capacity
+//     limit has to be named in TWO places: a row in `CAPACITY_LIMITS` and an id in
+//     `SLOT_GATES`. A limit added to the table alone is silently never asked.
+//     → Flagged: the alternative is an explicit `order` number per row, which trades
+//     a forgettable second edit for a magic-number column. Neither is obviously
+//     right; the current one is at least visible in one screen.
+// 10. THERE IS NO PER-WEEK DUTY CEILING. `maxPerWeek` is a row nobody has written.
+//     The week PERIOD exists (the hours cap uses it) and the meter exists (duties),
+//     so it is a five-line row — but adding it changes rosters, so it is not
+//     smuggled in beside a refactor.
+// 11. TWO AFFINITY POLARITIES ARE DECLARED AND DEAD, AND ONE OF THEM WOULD FAIL
+//     SILENTLY. Nothing produces `require` or `avoid`, nothing reads them, and there
+//     is no validation for them — `resolveAffinities` filters the adjacency map to
+//     `forbid` explicitly, so a `require` pair introduced by a future compiler would
+//     be DROPPED rather than refused. That is exactly the failure mode this engine
+//     exists to prevent, and it is tolerated only because no code path can reach it
+//     today. → FLAGGED: whoever implements `require` must add the reader FIRST; the
+//     guard is currently a test in `rosterEngineV2.primitives.test.js` ("leaves
+//     `require` and `avoid` DECLARED AND UNPRODUCED"), not a line in the engine.
+// 12. QUOTAS ARE DECLARED AND NOT ENFORCED, AND THE FLOOR IS THE HARD HALF. A
+//     `max` is a capacity limit read from the other end and is a row in
+//     `CAPACITY_LIMITS`. A `min` cannot be enforced by refusing anything: it is only
+//     knowable at the end of the run, and honouring one means biasing the CANDIDATE
+//     COMPARATOR towards people short of their minimum while occurrences remain —
+//     which changes who gets every duty and therefore every existing roster.
+//     `resolveQuotas` returns an empty frozen list, and a non-empty one produces a
+//     WARNING that the roster ignored it rather than looking obedient.
+// 13. THE SCALE IS NOT A CONFIGURATION FIELD. `defineGradeScale`,
+//     `validateScaleRegions` and `regionOfRank` are exported and a nursing or
+//     medical scale is declarable IN CODE, but `rules` carries only `bands` — a
+//     region cut for the allied-health scale — and `resolveGradeScale` always
+//     returns `ALLIED_HEALTH_SCALE`. A configuration naming `rules.scale` is
+//     ignored exactly as any unknown key is, and a nursing grade is still refused
+//     in allied health's words. PINNED BY TEST so the absence is a decision.
+//     → FLAGGED: exposing it needs its own refusal wording (which scale? named how?
+//     validated against what?) and a wizard, and it is the obvious next step.
+// 14. THE UNKNOWN RANK MOVED FROM 0 TO `firstRank - 1` (6 for AH7–AH17). Behaviour
+//     is identical for this scale because every recorded rank is at least 7 and
+//     every use is a difference or a `>` — MEASURED across 30 configurations,
+//     including one whose staff are all ungraded and one that mixes graded with
+//     ungraded on a team shift. A scale declared with `firstRank: 0` or below would
+//     put the unknown sentinel level with or under a real rank and could tie; nothing
+//     declares one, and `defineGradeScale` does not refuse it.
+// 15. `defineGradeScale` TRUSTS ITS ARGUMENTS. There is no `validateGradeScale`: a
+//     scale declared with a missing `prose` noun prints `undefined` into a refusal a
+//     roster master reads, and one whose `regions` are not contiguous is only caught
+//     when `validateScaleRegions` is called on them. The four exported faces are
+//     safe because the allied-health instance is declared in this file and pinned by
+//     149 tests; a scale declared elsewhere is on its author.
+// 16. REGIONS ARE STILL CONTIGUOUS AND TOTAL. A profession whose grouping genuinely
+//     is not a partition of a line — "levels 5 and 7 are one band, 6 is another" —
+//     cannot say it. That is a deliberate restriction, not an oversight: the gap it
+//     refuses is the failure mode section 0b exists to prevent.
+// 17. `compileTaskPrimitives` DOES NOT VALIDATE. It is the inspection face on
+//     `normaliseTasks`, so a task `validateRosterV2Config` would refuse compiles to
+//     nonsense rather than throwing. Pass it a validated task.
+// 18. THE TWO SHORTFALL WARNINGS ARE STILL SUGAR-SPECIFIC. "needs N leads per day
+//     from the X band" fires for a `leadBands` task and "needs N people from the X
+//     band per day" for a `slots` task. They are the same primitive fact — a
+//     position whose eligibility more people must satisfy than do — in two
+//     sentences, kept apart because merging them would change the warning text and
+//     the bar for this change was byte-identical output. → Flagged for a later pass.
+// 19. STRUCTURE HAS EXACTLY TWO COMPOSITIONS, AND `anchorRole` IS ALL THAT SEPARATES
+//     THEM. A composition with TWO anchor roles — a lead and a named deputy, each
+//     gated, each anchoring its own attached positions — is a third row nobody has
+//     written. So is "the scarce qualification leads", which multi-slot ledger item 7
+//     asks for: it is now a `compose` function rather than a rewrite of the day loop.
+// 20. `normaliseTasks` RUNS THREE TIMES PER GENERATION, and now allocates a position
+//     list and an eligibility array per task on each of them (the generator, then
+//     `auditHardConstraints`, then `scoreRoster` through it). MEASURED on the
+//     largest run this engine accepts — 52 weeks, 12 staff, 4 tasks — the whole
+//     generation is within noise of the pre-refactor engine. Stated so that nobody
+//     is surprised by three identical compilations in a profiler, and so that the
+//     obvious fix (compile once and pass it down) is recognised as a change to the
+//     PUBLIC signatures of `scoreRoster` and `auditHardConstraints`, which take a
+//     raw config on purpose.
+
+// --- 12. QUOTAS AND COHORT WINDOWS: THE LIMITS LEDGER ------------------------
+//
+// The same ledger, for the two primitives above: what a roster master can type today
+// and get a surprising result from, and where a JUDGMENT CALL was made rather than a
+// fact found. Every item is a real behaviour of the code above, measured where it says
+// measured. A judgment call buried in a comment is a decision nobody made.
+//
+// QUOTAS
+//
+//  1. A FLOOR IS A PREFERENCE, NOT A GUARANTEE, AND THAT IS THE HEADLINE. The engine
+//     prefers whoever is furthest behind and then TELLS YOU who still came up short.
+//     It will not double-book, leave a slot empty to reserve it for somebody, or move a
+//     duty it has already placed to make a later floor reachable — there is no
+//     backtracking and no repair pass. So a floor that is arithmetically possible can
+//     still be missed by a roster this engine builds: give the only two skill holders
+//     a floor of two Saturdays each in a four-Saturday month and put one of them on
+//     leave for three of them, and the arithmetic says 4 ≤ 4 while the roster ends
+//     1 / 3. MEASURED — it is the test "never buys somebody a slot a HARD constraint
+//     refuses them". → FLAGGED: closing it means a repair pass over the finished
+//     roster (the seam is open: `scoreRoster` and `auditHardConstraints` are pure), and
+//     that is a separate, measurable piece of work.
+//  2. THE FLOOR DEFICIT IS A MAXIMUM ACROSS OVERLAPPING QUOTAS, NOT A SUM. Somebody two
+//     behind on a task quota and one behind on a category quota that counts the same
+//     task is treated as two behind, because the two quotas would be satisfied by the
+//     same duties and adding them would count that work twice. A department that
+//     genuinely wants "two Saturdays AND two Sundays" says it with two quotas over two
+//     classes that do not overlap, and then the maximum is the right number anyway.
+//     → Flagged as a judgment call, WITH THE REASON NO TEST PINS IT. For two floors over
+//     the SAME class the two rules are provably order-equivalent: a person's held count
+//     is the same for both quotas, so the deficits are `m1 - h` and `m2 - h`, and for two
+//     people with `h_a < h_b` the maximum differs by `h_b - h_a` and the sum by
+//     `2(h_b - h_a)` — always the same sign, so no comparison can change. They can only
+//     diverge for OVERLAPPING BUT DIFFERENT classes (a task quota and a category quota
+//     that counts that task plus another), and no configuration in the interviews has
+//     that shape. The mutation table records max→sum as an UNCAUGHT mutation rather than
+//     pretending otherwise.
+//  3. THE QUOTA POPULATION IS NARROWED, AND THE NARROWING IS A DECISION.
+//     `scope: 'person'` reads as "everybody", and it is not: `quotaSubjects` counts only
+//     people who could fill some position of the class on standing eligibility (skill,
+//     band, whether any window names the task) plus — when the hours model is on — whose
+//     day can hold one occurrence. Without that, a floor on a skill-gated task would
+//     refuse in every mixed team, and worse, the impossible-floor arithmetic would
+//     produce FALSE REFUSALS by multiplying `min` by people who could never take a
+//     duty. The narrowing is announced in a warning naming the excluded people, because
+//     a silently smaller population is a silently weaker constraint.
+//  4. AND THE LINE IT DRAWS IS "PERMANENT", WHICH IS ARGUABLE AT THE EDGE. Leave, a
+//     full day, a consecutive-day run and a forbidden pairing are things that happen to
+//     somebody who could otherwise do the work, so the floor still applies and is
+//     reported unmet. Somebody on leave for every single occurrence of the class in a
+//     period is therefore reported short every period, with no hint that leave is why.
+//     → FLAGGED: the shortfall sentence could carry the binding reason (the engine knows
+//     it per date, in the tally) and does not. It is the clearest next improvement here.
+//  5. A PARTIAL PERIOD IS NEVER JUDGED AND NEVER REFUSED. A four-week run from a Monday
+//     almost never holds a whole calendar month, so `quotaPeriodBuckets` marks partial
+//     buckets and both the refusal and the shortfall report skip them; one warning per
+//     partial bucket says so. The cost: a department generating a month at a time on
+//     Monday boundaries gets NO monthly floor judged at all, only warnings — the
+//     interview's rule is a calendar-month rule and the engine's runs are week-aligned,
+//     and nothing can make those agree. February 2027 is the rare month that is exactly
+//     four weeks from a Monday, which is why it is the test fixture.
+//  6. QUOTAS DO NOT CROSS RUNS. The same border-data limit `consecutiveRunBefore`, the
+//     weekly hours window and `every`-week cadence already carry: two Saturdays worked
+//     in a previous generation are invisible, so a month split over two runs is two
+//     partial months and neither is judged.
+//  7. A CEILING IS COUNTED IN DUTIES, AND SO IS A FLOOR. `min: 2` is two OCCURRENCES,
+//     never two hours and never two whole days. A trio shift counts as one duty for each
+//     of its three assignees, which is right for "two Saturdays a month" and would be
+//     wrong for "16 weekend hours a month" — nobody asked for the second.
+//  8. THE ORDER OF THE CEILING GATE DECIDES WHICH QUOTA A REASON NAMES. Where two
+//     ceilings would both refuse somebody, the reason names the FIRST in resolution
+//     order (task quotas before category quotas, each in declaration order). The other
+//     is equally true and unmentioned.
+//  9. A TOP-LEVEL `config.quotas` KEY IS STILL SILENTLY IGNORED. The surfaces are
+//     `task.quota` and `rules.quotas`; a `quotas` array at the top level is an unknown
+//     key and is dropped exactly as `rules.scale` is (primitive-layer ledger item 13).
+//     It is the most likely place a roster master will try first. → FLAGGED, and
+//     deliberately not fixed here: `rosterEngineV2.primitives.test.js` pins that such a
+//     configuration is neither refused nor warned about, and moving that pin is a
+//     decision for the roster owner rather than a side effect of this change. The fix is
+//     either to accept it as a third sugar or to refuse unknown top-level keys, and the
+//     second is a much larger conversation about every key in the config.
+// 10. NO REGION QUOTA. `scope: 'region'` — "every junior does two Saturdays a month" —
+//     is REFUSED with a sentence saying it is unimplemented. That is the honest state,
+//     but it is also the constraint one of the interviews arguably meant, and expressing
+//     it per person is not the same thing.
+// 11. `score.breakdown` GAINED NO QUOTA COMPONENT. An unmet floor is a warning and not a
+//     soft-penalty term, so `softPenalty` cannot tell a configuration that met its floors
+//     from one that missed them. Adding a term means a third weights overlay beside
+//     `SOFT_PENALTY_WEIGHTS` and `HOURS_SOFT_PENALTY_WEIGHTS` (both pinned), and a weight
+//     nobody has calibrated. → Flagged for a later pass.
+//
+// COHORT WINDOWS
+//
+// 12. THE UNION READING IS A CHOICE, AND THE OTHER READING IS REASONABLE. A window that
+//     names tasks admits ONLY those tasks, so a student whose single window names the
+//     supervised clinic is eligible for the supervised clinic and for nothing else, ever.
+//     The alternative — each window restricts only the tasks it names, and unnamed tasks
+//     stay unbounded — is what somebody adding a one-line "she can only do X in March"
+//     window to an existing person will expect, and they will get a person who does
+//     nothing else all year. The refusal for a window with no bound at all
+//     ("cancels every other window") exists because of exactly this trap, and the
+//     validator refuses a task no window reaches; a window that quietly narrows a person
+//     is still possible and is only visible in `unfilled`.
+// 13. THE SENTENCE READS A LABEL AS A NOUN PHRASE. `label: 'team B block'` gives
+//     "Cara is outside their team B block, which runs …"; `label: 'starts mid-run'` gives
+//     "outside their starts mid-run", which is nonsense the engine cannot detect. A label
+//     is the department's own noun and is never matched on, so this is a documentation
+//     problem rather than a correctness one — but it is in a sentence a clinician reads.
+// 14. THE UNFILLED REASON NAMES THE WINDOWS, NOT THE TEAM. The field interview's
+//     sentence was "team B's block runs 2026-09-01 to 2026-12-31 and no eligible member
+//     is free". The engine has no concept of a team — windows are per person — so it
+//     produces one clause per blocked PERSON, naming their label and their dates, and
+//     truncates at three with a count. A department with an eight-person block gets three
+//     names and "and 5 others outside their cohort window", where the interview wanted one
+//     sentence about the block. → FLAGGED: expressing that needs a first-class cohort
+//     object (a named group with a window and members), which is a bigger feature and
+//     changes the config shape.
+// 15. WINDOWS ARE COMPARED AS STRINGS, DELIBERATELY. `'2026-09-14' <= '2026-12-31'` is
+//     correct for every well-formed `YYYY-MM-DD` pair, so `windowCoversDate` constructs no
+//     `Date`, and there is no timezone, no DST and no parse to get wrong. The cost is that
+//     the whole mechanism depends on validation having refused every other date shape,
+//     which it does — including `2027-02-30`, which `isDateKey` catches.
+// 16. THE AUDIT'S SLOT MATCHING DOES NOT ASK ABOUT WINDOWS. `unmatchableAssignees` answers
+//     the DATE-LESS eligibility question, so a `slots` shift holding somebody outside their
+//     block is reported once, by `HARD_RULE_WINDOW`, rather than twice. Somebody whose
+//     windows never name the task is caught by BOTH — the matching (for team tasks) and the
+//     window rule — and that double count is tolerated because it is a defect either way.
+// 17. THE `leadBands` SHORTFALL WARNING IS WINDOW-BLIND. "Task X needs 1 lead per day from
+//     the Principal band, but only 1 person qualifies" counts band and skill holders and
+//     does NOT subtract people whose windows never name the task, so it can under-report a
+//     shortfall. Its `slots` twin DOES ask the date-less window question. Two sentences that
+//     should be one (primitive-layer ledger item 18, one release older and now one
+//     inconsistency deeper).
+// 18. THERE IS NO WINDOW WIZARD, AND NO WINDOW IN THE DEMO TABLES. `staff.windows` joins
+//     `continuity`, `recurrence`, `forbidPairs`, `maxConsecutiveDays`, `temporal` and now
+//     `quota` on the list of engine capability with no UI path
+//     (ROSTER_QC_AUDIT_SURFACES.md §3). Loading a windowed configuration into the sandbox
+//     tables and regenerating silently drops the windows, exactly as it drops `temporal`.
+// 19. `normaliseTasks` NOW RUNS FOUR TIMES for a configuration that declares a quota or a
+//     window — the generator, the validator's cross-check block, `auditHardConstraints`,
+//     and `scoreRoster` through it. Primitive-layer ledger item 20 counted three; this is
+//     the fourth, it is gated on the features being used, and the fix is the same one
+//     (compile once and pass it down, which changes two public signatures).

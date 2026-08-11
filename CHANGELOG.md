@@ -59,6 +59,88 @@ Firestore rule, blocked on decision D6.
 
 ---
 
+## [1.11.0] - 2026-08-12
+
+The engine stops being a museum of special cases. Six professions in, each new team was
+costing a new flag; this release refactors those flags into **orthogonal primitives** they
+are all instances of, adds the two that were genuinely missing, and gives every one of them
+a surface. Four real department arrangements ship with it, and `npm run lint` runs for the
+first time in this repository's history.
+
+### Added
+
+- **A primitive constraint layer.** `days`, `recurrence`, `continuity`, `leadBands`,
+  `requiresSkill`, `slots`, `hours`, `forbidPairs` and the caps are now **sugar** compiled
+  down to six orthogonal primitives — **temporal, eligibility, capacity, affinity,
+  structure, quota** — and nothing past the compiler reads a feature name. Combinations no
+  sugar exposes yet (1st *and* 3rd Wednesday, alternate weeks, explicit date lists) already
+  work through the general path. **Faithfulness is the whole claim, and it was verified
+  adversarially:** an independent audit built its own harness and compared **22,000
+  generated configs** against the previous engine — 0 substantive divergences, with 233
+  distinct `unfilled` reason templates and 22 validation-refusal templates reproduced
+  character for character, in two timezones.
+- **A profession-agnostic scale.** AH7–AH17 with three fixed bands was KKH allied health.
+  A scale is now an ordered list of ranks plus any number of named regions, so nursing
+  bands, MO/Registrar/Consultant, or a two-tier team all work. The AH/three-band exports
+  are retained as one instance of the general thing.
+- **Quotas — the first *floor* in an engine that had only ever had ceilings.** The medical
+  lab scientists' "at least 2 Saturdays a month" is now expressible. Floors invert the
+  logic: a cap is checked when filling a slot, but a floor can only be judged once a period
+  is filled, so a `min` is **preferred during selection, then warned about** — never hard,
+  because capacity cannot be invented. A `max` is hard. An arithmetically impossible floor
+  is refused at configure time **with the arithmetic shown** ("4 × 3 = 12 duties — but only
+  8 exist there").
+- **Cohort windows.** A person can be eligible only within date ranges, optionally only for
+  named tasks — the embryologists' A/B/C four-month block rotation, and equally rotations,
+  secondments, placements and locums.
+- **Every stranded capability now has a UI.** `continuity`, monthly recurrence,
+  `forbidPairs`, the daily/consecutive caps, `maxPerDay`, `category`, quotas and windows
+  were all engine-only. Reachability was proven the way the previous audit demanded — by
+  feeding **mapper-built** configs to the engine and observing the roster change, not by
+  asserting a field is emitted.
+- **Four department arrangements**, selectable from a picker, each demonstrating what that
+  team cares about and each verified by running the engine: **Respiratory & Rehab**,
+  **Psychology** (3rd-Wednesday principal-only clinic with continuity), **Embryology**
+  (weekend principal+senior+junior trios on four-month blocks), **Medical Laboratory**
+  (42-hour weeks with a 2-Saturdays-a-month floor). The respiratory one is **labelled in
+  the UI as inferred, not interviewed** — that team has not been consulted, and an example
+  offered for correction is worth more than a mock-up presented as their service.
+- **`npm run lint` works, for the first time ever.** No ESLint config had existed, so the
+  `--max-warnings 0` gate had never run. Now 76 files, 0 messages, wired into CI after the
+  test step. Genuine findings were fixed in source, including two dead declarations in
+  `functions/index.js` and the service worker — both verified unused at `HEAD` and
+  re-parsed, since neither file has any test coverage.
+
+### Fixed
+
+- **A raw NUL byte made `rosterWizard.js` invisible to `grep`.** Introduced by this batch
+  and caught by audit. `file` reported "data", and `grep -c export` printed *nothing* while
+  exiting 0 — so `grep -rln "forbidPairs" src/` omitted the very module that parses and
+  validates it. That is the exact mechanism of this project's founding defect, re-armed.
+  **The obvious fix was wrong and is worth recording:** deleting the byte turned
+  `join('\u0000')` into `join('')`, so `['An','nBob']` and `['Ann','Bob']` would collide
+  into one key — and all 1522 tests still passed, because nothing exercised it. The NUL is
+  deliberate; only the *literal byte* was the bug. It is now written as an escape, and a
+  mutation-checked collision test guards the separator.
+
+### Notes — known issues from the audit, listed rather than implied fixed
+
+`ROSTER_QC_AUDIT_PRIMITIVES.md` records nine defects. D1 is fixed above; the rest are open:
+
+- **D2/D3 — a mistyped availability window silently deletes a person from the roster.** A
+  window whose dates fall outside the run makes that person eligible on zero dates, with no
+  error, no warning and no unfilled slot, because colleagues absorb the work. The engine
+  *already computes* `neverRostered` and throws it away — **D9**: `measureRosterLoad` has no
+  UI caller at all. One warning closes all three; it is the next fix.
+- **D4** — "all stranded capability closed" is not quite true; the wizard file itself lists
+  the remainder. **D5** — the slot "needs skill" input is unusable for a typed-in team.
+  **D6** — the ESLint config disables `no-unused-vars` for the whole engine, which is the
+  "passes by disabling things" failure. **D7** — a comment contradicts the validator on
+  `max: 0`. **D8** — the impossible-floor refusal ignores the hours model.
+
+1524 tests (was 1213), green under both timezones, lint exit 0. Live-mode generation is
+still the original V1 engine, byte-identical.
+
 ## [1.10.0] - 2026-08-12
 
 The engine capability from v1.9.0 becomes reachable, the roster starts telling the truth

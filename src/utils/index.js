@@ -1,11 +1,8 @@
-import { 
-  LayoutDashboard, 
-  Archive, 
-  Calendar, 
-  Activity,
-  Users,
-  Settings,
-  ShieldAlert
+import {
+  LayoutDashboard,
+  Archive,
+  Calendar,
+  Activity
 } from 'lucide-react';
 
 // ==========================================

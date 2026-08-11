@@ -59,13 +59,13 @@ const SmartReportView = ({ year, teamData, staffLoads, user, forceAdminView }) =
         }
 
         // Clean Bullets (Strips numbers like "1.", "2)", asterisks, and dashes)
-        const isBullet = cleanLine.startsWith('*') || cleanLine.startsWith('-') || /^\d+[\.\)]/.test(cleanLine);
-        
+        const isBullet = cleanLine.startsWith('*') || cleanLine.startsWith('-') || /^\d+[.)]/.test(cleanLine);
+
         if (isBullet) {
             const pureText = cleanLine
-                .replace(/^[\*\-\s]+/, '')
-                .replace(/^\d+[\.\)]\s*/, '')
-                .replace(/^[\*\-\s]+/, '')
+                .replace(/^[*\-\s]+/, '')
+                .replace(/^\d+[.)]\s*/, '')
+                .replace(/^[*\-\s]+/, '')
                 .trim();
             
             const unboldedText = pureText.replace(/\*\*/g, '');
@@ -217,7 +217,7 @@ const SmartReportView = ({ year, teamData, staffLoads, user, forceAdminView }) =
       }
 
       const isBullet = trimmedLine.startsWith('- ');
-      if (isBullet) trimmedLine = trimmedLine.replace(/^\-\s/, '');
+      if (isBullet) trimmedLine = trimmedLine.replace(/^-\s/, '');
 
       const parts = trimmedLine.split(/(\*\*.*?\*\*)/g);
       const formattedLine = parts.map((part, i) => {
@@ -342,7 +342,7 @@ const SmartReportView = ({ year, teamData, staffLoads, user, forceAdminView }) =
                 )}
                 <div className="bg-black/20 rounded-xl px-4 py-3 border border-white/10 flex-1 hidden sm:block">
                    <p className="text-[11px] font-black italic truncate">
-                      "{isPrivateView ? 'Private: Monitor JG rubrics and scope creep.' : 'Public: Maintain momentum on core deliverables.'}"
+                      &quot;{isPrivateView ? 'Private: Monitor JG rubrics and scope creep.' : 'Public: Maintain momentum on core deliverables.'}&quot;
                    </p>
                 </div>
             </div>

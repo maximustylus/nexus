@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Sparkles, MessageSquare, ThumbsUp, Share2, ShieldAlert, Link as LinkIcon, ExternalLink, Image as ImageIcon, Loader2, AlertTriangle, X, Send, MoreHorizontal, Edit2, Trash2 } from 'lucide-react';
+import { Sparkles, MessageSquare, ThumbsUp, Share2, ShieldAlert, Image as ImageIcon, Loader2, X, Send, MoreHorizontal, Edit2, Trash2 } from 'lucide-react';
 import { useNexus } from '../context/NexusContext';
 import { db, storage } from '../firebase';
 import { collection, query, orderBy, onSnapshot, doc, updateDoc, increment, addDoc, serverTimestamp, deleteDoc } from 'firebase/firestore';
@@ -31,7 +31,10 @@ const DEMO_MOCK_POSTS = [
     { id: 'm3', author: 'Nick Fury', role: 'Director', timestamp: '1 day ago', category: 'BUSY_BEE', raw_text: "S.H.I.E.L.D. is hosting a mandatory advanced tactical espionage seminar next month.", ai_enhancements: { tags: ['MANDATORY', 'TRAINING'] }, likes: 89, comments: 0 }
 ];
 
-const CommentSection = ({ postId, user, isMock, postAuthor }) => {
+// `postAuthor` is still passed by the caller (the post's author is needed for
+// any future author-side comment moderation) but nothing here reads it, so it is
+// bound to `_postAuthor` rather than deleted from the component's shape.
+const CommentSection = ({ postId, user, isMock, postAuthor: _postAuthor }) => {
     const [comments, setComments] = useState([]);
     const [draft, setDraft] = useState('');
     const [isSubmitting, setIsSubmitting] = useState(false);
@@ -94,6 +97,10 @@ const FeedsView = ({ user }) => {
     const [draftPost, setDraftPost] = useState('');
     const [livePosts, setLivePosts] = useState([]);
     const [isPosting, setIsPosting] = useState(false);
+    // DEFECT (left for follow-up, P0.7): `postError` is set to "AURA processing
+    // failed." in handlePostSubmit but never rendered, so a failed post is
+    // silent. Rendering it is a UI change, not a lint fix.
+    // eslint-disable-next-line no-unused-vars -- see the defect note above
     const [postError, setPostError] = useState(null);
     const [likedPosts, setLikedPosts] = useState(new Set());
     const [openComments, setOpenComments] = useState(new Set());
@@ -105,6 +112,10 @@ const FeedsView = ({ user }) => {
     // 🌟 STATE: Controls which post is slated for deletion
     const [postToDelete, setPostToDelete] = useState(null);
 
+    // DEFECT (left for follow-up, P0.7): `linkPreview` is populated from
+    // `post.external_link` when an edit starts and cleared on cancel, but never
+    // rendered — the link-preview card was never built.
+    // eslint-disable-next-line no-unused-vars -- see the defect note above
     const [linkPreview, setLinkPreview] = useState(null);
     const [selectedImage, setSelectedImage] = useState(null);
     const [imagePreviewUrl, setImagePreviewUrl] = useState(null);
@@ -201,7 +212,15 @@ const FeedsView = ({ user }) => {
     const handleLike = async (postId) => {
         if (likedPosts.has(postId)) return;
         setLikedPosts(prev => new Set(prev).add(postId));
-        if (!String(postId).startsWith('m') && !String(postId).startsWith('live')) { try { await updateDoc(doc(db, 'feed_posts', postId), { likes: increment(1) }); } catch (e) {} }
+        if (!String(postId).startsWith('m') && !String(postId).startsWith('live')) {
+            try {
+                await updateDoc(doc(db, 'feed_posts', postId), { likes: increment(1) });
+            } catch (e) {
+                // Deliberately ignored: the like is optimistic and local. A failed
+                // increment leaves the server count behind by one rather than
+                // bouncing the UI back. (Drift is a known, accepted trade-off.)
+            }
+        }
     };
 
     const getColorTheme = (categoryKey) => {

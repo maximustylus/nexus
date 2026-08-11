@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { db } from '../firebase';
 import { collection, getDocs } from 'firebase/firestore';
-import { Calendar, AlertTriangle, Activity, Download, TrendingUp } from 'lucide-react';
+import { AlertTriangle, Activity, Download, TrendingUp } from 'lucide-react';
 import { STAFF_LIST } from '../utils';
 import { MOCK_STAFF_NAMES } from '../data/mockData'; // Import Marvel Names
 import { useNexus } from '../context/NexusContext'; // Import Context
@@ -104,7 +104,7 @@ const AdminWellbeingPanel = () => {
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-                            {activeStaffList.map((name, idx) => {
+                            {activeStaffList.map((name) => {
                                 let weekAvg = null;
                                 let dailyEnergies = [];
 

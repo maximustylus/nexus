@@ -135,7 +135,13 @@ const fetchData = async () => {
     };
       
     fetchData();
-}, [loadYear, attYear, isDemo]); 
+    // `CEP_STAFF` is a fresh array on every render (it is `activeStaffList.filter(...)`
+    // in the component body), so adding it here — as exhaustive-deps asks — would
+    // refetch from Firestore on every render. `isDemo` already covers the only
+    // input that can change its contents. Left for follow-up: useMemo CEP_STAFF,
+    // then list it.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+}, [loadYear, attYear, isDemo]);
 
 // --- HANDLER: SAVE LOADS (Smart Routing) ---
 const saveLoads = async () => {

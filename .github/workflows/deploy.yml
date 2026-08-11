@@ -15,7 +15,10 @@ jobs:
         
       - name: Test Frontend
         run: npm test
-        
+
+      - name: Lint Frontend
+        run: npm run lint
+
       - name: Build Frontend
         run: npm run build
 

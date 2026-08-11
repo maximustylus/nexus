@@ -212,3 +212,400 @@ export const DEMO_EXAMPLE_DEPARTMENT = Object.freeze({
     bands: DEFAULT_GRADE_BANDS,
   }),
 });
+
+// 9. THE FOUR SELECTABLE ARRANGEMENTS (RosterView demo mode → the example picker)
+//
+// APPEND-ONLY SECTION. Everything above this line — including
+// `DEMO_EXAMPLE_DEPARTMENT` — is byte-identical to what it was before this section
+// existed, so every assertion already written against it still means what it meant.
+// `DEMO_EXAMPLE_DEPARTMENT` IS the respiratory arrangement (entry 1 below holds it by
+// reference, not by copy), and `DEMO_ARRANGEMENT_RESPIRATORY` is an alias for it.
+//
+// WHY FOUR. The roster owner presents to the respiratory therapists first, follows up
+// with the psychologists, and wants the embryologists and the medical laboratory
+// scientists trying it. A single fixture demonstrated one team's problem and left the
+// other three reading somebody else's roster. Each arrangement below is chosen so
+// that the ONE capability that team asked about is the thing on screen:
+//
+//   respiratory  grade bands + a skill gate + a part-timer + leave, and the ONE slot
+//                the engine refuses to invent cover for.
+//   psychology   a monthly clinic on the 3rd Wednesday of every month, principals
+//                only, with the SAME principal every time (continuity of care).
+//   embryology   a weekend shift that needs THREE people at once (principal, senior,
+//                junior), and three teams whose eligibility is bounded in time so
+//                team A appears in its four-month block and nowhere else.
+//   labs         a floor rather than a ceiling: at least two Saturdays per person per
+//                calendar month, measured and reported where it is not met.
+//
+// ⚠️ THE RESPIRATORY ARRANGEMENT IS INFERRED, NOT REPORTED. This is the honesty
+// constraint on the whole section and it is the reason `provenance` is a FIELD the UI
+// reads rather than a sentence in a caption somebody can forget to render. The
+// respiratory therapists HAVE NOT BEEN INTERVIEWED. Their arrangement was written by
+// pattern-matching the three teams that were — weekday sessions, a grade-gated duty,
+// a skill-gated one, one part-timer, one absence — and it is therefore an EXAMPLE TO
+// BE CORRECTED and must never be presented as their service. Specifically, and
+// deliberately, it does NOT invent: a night or on-call rota; any named competency,
+// accreditation or certification; a session length; a caseload; or a staff count. The
+// one weekend duty it carries ('Weekend Acute Cover') predates this section and is
+// part of the older fixture; it is an assumption too, and it is on the correction
+// list below rather than being quietly removed from a frozen export other tests read.
+//
+// The other three carry `provenance: 'interviewed'` because their SHAPE came from a
+// field interview. The DATA in them did not: every name is fictional and every task
+// name, grade, date and figure was invented to make the shape reproducible. Nothing
+// here is anybody's real roster, real grade or real leave — see the PDPA note below.
+//
+// 🔒 PDPA — FICTIONAL NAMES, ONE RECOGNISABLE CAST PER ARRANGEMENT. No colleague's
+// name appears anywhere in this file. The names are drawn from published fiction, one
+// source per arrangement (respiratory: Marvel, as the older fixture already was;
+// psychology: Star Trek; embryology: Jane Austen; laboratory: Sherlock Holmes),
+// because a name a reader RECOGNISES as fictional cannot be mistaken for a real
+// person's roster, whereas a plausible invented name can — and eventually will be, by
+// somebody who happens to share it.
+//
+// EVERY FIGURE BELOW IS MEASURED, NOT CLAIMED. Each arrangement's comment states what
+// `generateRosterV2` actually returned for it, and `RosterView.demo.test.jsx` re-runs
+// the engine rather than trusting these numbers, so a fixture that drifts fails a test
+// instead of shipping a caption that is no longer true.
+//
+// ALL FOUR ROUND-TRIP THROUGH THE WIZARD UNCHANGED. Every field used here has a
+// control in `RosterDemoWizardTables.jsx`, so the roster a visitor gets after pressing
+// a picker button is byte-identical to the one the engine gives this fixture directly.
+// That is asserted, not assumed — see `RosterView.demo.test.jsx`. It is also the
+// constraint that shaped these fixtures: no `temporal` patterns (no wizard field), no
+// window `label`s (no wizard field), no `coLeads` above 1, and no `rules.quotas`
+// (the wizard writes `task.quota`).
+
+/** Provenance: written by inference from other teams' patterns. Correct before use. */
+export const DEMO_PROVENANCE_INFERRED = 'inferred';
+/** Provenance: the SHAPE came from a field interview with that profession. */
+export const DEMO_PROVENANCE_INTERVIEWED = 'interviewed';
+
+/**
+ * The respiratory arrangement, by ALIAS. Not a copy: `DEMO_EXAMPLE_DEPARTMENT` is the
+ * frozen object every existing test already reads, and two objects that were meant to
+ * be equal is how a fixture and its assertions drift apart.
+ */
+export const DEMO_ARRANGEMENT_RESPIRATORY = DEMO_EXAMPLE_DEPARTMENT;
+
+// --- PSYCHOLOGY ---------------------------------------------------------------
+//
+// THE ASK: "our specialised clinic runs on the third Wednesday of the month, only a
+// principal can hold it, and it must be the same principal every time — the cohort is
+// seen monthly and being handed to a different psychologist each time is the thing
+// they complain about. Everything else is weekday sessions. We work a 42-hour week."
+//
+// FOUR ENGINE FIELDS, ONE PER CLAUSE, and none of them was reachable from the UI
+// before the picker existed:
+//
+//   `recurrence: { ordinal: 3, weekday: 3 }`  the 3rd Wednesday of every calendar
+//        month. NOT `days: [3]`, which is every Wednesday, and the engine refuses a
+//        task carrying both.
+//   `leadBands: ['principal']`                only a principal may LEAD it. Bands gate
+//        the lead only, so the co-lead slot stays open to every grade — which is how a
+//        junior sits in on a clinic they cannot yet hold.
+//   `continuity: true`                        the same principal on every occurrence.
+//        This is the engine's ONLY preference and it still loses to every hard gate, so
+//        a principal on leave or at capacity loses the slot and the break is COUNTED
+//        in `score.breakdown.continuityBreaks` and NAMED in `warnings`.
+//   `rules.weeklyHours: 42`                   turns the hours model on. The daily cap
+//        is then derived as 42/5 = 8.4 hours, which at the engine's 4-hour default
+//        session is two sessions a day — the same shape `maxConcurrentPerDay: 2` gives,
+//        stated in the currency the department actually negotiates in.
+//
+// WHY 12 WEEKS: the whole point is a clinic that recurs, so the run has to hold more
+// than one occurrence of it. Twelve weeks from Monday 2026-09-07 holds THREE — the 3rd
+// Wednesdays of September, October and November 2026 (2026-09-16, 2026-10-21,
+// 2026-11-18). A 4-week run would hold one, and one occurrence cannot show continuity.
+//
+// WHY NOBODY IS PART-TIME HERE: `weeklyHours` and `fte` MULTIPLY in this engine, so a
+// 0.5-FTE psychologist on a stated 42-hour week gets 21 hours — correct, and very
+// probably not what a roster master typing "42" expects. The part-timer stays in the
+// respiratory arrangement, where no hours policy is stated and FTE is unambiguous.
+//
+// MEASURED (generateRosterV2, 2026-09-07, 12 weeks): ok = true, hardViolations = 0,
+// unfilled = 0, warnings = 0, 60 days, 159 shifts, continuityBreaks = 0, and
+// Jean-Luc Picard leads all three occurrences of the clinic.
+export const DEMO_ARRANGEMENT_PSYCHOLOGY = Object.freeze({
+  label: 'Allied Health — Psychology',
+  startDate: '2026-09-07', // Monday
+  weeks: 12,
+  staff: Object.freeze([
+    { name: 'Jean-Luc Picard', fte: 1.0, grade: 'AH17', skills: [], unavailable: [] },
+    { name: 'Beverly Crusher', fte: 1.0, grade: 'AH16', skills: [], unavailable: [] },
+    { name: 'Kathryn Janeway', fte: 1.0, grade: 'AH15', skills: [], unavailable: [] },
+    { name: 'Deanna Troi', fte: 1.0, grade: 'AH14', skills: [], unavailable: [] },
+    { name: 'Benjamin Sisko', fte: 1.0, grade: 'AH13', skills: [], unavailable: [] },
+    { name: 'Geordi La Forge', fte: 1.0, grade: 'AH11', skills: [], unavailable: [] },
+    { name: 'Nyota Uhura', fte: 1.0, grade: 'AH10', skills: [], unavailable: [] },
+    { name: 'Christine Chapel', fte: 1.0, grade: 'AH8', skills: [], unavailable: [] },
+  ]),
+  tasks: Object.freeze([
+    {
+      name: 'Complex Trauma Clinic',
+      recurrence: { ordinal: 3, weekday: 3 },
+      leads: 1,
+      coLeads: 1,
+      category: 'Clinical',
+      leadBands: ['principal'],
+      continuity: true,
+    },
+    { name: 'Adult Outpatient Assessment', days: [1, 2, 3, 4, 5], leads: 1, coLeads: 1, category: 'Clinical' },
+    { name: 'Inpatient Liaison', days: [1, 2, 3, 4, 5], leads: 1, coLeads: 1, category: 'Clinical' },
+    { name: 'Group Therapy Programme', days: [2, 4], leads: 1, coLeads: 1, category: 'Therapy' },
+    { name: 'Case Formulation Review', days: [5], leads: 1, coLeads: 1, category: 'Education' },
+  ]),
+  rules: Object.freeze({
+    weeklyHours: 42,
+    maxConcurrentPerDay: 2,
+    maxConsecutiveDays: 6,
+    bands: DEFAULT_GRADE_BANDS,
+  }),
+});
+
+// --- EMBRYOLOGY ---------------------------------------------------------------
+//
+// THE ASK: "the weekend service needs three of us at once — a principal, a senior and
+// a junior, together, on the same shift. And we run three teams: each team takes the
+// weekends for four months, then hands over. Team A should not turn up on a team B
+// weekend."
+//
+// TWO ENGINE FIELDS, and this arrangement exists because neither was reachable:
+//
+//   `slots: [{ band: 'principal' }, { band: 'senior' }, { band: 'junior' }]`
+//        ONE ENTRY PER PERSON THE SHIFT NEEDS, each filled independently with its own
+//        band gate. This is not a lead plus two co-leads — the engine DERIVES the lead
+//        as the highest grade present, so the trio still renders as
+//        "Lead: <principal>, Co: <senior>" and the third assignee is in `assignees`.
+//        The engine refuses `slots` beside `leads`/`coLeads`/`leadBands`, so none of
+//        those three appears on this task.
+//   `staff.windows`
+//        eligibility BOUNDED IN TIME. Each person carries TWO windows, and the second
+//        one is the load-bearing part: window semantics are a UNION over (task, date),
+//        so a person with any window at all is eligible ONLY where some window of
+//        theirs admits both. A single `{ from, to, tasks: [weekend] }` window would
+//        therefore make that person eligible for the weekend shift in their block and
+//        FOR NOTHING ELSE, EVER — not even the weekday bench. The second window,
+//        which names the two bench tasks and carries no dates, is what says "and the
+//        weekday work, always".
+//
+// THE THREE BLOCKS ARE 2026-09-01→2026-12-31 (A), 2027-01-01→2027-04-30 (B) and
+// 2027-05-01→2027-08-31 (C). They are stated as whole calendar months rather than
+// snapped to the run, so the fixture reads like the handover the department actually
+// does; the run starts inside block A and that is fine, because a window is a bound on
+// eligibility and not a schedule.
+//
+// WHY 36 WEEKS — the longest run of the four, and it is a requirement rather than
+// decoration. A block is four months, so a run that shows the handover must be longer
+// than one block. Thirty-six weeks from Monday 2026-09-07 ends 2027-05-16: block A
+// entire, block B entire, and the first two weekends of block C. One block would show
+// a rota; two show a HANDOVER, which is the thing being demonstrated.
+//
+// NO HOURS POLICY, deliberately: a weekend trio plus weekday bench work is a duty-count
+// question, and stating `weeklyHours` here would add an hours cap to the one arrangement
+// whose interesting constraint is eligibility. The labs and psychology arrangements
+// carry the 42-hour week.
+//
+// MEASURED (generateRosterV2, 2026-09-07, 36 weeks): ok = true, hardViolations = 0,
+// unfilled = 0, warnings = 0, 252 days, 360 shifts. 72 weekend shifts, EVERY ONE with
+// exactly 3 assignees. Team A's weekend dates run 2026-09-12 → 2026-12-27 (32 of
+// them), team B's 2027-01-02 → 2027-04-25 (34), team C's 2027-05-01 → 2027-05-16 (6),
+// and ZERO weekend shifts mix people from two teams.
+export const DEMO_ARRANGEMENT_EMBRYOLOGY = Object.freeze({
+  label: 'Allied Health — Embryology',
+  startDate: '2026-09-07', // Monday
+  weeks: 36,
+  staff: Object.freeze([
+    // TEAM A — weekends September to December 2026.
+    { name: 'Elizabeth Bennet', fte: 1.0, grade: 'AH16', skills: [], unavailable: [], windows: [{ from: '2026-09-01', to: '2026-12-31', tasks: ['Weekend Laboratory Cover'] }, { tasks: ['Embryo Culture Bench', 'Cryostorage & Witnessing'] }] },
+    { name: 'Fitzwilliam Darcy', fte: 1.0, grade: 'AH14', skills: [], unavailable: [], windows: [{ from: '2026-09-01', to: '2026-12-31', tasks: ['Weekend Laboratory Cover'] }, { tasks: ['Embryo Culture Bench', 'Cryostorage & Witnessing'] }] },
+    { name: 'Catherine Morland', fte: 1.0, grade: 'AH10', skills: [], unavailable: [], windows: [{ from: '2026-09-01', to: '2026-12-31', tasks: ['Weekend Laboratory Cover'] }, { tasks: ['Embryo Culture Bench', 'Cryostorage & Witnessing'] }] },
+    // TEAM B — weekends January to April 2027.
+    { name: 'Emma Woodhouse', fte: 1.0, grade: 'AH15', skills: [], unavailable: [], windows: [{ from: '2027-01-01', to: '2027-04-30', tasks: ['Weekend Laboratory Cover'] }, { tasks: ['Embryo Culture Bench', 'Cryostorage & Witnessing'] }] },
+    { name: 'George Knightley', fte: 1.0, grade: 'AH13', skills: [], unavailable: [], windows: [{ from: '2027-01-01', to: '2027-04-30', tasks: ['Weekend Laboratory Cover'] }, { tasks: ['Embryo Culture Bench', 'Cryostorage & Witnessing'] }] },
+    { name: 'Marianne Dashwood', fte: 1.0, grade: 'AH9', skills: [], unavailable: [], windows: [{ from: '2027-01-01', to: '2027-04-30', tasks: ['Weekend Laboratory Cover'] }, { tasks: ['Embryo Culture Bench', 'Cryostorage & Witnessing'] }] },
+    // TEAM C — weekends May to August 2027.
+    { name: 'Anne Elliot', fte: 1.0, grade: 'AH17', skills: [], unavailable: [], windows: [{ from: '2027-05-01', to: '2027-08-31', tasks: ['Weekend Laboratory Cover'] }, { tasks: ['Embryo Culture Bench', 'Cryostorage & Witnessing'] }] },
+    { name: 'Frederick Wentworth', fte: 1.0, grade: 'AH14', skills: [], unavailable: [], windows: [{ from: '2027-05-01', to: '2027-08-31', tasks: ['Weekend Laboratory Cover'] }, { tasks: ['Embryo Culture Bench', 'Cryostorage & Witnessing'] }] },
+    { name: 'Elinor Dashwood', fte: 1.0, grade: 'AH8', skills: [], unavailable: [], windows: [{ from: '2027-05-01', to: '2027-08-31', tasks: ['Weekend Laboratory Cover'] }, { tasks: ['Embryo Culture Bench', 'Cryostorage & Witnessing'] }] },
+  ]),
+  tasks: Object.freeze([
+    // 0 = Sunday, 6 = Saturday, matching `Date.prototype.getDay`.
+    { name: 'Weekend Laboratory Cover', days: [0, 6], slots: [{ band: 'principal' }, { band: 'senior' }, { band: 'junior' }], category: 'Weekend' },
+    { name: 'Embryo Culture Bench', days: [1, 2, 3, 4, 5], leads: 1, coLeads: 1, category: 'Laboratory' },
+    { name: 'Cryostorage & Witnessing', days: [1, 3, 5], leads: 1, coLeads: 1, category: 'Laboratory' },
+  ]),
+  rules: Object.freeze({
+    maxConcurrentPerDay: 2,
+    maxConsecutiveDays: 6,
+    bands: DEFAULT_GRADE_BANDS,
+  }),
+});
+
+// --- MEDICAL LABORATORY -------------------------------------------------------
+//
+// THE ASK: "42-hour weeks, and each of us has to do at least two Saturdays a month.
+// The rest is weekday bench sessions."
+//
+// "AT LEAST" IS THE WHOLE POINT — every other constraint in this engine is a CEILING
+// or a standing fact, and this is the one FLOOR. `quota: { per: 'month', min: 2 }` on
+// the Saturday task. A floor cannot be enforced the way a ceiling can: a ceiling is
+// answerable the moment a slot is offered, a floor is only knowable once the month is
+// FULL, and refusing somebody a Saturday to protect a colleague's minimum would leave
+// the Saturday EMPTY. So the engine PREFERS whoever is furthest behind, ahead of
+// FTE-weighted fairness, and then MEASURES the finished roster and names every
+// shortfall by person and month. That is why the number to check here is not "did it
+// promise" but "what did every person's Saturday count come to".
+//
+// WHY ONE SATURDAY TASK, and not two:
+// A QUOTA COUNTS DUTIES, NOT DATES — the engine says so in its own header. With two
+// Saturday tasks a person could take both on ONE Saturday and satisfy `min: 2` without
+// working a second Saturday at all, and "at least two Saturdays" would quietly become
+// "at least two Saturday duties". With ONE task the engine's own rules make that
+// impossible twice over ("already on this task today", and a `slots` list never puts
+// the same person in two of its entries), so on this fixture a duty count IS a Saturday
+// count — and the test counts DISTINCT DATES anyway rather than trusting that.
+//
+// WHY EIGHT PEOPLE AND FOUR SLOTS, and this is the paragraph that was WRONG for one
+// revision. The first version of this fixture had six people and four slots: 6 × 2 = 12
+// demanded against a 4-Saturday month × 4 slots = 16 available, comfortable slack. Then
+// the mutation check asked the only question that matters about a floor — REMOVE THE
+// QUOTA AND SEE WHAT CHANGES — and the answer was NOTHING. With that much slack,
+// ordinary FTE-weighted fairness already gave all six of them two or three Saturdays a
+// month, so the arrangement was demonstrating a feature that was not doing any work, and
+// its test would have passed against a fixture with no floor in it at all. That is a
+// decoy test, and it was found by breaking the thing rather than by reading it.
+//
+// EIGHT people and FOUR slots is 8 × 2 = 16 demanded against 16 available: the floor is
+// EXACTLY satisfiable and nothing else satisfies it. Measured both ways —
+//   floor ON:  every one of the eight gets exactly 2 distinct Saturdays in both whole
+//              months. 16 of 16.
+//   floor OFF: Irene Adler gets ZERO Saturdays in February and John Watson one in
+//              March, while Tobias Gregson takes three of each.
+// So the two numbers on screen differ by the presence of the policy, which is what a
+// demonstration of a policy has to be able to show.
+//
+// THE HONEST COST OF THAT TIGHTNESS, stated rather than discovered later: with demand
+// equal to supply this fixture has NO ABSENCE HEADROOM. Give anybody a single day of
+// leave on a Saturday and the month can no longer be met, and the run will report a
+// shortfall by name — correctly, and that is a demonstration worth giving, but it is not
+// the one this arrangement should OPEN on. Three slots instead of four is not the
+// alternative: 12 available against 16 demanded is arithmetically impossible, and the
+// engine refuses it at configure time with the arithmetic shown.
+//
+// WHY THE RUN STARTS ON 2027-02-01: it is a Monday AND the first day of a calendar
+// month, so the quota's first period is a WHOLE month. The engine judges a floor only
+// where the run holds the whole period — a month the run covers four days of is a
+// horizon artefact, not a broken policy — so a run that started mid-month would open
+// on a "not judged there" warning about its own first month.
+//
+// WHY 9 WEEKS: two whole calendar months (February and March 2027) is the shortest run
+// that shows "per month" happening TWICE. The four-day tail into April is deliberately
+// left in rather than trimmed: it produces exactly one warning, saying the run covers
+// only 2027-04-01 to 2027-04-04 of April so the floor is not judged there, and that
+// sentence is the engine being honest about its own horizon in front of the people
+// whose policy it is. Trimming to exactly 8 weeks would hide it; trimming to 4 would
+// cost a month.
+//
+// MEASURED (generateRosterV2, 2027-02-01, 9 weeks): ok = true, hardViolations = 0, an
+// independent `auditHardConstraints` read-back of 0, unfilled = 0, 54 days, 171 shifts,
+// 9 Saturday shifts each with exactly 4 assignees, loadImbalance = 0, and ONE warning —
+// the partial-April one above. Distinct Saturdays per person: 2 in February and 2 in
+// March, for all eight.
+export const DEMO_ARRANGEMENT_LABS = Object.freeze({
+  label: 'Allied Health — Medical Laboratory',
+  startDate: '2027-02-01', // Monday, and the 1st of a calendar month
+  weeks: 9,
+  staff: Object.freeze([
+    { name: 'Sherlock Holmes', fte: 1.0, grade: 'AH15', skills: [], unavailable: [] },
+    { name: 'John Watson', fte: 1.0, grade: 'AH14', skills: [], unavailable: [] },
+    { name: 'Mycroft Holmes', fte: 1.0, grade: 'AH13', skills: [], unavailable: [] },
+    { name: 'Irene Adler', fte: 1.0, grade: 'AH12', skills: [], unavailable: [] },
+    { name: 'Tobias Gregson', fte: 1.0, grade: 'AH11', skills: [], unavailable: [] },
+    { name: 'Mary Morstan', fte: 1.0, grade: 'AH10', skills: [], unavailable: [] },
+    { name: 'Martha Hudson', fte: 1.0, grade: 'AH9', skills: [], unavailable: [] },
+    { name: 'Stanley Hopkins', fte: 1.0, grade: 'AH8', skills: [], unavailable: [] },
+  ]),
+  tasks: Object.freeze([
+    // Four slots, none of them band-gated: a Saturday bench is a staffing count, not a
+    // hierarchy, and the engine still derives the lead from the highest grade present.
+    { name: 'Saturday Bench', days: [6], slots: [{}, {}, {}, {}], category: 'Weekend', quota: { per: 'month', min: 2 } },
+    { name: 'Chemistry Bench', days: [1, 2, 3, 4, 5], leads: 1, coLeads: 1, category: 'Laboratory' },
+    { name: 'Haematology Bench', days: [1, 2, 3, 4, 5], leads: 1, coLeads: 1, category: 'Laboratory' },
+    { name: 'Blood Bank & Transfusion', days: [1, 2, 3, 4, 5], leads: 1, coLeads: 1, category: 'Laboratory' },
+    { name: 'Microbiology Bench', days: [1, 3, 5], leads: 1, coLeads: 1, category: 'Laboratory' },
+  ]),
+  rules: Object.freeze({
+    weeklyHours: 42,
+    maxConcurrentPerDay: 2,
+    maxConsecutiveDays: 6,
+    bands: DEFAULT_GRADE_BANDS,
+  }),
+});
+
+/**
+ * THE PICKER'S LIST, in presentation order — respiratory first because that is the
+ * meeting that happens first.
+ *
+ * One entry per arrangement:
+ *
+ *   id            stable key for React and for a test to name one arrangement.
+ *   name          what the button says.
+ *   demonstrates  ONE LINE, and it names the CAPABILITY rather than the fiction:
+ *                 somebody choosing between four buttons is choosing between four
+ *                 things the tool can do.
+ *   provenance    `DEMO_PROVENANCE_INFERRED` or `DEMO_PROVENANCE_INTERVIEWED`. A FIELD
+ *                 so the UI cannot render the arrangement without deciding what to say
+ *                 about where it came from.
+ *   correction    only on an inferred arrangement: the sentence the UI shows, and the
+ *                 list of what specifically needs correcting. `null` otherwise, so
+ *                 "does this need a health warning" is one truthy check.
+ *   config        `rosterEngineV2`'s input contract verbatim — handed straight to the
+ *                 wizard's tables, and from there to `generateRosterV2`.
+ */
+export const DEMO_ARRANGEMENTS = Object.freeze([
+  Object.freeze({
+    id: 'respiratory',
+    name: 'Respiratory & Rehab',
+    demonstrates: 'Duties only certain grades may lead, a skill-gated paediatric CPET, a part-timer, one person on leave — and the one duty it will not pretend to have staffed.',
+    provenance: DEMO_PROVENANCE_INFERRED,
+    correction: Object.freeze({
+      headline: 'Not your service — an example to correct.',
+      body: 'Nobody from Respiratory & Rehab has been interviewed yet. This arrangement was inferred from the patterns the other three teams described, so treat every line of it as a question. Please correct it.',
+      // Named individually so a correction session has a checklist rather than a
+      // feeling. Each of these is an ASSUMPTION this fixture makes.
+      items: Object.freeze([
+        'the eight duties, their names and which days they run',
+        'the weekend cover duty — an assumption, and the only out-of-hours work assumed anywhere here',
+        'which duties a junior may lead and which need a senior or principal',
+        'the three skills (CPET, REHAB, SLEEP) and who holds them',
+        'twelve staff, their grades, the one 0.6 FTE contract and the one day of leave',
+      ]),
+    }),
+    config: DEMO_ARRANGEMENT_RESPIRATORY,
+  }),
+  Object.freeze({
+    id: 'psychology',
+    name: 'Psychology',
+    demonstrates: 'A clinic on the 3rd Wednesday of every month, principals only, held by the same principal every time — and a 42-hour week.',
+    provenance: DEMO_PROVENANCE_INTERVIEWED,
+    correction: null,
+    config: DEMO_ARRANGEMENT_PSYCHOLOGY,
+  }),
+  Object.freeze({
+    id: 'embryology',
+    name: 'Embryology',
+    demonstrates: 'A weekend shift needing a principal, a senior and a junior at once, with three teams taking four-month blocks so each appears only in its own.',
+    provenance: DEMO_PROVENANCE_INTERVIEWED,
+    correction: null,
+    config: DEMO_ARRANGEMENT_EMBRYOLOGY,
+  }),
+  Object.freeze({
+    id: 'labs',
+    name: 'Medical Laboratory',
+    demonstrates: 'At least two Saturdays per person per calendar month — a floor rather than a limit, measured and reported wherever it is not met.',
+    provenance: DEMO_PROVENANCE_INTERVIEWED,
+    correction: null,
+    config: DEMO_ARRANGEMENT_LABS,
+  }),
+]);

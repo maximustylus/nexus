@@ -1,13 +1,10 @@
 import React from 'react';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend } from 'recharts';
 
-const STATUS_CONFIG = {
-    1: { label: 'Stuck', color: '#E2445C' },
-    2: { label: 'Planning', color: '#A25DDC' },
-    3: { label: 'Working', color: '#FDAB3D' },
-    4: { label: 'Review', color: '#0073EA' },
-    5: { label: 'Done', color: '#00C875' }
-};
+// NOTE: this file used to carry a copy of `STATUS_CONFIG` (status label/colour
+// map). It was never read here — the chart hardcodes its own labels in
+// `chartData` and its fills on the two `<Bar>`s — so the dead copy was removed.
+// The live copy that IS read lives in TaskProjectBarChart.jsx.
 
 const StatusBarChart = ({ data }) => {
     // 1. Initialize counts for Tasks vs Projects

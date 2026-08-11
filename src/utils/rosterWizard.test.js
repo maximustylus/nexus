@@ -32,6 +32,29 @@
  *      — the engine refuses all three combinations, measured below — and each
  *      slot's band and skill survive the mapping.
  *
+ * Sections 10 to 14 add the NINE capabilities `ROSTER_QC_AUDIT_SURFACES.md` §3
+ * enumerated as engine-only — continuity, monthly recurrence, quotas, forbidden
+ * pairs, cohort windows, the two department caps, a person's own cap, and category —
+ * and they are held to a harder standard than the eight above, because the audit
+ * said so in as many words: "A test asserting the mapper emits a field is not proof
+ * the feature works end to end."
+ *
+ * So every one of them is proved TWICE:
+ *
+ *   9.  THE CELL. Each parser accepts what the engine accepts, refuses what it
+ *       refuses, and returns `null` — never a default — for a blank box. This is the
+ *       part that keeps a typo from becoming somebody's ceiling.
+ *  10.  THE ROSTER. A config built THROUGH `buildDemoRosterV2ConfigFromTables` (never
+ *       hand-written) is fed to `generateRosterV2` twice, with the control off and
+ *       on, and the two rosters are compared. If the field arrives and changes
+ *       nothing, the test fails.
+ *
+ * And the blank-means-blank property gets its own section, because two of these
+ * fields switch a whole engine model on by being MENTIONED: a `windows` key bounds
+ * everybody's eligibility in time, and a `quota` compiles a floor or a ceiling. A
+ * helpfully-emitted empty list would change the roster of every department that has
+ * never heard of rotations.
+ *
  * No DOM, no mocks, no Firestore: the module under test is pure and imports only
  * the engine's read-only exports.
  * ==============================================================================
@@ -41,11 +64,33 @@ import { describe, it, expect } from 'vitest';
 import {
     ANY_BAND,
     BAND_NAMES,
+    EMPTY_RULES_INPUTS,
     HOURS_IN_A_DAY,
     HOURS_IN_A_WEEK,
+    QUOTA_CEILING_UNFILLED_MARKER,
+    QUOTA_FLOOR_WARNING_PREFIX,
+    QUOTA_PERIOD_OPTIONS,
+    RECURRENCE_LAST,
+    RECURRENCE_ORDINAL_OPTIONS,
     SLOTS_MIN,
     SLOTS_MAX,
+    TASK_CALENDAR_MODES,
+    TASK_CALENDAR_MONTHLY,
+    TASK_CALENDAR_WEEKLY,
     WEEKDAY_STRIP,
+    WINDOW_UNFILLED_MARKER,
+    createStaffWindow,
+    describeTaskRecurrence,
+    parseConcurrentPerDayCell,
+    parseConsecutiveDaysCell,
+    parseForbidPairs,
+    parseMaxPerDayCell,
+    parseStaffWindows,
+    parseTaskQuota,
+    parseTaskRecurrence,
+    partitionDemoWarnings,
+    summariseUnfilledCauses,
+    toRecurrenceOrdinal,
     bandsToInputs,
     countWorkingDays,
     inputsToBands,
@@ -71,6 +116,7 @@ import {
     DEFAULT_TASK_HOURS,
     DEFAULT_WEEKLY_HOURS,
     GRADE_SCALE,
+    QUOTA_PERIODS,
     ROSTER_V2_DEFAULTS,
     defaultMaxHoursPerDay,
     generateRosterV2,
@@ -1062,5 +1108,903 @@ describe('describeFteAsDays', () => {
         // …and an unreadable box says nothing: the row's error line speaks instead.
         expect(parseFteCell('two days').value).toBeNull();
         expect(describeFteAsDays(parseFteCell('two days').value, 5)).toBe('');
+    });
+});
+
+// ─── 10. THE ORDINAL LIST, PINNED BY MEASUREMENT RATHER THAN BY IMPORT ────────
+//
+// `RECURRENCE_ORDINALS` is module-private in `rosterEngineV2.js` and the engine is
+// not editable this phase, so `RECURRENCE_ORDINAL_OPTIONS` is a SECOND DEFINITION of
+// which ordinals exist. A second definition that nothing checks is how a wizard
+// starts offering a value the engine refuses (or hiding one it would accept), so this
+// section asks the ENGINE'S OWN VALIDATOR about every option and about four values
+// that must not be options.
+//
+// This is the only honest substitute for an import, and it fails loudly if the
+// engine's list ever moves.
+
+describe('the monthly ordinals the wizard offers', () => {
+    const probe = (ordinal) => validateRosterV2Config({
+        startDate: '2026-09-07',
+        weeks: 4,
+        staff: [{ name: 'Ada' }],
+        tasks: [{ name: 'Clinic', recurrence: { ordinal, weekday: 3 } }],
+    });
+
+    it('offers exactly the ordinals the ENGINE accepts', () => {
+        for (const option of RECURRENCE_ORDINAL_OPTIONS) {
+            const ordinal = toRecurrenceOrdinal(option.value);
+            expect(ordinal).not.toBeNull();
+            const check = probe(ordinal);
+            expect(check.valid, `${option.label} (${JSON.stringify(ordinal)}) should be accepted`).toBe(true);
+        }
+    });
+
+    it('offers none of the ordinals the engine REFUSES', () => {
+        // 5 is the important one: most months hold four of a weekday, so a
+        // "5th Wednesday" clinic would silently vanish in most months. `'last'` is
+        // the question departments actually ask, and it IS offered.
+        for (const bad of [5, 0, -1, 'first']) {
+            expect(probe(bad).valid, `${JSON.stringify(bad)} should be refused`).toBe(false);
+            expect(RECURRENCE_ORDINAL_OPTIONS.some((option) => option.value === String(bad))).toBe(false);
+        }
+    });
+
+    it('reads a select value back as the engine\'s own ordinal type', () => {
+        // `'3'` from the DOM becomes the number 3; `'last'` stays a string. Getting
+        // this wrong would send `'3'` to a validator that compares with `includes`.
+        expect(toRecurrenceOrdinal('3')).toBe(3);
+        expect(toRecurrenceOrdinal(' 4 ')).toBe(4);
+        expect(toRecurrenceOrdinal(RECURRENCE_LAST)).toBe(RECURRENCE_LAST);
+        expect(toRecurrenceOrdinal('')).toBeNull();
+        expect(toRecurrenceOrdinal('5')).toBeNull();
+        expect(toRecurrenceOrdinal(undefined)).toBeNull();
+    });
+
+    it('names the two calendar modes, and a fresh row is in one of them', () => {
+        // The two modes are mutually exclusive in the engine (`days` beside
+        // `recurrence` is a refusal), so "which mode is this row in" must always have
+        // exactly one answer — including for a row seeded from a fixture.
+        expect(TASK_CALENDAR_MODES).toEqual([TASK_CALENDAR_WEEKLY, TASK_CALENDAR_MONTHLY]);
+        expect(TASK_CALENDAR_MODES).toContain(createTaskRow().calendarMode);
+        expect(createTaskRow().calendarMode).toBe(TASK_CALENDAR_WEEKLY);
+        expect(createTaskRow({ recurrence: { ordinal: 3, weekday: 3 } }).calendarMode).toBe(TASK_CALENDAR_MONTHLY);
+        expect(createTaskRow({ recurrence: { ordinal: 3, weekday: 3 } }).recurrenceOrdinal).toBe('3');
+        expect(createTaskRow({ recurrence: { ordinal: 3, weekday: 3 } }).recurrenceWeekday).toBe('3');
+    });
+
+    it('offers only quota periods the engine names, spelled its way', () => {
+        for (const option of QUOTA_PERIOD_OPTIONS) {
+            expect(Object.values(QUOTA_PERIODS)).toContain(option.value);
+        }
+        // `run` is a real engine period the wizard deliberately does not offer — a
+        // UI range, like SLOTS_MIN/SLOTS_MAX, recorded rather than assumed.
+        expect(QUOTA_PERIOD_OPTIONS.map((option) => option.value)).toEqual(['week', 'month']);
+    });
+});
+
+// ─── 11. THE NINE NEW CELLS ───────────────────────────────────────────────────
+//
+// Same contract as `parseFteCell` throughout: blank is `null`, out-of-range is
+// REFUSED and never clamped, and the reason quotes what could not be read.
+
+describe('the count cells (a person\'s cap, and the two department caps)', () => {
+    it('treats blank as "no figure stated", which is the engine\'s default', () => {
+        for (const parse of [parseMaxPerDayCell, parseConcurrentPerDayCell, parseConsecutiveDaysCell]) {
+            expect(parse('')).toMatchObject({ ok: true, value: null });
+            expect(parse('   ')).toMatchObject({ ok: true, value: null });
+            expect(parse(undefined)).toMatchObject({ ok: true, value: null });
+        }
+    });
+
+    it('accepts a whole number of at least 1, which is exactly the engine\'s rule', () => {
+        expect(parseMaxPerDayCell('1')).toMatchObject({ ok: true, value: 1 });
+        expect(parseMaxPerDayCell(' 3 ')).toMatchObject({ ok: true, value: 3 });
+        // No artificial upper bound: the engine has none, and inventing one here
+        // would refuse a configuration `validateRosterV2Config` would accept.
+        expect(parseConsecutiveDaysCell('365')).toMatchObject({ ok: true, value: 365 });
+    });
+
+    it('refuses 0, a fraction and a word rather than rounding any of them', () => {
+        for (const parse of [parseMaxPerDayCell, parseConcurrentPerDayCell, parseConsecutiveDaysCell]) {
+            expect(parse('0').ok).toBe(false);
+            expect(parse('-2').ok).toBe(false);
+            expect(parse('1.5').ok).toBe(false);
+            expect(parse('two').ok).toBe(false);
+            expect(parse('two').reason).toMatch(/not a number/i);
+        }
+        // …and each says what clearing the box would do instead, which differs.
+        expect(parseMaxPerDayCell('0').reason).toMatch(/department's figure/i);
+        expect(parseConcurrentPerDayCell('0').reason).toContain(String(ROSTER_V2_DEFAULTS.maxConcurrentPerDay));
+        expect(parseConsecutiveDaysCell('0').reason).toContain(String(ROSTER_V2_DEFAULTS.maxConsecutiveDays));
+    });
+});
+
+describe('the monthly recurrence cells', () => {
+    const weekly = () => createTaskRow({ name: 'Clinic' });
+    const monthly = (patch = {}) => ({ ...weekly(), calendarMode: TASK_CALENDAR_MONTHLY, ...patch });
+
+    it('is null for a weekly task, so the mapper emits days exactly as before', () => {
+        expect(parseTaskRecurrence(weekly())).toMatchObject({ ok: true, recurrence: null });
+        expect(parseTaskRecurrence({})).toMatchObject({ ok: true, recurrence: null });
+    });
+
+    it('reads the 3rd Wednesday as the engine\'s own shape', () => {
+        expect(parseTaskRecurrence(monthly({ recurrenceOrdinal: '3', recurrenceWeekday: '3' })))
+            .toMatchObject({ ok: true, recurrence: { ordinal: 3, weekday: 3 } });
+        expect(parseTaskRecurrence(monthly({ recurrenceOrdinal: RECURRENCE_LAST, recurrenceWeekday: '5' })))
+            .toMatchObject({ ok: true, recurrence: { ordinal: RECURRENCE_LAST, weekday: 5 } });
+        // Sunday is 0, and 0 must not be read as "nothing chosen".
+        expect(parseTaskRecurrence(monthly({ recurrenceOrdinal: '1', recurrenceWeekday: '0' })))
+            .toMatchObject({ ok: true, recurrence: { ordinal: 1, weekday: 0 } });
+    });
+
+    it('REFUSES a half-chosen monthly pattern rather than picking a date for you', () => {
+        // The whole point: there is no engine default for "which Wednesday", so
+        // defaulting to the 1st would put a clinic on a date nobody chose.
+        const neither = parseTaskRecurrence(monthly());
+        expect(neither.ok).toBe(false);
+        expect(neither.reason).toMatch(/no week of the month and no weekday/i);
+
+        const noOrdinal = parseTaskRecurrence(monthly({ recurrenceWeekday: '3' }));
+        expect(noOrdinal.ok).toBe(false);
+        expect(noOrdinal.reason).toMatch(/no week of the month/i);
+        expect(noOrdinal.reason).toContain('Wed');
+
+        const noWeekday = parseTaskRecurrence(monthly({ recurrenceOrdinal: '3' }));
+        expect(noWeekday.ok).toBe(false);
+        expect(noWeekday.reason).toMatch(/no weekday/i);
+        expect(noWeekday.reason).toContain('3rd');
+    });
+
+    it('refuses a weekday that is not a weekday, and an ordinal off the list', () => {
+        expect(parseTaskRecurrence(monthly({ recurrenceOrdinal: '3', recurrenceWeekday: '7' })).ok).toBe(false);
+        expect(parseTaskRecurrence(monthly({ recurrenceOrdinal: '5', recurrenceWeekday: '3' })).ok).toBe(false);
+    });
+
+    it('describes a complete pattern in the words the row and the drawer share', () => {
+        expect(describeTaskRecurrence(monthly({ recurrenceOrdinal: '3', recurrenceWeekday: '3' })))
+            .toBe('the 3rd Wed of each month');
+        expect(describeTaskRecurrence(monthly({ recurrenceOrdinal: RECURRENCE_LAST, recurrenceWeekday: '5' })))
+            .toBe('the last Fri of each month');
+        // …and says nothing at all while it is incomplete: the row's error line is
+        // what speaks then, exactly as the FTE gloss does.
+        expect(describeTaskRecurrence(monthly({ recurrenceOrdinal: '3' }))).toBe('');
+        expect(describeTaskRecurrence(weekly())).toBe('');
+    });
+});
+
+describe('the quota cells', () => {
+    const row = (patch = {}) => ({ ...createTaskRow({ name: 'Saturday Bench' }), ...patch });
+
+    it('is null while all three cells are blank — no key, no model switched on', () => {
+        expect(parseTaskQuota(row())).toMatchObject({ ok: true, quota: null });
+        expect(parseTaskQuota({})).toMatchObject({ ok: true, quota: null });
+    });
+
+    it('reads a floor, a ceiling, or both', () => {
+        expect(parseTaskQuota(row({ quotaPer: 'month', quotaMin: '2' })))
+            .toMatchObject({ ok: true, quota: { per: 'month', min: 2 } });
+        expect(parseTaskQuota(row({ quotaPer: 'week', quotaMax: '1' })))
+            .toMatchObject({ ok: true, quota: { per: 'week', max: 1 } });
+        expect(parseTaskQuota(row({ quotaPer: 'month', quotaMin: '2', quotaMax: '4' })))
+            .toMatchObject({ ok: true, quota: { per: 'month', min: 2, max: 4 } });
+        // An absent bound is ABSENT, not 0 — 0 is a real ceiling the engine refuses.
+        expect(Object.keys(parseTaskQuota(row({ quotaPer: 'month', quotaMin: '2' })).quota)).toEqual(['per', 'min']);
+    });
+
+    it('refuses a number with no period, naming what was typed', () => {
+        const bare = parseTaskQuota(row({ quotaMin: '2' }));
+        expect(bare.ok).toBe(false);
+        expect(bare.reason).toContain('at least 2');
+        expect(bare.reason).toMatch(/no period/i);
+        // Silently adopting the engine's own default period (`run`) would put a
+        // floor on a window whose length is however many weeks somebody generated.
+        expect(bare.reason).toMatch(/per week or per calendar month/i);
+    });
+
+    it('refuses a period with no numbers, because it asks for nothing', () => {
+        const empty = parseTaskQuota(row({ quotaPer: 'month' }));
+        expect(empty.ok).toBe(false);
+        expect(empty.reason).toMatch(/neither a minimum nor a maximum/i);
+    });
+
+    it('refuses 0, a fraction, a word, and a floor above a ceiling', () => {
+        expect(parseTaskQuota(row({ quotaPer: 'month', quotaMin: '0' })).reason).toMatch(/met by doing nothing/i);
+        expect(parseTaskQuota(row({ quotaPer: 'month', quotaMax: '0' })).reason).toMatch(/never be staffed/i);
+        expect(parseTaskQuota(row({ quotaPer: 'month', quotaMin: '1.5' })).ok).toBe(false);
+        expect(parseTaskQuota(row({ quotaPer: 'month', quotaMax: 'lots' })).reason).toMatch(/not a number/i);
+        const inverted = parseTaskQuota(row({ quotaPer: 'month', quotaMin: '4', quotaMax: '2' }));
+        expect(inverted.ok).toBe(false);
+        expect(inverted.reason).toMatch(/floor above a ceiling/i);
+    });
+
+    it('refuses a period the wizard cannot display, rather than mapping it', () => {
+        // Only reachable from a fixture. A control holding a value it cannot show is
+        // a cell that silently lies, so it is refused with the offered list named.
+        const fromFixture = parseTaskQuota(row({ quotaPer: 'run', quotaMin: '2' }));
+        expect(fromFixture.ok).toBe(false);
+        expect(fromFixture.reason).toContain('"run"');
+    });
+});
+
+describe('the availability window rows', () => {
+    it('is an empty list while nobody has added one', () => {
+        expect(parseStaffWindows([])).toMatchObject({ ok: true, windows: [], taskNames: [] });
+        expect(parseStaffWindows(undefined)).toMatchObject({ ok: true, windows: [] });
+    });
+
+    it('reads a date range, either end optional', () => {
+        expect(parseStaffWindows([createStaffWindow({ from: '2026-09-01', to: '2026-12-31' })]).windows)
+            .toEqual([{ from: '2026-09-01', to: '2026-12-31' }]);
+        expect(parseStaffWindows([createStaffWindow({ from: '2026-09-01' })]).windows)
+            .toEqual([{ from: '2026-09-01' }]);
+        expect(parseStaffWindows([createStaffWindow({ to: '2026-03-31' })]).windows)
+            .toEqual([{ to: '2026-03-31' }]);
+    });
+
+    it('reads a comma-separated task list, trimmed and de-duplicated', () => {
+        const parsed = parseStaffWindows([
+            createStaffWindow({ from: '2026-09-01', tasks: ' Ward Round , EFT Clinic ,, Ward Round ' }),
+        ]);
+        expect(parsed.windows).toEqual([{ from: '2026-09-01', tasks: ['Ward Round', 'EFT Clinic'] }]);
+        expect(parsed.taskNames).toEqual(['Ward Round', 'EFT Clinic', 'Ward Round']);
+    });
+
+    it('REFUSES an empty window, because in a list it cancels every other one', () => {
+        const empty = parseStaffWindows([
+            createStaffWindow({ from: '2026-09-01', to: '2026-09-30' }),
+            createStaffWindow(),
+        ]);
+        expect(empty.ok).toBe(false);
+        expect(empty.reason).toMatch(/window 2 is empty/i);
+        expect(empty.reason).toMatch(/cancels every other window/i);
+        // Nothing partial survives a refusal: the first window is not kept.
+        expect(empty.windows).toEqual([]);
+    });
+
+    it('refuses an unreadable date and a backwards range, quoting the offender', () => {
+        const bad = parseStaffWindows([createStaffWindow({ from: '1 Sept' })]);
+        expect(bad.ok).toBe(false);
+        expect(bad.reason).toContain('"1 Sept"');
+        // The engine's own calendar check, so 30 February is refused here too.
+        expect(parseStaffWindows([createStaffWindow({ from: '2026-02-30' })]).ok).toBe(false);
+        expect(parseStaffWindows([createStaffWindow({ from: '2026-9-7' })]).ok).toBe(false);
+
+        const backwards = parseStaffWindows([createStaffWindow({ from: '2026-12-31', to: '2026-09-01' })]);
+        expect(backwards.ok).toBe(false);
+        expect(backwards.reason).toMatch(/ends before it starts/i);
+    });
+});
+
+describe('the forbidden-pair list', () => {
+    it('is empty by default and passes a well-formed pair through', () => {
+        expect(parseForbidPairs([])).toMatchObject({ ok: true, pairs: [] });
+        expect(parseForbidPairs(undefined)).toMatchObject({ ok: true, pairs: [] });
+        expect(parseForbidPairs([['Ada', 'Ben']]).pairs).toEqual([['Ada', 'Ben']]);
+    });
+
+    it('refuses a half-picked pair, a self-pair and a duplicate', () => {
+        expect(parseForbidPairs([['Ada', '']]).reason).toMatch(/needs two names/i);
+        expect(parseForbidPairs([['Ada']]).reason).toMatch(/needs two names/i);
+        expect(parseForbidPairs([['Ada', 'Ada']]).reason).toMatch(/with themselves/i);
+        // A pair is unordered, so [b, a] is the same rule said twice.
+        expect(parseForbidPairs([['Ada', 'Ben'], ['Ben', 'Ada']]).reason).toMatch(/listed twice/i);
+    });
+});
+
+// ─── 12. THE MAPPING OF ALL NINE, AND BLANK MEANS BLANK ───────────────────────
+
+describe('blank means blank, for every one of the nine new controls', () => {
+    it('emits not one new key when nothing has been touched', () => {
+        const result = build({
+            staffRows: [staff({ name: 'Ada' })],
+            taskRows: [task({ name: 'Clinic' })],
+            rulesInputs: EMPTY_RULES_INPUTS(),
+        });
+        expect(result.ok).toBe(true);
+        // The whole config, exactly — the assertion that would fail if any of the
+        // nine leaked a default. `windows: []` and `quota: {}` would both switch a
+        // model on for a department that never asked for one.
+        expect(result.config).toEqual({
+            startDate: '2026-09-07',
+            weeks: 1,
+            staff: [{ name: 'Ada', fte: 1, skills: [], unavailable: [] }],
+            tasks: [{ name: 'Clinic', days: [1, 2, 3, 4, 5], leads: 1, coLeads: 1 }],
+            rules: { bands: { junior: [7, 12], senior: [13, 14], principal: [15, 17] } },
+        });
+        expect(result.rulesErrors).toEqual({});
+    });
+
+    it('behaves identically when rulesInputs is not passed at all', () => {
+        // `RosterView` always passes it; a caller (or a test) that does not must get
+        // the same config rather than a crash or a defaulted policy.
+        const withEmpty = build({ staffRows: [staff({ name: 'Ada' })], taskRows: [task({ name: 'Clinic' })], rulesInputs: EMPTY_RULES_INPUTS() });
+        const without = build({ staffRows: [staff({ name: 'Ada' })], taskRows: [task({ name: 'Clinic' })] });
+        expect(JSON.stringify(without.config)).toBe(JSON.stringify(withEmpty.config));
+    });
+
+    it('emits continuity only when it is TRUE, never as false', () => {
+        const off = build({ staffRows: [staff({ name: 'Ada' })], taskRows: [{ ...task({ name: 'Clinic' }), continuity: false }] });
+        expect('continuity' in off.config.tasks[0]).toBe(false);
+        const on = build({ staffRows: [staff({ name: 'Ada' })], taskRows: [{ ...task({ name: 'Clinic' }), continuity: true }] });
+        expect(on.config.tasks[0].continuity).toBe(true);
+    });
+
+    it('drops continuity in slot mode, because the engine refuses the pair', () => {
+        const row = { ...slotTask({ name: 'Trio' }, [{}, {}, {}]), continuity: true };
+        const result = build({
+            staffRows: [staff({ name: 'Ada' }), staff({ name: 'Ben' }), staff({ name: 'Cara' })],
+            taskRows: [row],
+        });
+        expect(result.ok).toBe(true);
+        expect('continuity' in result.config.tasks[0]).toBe(false);
+        expect(result.config.tasks[0].slots).toHaveLength(3);
+        // MEASURED, not assumed: the combination really is a refusal.
+        expect(validateRosterV2Config({
+            ...result.config,
+            tasks: [{ ...result.config.tasks[0], continuity: true }],
+        }).valid).toBe(false);
+        // …and what the mapper actually emitted is accepted.
+        expect(validateRosterV2Config(result.config).valid).toBe(true);
+    });
+
+    it('emits recurrence INSTEAD of days, never both', () => {
+        const row = { ...task({ name: 'ADHD Clinic', days: [1, 3] }), calendarMode: TASK_CALENDAR_MONTHLY, recurrenceOrdinal: '3', recurrenceWeekday: '3' };
+        const result = build({ staffRows: [staff({ name: 'Ada' })], taskRows: [row] });
+        expect(result.config.tasks[0].recurrence).toEqual({ ordinal: 3, weekday: 3 });
+        expect('days' in result.config.tasks[0]).toBe(false);
+        expect(validateRosterV2Config(result.config).valid).toBe(true);
+        // MEASURED: the engine really does refuse the combination the mapper avoids.
+        expect(validateRosterV2Config({
+            ...result.config,
+            tasks: [{ ...result.config.tasks[0], days: [1, 3] }],
+        }).valid).toBe(false);
+    });
+
+    it('does not ask a monthly row about its ticked weekdays, and keeps them', () => {
+        // A monthly task with NO days ticked is legal — `days` is not part of what
+        // the row means any more — and the ticks survive so switching back restores
+        // them. Both halves matter: the first is a refusal that must not fire, the
+        // second is data that must not be lost.
+        const row = { ...task({ name: 'Clinic', days: [] }), calendarMode: TASK_CALENDAR_MONTHLY, recurrenceOrdinal: '1', recurrenceWeekday: '2' };
+        const monthly = build({ staffRows: [staff({ name: 'Ada' })], taskRows: [row] });
+        expect(monthly.ok).toBe(true);
+        expect(monthly.taskErrors[row.id]).toBeUndefined();
+
+        const backToWeekly = build({
+            staffRows: [staff({ name: 'Ada' })],
+            taskRows: [{ ...row, calendarMode: TASK_CALENDAR_WEEKLY, days: [1, 3] }],
+        });
+        expect(backToWeekly.config.tasks[0].days).toEqual([1, 3]);
+        expect('recurrence' in backToWeekly.config.tasks[0]).toBe(false);
+    });
+
+    it('reports a half-chosen monthly pattern per row, and blocks', () => {
+        const row = { ...task({ name: 'Clinic' }), calendarMode: TASK_CALENDAR_MONTHLY, recurrenceOrdinal: '3' };
+        const result = build({ staffRows: [staff({ name: 'Ada' })], taskRows: [row] });
+        expect(result.ok).toBe(false);
+        expect(result.config).toBeNull();
+        expect(result.taskErrors[row.id].recurrence).toContain('Clinic');
+        expect(result.reason).toBe(result.taskErrors[row.id].recurrence);
+    });
+
+    it('attaches a quota, a category and a cap to the RIGHT row', () => {
+        const result = build({
+            staffRows: [
+                { ...staff({ name: 'Ada' }), maxPerDay: '1' },
+                staff({ name: 'Ben' }),
+            ],
+            taskRows: [
+                { ...task({ name: 'Saturday Bench', days: [6] }), quotaPer: 'month', quotaMax: '2', category: ' WEEKEND ' },
+                task({ name: 'Ward Round', days: [1] }),
+            ],
+        });
+        expect(result.ok).toBe(true);
+        expect(result.config.staff[0].maxPerDay).toBe(1);
+        expect('maxPerDay' in result.config.staff[1]).toBe(false);
+        expect(result.config.tasks[0]).toMatchObject({ quota: { per: 'month', max: 2 }, category: 'WEEKEND' });
+        expect('quota' in result.config.tasks[1]).toBe(false);
+        expect('category' in result.config.tasks[1]).toBe(false);
+        expect(validateRosterV2Config(result.config).valid).toBe(true);
+    });
+
+    it('attaches windows to the RIGHT person, in the engine\'s own shape', () => {
+        const result = build({
+            staffRows: [
+                { ...staff({ name: 'Ada' }), windows: [createStaffWindow({ from: '2026-09-01', to: '2026-12-31' })] },
+                staff({ name: 'Ben' }),
+            ],
+            taskRows: [task({ name: 'Clinic' })],
+        });
+        expect(result.config.staff[0].windows).toEqual([{ from: '2026-09-01', to: '2026-12-31' }]);
+        expect('windows' in result.config.staff[1]).toBe(false);
+        expect(validateRosterV2Config(result.config).valid).toBe(true);
+    });
+
+    it('maps the two department caps and the pair list into rules', () => {
+        const result = build({
+            staffRows: [staff({ name: 'Ada' }), staff({ name: 'Ben' })],
+            taskRows: [task({ name: 'Clinic' })],
+            rulesInputs: { maxConcurrentPerDay: '1', maxConsecutiveDays: '3', forbidPairs: [['Ada', 'Ben']] },
+        });
+        expect(result.ok).toBe(true);
+        expect(result.config.rules).toMatchObject({
+            maxConcurrentPerDay: 1,
+            maxConsecutiveDays: 3,
+            forbidPairs: [['Ada', 'Ben']],
+        });
+        expect(validateRosterV2Config(result.config).valid).toBe(true);
+    });
+
+    it('lets the limits panel win over anything extraRules carried', () => {
+        // The same rule `bands` and the two hours boxes follow: one value, one
+        // source, and the source is the control the visitor can see.
+        const result = build({
+            staffRows: [staff({ name: 'Ada' })],
+            taskRows: [task({ name: 'Clinic' })],
+            extraRules: { maxConcurrentPerDay: 9, maxConsecutiveDays: 9 },
+            rulesInputs: { maxConcurrentPerDay: '2', maxConsecutiveDays: '4', forbidPairs: [] },
+        });
+        expect(result.config.rules.maxConcurrentPerDay).toBe(2);
+        expect(result.config.rules.maxConsecutiveDays).toBe(4);
+    });
+
+    it('reports each department-limit box against itself, and blocks', () => {
+        const result = build({
+            staffRows: [staff({ name: 'Ada' })],
+            taskRows: [task({ name: 'Clinic' })],
+            rulesInputs: { maxConcurrentPerDay: '0', maxConsecutiveDays: 'six', forbidPairs: [] },
+        });
+        expect(result.ok).toBe(false);
+        expect(result.rulesErrors.maxConcurrentPerDay).toMatch(/at least 1/i);
+        expect(result.rulesErrors.maxConsecutiveDays).toMatch(/not a number/i);
+        expect(result.reason).toBe(result.rulesErrors.maxConcurrentPerDay);
+    });
+
+    it('names a forbidden pair who is not in the staff table', () => {
+        const result = build({
+            staffRows: [staff({ name: 'Ada' }), staff({ name: 'Ben' })],
+            taskRows: [task({ name: 'Clinic' })],
+            rulesInputs: { ...EMPTY_RULES_INPUTS(), forbidPairs: [['Ada', 'Nobody']] },
+        });
+        expect(result.ok).toBe(false);
+        expect(result.rulesErrors.forbidPairs).toContain('Nobody');
+        expect(result.reason).toBe(result.rulesErrors.forbidPairs);
+    });
+
+    it('names a window whose task does not exist', () => {
+        const row = { ...staff({ name: 'Ben' }), windows: [createStaffWindow({ from: '2026-09-07', tasks: 'Wardd Round' })] };
+        const result = build({
+            staffRows: [staff({ name: 'Ada' }), row],
+            taskRows: [task({ name: 'Ward Round' })],
+        });
+        expect(result.ok).toBe(false);
+        expect(result.staffErrors[row.id].windows).toContain('"Wardd Round"');
+        expect(result.reason).toBe(result.staffErrors[row.id].windows);
+    });
+
+    it('does NOT blame a pair or a window for a mistake in another table', () => {
+        // THE ORDERING PROPERTY. A staff row dropped for an unreadable FTE leaves a
+        // name missing from the pool, and a task row dropped for having no days
+        // leaves a name missing from the task list. Reporting "Ben is not in the
+        // staff table" or "no task is called Clinic" in those states would point the
+        // visitor at the wrong control entirely.
+        const dirtyStaff = build({
+            staffRows: [staff({ name: 'Ada' }), staff({ name: 'Ben', fte: '9' })],
+            taskRows: [task({ name: 'Clinic' })],
+            rulesInputs: { ...EMPTY_RULES_INPUTS(), forbidPairs: [['Ada', 'Ben']] },
+        });
+        expect(dirtyStaff.ok).toBe(false);
+        expect(dirtyStaff.reason).toMatch(/^Ben: FTE 9/);
+        expect(dirtyStaff.rulesErrors.forbidPairs).toBeUndefined();
+
+        const windowRow = { ...staff({ name: 'Ben' }), windows: [createStaffWindow({ from: '2026-09-07', tasks: 'Clinic' })] };
+        const dirtyTasks = build({
+            staffRows: [staff({ name: 'Ada' }), windowRow],
+            taskRows: [task({ name: 'Clinic', days: [] })],
+        });
+        expect(dirtyTasks.ok).toBe(false);
+        expect(dirtyTasks.reason).toMatch(/no days ticked/i);
+        expect(dirtyTasks.staffErrors[windowRow.id]).toBeUndefined();
+    });
+
+    it('reports a nameless row that carries a hidden cap or window', () => {
+        // The drawer can hold content on a row with no name, and it would otherwise
+        // vanish without a word — which is what the name check has always been for.
+        const capOnly = { ...staff({ name: '' }), maxPerDay: '2' };
+        const capResult = build({ staffRows: [capOnly], taskRows: [task({ name: 'Clinic' })] });
+        expect(capResult.staffErrors[capOnly.id].name).toMatch(/add a name/i);
+
+        const windowOnly = { ...staff({ name: '' }), windows: [createStaffWindow({ from: '2026-09-07' })] };
+        const windowResult = build({ staffRows: [windowOnly], taskRows: [task({ name: 'Clinic' })] });
+        expect(windowResult.staffErrors[windowOnly.id].name).toMatch(/add a name/i);
+    });
+
+    it('is pure: the new rows and lists are neither mutated nor aliased', () => {
+        const staffRows = [{ ...staff({ name: 'Ada' }), maxPerDay: '2', windows: [createStaffWindow({ from: '2026-09-07' })] }];
+        const taskRows = [{ ...task({ name: 'Clinic' }), quotaPer: 'week', quotaMin: '1', category: 'CLIN' }];
+        const rulesInputs = { maxConcurrentPerDay: '2', maxConsecutiveDays: '4', forbidPairs: [['Ada', 'Ada2']] };
+        const staffRows2 = [...staffRows, staff({ name: 'Ada2' })];
+        const before = JSON.stringify({ staffRows2, taskRows, rulesInputs });
+
+        const result = build({ staffRows: staffRows2, taskRows, rulesInputs });
+        expect(result.ok).toBe(true);
+        expect(JSON.stringify({ staffRows2, taskRows, rulesInputs })).toBe(before);
+
+        result.config.rules.forbidPairs[0].push('Cara');
+        result.config.staff[0].windows.push({ from: '2027-01-01' });
+        expect(rulesInputs.forbidPairs[0]).toEqual(['Ada', 'Ada2']);
+        expect(staffRows2[0].windows).toHaveLength(1);
+    });
+});
+
+// ─── 13. REACHABILITY: EVERY ONE OF THEM CHANGES THE ROSTER ───────────────────
+//
+// THE STANDARD THE AUDIT SET, applied to all nine: a config built THROUGH the mapper
+// (never hand-written), fed to `generateRosterV2` twice — control off, control on —
+// and the two rosters compared. A field that arrives and changes nothing is a field
+// that is not wired, and these tests fail in that case rather than passing on the
+// strength of a `toMatchObject`.
+//
+// `score.hardViolations` is checked on every run that produces a roster, because it
+// is measured by re-auditing the finished roster: 0 is the engine confirming that the
+// constraint the wizard just set was actually honoured, not asserted.
+
+describe('reachability: the mapper -> the engine -> a different roster', () => {
+    const runFrom = (result) => {
+        expect(result.ok, result.reason || 'mapper refused').toBe(true);
+        const check = validateRosterV2Config(result.config);
+        expect(check.valid, check.reason || 'engine refused').toBe(true);
+        return generateRosterV2(result.config);
+    };
+    const leadsOf = (out, taskName) => Object.keys(out.roster).sort()
+        .flatMap((date) => out.roster[date].filter((shift) => shift.task === taskName).map((shift) => shift.lead));
+
+    it('CONTINUITY keeps one lead across every occurrence, and rotation does not', () => {
+        const staffRows = [staff({ name: 'Ada' }), staff({ name: 'Ben' }), staff({ name: 'Cara' })];
+        const rows = (continuity) => [
+            { ...task({ name: 'Group Therapy', days: [3], coLeads: 0 }), continuity },
+            task({ name: 'Ward Round', days: [1, 2, 3, 4, 5], coLeads: 0 }),
+        ];
+        const off = runFrom(build({ weeks: 4, staffRows, taskRows: rows(false) }));
+        const on = runFrom(build({ weeks: 4, staffRows, taskRows: rows(true) }));
+
+        expect(new Set(leadsOf(off, 'Group Therapy')).size).toBeGreaterThan(1);
+        expect(new Set(leadsOf(on, 'Group Therapy')).size).toBe(1);
+        expect(leadsOf(on, 'Group Therapy')).toHaveLength(4);
+        expect(JSON.stringify(off.roster)).not.toBe(JSON.stringify(on.roster));
+        // The engine counts what it did, and the run is clean.
+        expect(on.score.breakdown.continuityBreaks).toBe(0);
+        expect(on.score.hardViolations).toBe(0);
+        // …and it is a PREFERENCE: `off` has no continuity component at all.
+        expect('continuityBreaks' in off.score.breakdown).toBe(false);
+    });
+
+    it('MONTHLY RECURRENCE runs the clinic once a month, not once a week', () => {
+        const staffRows = [staff({ name: 'Ada' }), staff({ name: 'Ben' })];
+        const weeklyRow = task({ name: 'ADHD Clinic', days: [3], coLeads: 0 });
+        const weekly = runFrom(build({ weeks: 4, staffRows, taskRows: [weeklyRow] }));
+        const monthly = runFrom(build({
+            weeks: 4,
+            staffRows,
+            taskRows: [{ ...weeklyRow, calendarMode: TASK_CALENDAR_MONTHLY, recurrenceOrdinal: '3', recurrenceWeekday: '3' }],
+        }));
+
+        // Four Wednesdays in the run; the 3rd Wednesday of September is the 16th.
+        expect(Object.keys(weekly.roster).sort()).toEqual(['2026-09-09', '2026-09-16', '2026-09-23', '2026-09-30']);
+        expect(Object.keys(monthly.roster)).toEqual(['2026-09-16']);
+        expect(JSON.stringify(weekly.roster)).not.toBe(JSON.stringify(monthly.roster));
+        expect(monthly.score.hardViolations).toBe(0);
+    });
+
+    it('A QUOTA CEILING refuses a slot and names the count, per calendar month', () => {
+        const staffRows = [staff({ name: 'Ada' }), staff({ name: 'Ben' })];
+        const bare = task({ name: 'Saturday Bench', days: [6], coLeads: 0 });
+        const open = runFrom(build({ weeks: 4, staffRows, taskRows: [bare] }));
+        const capped = runFrom(build({
+            weeks: 4,
+            staffRows,
+            taskRows: [{ ...bare, quotaPer: 'month', quotaMax: '1' }],
+        }));
+
+        expect(open.unfilled).toEqual([]);
+        expect(capped.unfilled).toHaveLength(1);
+        expect(capped.unfilled[0].reason).toContain('quota ceiling of 1 Saturday Bench duty');
+        expect(JSON.stringify(open.roster)).not.toBe(JSON.stringify(capped.roster));
+        // A ceiling is HARD and it was honoured: nobody holds two in one month.
+        expect(capped.score.hardViolations).toBe(0);
+    });
+
+    it('A QUOTA FLOOR is preferred, then reported unmet — never enforced', () => {
+        // Three people, a duty needing two of them Mon-Fri, a floor of two a week,
+        // and one colleague away for the whole of week 1. The floor is reachable and
+        // still unmet, which is exactly the state the warning exists for.
+        const result = build({
+            weeks: 2,
+            staffRows: [
+                staff({ name: 'Ada' }),
+                staff({ name: 'Ben' }),
+                staff({ name: 'Cara', away: '2026-09-07, 2026-09-08, 2026-09-09, 2026-09-10, 2026-09-11' }),
+            ],
+            taskRows: [{ ...task({ name: 'Saturday Bench', days: [1, 2, 3, 4, 5] }), quotaPer: 'week', quotaMin: '2' }],
+        });
+        const out = runFrom(result);
+
+        const floors = partitionDemoWarnings(out.warnings).quotaFloors;
+        expect(floors).toHaveLength(1);
+        expect(floors[0]).toContain('Cara');
+        expect(floors[0]).toContain('0 of 2, 2 short');
+        // NOT a violation: a floor cannot be met by inventing capacity, so the roster
+        // is still clean and the shortfall is a warning.
+        expect(out.score.hardViolations).toBe(0);
+        expect(out.unfilled).toEqual([]);
+    });
+
+    it('AN IMPOSSIBLE QUOTA FLOOR is refused before generating, with the arithmetic', () => {
+        const result = build({
+            weeks: 4,
+            staffRows: [staff({ name: 'Ada' }), staff({ name: 'Ben' })],
+            taskRows: [{ ...task({ name: 'Saturday Bench', days: [6], coLeads: 0 }), quotaPer: 'week', quotaMin: '3' }],
+        });
+        // The MAPPER is happy — the cells are all readable — and the ENGINE refuses,
+        // which is the division of labour this wizard is built on.
+        expect(result.ok).toBe(true);
+        const check = validateRosterV2Config(result.config);
+        expect(check.valid).toBe(false);
+        expect(check.reason).toContain('2 × 3 = 6 duties');
+        expect(generateRosterV2(result.config).ok).toBe(false);
+    });
+
+    it('A FORBIDDEN PAIR stops two people sharing a shift', () => {
+        const staffRows = [staff({ name: 'Ada' }), staff({ name: 'Ben' }), staff({ name: 'Cara' })];
+        const taskRows = [task({ name: 'Clinic', days: [1, 2, 3, 4, 5] })];
+        const together = (out) => Object.values(out.roster).flat()
+            .filter((shift) => [shift.lead, shift.coLead].every((name) => name === 'Ada' || name === 'Ben'));
+
+        const open = runFrom(build({ weeks: 2, staffRows, taskRows }));
+        const kept = runFrom(build({
+            weeks: 2,
+            staffRows,
+            taskRows,
+            rulesInputs: { ...EMPTY_RULES_INPUTS(), forbidPairs: [['Ada', 'Ben']] },
+        }));
+
+        expect(together(open).length).toBeGreaterThan(0);
+        expect(together(kept)).toEqual([]);
+        expect(JSON.stringify(open.roster)).not.toBe(JSON.stringify(kept.roster));
+        // …and it did not cost a single slot: the third colleague absorbed it.
+        expect(kept.unfilled).toEqual([]);
+        expect(kept.score.hardViolations).toBe(0);
+    });
+
+    it('AN AVAILABILITY WINDOW moves who is rostered, and names the gap when it bites', () => {
+        const taskRows = [task({ name: 'Weekend Witnessing', days: [6], coLeads: 0 })];
+        const open = runFrom(build({
+            weeks: 4,
+            staffRows: [staff({ name: 'Ada' }), staff({ name: 'Ben' })],
+            taskRows,
+        }));
+        const blocked = runFrom(build({
+            weeks: 4,
+            staffRows: [
+                { ...staff({ name: 'Ada' }), windows: [createStaffWindow({ from: '2026-09-07', to: '2026-09-20' })] },
+                { ...staff({ name: 'Ben' }), windows: [createStaffWindow({ from: '2026-09-21', to: '2026-10-31' })] },
+            ],
+            taskRows,
+        }));
+
+        // Two four-week blocks: Ada takes the first two Saturdays, Ben the last two.
+        expect(leadsOf(open, 'Weekend Witnessing')).toEqual(['Ada', 'Ben', 'Ada', 'Ben']);
+        expect(leadsOf(blocked, 'Weekend Witnessing')).toEqual(['Ada', 'Ada', 'Ben', 'Ben']);
+        expect(JSON.stringify(open.roster)).not.toBe(JSON.stringify(blocked.roster));
+        expect(blocked.unfilled).toEqual([]);
+        expect(blocked.score.hardViolations).toBe(0);
+
+        // …and a window that does not reach the work leaves the slot UNFILLED with the
+        // window named, rather than assigning somebody outside their block.
+        const short = runFrom(build({
+            weeks: 4,
+            staffRows: ['Ada', 'Ben'].map((name) => ({
+                ...staff({ name }),
+                windows: [createStaffWindow({ from: '2026-09-07', to: '2026-09-13' })],
+            })),
+            taskRows,
+        }));
+        expect(short.unfilled).toHaveLength(3);
+        expect(short.unfilled[0].reason).toContain('outside their cohort window');
+        expect(short.score.hardViolations).toBe(0);
+    });
+
+    it('A WINDOW NAMING TASKS admits only those tasks, on no date at all otherwise', () => {
+        // The union reading, end to end. Ben's only window names the Ward Round, so
+        // he is on the Ward Round or on nothing — not "restricted on one task and
+        // free on the rest", which is the reading somebody will expect.
+        const out = runFrom(build({
+            weeks: 4,
+            staffRows: [
+                staff({ name: 'Ada' }),
+                { ...staff({ name: 'Ben' }), windows: [createStaffWindow({ from: '2026-09-07', to: '2026-12-31', tasks: 'Ward Round' })] },
+            ],
+            taskRows: [
+                task({ name: 'Weekend Witnessing', days: [6], coLeads: 0 }),
+                task({ name: 'Ward Round', days: [1], coLeads: 0 }),
+            ],
+        }));
+        expect(leadsOf(out, 'Weekend Witnessing').every((name) => name === 'Ada')).toBe(true);
+        expect(leadsOf(out, 'Ward Round')).toContain('Ben');
+        expect(out.score.hardViolations).toBe(0);
+    });
+
+    it('THE DEPARTMENT DAILY CAP changes how much one person may hold', () => {
+        const staffRows = [staff({ name: 'Ada' }), staff({ name: 'Ben' })];
+        const taskRows = [1, 2, 3].map((n) => task({ name: `Clinic ${n}`, days: [1], coLeads: 0 }));
+        const open = runFrom(build({ weeks: 1, staffRows, taskRows }));
+        const capped = runFrom(build({
+            weeks: 1,
+            staffRows,
+            taskRows,
+            rulesInputs: { ...EMPTY_RULES_INPUTS(), maxConcurrentPerDay: '1' },
+        }));
+
+        // Default cap is 2, so two people cover three duties with one to spare.
+        expect(open.unfilled).toEqual([]);
+        // At one duty each, the third has nobody — and it is REPORTED, not squeezed in.
+        expect(capped.unfilled).toHaveLength(1);
+        expect(capped.unfilled[0].reason).toContain('at daily limit');
+        expect(JSON.stringify(open.roster)).not.toBe(JSON.stringify(capped.roster));
+        expect(capped.score.hardViolations).toBe(0);
+    });
+
+    it('A PERSON\'S OWN DAILY CAP overrides the department\'s, for them alone', () => {
+        const taskRows = [1, 2, 3, 4].map((n) => task({ name: `Clinic ${n}`, days: [1], coLeads: 0 }));
+        const out = runFrom(build({
+            weeks: 1,
+            staffRows: [{ ...staff({ name: 'Ada' }), maxPerDay: '1' }, staff({ name: 'Ben' })],
+            taskRows,
+        }));
+        const dutiesOn = (name) => out.roster['2026-09-07'].filter((shift) => shift.lead === name).length;
+        expect(dutiesOn('Ada')).toBe(1);
+        expect(dutiesOn('Ben')).toBe(2);
+        expect(out.unfilled).toHaveLength(1);
+        expect(out.score.hardViolations).toBe(0);
+    });
+
+    it('THE CONSECUTIVE-DAY LIMIT stops a run of days and says which limit bound', () => {
+        const staffRows = [staff({ name: 'Ada' })];
+        const taskRows = [task({ name: 'Cover', days: [0, 1, 2, 3, 4, 5, 6], coLeads: 0 })];
+        const open = runFrom(build({ weeks: 1, staffRows, taskRows }));
+        const capped = runFrom(build({
+            weeks: 1,
+            staffRows,
+            taskRows,
+            rulesInputs: { ...EMPTY_RULES_INPUTS(), maxConsecutiveDays: '3' },
+        }));
+
+        // MEASURED, and the measurement is a genuine surprise worth pinning: the
+        // limit is a RUN of days, and one day off RESETS it. So a cap of 3 does not
+        // give three duties a week — it moves the rest day from the 7th day to the
+        // 4th, and the clinician still works six of the seven days.
+        expect(Object.keys(open.roster).sort())
+            .toEqual(['2026-09-07', '2026-09-08', '2026-09-09', '2026-09-10', '2026-09-11', '2026-09-12']);
+        expect(open.unfilled.map((slot) => slot.date)).toEqual(['2026-09-13']);
+        expect(Object.keys(capped.roster).sort())
+            .toEqual(['2026-09-07', '2026-09-08', '2026-09-09', '2026-09-11', '2026-09-12', '2026-09-13']);
+        expect(capped.unfilled.map((slot) => slot.date)).toEqual(['2026-09-10']);
+        expect(capped.unfilled[0].reason).toContain('at the consecutive-day limit');
+        expect(JSON.stringify(open.roster)).not.toBe(JSON.stringify(capped.roster));
+        expect(capped.score.hardViolations).toBe(0);
+    });
+
+    it('A CATEGORY reaches every shift the task produces', () => {
+        const staffRows = [staff({ name: 'Ada' })];
+        const plain = runFrom(build({ weeks: 1, staffRows, taskRows: [task({ name: 'EFT Clinic', days: [1], coLeads: 0 })] }));
+        const labelled = runFrom(build({
+            weeks: 1,
+            staffRows,
+            taskRows: [{ ...task({ name: 'EFT Clinic', days: [1], coLeads: 0 }), category: 'VC' }],
+        }));
+
+        expect(plain.roster['2026-09-07'][0].category).toBe(ROSTER_V2_DEFAULTS.category);
+        expect(labelled.roster['2026-09-07'][0].category).toBe('VC');
+        expect(JSON.stringify(plain.roster)).not.toBe(JSON.stringify(labelled.roster));
+    });
+});
+
+// ─── 14. THE RESULT PANEL'S READERS, PINNED AGAINST REAL ENGINE OUTPUT ────────
+//
+// `partitionDemoWarnings` and `summariseUnfilledCauses` read the ENGINE'S PROSE,
+// because an `unfilled` entry carries no machine-readable rejection code. That is a
+// real coupling, and the only honest way to hold it is to ask the classifier about a
+// sentence the engine ACTUALLY produced rather than one typed into a test. If the
+// engine ever rewords either phrase, these fail — which is the point.
+
+describe('the result panel\'s classifiers', () => {
+    it('recognises a quota-floor warning the ENGINE wrote, not one we typed', () => {
+        const result = build({
+            weeks: 2,
+            staffRows: [
+                staff({ name: 'Ada' }),
+                staff({ name: 'Ben' }),
+                staff({ name: 'Cara', away: '2026-09-07, 2026-09-08, 2026-09-09, 2026-09-10, 2026-09-11' }),
+            ],
+            taskRows: [{ ...task({ name: 'Saturday Bench', days: [1, 2, 3, 4, 5] }), quotaPer: 'week', quotaMin: '2' }],
+        });
+        const out = generateRosterV2(result.config);
+        expect(out.ok).toBe(true);
+        expect(out.warnings.length).toBeGreaterThan(0);
+
+        const part = partitionDemoWarnings(out.warnings);
+        expect(part.quotaFloors.length).toBe(1);
+        expect(part.quotaFloors[0].startsWith(QUOTA_FLOOR_WARNING_PREFIX)).toBe(true);
+        // A PARTITION: nothing falls out of it, which is the property that keeps the
+        // panel from dropping a warning by classifying it.
+        expect(part.quotaFloors.length + part.others.length).toBe(out.warnings.length);
+        expect([...part.quotaFloors, ...part.others].sort()).toEqual([...out.warnings].sort());
+    });
+
+    it('recognises a window-blocked and a quota-blocked unfilled slot the ENGINE wrote', () => {
+        const windowed = build({
+            weeks: 4,
+            staffRows: ['Ada', 'Ben'].map((name) => ({
+                ...staff({ name }),
+                windows: [createStaffWindow({ from: '2026-09-07', to: '2026-09-13' })],
+            })),
+            taskRows: [task({ name: 'Weekend Witnessing', days: [6], coLeads: 0 })],
+        });
+        const windowOut = generateRosterV2(windowed.config);
+        expect(windowOut.unfilled.length).toBe(3);
+        expect(windowOut.unfilled[0].reason).toContain(WINDOW_UNFILLED_MARKER);
+        expect(summariseUnfilledCauses(windowOut.unfilled))
+            .toEqual({ total: 3, windowBlocked: 3, quotaBlocked: 0 });
+
+        const capped = build({
+            weeks: 4,
+            staffRows: [staff({ name: 'Ada' }), staff({ name: 'Ben' })],
+            taskRows: [{ ...task({ name: 'Saturday Bench', days: [6], coLeads: 0 }), quotaPer: 'month', quotaMax: '1' }],
+        });
+        const quotaOut = generateRosterV2(capped.config);
+        expect(quotaOut.unfilled[0].reason).toContain(QUOTA_CEILING_UNFILLED_MARKER);
+        expect(summariseUnfilledCauses(quotaOut.unfilled))
+            .toEqual({ total: 1, windowBlocked: 0, quotaBlocked: 1 });
+    });
+
+    it('says nothing about causes it did not see, and never throws', () => {
+        expect(partitionDemoWarnings([])).toEqual({ quotaFloors: [], others: [] });
+        expect(partitionDemoWarnings(undefined)).toEqual({ quotaFloors: [], others: [] });
+        expect(summariseUnfilledCauses([])).toEqual({ total: 0, windowBlocked: 0, quotaBlocked: 0 });
+        expect(summariseUnfilledCauses(null)).toEqual({ total: 0, windowBlocked: 0, quotaBlocked: 0 });
+        expect(summariseUnfilledCauses([{ date: '2026-09-07' }])).toEqual({ total: 1, windowBlocked: 0, quotaBlocked: 0 });
+    });
+});
+
+
+// =============================================================================
+// PAIR-KEY COLLISION — the test that was missing when a NUL byte was "cleaned up"
+// =============================================================================
+//
+// `parseForbidPairs` de-duplicates by joining the sorted pair with a NUL
+// separator. That separator is not decoration: without it, 'An' + 'nBob' and
+// 'Ann' + 'Bob' both key to 'AnnBob', and the second, genuinely different rule
+// is refused as a duplicate.
+//
+// This test exists because the separator was once written as a LITERAL NUL byte,
+// which made the whole module register as BINARY so grep and file silently
+// skipped it (audit D1) — and the obvious cleanup, deleting the byte, quietly
+// collapsed the separator to '' while all 1522 tests still passed. Nothing
+// exercised the collision, so nothing objected. Now something does.
+describe('parseForbidPairs — the separator is load-bearing, not decoration', () => {
+    it('keeps two pairs whose names concatenate identically', () => {
+        const result = parseForbidPairs([['An', 'nBob'], ['Ann', 'Bob']]);
+
+        expect(result.ok).toBe(true);
+        expect(result.pairs).toEqual([['An', 'nBob'], ['Ann', 'Bob']]);
+    });
+
+    it('still refuses a genuine duplicate, in either order', () => {
+        const result = parseForbidPairs([['Ann', 'Bob'], ['Bob', 'Ann']]);
+
+        expect(result.ok).toBe(false);
+        expect(result.reason).toMatch(/listed twice/i);
     });
 });

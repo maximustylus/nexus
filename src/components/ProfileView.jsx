@@ -20,6 +20,12 @@ const ProfileView = ({ user, onLogout }) => {
             }
         });
         return () => unsub();
+        // Deliberately keyed on the uid alone: re-subscribing whenever the `user`
+        // object's identity changes would tear down and rebuild the Firestore
+        // listener on every parent render. The cost is that the `...user` spread
+        // above can be one render stale. Left for follow-up: spread from a ref or
+        // merge in a functional update, then list `user`.
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [user?.uid]);
 
     const [isEditing, setIsEditing] = useState(false);

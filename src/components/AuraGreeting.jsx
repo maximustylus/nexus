@@ -35,6 +35,9 @@ const AuraGreeting = ({ openAuraChat, dailyPatientLoad = 120 }) => {
 
   useEffect(() => {
     const today = new Date().toDateString();
+    // Read but not compared: the once-a-day gate below is commented out, so this
+    // binding exists only to keep that gate a one-line uncomment.
+    // eslint-disable-next-line no-unused-vars -- see the commented-out gate below
     const lastSeen = localStorage.getItem('aura_greeting_date');
 
     setCurrentQuote(getDailySmartQuote());
@@ -50,6 +53,10 @@ const AuraGreeting = ({ openAuraChat, dailyPatientLoad = 120 }) => {
         
         return () => clearTimeout(timer);
     // }
+    // `getDailySmartQuote` is redefined on every render, so listing it here (as
+    // exhaustive-deps asks) would re-arm the 10s timer and rewrite localStorage
+    // on every render. Left for follow-up: hoist or useCallback the quote picker.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [dailyPatientLoad]);
 
   // 🌟 THE GENIE EFFECT HANDLERS
@@ -96,7 +103,7 @@ const AuraGreeting = ({ openAuraChat, dailyPatientLoad = 120 }) => {
               <div className="flex flex-col">
                  <span className="text-[9px] font-black text-indigo-400 uppercase tracking-widest mb-1.5 drop-shadow-md">Aura Daily Briefing</span>
                  <p className="text-sm font-medium text-slate-200 italic leading-relaxed">
-                   "{currentQuote}"
+                   &quot;{currentQuote}&quot;
                  </p>
               </div>
             </div>

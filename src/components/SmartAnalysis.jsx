@@ -21,6 +21,12 @@ const STAFF_PROFILES = {
 };
 
 // 🦸‍♂️ MARVEL PROFILES
+// UNREACHABLE (left for follow-up, P0.7): the demo branch in handleAnalyze
+// returns a hardcoded report before any profile map is chosen, so these demo
+// personas are never read — line ~88's `const currentProfiles = STAFF_PROFILES;`
+// is the leftover of what used to be a `isDemo ? MARVEL_PROFILES : ...` ternary.
+// Kept rather than deleted because demo-mode data is being reworked elsewhere.
+// eslint-disable-next-line no-unused-vars -- see the note above
 const MARVEL_PROFILES = {
     "Steve": { role: "Senior Staff and Clinical Lead", grade: "JG14", focus: "Leadership, Clinical" },
     "Peter": { role: "Junior Staff", grade: "JG11", focus: "Inpatient, Clinical" },

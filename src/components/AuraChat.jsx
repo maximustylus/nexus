@@ -781,7 +781,10 @@ const AuraChatbot = () => {
         try {
           var s = stripped.indexOf('{'); var e = stripped.lastIndexOf('}') + 1;
           if (s !== -1 && e > s) { var p = JSON.parse(stripped.substring(s, e)); aiAck = (p.reply || '').trim(); }
-        } catch(ex) {}
+        } catch(ex) {
+          // Ignored on purpose: a non-JSON reply is expected here. `aiAck` stays
+          // empty and the raw stripped text is used as the acknowledgement below.
+        }
         if (!aiAck) aiAck = stripped;
         if (!aiAck) return;
 

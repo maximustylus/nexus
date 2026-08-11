@@ -50,7 +50,16 @@ import {
 
 // --- SANDBOX IMPORTS ---
 import { useNexus } from '../context/NexusContext';
-import { DEMO_EXAMPLE_DEPARTMENT } from '../data/mockData';
+// 🧪 The picker's four arrangements. `DEMO_ARRANGEMENTS[0].config` IS
+// `DEMO_EXAMPLE_DEPARTMENT` — an alias, not a copy — so the respiratory option loads
+// exactly the fixture this view has always loaded.
+// `provenance` is deliberately NOT imported here. The panel keys off `correction`
+// being present, which is ONE source for "does this need a health warning"; reading
+// both fields in this file would be two, and the two would eventually disagree in
+// front of a roster master. That the two fields agree is pinned in
+// `RosterView.demo.test.jsx` instead, where a mismatch is a failing test rather than a
+// missing panel.
+import { DEMO_ARRANGEMENTS } from '../data/mockData';
 // 🧪 SANDBOX ENGINE — the constraint-aware engine, used ONLY on the demo path.
 // Live generation still goes through prepareRosterWrite → generateRoster, which
 // has characterization tests pinning its byte-exact output and a live document
@@ -76,6 +85,9 @@ import {
     countWorkingDays,
     describeFteAsDays,
     EMPTY_HOURS_INPUTS,
+    EMPTY_RULES_INPUTS,
+    partitionDemoWarnings,
+    summariseUnfilledCauses,
 } from '../utils/rosterWizard';
 // 👤 ONE PERSON'S DUTIES — pure, unit-tested in rosterPersonView.test.js, and used
 // by BOTH universes: "my week" is a re-reading of the roster already on screen, so
@@ -572,6 +584,24 @@ const RosterView = ({ user }) => {
     // calendar can report what the engine actually knew, rather than a summary.
     const [demoResult, setDemoResult] = useState(null);
 
+    // 🧪 WHICH OF THE FOUR ARRANGEMENTS WAS LOADED, or `null` for a team typed in by
+    // hand. The whole descriptor rather than its id, because what this is read for is
+    // its `correction` field.
+    //
+    // IT EXISTS FOR ONE REASON AND IT IS AN HONESTY REASON. The picker says, on the
+    // button, that the respiratory arrangement is inferred rather than reported — but
+    // the picker is inside a modal that closes the moment the roster is drafted, and
+    // what the therapists in the room then look at is a finished roster of their own
+    // service with no caveat anywhere near it. So the caveat travels with the loaded
+    // arrangement and is restated beside the report. `null` for a typed-in team is
+    // correct and not a gap: a team that typed their own roster in needs no warning
+    // about somebody else's inference.
+    //
+    // NOT A SOURCE OF TRUTH FOR ANYTHING GENERATED. The rows are, exactly as before —
+    // this is a label, and a visitor who loads an arrangement and then edits every row
+    // still sees the caveat, which is the safe direction to be wrong in.
+    const [demoArrangement, setDemoArrangement] = useState(null);
+
     // 🧪 THE GRADE-AWARE WIZARD'S TABLES. These replaced the two comma-separated
     // textareas in demo mode; live mode still renders the textareas, unchanged.
     //
@@ -591,10 +621,19 @@ const RosterView = ({ user }) => {
     // would start judging every sandbox run against an 8.4-hour day nobody typed.
     // Blank means "count duties only", which is what the sandbox has always done.
     const [demoHoursInputs, setDemoHoursInputs] = useState(EMPTY_HOURS_INPUTS);
-    // Department policy the tables have no column for: maxConcurrentPerDay and
-    // maxConsecutiveDays. `null` for a typed-in team, which then gets the
-    // engine's own documented defaults; "Load example department" supplies the
-    // example's. `rules.bands` is NOT in here — it comes from the editor above.
+    // 🧪 THE THREE DEPARTMENT LIMITS, as the panel beside the hours boxes holds them:
+    // `{ maxConcurrentPerDay, maxConsecutiveDays, forbidPairs }` — two raw strings and
+    // a list of `[a, b]` name pairs. ALL EMPTY on purpose, for the same reason the
+    // hours boxes are: `maxConcurrentPerDay: 2` is also the engine's default, and
+    // STATING it is a department declaring a policy, which is a different fact from
+    // never having thought about it. `forbidPairs` had NO control at all before this
+    // — `grep -rn forbidPairs src/` outside the engine returned nothing.
+    const [demoRulesInputs, setDemoRulesInputs] = useState(EMPTY_RULES_INPUTS);
+    // Anything a fixture carries that has no control of its own. `null` for a typed-in
+    // team. `rules.bands`, the two hours fields and the three limits above are all
+    // STRIPPED out of this by "Load example department" and into the controls that own
+    // them — two sources for one value is how a roster gets generated against a policy
+    // nobody can see.
     const [demoExtraRules, setDemoExtraRules] = useState(null);
     // Who held which grade in the run that is ON SCREEN, so the load table can
     // report it. Captured at generate time rather than read from the live rows:
@@ -678,9 +717,10 @@ const RosterView = ({ user }) => {
             taskRows: demoTaskRows,
             bandInputs: demoBandInputs,
             hoursInputs: demoHoursInputs,
+            rulesInputs: demoRulesInputs,
             extraRules: demoExtraRules,
         }),
-        [config.startDate, config.weeks, demoStaffRows, demoTaskRows, demoBandInputs, demoHoursInputs, demoExtraRules],
+        [config.startDate, config.weeks, demoStaffRows, demoTaskRows, demoBandInputs, demoHoursInputs, demoRulesInputs, demoExtraRules],
     );
 
     // …and then the engine's OWN validator on the finished config, so the
@@ -773,6 +813,31 @@ const RosterView = ({ user }) => {
             setDemoTaskRows(createEmptyTaskRows());
             setDemoBandInputs(bandsToInputs(DEFAULT_GRADE_BANDS));
             setDemoHoursInputs(EMPTY_HOURS_INPUTS());
+            // Cleared with the rows it labels. A stale "this is an inferred example"
+            // notice sitting over a roster somebody typed in themselves would be a
+            // false statement about their own data — the one direction this label
+            // must never be wrong in.
+            //
+            // 🧬 MUTATION-CHECK NOTE, and an HONEST ONE: removing this line kills 0 of
+            // 1522 tests (measured, mutation M18). It is UNMEASURED, not dead. The
+            // universe toggle cannot be driven from `RosterView.demo.test.jsx`, whose
+            // context mock returns a constant `isDemo: true`, so the only file that
+            // could cover it is one with a mutable context — and adding a whole mock
+            // harness for a single assertion was judged the wrong trade in this phase.
+            // It is kept, and flagged for review rather than left looking tested,
+            // because every other sandbox value is cleared on both paths and a reset
+            // that holds on only one is a guarantee waiting to be edited away. The
+            // twin below has the same status.
+            setDemoArrangement(null);
+            // 🧬 MUTATION-CHECK NOTE, so a later reader does not delete one of these as
+            // dead code: this reset and its twin in the `else` branch below are
+            // REDUNDANT WITH EACH OTHER for `demoRulesInputs`. Removing either alone
+            // breaks nothing in the suite (measured: M26 and M27 both killed 0 of 1498
+            // tests); removing BOTH breaks the "leaving and re-entering the sandbox"
+            // test in `RosterView.reach.test.jsx` (M28, 1 test). Both are kept because
+            // every other sandbox value is cleared in both branches and a reset that
+            // holds only on one path is a guarantee waiting to be edited away.
+            setDemoRulesInputs(EMPTY_RULES_INPUTS());
             setDemoExtraRules(null);
             setConfig(prev => ({ ...prev, staff: [], tasks: [] }));
             // 🛡️ A live "Generate?" confirmation must not survive into demo mode.
@@ -801,7 +866,11 @@ const RosterView = ({ user }) => {
             setDemoTaskRows(createEmptyTaskRows());
             setDemoBandInputs(bandsToInputs(DEFAULT_GRADE_BANDS));
             setDemoHoursInputs(EMPTY_HOURS_INPUTS());
+            setDemoRulesInputs(EMPTY_RULES_INPUTS());
             setDemoExtraRules(null);
+            // 🧬 The twin of the reset above, and unmeasured for the same reason — see
+            // the note there. Kept for the same reason too.
+            setDemoArrangement(null);
 
             // 🛡️ M1 FIX: the demo branch above rewrites config.staff/config.tasks
             // (it used to overwrite them with the Marvel dataset; it now clears
@@ -896,52 +965,96 @@ const RosterView = ({ user }) => {
     // --- ACTIONS ---
     
     /**
-     * 🧪 SANDBOX: fill the example department into the wizard's tables.
+     * 🧪 SANDBOX: fill ONE OF THE FOUR ARRANGEMENTS into the wizard's tables.
      *
-     * EVERYTHING the fixture holds now lands somewhere the visitor can see and
-     * change: names, grades, FTE and leave dates into the staff rows; days, lead
-     * bands and the co-lead toggle into the task rows; the three band boundaries
-     * into the editor above them. The fixture's grades were tuned against those
-     * boundaries (see `DEMO_EXAMPLE_DEPARTMENT`), so the editor is loaded from
-     * `rules.bands` rather than left at whatever the visitor last typed.
+     * WAS `loadExampleDepartment`, which took no argument and closed over the single
+     * example fixture. It now takes the arrangement, and the body below is otherwise
+     * the same code with `DEMO_EXAMPLE_DEPARTMENT` replaced by `fixture` — deliberately
+     * a parameterisation and not a rewrite, because the respiratory option passes
+     * exactly the object this function used to read and its four existing tests
+     * therefore still describe the same behaviour.
      *
-     * Two things travel on the rows without a column of their own — staff
-     * `skills` and a task's `requiresSkill` — because the example's single
-     * unfillable slot exists precisely because only two people hold CPET. They
-     * are rendered read-only in the tables rather than hidden.
+     * EVERYTHING the fixture holds lands somewhere the visitor can see and change:
+     * names, grades, FTE, leave dates, per-person daily caps and cohort windows into
+     * the staff rows; days or a monthly recurrence, lead bands, the co-lead toggle,
+     * continuity, a quota, a session length, a slot list and a category into the task
+     * rows; the three band boundaries, the two hours boxes and the three department
+     * limits into the panels that own them. THAT IS WHAT MAKES THE PICKER HONEST: an
+     * arrangement whose interesting field had no control would load, generate, and be
+     * uneditable — a demo of a capability nobody in the room could then adjust.
+     *
+     * Two things travel on the rows without a column of their own — staff `skills` and
+     * a task's `requiresSkill` — because the respiratory arrangement's single
+     * unfillable slot exists precisely because only two people hold CPET. They are
+     * rendered read-only in the tables rather than hidden.
      *
      * Fresh copies throughout, so a later edit cannot mutate the frozen export
      * through a shared array reference.
      */
-    const loadExampleDepartment = () => {
-        setDemoStaffRows(DEMO_EXAMPLE_DEPARTMENT.staff.map(person => createStaffRow(person)));
-        setDemoTaskRows(DEMO_EXAMPLE_DEPARTMENT.tasks.map(task => createTaskRow(task)));
-        setDemoBandInputs(bandsToInputs(DEMO_EXAMPLE_DEPARTMENT.rules?.bands || DEFAULT_GRADE_BANDS));
-        // The fixture's hours policy, if it ever grows one, goes into the two boxes
-        // — not into `extraRules` — for exactly the reason `bands` does: one value,
-        // one source, and the source is the control the visitor can see. Today the
-        // fixture states neither field, so both boxes stay blank and the sandbox's
-        // headline run is the duties-only run it has always been.
+    const loadArrangement = (arrangement) => {
+        const fixture = arrangement.config;
+        // The label, and specifically its `correction`, travels with the rows. See the
+        // note on `demoArrangement`: the picker closes, the caveat must not.
+        setDemoArrangement(arrangement);
+        setDemoStaffRows(fixture.staff.map(person => createStaffRow(person)));
+        setDemoTaskRows(fixture.tasks.map(task => createTaskRow(task)));
+        setDemoBandInputs(bandsToInputs(fixture.rules?.bands || DEFAULT_GRADE_BANDS));
+        // The fixture's hours policy goes into the two boxes — not into `extraRules` —
+        // for exactly the reason `bands` does: one value, one source, and the source is
+        // the control the visitor can see. The respiratory arrangement states neither
+        // field, so both boxes stay blank and its run is the duties-only run it has
+        // always been; psychology and the laboratory state `weeklyHours: 42`, and 42
+        // therefore appears in the box as a TYPED value, which is what makes the hours
+        // columns in their load tables something a visitor can change rather than a
+        // property of the fixture.
         const exampleHours = {
-            weeklyHours: DEMO_EXAMPLE_DEPARTMENT.rules?.weeklyHours === undefined
-                ? '' : String(DEMO_EXAMPLE_DEPARTMENT.rules.weeklyHours),
-            maxHoursPerDay: DEMO_EXAMPLE_DEPARTMENT.rules?.maxHoursPerDay === undefined
-                ? '' : String(DEMO_EXAMPLE_DEPARTMENT.rules.maxHoursPerDay),
+            weeklyHours: fixture.rules?.weeklyHours === undefined
+                ? '' : String(fixture.rules.weeklyHours),
+            maxHoursPerDay: fixture.rules?.maxHoursPerDay === undefined
+                ? '' : String(fixture.rules.maxHoursPerDay),
         };
         setDemoHoursInputs(exampleHours);
-        // Only the policy the tables have no column for. `bands` is stripped: the
-        // editor owns it from here, and two sources for one value is how a
-        // roster gets generated against boundaries nobody can see. The two hours
-        // fields are stripped for the same reason, into the boxes above.
-        const exampleRules = { ...(DEMO_EXAMPLE_DEPARTMENT.rules || {}) };
+        // …and the same discipline for the three department limits, which used to be
+        // the ONLY way `maxConcurrentPerDay` and `maxConsecutiveDays` reached a config
+        // at all (`ROSTER_QC_AUDIT_SURFACES.md` §3: "example fixture only"). They now
+        // land in the panel that owns them, so the example's policy is visible and
+        // editable rather than carried invisibly in `extraRules`. The fixture states 2
+        // and 6, which happen to be the engine's defaults — the boxes therefore show
+        // "2" and "6" as TYPED values, because the example department really does
+        // declare them, and that is a different fact from leaving them blank. All four
+        // arrangements state the same two, so all four show them.
+        setDemoRulesInputs({
+            maxConcurrentPerDay: fixture.rules?.maxConcurrentPerDay === undefined
+                ? '' : String(fixture.rules.maxConcurrentPerDay),
+            maxConsecutiveDays: fixture.rules?.maxConsecutiveDays === undefined
+                ? '' : String(fixture.rules.maxConsecutiveDays),
+            // Fresh arrays, so an edit in the wizard cannot reach into the frozen
+            // export through a shared reference.
+            forbidPairs: (fixture.rules?.forbidPairs || []).map(pair => [...pair]),
+        });
+        // Only the policy no control owns. `bands` is stripped: the editor owns it from
+        // here, and two sources for one value is how a roster gets generated against
+        // boundaries nobody can see. The two hours fields and the three limits are
+        // stripped for the same reason, into the controls above.
+        const exampleRules = { ...(fixture.rules || {}) };
         delete exampleRules.bands;
         delete exampleRules.weeklyHours;
         delete exampleRules.maxHoursPerDay;
+        delete exampleRules.maxConcurrentPerDay;
+        delete exampleRules.maxConsecutiveDays;
+        delete exampleRules.forbidPairs;
         setDemoExtraRules(exampleRules);
+        // The start date and the length of the run are PART OF THE ARRANGEMENT, and for
+        // three of the four they are load-bearing rather than cosmetic: a psychology run
+        // shorter than two months holds one occurrence of a monthly clinic and cannot
+        // show continuity at all; an embryology run shorter than a four-month block
+        // shows a rota instead of a handover; and the laboratory run starts on the 1st
+        // of a month so its first quota period is a WHOLE month the engine will judge.
+        // Each fixture's own comment states why its two numbers are what they are.
         setConfig(prev => ({
             ...prev,
-            startDate: DEMO_EXAMPLE_DEPARTMENT.startDate,
-            weeks: DEMO_EXAMPLE_DEPARTMENT.weeks,
+            startDate: fixture.startDate,
+            weeks: fixture.weeks,
         }));
     };
 
@@ -964,6 +1077,13 @@ const RosterView = ({ user }) => {
 
     const patchHoursInput = (field, value) =>
         setDemoHoursInputs(prev => ({ ...prev, [field]: value }));
+
+    // The three department limits, including the whole `forbidPairs` LIST: the panel
+    // computes the next list (add a pair, remove a pair) and hands it over in one
+    // call, exactly as the task drawer does for its slot list and the staff drawer for
+    // its windows. One callback per control family, no per-item plumbing here.
+    const patchRulesInput = (field, value) =>
+        setDemoRulesInputs(prev => ({ ...prev, [field]: value }));
 
     const handleGenerateClick = () => {
         if (isDemo) {
@@ -1524,6 +1644,35 @@ const RosterView = ({ user }) => {
         return grouped;
     }, [demoResult]);
 
+    // 🧪 THE TWO NEW ENGINE OUTPUTS, READ THROUGH THE PURE CLASSIFIERS.
+    //
+    // Both exist because the engine's own sentence is CORRECT and still reads as a
+    // failure to somebody who did not write the engine:
+    //
+    //   an UNMET QUOTA FLOOR is not a bug and not a broken roster — a floor cannot be
+    //   met by inventing capacity, so the engine prefers whoever is behind for every
+    //   occurrence it can and then says who was still short. Mixed into the general
+    //   warnings list it reads as "something went wrong"; given its own block with one
+    //   sentence of framing it reads as "this is what your policy cost".
+    //
+    //   a WINDOW-BLOCKED SLOT is the one `unfilled` reason whose cause is invisible in
+    //   the tables: the people are in the pool, none of them is on leave, and they are
+    //   still not eligible. Saying how many of the gaps are that, in words, is the
+    //   difference between a report and a puzzle.
+    //
+    // Classified in `rosterWizard.js` rather than here, and pinned by end-to-end tests
+    // that ask the classifier about a sentence the ENGINE actually produced — so this
+    // component holds no opinion about the engine's prose and there is one definition
+    // of "is this a quota floor" for the panel and the tests to share.
+    const demoWarnings = useMemo(
+        () => partitionDemoWarnings(demoResult?.warnings || []),
+        [demoResult],
+    );
+    const demoUnfilledCauses = useMemo(
+        () => summariseUnfilledCauses(demoResult?.unfilled || []),
+        [demoResult],
+    );
+
     // 🤝 The coverage requests actually on screen: PENDING per Firestore, minus the
     // ones answered in this session (the snapshot lags a successful write by a
     // round trip). A request whose acceptance FAILED is deliberately still here.
@@ -1586,15 +1735,34 @@ const RosterView = ({ user }) => {
                         </h2>
                         
                         <div className="flex items-center gap-3 mt-1">
-                            <button onClick={() => handleMonthChange(-1)} className="p-1 hover:bg-slate-100 dark:hover:bg-slate-700 rounded transition-colors text-slate-500">
+                            {/* ♿ NAMED. Both were icon-only buttons with no accessible
+                                name at all, so a screen reader announced two unlabelled
+                                buttons either side of a month — and no test could reach
+                                them, which is why every calendar assertion in the suite
+                                was confined to the one month the view opens on. The
+                                arrangements changed that: an embryology run spans nine
+                                months and its handover is only visible by moving between
+                                them. Additive — nothing queried these by name before,
+                                because they had none. */}
+                            <button
+                                type="button"
+                                aria-label="Previous month"
+                                onClick={() => handleMonthChange(-1)}
+                                className="p-1 hover:bg-slate-100 dark:hover:bg-slate-700 rounded transition-colors text-slate-500"
+                            >
                                 <ChevronLeft size={18} />
                             </button>
-                            
+
                             <span className="text-sm font-bold text-slate-600 dark:text-slate-300 uppercase min-w-[140px] text-center whitespace-nowrap">
                                 {currentDate.toLocaleString('default', { month: 'long' })} {year}
                             </span>
-                            
-                            <button onClick={() => handleMonthChange(1)} className="p-1 hover:bg-slate-100 dark:hover:bg-slate-700 rounded transition-colors text-slate-500">
+
+                            <button
+                                type="button"
+                                aria-label="Next month"
+                                onClick={() => handleMonthChange(1)}
+                                className="p-1 hover:bg-slate-100 dark:hover:bg-slate-700 rounded transition-colors text-slate-500"
+                            >
                                 <ChevronRight size={18} />
                             </button>
                         </div>
@@ -1883,10 +2051,37 @@ const RosterView = ({ user }) => {
                         </p>
                     </div>
 
+                    {/* 🧪 THE PROVENANCE NOTICE, and it is here rather than only in the
+                        wizard for one reason: the wizard is a modal and it closes the
+                        moment the roster is drafted. What the room then looks at is a
+                        finished roster of their own service, and if the only place that
+                        said "this was inferred, not reported" was the panel that just
+                        disappeared, the tool would have quietly presented a guess as a
+                        service. Rendered from the loaded arrangement's `correction` field,
+                        so it appears for whichever arrangement declares one and for no
+                        other — and never for a team who typed their own roster in, where
+                        it would be a false statement about their own data.
+
+                        It sits ABOVE the run summary on purpose. Reading order is the
+                        claim: what this roster IS comes before how many shifts it holds. */}
+                    {demoArrangement?.correction && (
+                        <div className="flex items-start gap-2 p-3 rounded-xl bg-amber-50 dark:bg-amber-900/20 border border-amber-300 dark:border-amber-800">
+                            <ShieldAlert size={16} className="text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
+                            <div>
+                                <p className="text-xs font-black text-amber-800 dark:text-amber-300 uppercase tracking-wide">
+                                    {demoArrangement.name} — {demoArrangement.correction.headline}
+                                </p>
+                                <p className="text-xs text-amber-800 dark:text-amber-300 leading-relaxed mt-1">
+                                    {demoArrangement.correction.body}
+                                </p>
+                            </div>
+                        </div>
+                    )}
+
                     {!demoResult && (
                         <p className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed">
                             No sandbox roster yet. Open <span className="font-bold">Configure</span>, fill in the
-                            staff and task tables (or load the example department) and press{' '}
+                            staff and task tables (or load one of the four example arrangements) and press{' '}
                             <span className="font-bold">Draft roster</span>. The calendar above is
                             empty because nothing has been generated — not because a roster failed.
                         </p>
@@ -1925,14 +2120,62 @@ const RosterView = ({ user }) => {
                                 </div>
                             </div>
 
-                            {/* --- warnings --- */}
-                            {demoResult.warnings.length > 0 && (
+                            {/* --- warnings ---
+                                THE COUNT IN THE HEADING IS WHAT THIS BLOCK LISTS, not the
+                                engine's total, because the unmet quota floors are pulled
+                                out into their own block below. Any difference is stated
+                                on the next line rather than left as an unexplained
+                                number — a partition that loses a warning, or a count
+                                that does not match the list under it, is exactly the
+                                class of quiet dishonesty this panel exists to prevent.
+                                `partitionDemoWarnings` is a partition and its own tests
+                                assert that nothing falls out of it. */}
+                            {demoWarnings.others.length > 0 && (
                                 <div className="p-3 rounded-xl bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800">
                                     <p className="text-[10px] font-black text-amber-700 dark:text-amber-400 uppercase tracking-widest mb-2">
-                                        Warnings ({demoResult.warnings.length})
+                                        Warnings ({demoWarnings.others.length})
                                     </p>
                                     <ul className="space-y-1">
-                                        {demoResult.warnings.map((warning, idx) => (
+                                        {demoWarnings.others.map((warning, idx) => (
+                                            <li key={idx} className="text-xs text-amber-800 dark:text-amber-300 leading-relaxed flex items-start gap-1.5">
+                                                <ShieldAlert size={13} className="shrink-0 mt-0.5" />
+                                                <span>{warning}</span>
+                                            </li>
+                                        ))}
+                                    </ul>
+                                    {demoWarnings.quotaFloors.length > 0 && (
+                                        <p className="mt-2 text-[10px] text-amber-700/90 dark:text-amber-400/90 leading-relaxed">
+                                            {demoWarnings.quotaFloors.length === 1
+                                                ? 'One more warning is listed under Per-person minimums below.'
+                                                : `${demoWarnings.quotaFloors.length} more warnings are listed under Per-person minimums below.`}
+                                        </p>
+                                    )}
+                                </div>
+                            )}
+
+                            {/* --- unmet per-person minimums (quota FLOORS) ------------
+                                Its own block, in its own words, because the engine's
+                                sentence is right and reads wrong: a floor is a
+                                PREFERENCE the engine could not fully honour, not a
+                                constraint it broke. Nothing here is a rule violation —
+                                `score.hardViolations` is still 0 — and a roster master
+                                who reads it as one will go looking for a bug instead of
+                                revisiting the policy or the pool. */}
+                            {demoWarnings.quotaFloors.length > 0 && (
+                                <div className="p-3 rounded-xl bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800">
+                                    <p className="text-[10px] font-black text-amber-700 dark:text-amber-400 uppercase tracking-widest mb-2">
+                                        Per-person minimums not met ({demoWarnings.quotaFloors.length})
+                                    </p>
+                                    <p className="text-xs text-amber-800 dark:text-amber-300 leading-relaxed mb-2">
+                                        A minimum is a <span className="font-bold">preference, not a promise</span>.
+                                        AURA gave these duties to whoever was behind whenever it could, and this is
+                                        what was left over — a floor cannot be met by inventing capacity. Nothing
+                                        below is a rule this roster breaks. To close the gap, add dates, add people
+                                        to each date, or lower the minimum under{' '}
+                                        <span className="font-bold">More…</span> on the task.
+                                    </p>
+                                    <ul className="space-y-1">
+                                        {demoWarnings.quotaFloors.map((warning, idx) => (
                                             <li key={idx} className="text-xs text-amber-800 dark:text-amber-300 leading-relaxed flex items-start gap-1.5">
                                                 <ShieldAlert size={13} className="shrink-0 mt-0.5" />
                                                 <span>{warning}</span>
@@ -1965,6 +2208,49 @@ const RosterView = ({ user }) => {
                                     </p>
                                 ) : (
                                     <>
+                                        {/* WHY, IN PLAIN LANGUAGE, FOR THE TWO CAUSES A
+                                            READER CANNOT SEE IN THE TABLES.
+                                            Every reason below is already the engine's own
+                                            complete sentence, and two of them describe a
+                                            state that is invisible in the staff table: the
+                                            people are there, nobody is on leave, and they
+                                            are still not eligible. This is the one line
+                                            that says so before the list rather than
+                                            leaving it to be inferred from "3 outside their
+                                            cohort window".
+                                            THE TWO FIGURES ARE NOT A PARTITION OF THE
+                                            TOTAL and are deliberately not presented as
+                                            one: a single slot can be short of candidates
+                                            for both reasons at once, so they are stated as
+                                            "N of these" rather than summed. */}
+                                        {(demoUnfilledCauses.windowBlocked > 0 || demoUnfilledCauses.quotaBlocked > 0) && (
+                                            <div className="mb-2 space-y-1">
+                                                {demoUnfilledCauses.windowBlocked > 0 && (
+                                                    <p className="text-xs font-bold text-red-800 dark:text-red-300 leading-relaxed">
+                                                        {demoUnfilledCauses.windowBlocked === 1
+                                                            ? 'One of these is a date nobody\'s availability window covers'
+                                                            : `${demoUnfilledCauses.windowBlocked} of these are dates nobody's availability window covers`}
+                                                        {' — '}
+                                                        the people are in the pool and not on leave, they are simply outside
+                                                        the block of dates they were given. Widen a window under{' '}
+                                                        <span className="font-bold">More…</span> in the staff table, move the
+                                                        run, or change when the task happens.
+                                                    </p>
+                                                )}
+                                                {demoUnfilledCauses.quotaBlocked > 0 && (
+                                                    <p className="text-xs font-bold text-red-800 dark:text-red-300 leading-relaxed">
+                                                        {demoUnfilledCauses.quotaBlocked === 1
+                                                            ? 'One of these is a per-person maximum being enforced'
+                                                            : `${demoUnfilledCauses.quotaBlocked} of these are a per-person maximum being enforced`}
+                                                        {' — '}
+                                                        everybody who could take the duty has already had as many as you
+                                                        allowed them. Raise the maximum under{' '}
+                                                        <span className="font-bold">More…</span> on the task, or add somebody
+                                                        who can share it.
+                                                    </p>
+                                                )}
+                                            </div>
+                                        )}
                                         <ul className="space-y-1.5">
                                             {demoResult.unfilled.slice(0, DEMO_UNFILLED_PREVIEW).map((slot, idx) => (
                                                 <li key={`${slot.date}-${slot.task}-${slot.role}-${idx}`} className="text-xs text-red-800 dark:text-red-300 leading-relaxed">
@@ -2305,30 +2591,110 @@ const RosterView = ({ user }) => {
                             </h3>
                         </div>
                         
-                        {/* 🧪 SANDBOX: one press fills a whole fictional department into
-                            the tables below — twelve staff with AH grades and one 0.6
-                            FTE part-timer, eight tasks, three skills, one day of leave
-                            and two band-gated duties. It is the configuration the
-                            unfilled-slot behaviour is demonstrated with, and every part
-                            of it is now editable rather than carried invisibly. A
-                            typed-in team still works: a name alone is enough, and the
-                            columns beside it are all optional. */}
+                        {/* 🧪 SANDBOX: THE ARRANGEMENT PICKER.
+                            WAS ONE BUTTON, "Load example department", which filled the
+                            tables with a single twelve-person fixture. One fixture
+                            demonstrated one team's problem, so three of the four
+                            professions who were interviewed sat through a roster that was
+                            not about them: the psychologists' question is a monthly clinic
+                            with the same clinician on it, the embryologists' is a shift
+                            that needs three people at once and a team rotation, the
+                            laboratory's is a Saturday FLOOR. None of the three is visible
+                            in a run of the respiratory example, however good that example
+                            is at what it does show.
+                            FOUR OPTIONS, and each carries the ONE LINE that says what it
+                            demonstrates — because the choice being made here is between
+                            four capabilities, not four casts of fictional names.
+                            THE HEALTH WARNING IS RENDERED FROM DATA, not written into this
+                            markup: an arrangement carries `correction`, and any arrangement
+                            that carries one gets the amber panel. That way an arrangement
+                            added later cannot be labelled as a team's real service just
+                            because whoever added it forgot the caption — the field is the
+                            thing that has to be filled in, and a `null` is a claim.
+                            A typed-in team still works and is still the point of the
+                            tables: a name alone is enough, and every column beside it is
+                            optional. */}
                         {isDemo && (
                             <div className="mb-4 p-3 rounded-xl bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800">
-                                <button
-                                    type="button"
-                                    onClick={loadExampleDepartment}
-                                    className="flex items-center gap-2 px-3 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs uppercase tracking-wider transition-colors"
-                                >
-                                    <Users size={14} /> Load example department
-                                </button>
-                                <p className="text-[10px] text-emerald-700 dark:text-emerald-300 mt-2 leading-relaxed">
-                                    {DEMO_EXAMPLE_DEPARTMENT.label} — {DEMO_EXAMPLE_DEPARTMENT.staff.length} staff
-                                    with job grades, {DEMO_EXAMPLE_DEPARTMENT.tasks.length} tasks, two of them
-                                    restricted by grade band, skill-gated duties, one part-timer and one person on
-                                    leave. Or fill in the tables below with your own team — a name alone is
-                                    enough, and anyone you leave blank is treated as full-time with no skills, no
-                                    leave and no grade recorded.
+                                <p className="text-[10px] font-black text-emerald-800 dark:text-emerald-300 uppercase tracking-widest">
+                                    Load an example arrangement
+                                </p>
+                                <p className="text-[10px] text-emerald-700 dark:text-emerald-300 mt-1 leading-relaxed">
+                                    Four teams, four different rostering problems. Each fills the tables below in one
+                                    press, and every part of what it loads stays editable — including the fields that
+                                    make it interesting.
+                                </p>
+
+                                <div className="mt-3 space-y-2">
+                                    {DEMO_ARRANGEMENTS.map((arrangement) => {
+                                        const loaded = demoArrangement?.id === arrangement.id;
+                                        return (
+                                            <div
+                                                key={arrangement.id}
+                                                data-arrangement={arrangement.id}
+                                                className={`p-2 rounded-lg border transition-colors ${
+                                                    loaded
+                                                        ? 'border-emerald-500 bg-white dark:bg-slate-900'
+                                                        : 'border-emerald-200/70 dark:border-emerald-800/70'
+                                                }`}
+                                            >
+                                                <div className="flex flex-col sm:flex-row sm:items-start gap-2">
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => loadArrangement(arrangement)}
+                                                        className="shrink-0 flex items-center gap-2 px-3 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-[11px] uppercase tracking-wider transition-colors"
+                                                    >
+                                                        <Users size={14} /> Load {arrangement.name}
+                                                    </button>
+                                                    <p className="text-[10px] text-emerald-700 dark:text-emerald-300 leading-relaxed">
+                                                        {arrangement.demonstrates}
+                                                    </p>
+                                                </div>
+
+                                                {/* THE PROVENANCE WARNING. Present whenever the
+                                                    arrangement carries one, loaded or not — a
+                                                    visitor has to be able to read it BEFORE
+                                                    pressing, not only after. The checklist below it
+                                                    opens once the arrangement is loaded, because
+                                                    five bullet points on every unpressed option is
+                                                    a wall of text, and the moment they become
+                                                    actionable is the moment the roster exists. */}
+                                                {arrangement.correction && (
+                                                    <div className="mt-2 flex items-start gap-2 p-2 rounded-lg bg-amber-50 dark:bg-amber-900/20 border border-amber-300 dark:border-amber-800">
+                                                        <ShieldAlert size={14} className="text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
+                                                        <div>
+                                                            <p className="text-[10px] font-black text-amber-800 dark:text-amber-300 uppercase tracking-wide">
+                                                                {arrangement.correction.headline}
+                                                            </p>
+                                                            {loaded && (
+                                                                <>
+                                                                    <p className="text-[10px] text-amber-800 dark:text-amber-300 leading-relaxed mt-1">
+                                                                        {arrangement.correction.body}
+                                                                    </p>
+                                                                    <p className="text-[10px] font-bold text-amber-800 dark:text-amber-300 mt-1">
+                                                                        Please check every one of these:
+                                                                    </p>
+                                                                    <ul className="mt-0.5 list-disc list-outside pl-4 space-y-0.5">
+                                                                        {arrangement.correction.items.map((item) => (
+                                                                            <li key={item} className="text-[10px] text-amber-700 dark:text-amber-400 leading-relaxed">
+                                                                                {item}
+                                                                            </li>
+                                                                        ))}
+                                                                    </ul>
+                                                                </>
+                                                            )}
+                                                        </div>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+
+                                <p className="text-[10px] text-emerald-700 dark:text-emerald-300 mt-3 leading-relaxed">
+                                    Or fill in the tables below with your own team — a name alone is enough, and
+                                    anyone you leave blank is treated as full-time with no skills, no leave and no
+                                    grade recorded.
                                 </p>
                             </div>
                         )}
@@ -2385,6 +2751,9 @@ const RosterView = ({ user }) => {
                                     hoursInputs={demoHoursInputs}
                                     hoursErrors={demoWizard.hoursErrors}
                                     onHoursChange={patchHoursInput}
+                                    rulesInputs={demoRulesInputs}
+                                    rulesErrors={demoWizard.rulesErrors}
+                                    onRulesChange={patchRulesInput}
                                     staffRows={demoStaffRows}
                                     staffErrors={demoWizard.staffErrors}
                                     onStaffChange={patchStaffRow}

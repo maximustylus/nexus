@@ -1,5 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { Routes, Route, useLocation } from 'react-router-dom';
+// `useLocation` is intentionally not imported here: App's only use of it was a
+// dead `isPublicPathway` flag. `<Routes>` subscribes to the location itself.
+import { Routes, Route } from 'react-router-dom';
 import { getMessaging, onMessage } from "firebase/messaging";
 
 // FIREBASE
@@ -82,10 +84,8 @@ const CustomBarTooltip = ({ active, payload, label }) => {
 };
 
 export default function App() {
-  const { isDemo, toggleDemo } = useNexus(); 
-  const location = useLocation();
-  const isPublicPathway = location.pathname.startsWith('/individuals');
-  
+  const { isDemo, toggleDemo } = useNexus();
+
   const [currentView, setCurrentView] = useState(() => {
       if (typeof window !== 'undefined') {
           const params = new URLSearchParams(window.location.search);

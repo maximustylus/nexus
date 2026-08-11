@@ -74,7 +74,6 @@ const weekdayOfKey = (key) => new Date(`${key}T00:00:00Z`).getUTCDay();
 const SUNDAY = 0;
 const MONDAY = 1;
 const TUESDAY = 2;
-const FRIDAY = 5;
 const SATURDAY = 6;
 
 /** The weekdays a "Mon-Fri" core block is allowed to occupy. */

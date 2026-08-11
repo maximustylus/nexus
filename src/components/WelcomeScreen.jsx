@@ -19,6 +19,18 @@ import {
 import { useNexus } from '../context/NexusContext';
 import { checkAccess } from '../utils'; 
 
+// Hoisted out of the component: a fixed, render-independent list. Inside the
+// body it was reallocated every render, which is what made
+// react-hooks/exhaustive-deps ask for `welcomeTexts.length` in the rotator
+// effect below. At module scope the dependency is a constant and the effect's
+// `[activeTab]` list is complete.
+const WELCOME_TEXTS = [
+    "Explore community resources tailored to your health, lifestyle and wellness journey. AURA provides recommendations and can direct you to leading health and community programmes and services.",
+    "Terokai sumber komuniti yang disesuaikan untuk perjalanan kesihatan, gaya hidup dan kesejahteraan anda. AURA memberikan cadangan dan boleh menghalakan anda ke program dan perkhidmatan kesihatan dan komuniti yang terkemuka.",
+    "探索专为您的健康、生活方式和保健之旅量身定制的社区资源。AURA 提供建议，并能引导您参与领先的健康与社区计划和服务。",
+    "உங்கள் உடல்நலம், வாழ்க்கை முறை மற்றும் ஆரோக்கியப் பயணத்திற்கு ஏற்ப சமூக வளங்களை ஆராயுங்கள். AURA பரிந்துரைகளை வழங்கி, முன்னணி சுகாதார மற்றும் சமூக சேவைகளுக்கு உங்களை வழிநடத்தும்."
+];
+
 const WelcomeScreen = (props) => {
     const onAuthSuccess = props.onStart || props.onLogin || props.onEnter;
     const navigate = useNavigate();
@@ -37,18 +49,12 @@ const WelcomeScreen = (props) => {
     const [message, setMessage] = useState(''); 
     const [loading, setLoading] = useState(false);
     const [langIndex, setLangIndex] = useState(0);
-    const welcomeTexts = [
-        "Explore community resources tailored to your health, lifestyle and wellness journey. AURA provides recommendations and can direct you to leading health and community programmes and services.",
-        "Terokai sumber komuniti yang disesuaikan untuk perjalanan kesihatan, gaya hidup dan kesejahteraan anda. AURA memberikan cadangan dan boleh menghalakan anda ke program dan perkhidmatan kesihatan dan komuniti yang terkemuka.",
-        "探索专为您的健康、生活方式和保健之旅量身定制的社区资源。AURA 提供建议，并能引导您参与领先的健康与社区计划和服务。",
-        "உங்கள் உடல்நலம், வாழ்க்கை முறை மற்றும் ஆரோக்கியப் பயணத்திற்கு ஏற்ப சமூக வளங்களை ஆராயுங்கள். AURA பரிந்துரைகளை வழங்கி, முன்னணி சுகாதார மற்றும் சமூக சேவைகளுக்கு உங்களை வழிநடத்தும்."
-    ];
 
     useEffect(() => {
         if (activeTab === 'INDIVIDUALS') {
             const interval = setInterval(() => {
-                setLangIndex((prev) => (prev + 1) % welcomeTexts.length);
-            }, 4500); 
+                setLangIndex((prev) => (prev + 1) % WELCOME_TEXTS.length);
+            }, 4500);
             return () => clearInterval(interval);
         }
     }, [activeTab]);
@@ -245,7 +251,7 @@ const WelcomeScreen = (props) => {
                                 
                                 {/* THE BREATHING CAROUSEL */}
                                 <div className="grid mb-10 relative z-0 pointer-events-none min-h-[80px]"> 
-                                    {welcomeTexts.map((text, index) => (
+                                    {WELCOME_TEXTS.map((text, index) => (
                                         <p 
                                             key={index}
                                             className={`col-start-1 row-start-1 w-full text-slate-600 dark:text-slate-400 leading-relaxed text-sm font-medium transition-all duration-1000 ease-in-out ${

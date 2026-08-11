@@ -231,7 +231,12 @@ describe('demo mode raises no native dialog (P8.3)', () => {
     it('generates a sandbox roster without alert(), confirm() or prompt()', () => {
         render(<RosterView user={VISITOR} />);
         openConfigure();
-        fireEvent.click(screen.getByRole('button', { name: /load example department/i }));
+        // CHANGED: was `/load example department/i`. That single button is now a picker
+        // of four arrangements and no button carries that name any more. The RESPIRATORY
+        // option loads `DEMO_EXAMPLE_DEPARTMENT` — the same fixture, by alias — so this
+        // test still generates the same sandbox roster it always did, and the P8.3 claim
+        // it exists for (branded UI, never a native dialog) is untouched.
+        fireEvent.click(screen.getByRole('button', { name: /^load respiratory & rehab$/i }));
         // RENAMED (language pass): the sandbox Generate button said "Generate Sandbox
         // Roster" and now says "Draft roster". Live mode's label is unchanged.
         fireEvent.click(screen.getByRole('button', { name: /^draft roster$/i }));
@@ -278,7 +283,12 @@ describe('demo mode raises no native dialog (P8.3)', () => {
     it('submits a sandbox swap into an on-screen notice, and says nothing was sent', async () => {
         render(<RosterView user={VISITOR} />);
         openConfigure();
-        fireEvent.click(screen.getByRole('button', { name: /load example department/i }));
+        // CHANGED: was `/load example department/i`. That single button is now a picker
+        // of four arrangements and no button carries that name any more. The RESPIRATORY
+        // option loads `DEMO_EXAMPLE_DEPARTMENT` — the same fixture, by alias — so this
+        // test still generates the same sandbox roster it always did, and the P8.3 claim
+        // it exists for (branded UI, never a native dialog) is untouched.
+        fireEvent.click(screen.getByRole('button', { name: /^load respiratory & rehab$/i }));
         fireEvent.click(screen.getByRole('button', { name: /^draft roster$/i }));
 
         openSwapModalFor('Inpatient Rounds');

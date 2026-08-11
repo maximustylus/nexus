@@ -14,19 +14,37 @@
  *   2. `DepartmentHoursEditor` — the contracted week and the longest working day.
  *      Beside the ruler because it is the same KIND of thing: one departmental
  *      policy that every row below is judged against.
- *   3. `StaffTable` — Name / Grade / FTE / Away.
- *   4. `TaskTable` — Task / Who may lead / Days / Co-lead?, plus a per-row
- *      "More…" disclosure holding hours and the multi-slot editor.
+ *   3. `DepartmentLimitsEditor` — the daily duty cap, the run of days, and the
+ *      pairs who must never share a shift. Beside the hours for the same reason.
+ *   4. `StaffTable` — Name / Grade / FTE / Away, plus a per-row "More…" disclosure
+ *      holding this person's own daily cap and their availability windows.
+ *   5. `TaskTable` — Task / Who may lead / Days / Co-lead?, plus a per-row
+ *      "More…" disclosure holding how often it repeats, how long a session takes,
+ *      the multi-slot editor, continuity, a per-person quota and a category.
  *
- * WHY THE TASK TABLE HAS A DISCLOSURE AND THE STAFF TABLE DOES NOT. The task row
+ * WHY BOTH TABLES NOW HAVE A DISCLOSURE, AND WHAT KEEPS IT HONEST. The task row
  * already carries a name, three band chips, seven day chips, a co-lead toggle and
- * a remove button — eleven controls. Hours and a slot list would make it fifteen
- * to twenty, on a row that has to fit a modal, and the two new ones are needed by
- * a minority of tasks (the lab's long benches, the embryologists' trios) while the
- * first four are needed by all of them. So the common case stays visible and the
- * rest is one click away, CLOSED by default. Two rules keep that from hiding
- * something that matters: a row whose hidden cells are set says so in a summary
- * line under its name, and a row whose hidden cells are WRONG opens itself.
+ * a remove button — eleven controls. The nine capabilities this phase reaches would
+ * have made it twenty-five, on a row that has to fit a modal, and every one of them
+ * is needed by a MINORITY of rows (the psychologists' monthly clinic, the
+ * embryologists' block rotation, the lab's Saturday floor) while the first four are
+ * needed by all of them. So the common case stays visible and the rest is one click
+ * away, CLOSED by default. THREE rules keep that from hiding something that matters:
+ *
+ *   • a row whose hidden cells are SET says so in a summary line under its name, in
+ *     the words of the setting rather than a bare dot;
+ *   • a row whose hidden cells are WRONG opens itself and refuses to fold;
+ *   • a control whose value the mapper would DROP is not rendered at all — the cell
+ *     says where the decision moved to instead. That is why slot mode replaces the
+ *     band chips, the co-lead toggle AND the continuity toggle, and why monthly mode
+ *     replaces the day strip.
+ *
+ * EVERY NEW CONTROL STATES ITS DEFAULT AS A PLACEHOLDER AND EMITS NOTHING WHILE IT
+ * IS BLANK. That is not politeness: the engine treats a STATED value as intent, and
+ * two of these fields switch a whole model on by being mentioned at all
+ * (`staff.windows` bounds everybody's eligibility in time; `task.quota` compiles a
+ * floor or a ceiling). A helpfully prefilled `2` in the daily-cap box would be a
+ * department declaring a policy it never discussed.
  *
  * ⚠️ SANDBOX ONLY. `RosterView` renders this in place of the two textareas when
  * `isDemo` is true, and renders the textareas exactly as before when it is not.
@@ -41,29 +59,37 @@
  */
 
 import React, { useRef, useState } from 'react';
-import { Plus, Trash2, ShieldAlert, Users, ClipboardList, Layers, ChevronRight, ChevronDown, Clock } from 'lucide-react';
+import { Plus, Trash2, ShieldAlert, Users, ClipboardList, Layers, ChevronRight, ChevronDown, Clock, SlidersHorizontal } from 'lucide-react';
 import {
     DEFAULT_TASK_HOURS,
     DEFAULT_WEEKLY_HOURS,
     GRADE_SCALE,
+    ROSTER_V2_DEFAULTS,
 } from '../utils/rosterEngineV2';
 import {
     ANY_BAND,
     BAND_DIVIDERS,
     BAND_NAMES,
+    QUOTA_PERIOD_OPTIONS,
+    RECURRENCE_ORDINAL_OPTIONS,
     RULER_GRADES,
     SLOTS_MAX,
     SLOTS_MIN,
+    TASK_CALENDAR_MONTHLY,
+    TASK_CALENDAR_WEEKLY,
     WEEKDAY_STRIP,
     bandDividerAtFraction,
     bandLabel,
     bandRulerModel,
     countWorkingDays,
+    createStaffWindow,
     createTaskSlot,
     derivedDailyHours,
     describeBandRange,
     describeFteAsDays,
+    describeTaskRecurrence,
     moveBandDivider,
+    parseConcurrentPerDayCell,
     parseFteCell,
 } from '../utils/rosterWizard';
 
@@ -112,6 +138,63 @@ const RowErrors = ({ errors, colSpan }) => {
         </tr>
     );
 };
+
+/**
+ * WHAT A CLOSED DRAWER IS HIDING, when it is hiding anything.
+ *
+ * ONE definition for both tables, because "a closed drawer must never be the only
+ * record that this task is monthly or that this person has a block rotation" is one
+ * rule, and two renderers for it would eventually disagree about which settings
+ * count. `parts` is already-worded fragments; empty means nothing to say and nothing
+ * is rendered.
+ */
+const HiddenSummary = ({ parts }) => {
+    const shown = (parts || []).filter(Boolean);
+    if (shown.length === 0) return null;
+    return (
+        <p className="mt-0.5 text-[9px] font-bold uppercase tracking-wider text-emerald-700 dark:text-emerald-400">
+            {shown.join(' · ')}
+        </p>
+    );
+};
+
+/**
+ * The disclosure control itself, shared by both tables so the two behave the same
+ * way — including the part that matters: a FORCED-OPEN row refuses to fold rather
+ * than folding and springing back open the moment the value is fixed. A box that
+ * disappears from under the cursor mid-correction is worse than a button that says
+ * why it will not close.
+ */
+const DisclosureButton = ({ open, forcedOpen, onToggle, ariaLabel, title, forcedTitle }) => {
+    const Chevron = open ? ChevronDown : ChevronRight;
+    return (
+        <button
+            type="button"
+            onClick={() => { if (!forcedOpen) onToggle(); }}
+            aria-expanded={open}
+            aria-label={ariaLabel}
+            title={forcedOpen ? forcedTitle : title}
+            className="flex items-center gap-0.5 px-1 py-0.5 rounded text-[10px] font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400 hover:text-emerald-700 dark:hover:text-emerald-400 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors"
+        >
+            <Chevron size={12} /> More
+        </button>
+    );
+};
+
+/** A labelled group inside a drawer. The whole reason a drawer with six controls reads. */
+const DrawerGroup = ({ label, children }) => (
+    <div className="space-y-1.5">
+        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{label}</p>
+        {children}
+    </div>
+);
+
+/** The one hairline between drawer groups, so the groups read as groups. */
+const DRAWER_DIVIDER = 'pt-3 border-t border-slate-200 dark:border-slate-700';
+
+/** A small number box, the same chrome as the department hours fields. */
+const NUMBER_FIELD =
+    'w-20 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded px-2 py-1 text-xs font-bold tabular-nums text-slate-800 dark:text-white focus:ring-2 focus:ring-emerald-500 outline-none';
 
 // --- 1. BAND BOUNDARIES: THE RULER --------------------------------------------
 //
@@ -545,10 +628,401 @@ export const DepartmentHoursEditor = ({ inputs, onChange, errors }) => {
     );
 };
 
-// --- 2. STAFF -----------------------------------------------------------------
+// --- 1c. DEPARTMENT LIMITS ----------------------------------------------------
+//
+// Three engine constraints that had NO control at all before this phase, and the
+// audit (`ROSTER_QC_AUDIT_SURFACES.md` §3) is blunt about what that meant:
+// `maxConcurrentPerDay` and `maxConsecutiveDays` arrived only via "Load example
+// department", so a typed-in team could not set them; `rules.forbidPairs` had zero
+// hits anywhere outside the engine and its own tests — validated, gated and audited,
+// and unreachable by anybody.
+//
+// THEY LIVE UP HERE, BESIDE THE WORKING WEEK, because they are the same kind of fact:
+// one departmental policy every row below is measured against. Putting the daily cap
+// in a staff column would have implied it was per person — it is the DEFAULT that a
+// person's own cap overrides, and the two want to be visibly a general rule and an
+// exception to it.
+//
+// WHY THE PAIR PICKER IS TWO DROPDOWNS AND NOT A TEXT BOX. The engine refuses a pair
+// naming somebody outside the staff pool, so free text would turn every typo into a
+// blocked run with a message about spelling. Two selects over the names actually in
+// the table cannot produce that state at all — and when the table is empty the
+// control says so instead of offering two empty boxes.
 
 /**
- * Name / Grade / FTE / Away.
+ * The daily duty cap, the run of days, and "never on the same shift".
+ *
+ * `inputs` is `{ maxConcurrentPerDay, maxConsecutiveDays, forbidPairs }` — two raw
+ * strings and a list of `[a, b]` name pairs — `onChange(field, value)` is per field,
+ * and `errors` is the mapper's `rulesErrors`.
+ *
+ * `staffNames` comes from the staff table two controls below. It is derived rather
+ * than passed in from `RosterView` for the same reason `workingDays` is: it is a fact
+ * about rows that are already in scope, and computing it once keeps one definition of
+ * "who is in this department".
+ *
+ * THE ONLY LOCAL STATE IS WHICH TWO NAMES ARE CURRENTLY SELECTED IN THE PICKER, and
+ * it is not an answer to "what will be generated" — nothing reads it but the Add
+ * button — so it cannot diverge from one. The committed pairs live in `RosterView`
+ * like every other value in this wizard.
+ */
+export const DepartmentLimitsEditor = ({ inputs, onChange, errors, staffNames = [] }) => {
+    const concurrent = inputs?.maxConcurrentPerDay ?? '';
+    const consecutive = inputs?.maxConsecutiveDays ?? '';
+    const pairs = Array.isArray(inputs?.forbidPairs) ? inputs.forbidPairs : [];
+    const [pending, setPending] = useState({ a: '', b: '' });
+
+    const problems = [errors?.maxConcurrentPerDay, errors?.maxConsecutiveDays, errors?.forbidPairs].filter(Boolean);
+
+    /**
+     * A PENDING CHOICE IS ONLY REAL WHILE THE PERSON IS. Rename or clear the staff row
+     * a picker is pointing at and the stored name has no option to select — a `<select>`
+     * then displays its first option while its value says otherwise, which is the
+     * "control holding a value it cannot show" failure this file refuses everywhere
+     * else. So the RENDERED value is filtered through the current names, and Add is
+     * disabled with it. Nothing is silently substituted: the box simply goes back to
+     * "Choose someone", which is the truth about what is selected.
+     */
+    const chosen = (which) => (staffNames.includes(pending[which]) ? pending[which] : '');
+    const canAdd = chosen('a') !== '' && chosen('b') !== '' && chosen('a') !== chosen('b');
+
+    const addPair = () => {
+        if (!canAdd) return;
+        onChange('forbidPairs', [...pairs, [chosen('a'), chosen('b')]]);
+        setPending({ a: '', b: '' });
+    };
+
+    const removePair = (index) =>
+        onChange('forbidPairs', pairs.filter((_, position) => position !== index));
+
+    const namePicker = (which, label) => (
+        <div>
+            <label className="text-[9px] font-bold text-slate-400 uppercase block" htmlFor={`demo-forbid-${which}`}>
+                {label}
+            </label>
+            <select
+                id={`demo-forbid-${which}`}
+                aria-label={`Never on the same shift: ${label.toLowerCase()}`}
+                value={chosen(which)}
+                onChange={(e) => setPending((prev) => ({ ...prev, [which]: e.target.value }))}
+                className={`${CELL_INPUT} w-40`}
+            >
+                <option value="">Choose someone</option>
+                {staffNames.map((name) => (
+                    <option key={name} value={name}>{name}</option>
+                ))}
+            </select>
+        </div>
+    );
+
+    return (
+        <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700">
+            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1 flex items-center gap-1.5">
+                <SlidersHorizontal size={13} /> Department limits
+            </p>
+            <p className="text-[10px] text-slate-500 dark:text-slate-400 leading-relaxed mb-3">
+                How much any one person may be asked to do, and who must not be put together. All three
+                are <span className="font-bold">hard</span>: a duty that would break one is reported as
+                not staffed, with the limit named, rather than quietly assigned. Leave a box empty and
+                AURA uses the figure shown in it.
+            </p>
+
+            <div className="flex flex-wrap gap-4">
+                <div>
+                    <label className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase block mb-1" htmlFor="demo-max-concurrent">
+                        Most duties in one day
+                    </label>
+                    <input
+                        id="demo-max-concurrent"
+                        type="text"
+                        inputMode="numeric"
+                        value={concurrent}
+                        // The engine's own default, so the number shown cannot drift
+                        // from the number applied.
+                        placeholder={String(ROSTER_V2_DEFAULTS.maxConcurrentPerDay)}
+                        onChange={(e) => onChange('maxConcurrentPerDay', e.target.value)}
+                        className={NUMBER_FIELD}
+                    />
+                    <p className="mt-0.5 text-[9px] text-slate-400 leading-relaxed max-w-[10rem]">
+                        Anyone may be given their own figure under <span className="font-bold">More…</span>
+                        {' '}in the staff table.
+                    </p>
+                </div>
+
+                <div>
+                    <label className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase block mb-1" htmlFor="demo-max-consecutive">
+                        Most days in a row
+                    </label>
+                    <input
+                        id="demo-max-consecutive"
+                        type="text"
+                        inputMode="numeric"
+                        value={consecutive}
+                        placeholder={String(ROSTER_V2_DEFAULTS.maxConsecutiveDays)}
+                        onChange={(e) => onChange('maxConsecutiveDays', e.target.value)}
+                        className={NUMBER_FIELD}
+                    />
+                    <p className="mt-0.5 text-[9px] text-slate-400 leading-relaxed max-w-[10rem]">
+                        Counted inside this run only — the day before it starts is not known.
+                    </p>
+                </div>
+            </div>
+
+            {/* --- never on the same shift --- */}
+            <div className={`mt-3 ${DRAWER_DIVIDER}`}>
+                <p className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">
+                    Never on the same shift
+                </p>
+                <p className="text-[10px] text-slate-500 dark:text-slate-400 leading-relaxed mb-2">
+                    Two people who must not be rostered onto one duty together — a supervision conflict,
+                    a household, a grievance. AURA will leave the second half of a shift{' '}
+                    <span className="font-bold">unstaffed and say so</span> rather than pair them.
+                </p>
+
+                {staffNames.length < 2 ? (
+                    <p className="text-[10px] font-bold text-slate-500 dark:text-slate-400 leading-relaxed">
+                        Add at least two named people to the staff table below and they can be paired here.
+                    </p>
+                ) : (
+                    <div className="flex flex-wrap items-end gap-2">
+                        {namePicker('a', 'First person')}
+                        {namePicker('b', 'Second person')}
+                        <button
+                            type="button"
+                            onClick={addPair}
+                            disabled={!canAdd}
+                            title={chosen('a') !== '' && chosen('a') === chosen('b')
+                                ? 'Somebody cannot be kept apart from themselves — pick two different people'
+                                : 'Add this pair'}
+                            className={`${ADD_ROW} disabled:opacity-40 disabled:cursor-not-allowed`}
+                        >
+                            <Plus size={12} /> Add pair
+                        </button>
+                    </div>
+                )}
+
+                {pairs.length > 0 && (
+                    // A LIST rather than a table on purpose: the load table's headings
+                    // are read off every `<th>` in the document, and a second table in
+                    // the wizard would answer that question with the wrong columns.
+                    <ul className="mt-2 space-y-1">
+                        {pairs.map(([a, b], index) => (
+                            <li key={`${a}|${b}|${index}`} className="flex items-center gap-2">
+                                <span className="text-[10px] font-bold text-slate-700 dark:text-slate-200">
+                                    {`${a} and ${b}`}
+                                </span>
+                                <button
+                                    type="button"
+                                    aria-label={`Remove pair ${index + 1}, ${a} and ${b}`}
+                                    title="Let these two work together again"
+                                    onClick={() => removePair(index)}
+                                    className="p-0.5 rounded text-slate-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/30 transition-colors"
+                                >
+                                    <Trash2 size={12} />
+                                </button>
+                            </li>
+                        ))}
+                    </ul>
+                )}
+            </div>
+
+            {problems.map((message) => (
+                <p key={message} className="mt-2 text-[10px] font-bold text-red-600 dark:text-red-400 flex items-start gap-1.5">
+                    <ShieldAlert size={12} className="shrink-0 mt-px" />
+                    <span>{message}</span>
+                </p>
+            ))}
+        </div>
+    );
+};
+
+// --- 2. STAFF -----------------------------------------------------------------
+
+/** How many columns a staff row spans — used by the error line and the drawer. */
+const STAFF_COLUMNS = 6;
+
+/**
+ * ONE PERSON'S HIDDEN HALF: how many duties they may hold in a day, and the dates
+ * they are available at all.
+ *
+ * Rendered as its own full-width row under the person's row, not as extra columns,
+ * for the reason the task drawer is: a window list is a LIST — three controls per
+ * line — and there is no width in a table for it.
+ *
+ * THE UNION SENTENCE IS THE MOST IMPORTANT COPY IN THIS FILE, and it is stated twice
+ * because it is the one thing a roster master will get wrong. A person with ANY
+ * window is eligible ONLY inside their windows. A window naming one task does not
+ * "restrict that task and leave the rest alone" — it says "this task, in this range,
+ * and nothing else at all". That is the engine's documented reading (section 0e(ii)),
+ * it is the reading a placement or a block rotation actually needs, and it is not the
+ * reading the words "availability window" suggest on their own.
+ */
+const StaffRowDetail = ({ row, index, departmentMaxPerDay, onChange }) => {
+    const windows = Array.isArray(row.windows) ? row.windows : [];
+
+    const patchWindow = (windowId, patch) =>
+        onChange(row.id, {
+            windows: windows.map((entry) => (entry.id === windowId ? { ...entry, ...patch } : entry)),
+        });
+
+    const addWindow = () => onChange(row.id, { windows: [...windows, createStaffWindow()] });
+
+    const removeWindow = (windowId) =>
+        onChange(row.id, { windows: windows.filter((entry) => entry.id !== windowId) });
+
+    return (
+        <tr>
+            <td colSpan={STAFF_COLUMNS} className="pb-3">
+                <div className="rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/60 p-3 space-y-3">
+
+                    {/* --- this person's own daily cap --- */}
+                    <DrawerGroup label="Most duties in one day">
+                        <div className="flex flex-wrap items-start gap-3">
+                            <input
+                                type="text"
+                                inputMode="numeric"
+                                aria-label={`Staff row ${index + 1} most duties per day`}
+                                value={row.maxPerDay}
+                                // The DEPARTMENT'S figure as it currently reads, not the
+                                // engine's shipped 2 — otherwise the placeholder would be a
+                                // lie the moment somebody types 3 in the box above.
+                                placeholder={String(departmentMaxPerDay)}
+                                onChange={(e) => onChange(row.id, { maxPerDay: e.target.value })}
+                                className={NUMBER_FIELD}
+                            />
+                            <p className="text-[10px] text-slate-500 dark:text-slate-400 leading-relaxed max-w-md">
+                                Blank means this person follows the department&apos;s figure of{' '}
+                                <span className="font-bold">{departmentMaxPerDay}</span>, set under{' '}
+                                <span className="font-bold">Department limits</span> above. A number here
+                                REPLACES it for them — higher or lower — and it is hard: a third duty on a
+                                day they are capped at two is reported as not staffed, not assigned.
+                            </p>
+                        </div>
+                    </DrawerGroup>
+
+                    {/* --- availability windows --- */}
+                    <div className={DRAWER_DIVIDER}>
+                        <DrawerGroup label="Available only between these dates">
+                            <p className="text-[10px] text-slate-500 dark:text-slate-400 leading-relaxed">
+                                For a rotation, a placement, a secondment or a locum — a block of months
+                                that is theirs, rather than the {' '}
+                                <span className="font-bold">Away</span> column&apos;s list of single days
+                                off. Add nothing and they are available on every date, which is what
+                                everybody in a department without rotations is.
+                            </p>
+                            <p className="text-[10px] font-bold text-amber-700 dark:text-amber-300 leading-relaxed">
+                                ⚠ Adding even one window makes this person available{' '}
+                                <span className="font-bold">only</span> inside their windows — not
+                                &ldquo;available as usual, plus these&rdquo;. Two windows are read as
+                                either one; a window that names tasks admits{' '}
+                                <span className="font-bold">only those tasks</span>, so somebody whose one
+                                window names a single clinic is on that clinic or on nothing.
+                            </p>
+
+                            {windows.length === 0 ? (
+                                <p className="text-[10px] font-bold text-slate-500 dark:text-slate-400 leading-relaxed">
+                                    No windows — available on every date of the run.
+                                </p>
+                            ) : (
+                                <div className="space-y-2">
+                                    {windows.map((window, windowIndex) => (
+                                        <div key={window.id} className="flex flex-wrap items-end gap-2">
+                                            <div>
+                                                <label
+                                                    className="text-[9px] font-bold text-slate-400 uppercase block"
+                                                    htmlFor={`window-from-${window.id}`}
+                                                >
+                                                    {`Window ${windowIndex + 1} from`}
+                                                </label>
+                                                <input
+                                                    id={`window-from-${window.id}`}
+                                                    type="text"
+                                                    aria-label={`Staff row ${index + 1} window ${windowIndex + 1} from`}
+                                                    value={window.from}
+                                                    placeholder="any earlier date"
+                                                    onChange={(e) => patchWindow(window.id, { from: e.target.value })}
+                                                    className={`${CELL_INPUT} w-36`}
+                                                />
+                                            </div>
+                                            <div>
+                                                <label
+                                                    className="text-[9px] font-bold text-slate-400 uppercase block"
+                                                    htmlFor={`window-to-${window.id}`}
+                                                >
+                                                    {`Window ${windowIndex + 1} to`}
+                                                </label>
+                                                <input
+                                                    id={`window-to-${window.id}`}
+                                                    type="text"
+                                                    aria-label={`Staff row ${index + 1} window ${windowIndex + 1} to`}
+                                                    value={window.to}
+                                                    placeholder="any later date"
+                                                    onChange={(e) => patchWindow(window.id, { to: e.target.value })}
+                                                    className={`${CELL_INPUT} w-36`}
+                                                />
+                                            </div>
+                                            <div>
+                                                <label
+                                                    className="text-[9px] font-bold text-slate-400 uppercase block"
+                                                    htmlFor={`window-tasks-${window.id}`}
+                                                >
+                                                    Only these tasks (optional)
+                                                </label>
+                                                <input
+                                                    id={`window-tasks-${window.id}`}
+                                                    type="text"
+                                                    aria-label={`Staff row ${index + 1} window ${windowIndex + 1} tasks`}
+                                                    value={window.tasks}
+                                                    placeholder="every task"
+                                                    onChange={(e) => patchWindow(window.id, { tasks: e.target.value })}
+                                                    className={`${CELL_INPUT} w-48`}
+                                                />
+                                            </div>
+                                            <button
+                                                type="button"
+                                                aria-label={`Remove staff row ${index + 1} window ${windowIndex + 1}`}
+                                                title="Remove this window"
+                                                onClick={() => removeWindow(window.id)}
+                                                className="mb-1 p-1 rounded text-slate-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/30 transition-colors"
+                                            >
+                                                <Trash2 size={13} />
+                                            </button>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+
+                            <button
+                                type="button"
+                                onClick={addWindow}
+                                title="Add a block of dates this person is available for"
+                                className={ADD_ROW}
+                            >
+                                <Plus size={12} /> {`Add availability window to person ${index + 1}`}
+                            </button>
+
+                            <p className="text-[10px] text-slate-500 dark:text-slate-400 leading-relaxed">
+                                Dates are <span className="font-bold">YYYY-MM-DD</span>. Leave{' '}
+                                <span className="font-bold">from</span> blank for &ldquo;from the start of
+                                the run&rdquo; and <span className="font-bold">to</span> blank for
+                                &ldquo;until the end of it&rdquo;. Task names must match the task table
+                                below exactly; separate several with commas.
+                            </p>
+                        </DrawerGroup>
+                    </div>
+
+                    {/* NO ERROR LINE HERE, deliberately — `RowErrors` renders every
+                        per-cell problem once, on one full-width line under this row.
+                        What makes the single copy safe is the forced-open rule in
+                        `StaffTable`: a row with a cap or a window error cannot fold. */}
+                </div>
+            </td>
+        </tr>
+    );
+};
+
+/**
+ * Name / Grade / FTE / Away / More…
  *
  * The grade dropdown's first option is BLANK and means "not recorded" — it is not
  * a default of AH7. Somebody with no grade recorded cannot lead a band-gated
@@ -562,134 +1036,203 @@ export const DepartmentHoursEditor = ({ inputs, onChange, errors }) => {
  * five-day week — a lab that runs Saturdays would be told the wrong number by a
  * hard-coded 5. The number itself stays in the box, because it is what a payroll
  * record holds and it is what the load table reports against.
+ *
+ * THE DISCLOSURE IS NEW, and it holds the two things a person can carry that the
+ * engine gates on and the table had no column for: their own daily duty cap, and the
+ * dates they are available at all. Same three rules as the task table's — a summary
+ * line when it is hiding something, forced open when what it hides is wrong, and no
+ * control rendered whose value the mapper would drop.
+ *
+ * THE ONE PIECE OF STATE HERE is which rows are expanded, and it is deliberate for
+ * exactly the reason the task table's is: it is not an answer to "what will be
+ * generated", so it cannot diverge from one.
  */
-export const StaffTable = ({ rows, errors, onChange, onAdd, onRemove, workingDays = 0 }) => (
-    <div>
-        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1 flex items-center gap-1.5">
-            <Users size={13} /> Staff
-        </p>
+export const StaffTable = ({ rows, errors, onChange, onAdd, onRemove, workingDays = 0, departmentMaxPerDay = ROSTER_V2_DEFAULTS.maxConcurrentPerDay }) => {
+    const [expandedRows, setExpandedRows] = useState(() => new Set());
 
-        <div className="overflow-x-auto">
-            <table className="w-full text-xs">
-                <thead>
-                    <tr>
-                        <th className={TH}>Name</th>
-                        <th className={TH}>Grade</th>
-                        <th className={TH}>FTE</th>
-                        <th className={TH}>Away (YYYY-MM-DD)</th>
-                        <th className="w-8" />
-                    </tr>
-                </thead>
-                <tbody>
-                    {rows.map((row, index) => (
-                        <React.Fragment key={row.id}>
-                            <tr>
-                                <td className="py-1 pr-2 align-top">
-                                    <input
-                                        type="text"
-                                        aria-label={`Staff row ${index + 1} name`}
-                                        value={row.name}
-                                        placeholder={index === 0 ? 'e.g. Aisha Rahman' : ''}
-                                        onChange={(e) => onChange(row.id, { name: e.target.value })}
-                                        className={CELL_INPUT}
-                                    />
-                                    {/* Skills have no column — they arrive with the
-                                        example department and are carried on the row.
-                                        Shown read-only rather than hidden: the example's
-                                        one unfillable slot exists BECAUSE only two people
-                                        hold CPET, and an invisible constraint that causes
-                                        a visible failure is exactly what this app is
-                                        against. */}
-                                    {row.skills?.length > 0 && (
-                                        <p className="mt-0.5 text-[9px] font-bold uppercase tracking-wider text-slate-400">
-                                            skills: {row.skills.join(' · ')}
-                                        </p>
-                                    )}
-                                </td>
-                                <td className="py-1 pr-2 align-top">
-                                    <select
-                                        aria-label={`Staff row ${index + 1} job grade`}
-                                        value={row.grade}
-                                        onChange={(e) => onChange(row.id, { grade: e.target.value })}
-                                        className={CELL_INPUT}
-                                    >
-                                        <option value="">Not recorded</option>
-                                        {GRADE_SCALE.map((grade) => (
-                                            <option key={grade} value={grade}>{grade}</option>
-                                        ))}
-                                    </select>
-                                </td>
-                                <td className="py-1 pr-2 align-top">
-                                    <input
-                                        type="text"
-                                        inputMode="decimal"
-                                        aria-label={`Staff row ${index + 1} FTE`}
-                                        value={row.fte}
-                                        onChange={(e) => onChange(row.id, { fte: e.target.value })}
-                                        className={`${CELL_INPUT} w-16`}
-                                    />
-                                    {/* What the figure means, in the words the person
-                                        whose contract it is would use. Read off the
-                                        PARSED cell, so a blank box says "full time"
-                                        (which is what blank means here) and an
-                                        unreadable one says nothing at all — the row's
-                                        error line is what speaks then. */}
-                                    {describeFteAsDays(parseFteCell(row.fte).value, workingDays) !== '' && (
-                                        <p className="mt-0.5 text-[9px] font-bold uppercase tracking-wider text-slate-400">
-                                            {describeFteAsDays(parseFteCell(row.fte).value, workingDays)}
-                                        </p>
-                                    )}
-                                </td>
-                                <td className="py-1 pr-2 align-top">
-                                    <input
-                                        type="text"
-                                        aria-label={`Staff row ${index + 1} away dates`}
-                                        value={row.away}
-                                        placeholder="2026-09-16, 2026-09-17"
-                                        onChange={(e) => onChange(row.id, { away: e.target.value })}
-                                        className={CELL_INPUT}
-                                    />
-                                </td>
-                                <td className="py-1 align-top">
-                                    <button
-                                        type="button"
-                                        aria-label={`Remove staff row ${index + 1}`}
-                                        title="Remove this person"
-                                        onClick={() => onRemove(row.id)}
-                                        disabled={rows.length <= 1}
-                                        className="p-1 rounded text-slate-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/30 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
-                                    >
-                                        <Trash2 size={13} />
-                                    </button>
-                                </td>
-                            </tr>
-                            <RowErrors errors={errors[row.id]} colSpan={5} />
-                        </React.Fragment>
-                    ))}
-                </tbody>
-            </table>
-        </div>
+    const toggleExpanded = (id) =>
+        setExpandedRows((prev) => {
+            const next = new Set(prev);
+            if (next.has(id)) next.delete(id);
+            else next.add(id);
+            return next;
+        });
 
-        <button type="button" onClick={onAdd} className={ADD_ROW}>
-            <Plus size={12} /> Add row
-        </button>
-
-        <p className="mt-1.5 text-[10px] text-slate-500 dark:text-slate-400 leading-relaxed">
-            Leave a grade as <span className="font-bold">Not recorded</span> and AURA will keep that
-            person out of every band-restricted lead slot and say so by name in the warnings — it will
-            not guess a grade for them. FTE defaults to 1.0; a blank FTE is full time. Away is a
-            comma-separated list of dates.
-        </p>
-        {workingDays > 0 && (
-            <p className="mt-1 text-[10px] text-slate-500 dark:text-slate-400 leading-relaxed">
-                The days-a-week line under each FTE is that figure spread over the{' '}
-                <span className="font-bold">{workingDays}</span>{' '}
-                {workingDays === 1 ? 'day' : 'days'} a week your tasks below are ticked for. Tick
-                another day and it changes.
+    return (
+        <div>
+            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1 flex items-center gap-1.5">
+                <Users size={13} /> Staff
             </p>
-        )}
-    </div>
-);
+
+            <div className="overflow-x-auto">
+                <table className="w-full text-xs">
+                    <thead>
+                        <tr>
+                            <th className={TH}>Name</th>
+                            <th className={TH}>Grade</th>
+                            <th className={TH}>FTE</th>
+                            <th className={TH}>Away (YYYY-MM-DD)</th>
+                            {/* The disclosure's own column, headed rather than blank:
+                                a nameless chevron is not discoverable. */}
+                            <th className={TH}>Limits &amp; dates</th>
+                            <th className="w-8" />
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {rows.map((row, index) => {
+                            const rowErrors = errors[row.id];
+                            // A row whose HIDDEN cells are wrong opens itself, for the
+                            // same reason the task table's does: a refusal the visitor
+                            // cannot act on is not a refusal, it is a dead end.
+                            const forcedOpen = Boolean(rowErrors?.maxPerDay || rowErrors?.windows);
+                            const open = expandedRows.has(row.id) || forcedOpen;
+                            const capSet = typeof row.maxPerDay === 'string' && row.maxPerDay.trim() !== '';
+                            const windowCount = Array.isArray(row.windows) ? row.windows.length : 0;
+
+                            return (
+                                <React.Fragment key={row.id}>
+                                    <tr>
+                                        <td className="py-1 pr-2 align-top">
+                                            <input
+                                                type="text"
+                                                aria-label={`Staff row ${index + 1} name`}
+                                                value={row.name}
+                                                placeholder={index === 0 ? 'e.g. Aisha Rahman' : ''}
+                                                onChange={(e) => onChange(row.id, { name: e.target.value })}
+                                                className={CELL_INPUT}
+                                            />
+                                            {/* Skills have no column — they arrive with the
+                                                example department and are carried on the row.
+                                                Shown read-only rather than hidden: the example's
+                                                one unfillable slot exists BECAUSE only two people
+                                                hold CPET, and an invisible constraint that causes
+                                                a visible failure is exactly what this app is
+                                                against. */}
+                                            {row.skills?.length > 0 && (
+                                                <p className="mt-0.5 text-[9px] font-bold uppercase tracking-wider text-slate-400">
+                                                    skills: {row.skills.join(' · ')}
+                                                </p>
+                                            )}
+                                            {/* WHAT THE DISCLOSURE IS HIDING. A closed drawer
+                                                must never be the only record that this person is
+                                                capped at one duty or is on a four-month block. */}
+                                            <HiddenSummary parts={[
+                                                capSet ? `max ${row.maxPerDay.trim()} a day` : null,
+                                                windowCount > 0
+                                                    ? `${windowCount} availability ${windowCount === 1 ? 'window' : 'windows'}`
+                                                    : null,
+                                            ]} />
+                                        </td>
+                                        <td className="py-1 pr-2 align-top">
+                                            <select
+                                                aria-label={`Staff row ${index + 1} job grade`}
+                                                value={row.grade}
+                                                onChange={(e) => onChange(row.id, { grade: e.target.value })}
+                                                className={CELL_INPUT}
+                                            >
+                                                <option value="">Not recorded</option>
+                                                {GRADE_SCALE.map((grade) => (
+                                                    <option key={grade} value={grade}>{grade}</option>
+                                                ))}
+                                            </select>
+                                        </td>
+                                        <td className="py-1 pr-2 align-top">
+                                            <input
+                                                type="text"
+                                                inputMode="decimal"
+                                                aria-label={`Staff row ${index + 1} FTE`}
+                                                value={row.fte}
+                                                onChange={(e) => onChange(row.id, { fte: e.target.value })}
+                                                className={`${CELL_INPUT} w-16`}
+                                            />
+                                            {/* What the figure means, in the words the person
+                                                whose contract it is would use. Read off the
+                                                PARSED cell, so a blank box says "full time"
+                                                (which is what blank means here) and an
+                                                unreadable one says nothing at all — the row's
+                                                error line is what speaks then. */}
+                                            {describeFteAsDays(parseFteCell(row.fte).value, workingDays) !== '' && (
+                                                <p className="mt-0.5 text-[9px] font-bold uppercase tracking-wider text-slate-400">
+                                                    {describeFteAsDays(parseFteCell(row.fte).value, workingDays)}
+                                                </p>
+                                            )}
+                                        </td>
+                                        <td className="py-1 pr-2 align-top">
+                                            <input
+                                                type="text"
+                                                aria-label={`Staff row ${index + 1} away dates`}
+                                                value={row.away}
+                                                placeholder="2026-09-16, 2026-09-17"
+                                                onChange={(e) => onChange(row.id, { away: e.target.value })}
+                                                className={CELL_INPUT}
+                                            />
+                                        </td>
+                                        <td className="py-1 pr-2 align-top">
+                                            <DisclosureButton
+                                                open={open}
+                                                forcedOpen={forcedOpen}
+                                                onToggle={() => toggleExpanded(row.id)}
+                                                ariaLabel={`Staff row ${index + 1}: limits and availability`}
+                                                title="Their own daily duty cap, and the dates they are available"
+                                                forcedTitle="This person's daily cap or availability window needs fixing before it can be folded away"
+                                            />
+                                        </td>
+                                        <td className="py-1 align-top">
+                                            <button
+                                                type="button"
+                                                aria-label={`Remove staff row ${index + 1}`}
+                                                title="Remove this person"
+                                                onClick={() => onRemove(row.id)}
+                                                disabled={rows.length <= 1}
+                                                className="p-1 rounded text-slate-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/30 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                                            >
+                                                <Trash2 size={13} />
+                                            </button>
+                                        </td>
+                                    </tr>
+                                    {open && (
+                                        <StaffRowDetail
+                                            row={row}
+                                            index={index}
+                                            departmentMaxPerDay={departmentMaxPerDay}
+                                            onChange={onChange}
+                                        />
+                                    )}
+                                    <RowErrors errors={rowErrors} colSpan={STAFF_COLUMNS} />
+                                </React.Fragment>
+                            );
+                        })}
+                    </tbody>
+                </table>
+            </div>
+
+            <button type="button" onClick={onAdd} className={ADD_ROW}>
+                <Plus size={12} /> Add row
+            </button>
+
+            <p className="mt-1.5 text-[10px] text-slate-500 dark:text-slate-400 leading-relaxed">
+                Leave a grade as <span className="font-bold">Not recorded</span> and AURA will keep that
+                person out of every band-restricted lead slot and say so by name in the warnings — it will
+                not guess a grade for them. FTE defaults to 1.0; a blank FTE is full time. Away is a
+                comma-separated list of dates.
+            </p>
+            <p className="mt-1 text-[10px] text-slate-500 dark:text-slate-400 leading-relaxed">
+                <span className="font-bold">Limits &amp; dates</span> opens the rest of a person: how many
+                duties they may hold in one day, and — for a rotation, a placement or a locum — the block
+                of dates they are available at all. <span className="font-bold">Away</span> is for single
+                days off; a window is for months at a time.
+            </p>
+            {workingDays > 0 && (
+                <p className="mt-1 text-[10px] text-slate-500 dark:text-slate-400 leading-relaxed">
+                    The days-a-week line under each FTE is that figure spread over the{' '}
+                    <span className="font-bold">{workingDays}</span>{' '}
+                    {workingDays === 1 ? 'day' : 'days'} a week your tasks below are ticked for. Tick
+                    another day and it changes.
+                </p>
+            )}
+        </div>
+    );
+};
 
 // --- 3. TASKS -----------------------------------------------------------------
 
@@ -697,19 +1240,28 @@ export const StaffTable = ({ rows, errors, onChange, onAdd, onRemove, workingDay
 const TASK_COLUMNS = 6;
 
 /**
- * ONE TASK'S HIDDEN HALF: how long it takes, and whether it is staffed as a lead
- * plus a co-lead or as a list of slots.
+ * ONE TASK'S HIDDEN HALF: how often it repeats, how long it takes, how it is
+ * staffed, whether the same person keeps it, how many of them one person may hold,
+ * and what the department calls it.
  *
  * Rendered as its own full-width row under the task's row, not as extra columns,
  * because a slot list is a LIST — three lines of two controls each — and there is
- * no width in a 6-column table for it.
+ * no width in a 6-column table for it. SIX GROUPS, each with a heading and a rule
+ * above it, because a drawer holding a dozen controls with no grouping is the same
+ * wall of inputs the visible row was protected from.
  *
- * THE MODE SWITCH HIDES THE CONTROLS IT WOULD OVERRIDE. The engine refuses a task
- * carrying `slots` beside `leads`, `coLeads` or `leadBands`, so in slot mode the
- * band chips and the co-lead toggle are replaced by a sentence saying where those
- * decisions have moved to. Leaving them on screen, greyed or not, would be showing
- * a control whose value the mapper then drops — which is the shape of every defect
- * in this repo's post-mortem.
+ * THE ORDER IS THE ORDER A ROSTER MASTER ASKS THE QUESTIONS IN: when does it happen,
+ * how long is it, who staffs it, does the same person keep it, how much of it does
+ * one person get, and what is it called. It is also the order the mapper reports
+ * errors in, so a refusal and the screen read the same way down the page.
+ *
+ * A MODE SWITCH HIDES THE CONTROLS IT WOULD OVERRIDE, and there are now two of them.
+ * The engine refuses a task carrying `slots` beside `leads`, `coLeads`, `leadBands`
+ * or `continuity: true`, and refuses `days` beside `recurrence`. So in slot mode the
+ * band chips, the co-lead toggle and the continuity toggle are replaced by a sentence
+ * saying where those decisions have moved to, and in monthly mode the day strip is.
+ * Leaving them on screen, greyed or not, would be showing a control whose value the
+ * mapper then drops — which is the shape of every defect in this repo's post-mortem.
  */
 const TaskRowDetail = ({ row, index, bands, onChange }) => {
     const label = (suffix) => `Task row ${index + 1} ${suffix}`;
@@ -724,13 +1276,121 @@ const TaskRowDetail = ({ row, index, bands, onChange }) => {
     const removeSlot = (slotId) =>
         onChange(row.id, { slots: row.slots.filter((slot) => slot.id !== slotId) });
 
+    const monthly = row.calendarMode === TASK_CALENDAR_MONTHLY;
+    const pattern = describeTaskRecurrence(row);
+
     return (
         <tr>
             <td colSpan={TASK_COLUMNS} className="pb-3">
                 <div className="rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/60 p-3 space-y-3">
 
-                    {/* --- how long one occurrence takes --- */}
-                    <div className="flex flex-wrap items-end gap-3">
+                    {/* --- 1. HOW OFTEN IT REPEATS ---------------------------------
+                        The psychologists' 3rd-Wednesday clinic. `recurrence` has been
+                        in the engine — validated, resolved, exported as
+                        `recurrenceDatesBetween` — since v1.8.0 with no way to set it;
+                        `061ae93`'s own subject line says "monthly clinics". */}
+                    <DrawerGroup label="How often it repeats">
+                        <div className="flex flex-wrap items-center gap-2">
+                            <Toggle
+                                pressed={!monthly}
+                                onClick={() => onChange(row.id, { calendarMode: TASK_CALENDAR_WEEKLY })}
+                                label="Every week"
+                                ariaLabel={`Task row ${index + 1}: repeats every week`}
+                                title="On the weekdays ticked in the Days column"
+                            />
+                            <Toggle
+                                pressed={monthly}
+                                // Whatever weekdays were ticked stay on the row, so
+                                // switching to monthly and back does not lose them —
+                                // the same rule the slot list follows.
+                                onClick={() => onChange(row.id, { calendarMode: TASK_CALENDAR_MONTHLY })}
+                                label="Once a month"
+                                ariaLabel={`Task row ${index + 1}: repeats once a month`}
+                                title="The nth (or last) weekday of each calendar month"
+                            />
+                        </div>
+
+                        {monthly ? (
+                            <>
+                                <div className="flex flex-wrap items-end gap-2">
+                                    <div>
+                                        <label
+                                            className="text-[9px] font-bold text-slate-400 uppercase block"
+                                            htmlFor={`task-ordinal-${row.id}`}
+                                        >
+                                            Which one
+                                        </label>
+                                        <select
+                                            id={`task-ordinal-${row.id}`}
+                                            aria-label={label('week of the month')}
+                                            value={row.recurrenceOrdinal}
+                                            onChange={(e) => onChange(row.id, { recurrenceOrdinal: e.target.value })}
+                                            className={`${CELL_INPUT} w-28`}
+                                        >
+                                            {/* NOT PREFILLED. There is no engine default
+                                                for "which Wednesday", so choosing the 1st
+                                                on the visitor's behalf would put a clinic
+                                                on a date nobody picked. Blank is refused
+                                                with a reason instead. */}
+                                            <option value="">Choose…</option>
+                                            {RECURRENCE_ORDINAL_OPTIONS.map((option) => (
+                                                <option key={option.value} value={option.value}>{option.label}</option>
+                                            ))}
+                                        </select>
+                                    </div>
+                                    <div>
+                                        <label
+                                            className="text-[9px] font-bold text-slate-400 uppercase block"
+                                            htmlFor={`task-weekday-${row.id}`}
+                                        >
+                                            Day of the week
+                                        </label>
+                                        <select
+                                            id={`task-weekday-${row.id}`}
+                                            aria-label={label('monthly weekday')}
+                                            value={row.recurrenceWeekday}
+                                            onChange={(e) => onChange(row.id, { recurrenceWeekday: e.target.value })}
+                                            className={`${CELL_INPUT} w-28`}
+                                        >
+                                            <option value="">Choose…</option>
+                                            {/* The same strip the day chips are built
+                                                from, so the two cannot disagree about
+                                                which number is which day. */}
+                                            {WEEKDAY_STRIP.map(({ day, label: dayLabel }) => (
+                                                <option key={day} value={String(day)}>{dayLabel}</option>
+                                            ))}
+                                        </select>
+                                    </div>
+                                </div>
+                                {pattern !== '' && (
+                                    <p className="text-[10px] font-bold text-emerald-700 dark:text-emerald-400 leading-relaxed">
+                                        {`Runs on ${pattern}.`}
+                                    </p>
+                                )}
+                                <p className="text-[10px] font-bold text-amber-700 dark:text-amber-300 leading-relaxed">
+                                    While this task is monthly its <span className="font-bold">Days</span>{' '}
+                                    chips do not apply — a task repeats weekly or monthly, never both, and
+                                    AURA will not send the ticked weekdays to the engine for it. They are
+                                    kept, so switching back restores them.
+                                </p>
+                                <p className="text-[10px] text-slate-500 dark:text-slate-400 leading-relaxed">
+                                    <span className="font-bold">Last</span> is not the same as{' '}
+                                    <span className="font-bold">4th</span>: most months hold four of a
+                                    weekday and some hold five. There is no &ldquo;5th&rdquo; option
+                                    because a 5th-Wednesday clinic would silently vanish in most months.
+                                </p>
+                            </>
+                        ) : (
+                            <p className="text-[10px] text-slate-500 dark:text-slate-400 leading-relaxed">
+                                Every week, on the weekdays ticked in the <span className="font-bold">Days</span>{' '}
+                                column. Switch to <span className="font-bold">once a month</span> for a
+                                clinic that runs on the 3rd Wednesday, or the last Friday, of each month.
+                            </p>
+                        )}
+                    </DrawerGroup>
+
+                    {/* --- 2. how long one occurrence takes --- */}
+                    <div className={`${DRAWER_DIVIDER} flex flex-wrap items-end gap-3`}>
                         <div>
                             <label
                                 className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase block mb-1"
@@ -759,8 +1419,8 @@ const TaskRowDetail = ({ row, index, bands, onChange }) => {
                         </p>
                     </div>
 
-                    {/* --- lead + co-lead, or a team of slots --- */}
-                    <div className="flex flex-wrap items-center gap-2">
+                    {/* --- 3. lead + co-lead, or a team of slots --- */}
+                    <div className={`${DRAWER_DIVIDER} flex flex-wrap items-center gap-2`}>
                         <span className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase">
                             Staffed as
                         </span>
@@ -896,14 +1556,185 @@ const TaskRowDetail = ({ row, index, bands, onChange }) => {
                         </p>
                     )}
 
+                    {/* --- 4. THE SAME PERSON EVERY TIME ---------------------------
+                        The engine's only preference, and the one control in this
+                        drawer whose SIDE EFFECT has to be on screen: it overrides
+                        FTE-weighted fairness for this task's lead slot. A roster
+                        master who reads "continuity of care" as a free improvement
+                        will find one colleague holding every occurrence of a duty and
+                        no explanation on the configure screen.
+                        HIDDEN IN SLOT MODE, because the engine refuses `slots` beside
+                        `continuity: true`: with a team the lead is derived from the
+                        grades present, so there is no lead slot to keep. */}
+                    <div className={DRAWER_DIVIDER}>
+                        <DrawerGroup label="Continuity of care">
+                            {row.slotMode ? (
+                                <p className="text-[10px] text-slate-500 dark:text-slate-400 leading-relaxed">
+                                    Not available while this task is a{' '}
+                                    <span className="font-bold">team of slots</span>: the lead of a team
+                                    shift is whichever assignee holds the highest grade, so there is no
+                                    lead slot to keep with one person. Switch back to{' '}
+                                    <span className="font-bold">lead + co-lead</span> to ask for it.
+                                </p>
+                            ) : (
+                                <>
+                                    <div className="flex flex-wrap items-center gap-2">
+                                        <Toggle
+                                            pressed={row.continuity === true}
+                                            onClick={() => onChange(row.id, { continuity: row.continuity !== true })}
+                                            label={row.continuity === true ? 'Same lead' : 'Anyone'}
+                                            ariaLabel={`Task row ${index + 1}: same lead every time`}
+                                            title="Ask for the same person to lead every occurrence of this task"
+                                        />
+                                        <span className="text-[10px] text-slate-500 dark:text-slate-400">
+                                            {row.continuity === true
+                                                ? 'the same person leads every occurrence, where they can'
+                                                : 'the lead rotates with everybody else'}
+                                        </span>
+                                    </div>
+                                    {/* THE TRADE, IN ONE LINE, AS THE BRIEF REQUIRES. */}
+                                    <p className="text-[10px] font-bold text-amber-700 dark:text-amber-300 leading-relaxed">
+                                        What it costs: this task&apos;s lead stops being shared out fairly.
+                                        Continuity beats FTE-weighted fairness for this one slot, so one
+                                        colleague carries every occurrence and the others carry none.
+                                    </p>
+                                    <p className="text-[10px] text-slate-500 dark:text-slate-400 leading-relaxed">
+                                        It never beats a hard limit: an incumbent who is on leave, at their
+                                        daily limit or out of band loses the slot to the next person, and
+                                        AURA counts every change of lead and names it in the warnings — so
+                                        you find out when continuity broke, and why.
+                                    </p>
+                                </>
+                            )}
+                        </DrawerGroup>
+                    </div>
+
+                    {/* --- 5. HOW MANY EACH PERSON TAKES ---------------------------
+                        The lab's "everyone works at least two Saturdays a month". The
+                        floor/ceiling asymmetry is the engine's and it is stated here
+                        rather than discovered from a warning. */}
+                    <div className={DRAWER_DIVIDER}>
+                        <DrawerGroup label="How many of these one person takes">
+                            <div className="flex flex-wrap items-end gap-2">
+                                <div>
+                                    <label
+                                        className="text-[9px] font-bold text-slate-400 uppercase block"
+                                        htmlFor={`task-quota-per-${row.id}`}
+                                    >
+                                        Counted
+                                    </label>
+                                    <select
+                                        id={`task-quota-per-${row.id}`}
+                                        aria-label={label('per-person limit period')}
+                                        value={row.quotaPer}
+                                        onChange={(e) => onChange(row.id, { quotaPer: e.target.value })}
+                                        className={`${CELL_INPUT} w-40`}
+                                    >
+                                        <option value="">No limit</option>
+                                        {QUOTA_PERIOD_OPTIONS.map((option) => (
+                                            <option key={option.value} value={option.value}>{option.label}</option>
+                                        ))}
+                                    </select>
+                                </div>
+                                <div>
+                                    <label
+                                        className="text-[9px] font-bold text-slate-400 uppercase block"
+                                        htmlFor={`task-quota-min-${row.id}`}
+                                    >
+                                        At least
+                                    </label>
+                                    <input
+                                        id={`task-quota-min-${row.id}`}
+                                        type="text"
+                                        inputMode="numeric"
+                                        aria-label={label('per-person minimum')}
+                                        value={row.quotaMin}
+                                        // "none" rather than a number: there IS no default
+                                        // floor, and a placeholder showing `1` would read
+                                        // as one already being in force.
+                                        placeholder="none"
+                                        onChange={(e) => onChange(row.id, { quotaMin: e.target.value })}
+                                        className={NUMBER_FIELD}
+                                    />
+                                </div>
+                                <div>
+                                    <label
+                                        className="text-[9px] font-bold text-slate-400 uppercase block"
+                                        htmlFor={`task-quota-max-${row.id}`}
+                                    >
+                                        At most
+                                    </label>
+                                    <input
+                                        id={`task-quota-max-${row.id}`}
+                                        type="text"
+                                        inputMode="numeric"
+                                        aria-label={label('per-person maximum')}
+                                        value={row.quotaMax}
+                                        placeholder="none"
+                                        onChange={(e) => onChange(row.id, { quotaMax: e.target.value })}
+                                        className={NUMBER_FIELD}
+                                    />
+                                </div>
+                            </div>
+                            {/* THE ASYMMETRY. Both halves are true and they are not the
+                                same promise, which is the whole reason this paragraph
+                                exists on the configure screen instead of only in a
+                                warning after the fact. */}
+                            <p className="text-[10px] text-slate-500 dark:text-slate-400 leading-relaxed">
+                                <span className="font-bold">At most</span> is hard: a duty that would take
+                                somebody past it is reported as not staffed, with the count named.{' '}
+                                <span className="font-bold">At least</span> is a{' '}
+                                <span className="font-bold">preference, not a guarantee</span> — a floor
+                                cannot be met by inventing capacity, so AURA prefers whoever is behind for
+                                every occurrence it can and then names anybody still short in the
+                                warnings. Leave both blank for no limit at all.
+                            </p>
+                            <p className="text-[10px] text-slate-500 dark:text-slate-400 leading-relaxed">
+                                Counted in <span className="font-bold">duties</span>, not hours, and only
+                                over WHOLE periods inside the run — a month the run only half covers is
+                                reported as a partial period rather than judged. A floor nobody could
+                                possibly meet is refused before generating, with the arithmetic shown.
+                            </p>
+                        </DrawerGroup>
+                    </div>
+
+                    {/* --- 6. category --------------------------------------------- */}
+                    <div className={DRAWER_DIVIDER}>
+                        <DrawerGroup label="Category">
+                            <div className="flex flex-wrap items-start gap-3">
+                                <input
+                                    id={`task-category-${row.id}`}
+                                    type="text"
+                                    aria-label={label('category')}
+                                    value={row.category}
+                                    // The engine's own default, shown rather than
+                                    // written: a stated category changes how the shift is
+                                    // drawn in the calendar, so stating one nobody typed
+                                    // would change the roster's appearance unasked.
+                                    placeholder={ROSTER_V2_DEFAULTS.category}
+                                    onChange={(e) => onChange(row.id, { category: e.target.value })}
+                                    className={`${CELL_INPUT} w-40`}
+                                />
+                                <p className="text-[10px] text-slate-500 dark:text-slate-400 leading-relaxed max-w-md">
+                                    What kind of work this is — <span className="font-bold">Clinical</span>,{' '}
+                                    <span className="font-bold">Rehab</span>,{' '}
+                                    <span className="font-bold">On Call</span>. It travels onto every shift
+                                    and the calendar colours it. Blank means{' '}
+                                    <span className="font-bold">{ROSTER_V2_DEFAULTS.category}</span>.
+                                </p>
+                            </div>
+                        </DrawerGroup>
+                    </div>
+
                     {/* NO ERROR LINE HERE, deliberately. `RowErrors` renders every
                         per-cell problem on one full-width line under this row —
-                        including these two — and that is the one place this wizard
+                        including all of these — and that is the one place this wizard
                         puts them. A second copy inside the drawer would be the same
                         sentence twice in one visual block, and two renderers for one
                         message is how the two start disagreeing. What makes the
-                        single copy safe is the forced-open rule in `TaskTable`: a
-                        row with an hours or slots error cannot be collapsed. */}
+                        single copy safe is the forced-open rule in `TaskTable`: a row
+                        with an hours, slots, monthly-pattern or quota error cannot be
+                        collapsed. */}
                 </div>
             </td>
         </tr>
@@ -924,12 +1755,11 @@ const TaskRowDetail = ({ row, index, bands, onChange }) => {
  * off. A shift that genuinely needs three people is a SLOT LIST instead, under
  * "More…", and the engine reports all of its people in `assignees`.
  *
- * THE ONE PIECE OF STATE IN THIS FILE, and it is deliberate: which rows are
- * expanded. It is not an answer to "what will be generated" — every value still
- * lives in `RosterView` — so it cannot diverge from one, which is the property the
- * file header's no-state rule exists to protect (the ruler's `draggingRef` is the
- * same exception for the same reason). Collapsing a row changes nothing about the
- * roster: hours and slots typed inside stay in the row and stay in the config.
+ * WHICH ROWS ARE EXPANDED IS LOCAL STATE, and it is deliberate — the same exception
+ * `StaffTable`'s disclosure and the ruler's `draggingRef` are, for the same reason:
+ * it is not an answer to "what will be generated", so it cannot diverge from one.
+ * Collapsing a row changes nothing about the roster: everything typed inside stays
+ * in the row and stays in the config.
  */
 export const TaskTable = ({ rows, errors, bands, onChange, onAdd, onRemove }) => {
     const [expandedRows, setExpandedRows] = useState(() => new Set());
@@ -972,7 +1802,7 @@ export const TaskTable = ({ rows, errors, bands, onChange, onAdd, onRemove }) =>
                             <th className={TH}>Co-lead?</th>
                             {/* The disclosure's own column, headed rather than blank:
                                 a nameless chevron is not discoverable. */}
-                            <th className={TH}>Hours &amp; team</th>
+                            <th className={TH}>Repeat, hours &amp; limits</th>
                             <th className="w-8" />
                         </tr>
                     </thead>
@@ -986,10 +1816,27 @@ export const TaskTable = ({ rows, errors, bands, onChange, onAdd, onRemove }) =>
                             // generate and showing the reason for a box that is not on
                             // screen. The disclosure is a convenience; a refusal the
                             // user cannot act on is not.
-                            const forcedOpen = Boolean(rowErrors?.hours || rowErrors?.slots);
+                            const forcedOpen = Boolean(
+                                rowErrors?.hours || rowErrors?.slots || rowErrors?.recurrence || rowErrors?.quota,
+                            );
                             const open = expandedRows.has(row.id) || forcedOpen;
                             const hoursSet = typeof row.hours === 'string' && row.hours.trim() !== '';
-                            const Chevron = open ? ChevronDown : ChevronRight;
+                            const monthly = row.calendarMode === TASK_CALENDAR_MONTHLY;
+                            const pattern = describeTaskRecurrence(row);
+                            const categorySet = typeof row.category === 'string' && row.category.trim() !== '';
+                            // The quota's SUMMARY, in the words the drawer uses. Read off
+                            // the raw cells rather than the parsed quota so that a
+                            // half-filled one still says something is set — the row is
+                            // forced open in that case anyway, and a summary that went
+                            // silent while a cell was mid-edit would read as the value
+                            // having been dropped.
+                            const quotaParts = [
+                                typeof row.quotaMin === 'string' && row.quotaMin.trim() !== '' ? `at least ${row.quotaMin.trim()}` : null,
+                                typeof row.quotaMax === 'string' && row.quotaMax.trim() !== '' ? `at most ${row.quotaMax.trim()}` : null,
+                            ].filter(Boolean);
+                            const quotaPeriod = QUOTA_PERIOD_OPTIONS.find(
+                                (option) => option.value === row.quotaPer,
+                            );
 
                             return (
                                 <React.Fragment key={row.id}>
@@ -1013,16 +1860,21 @@ export const TaskTable = ({ rows, errors, bands, onChange, onAdd, onRemove }) =>
                                             )}
                                             {/* WHAT THE DISCLOSURE IS HIDING, when it is
                                                 hiding anything. A closed drawer must never
-                                                be the only record that this task takes 8
-                                                hours or needs three people. */}
-                                            {(hoursSet || row.slotMode) && (
-                                                <p className="mt-0.5 text-[9px] font-bold uppercase tracking-wider text-emerald-700 dark:text-emerald-400">
-                                                    {[
-                                                        hoursSet ? `${row.hours.trim()}h per session` : null,
-                                                        row.slotMode ? `team of ${row.slots.length}` : null,
-                                                    ].filter(Boolean).join(' · ')}
-                                                </p>
-                                            )}
+                                                be the only record that this task is monthly,
+                                                takes 8 hours, needs three people, is kept by
+                                                one clinician or carries a floor. Same
+                                                renderer as the staff table's, so the two
+                                                cannot drift apart. */}
+                                            <HiddenSummary parts={[
+                                                monthly ? (pattern === '' ? 'monthly — pattern incomplete' : pattern) : null,
+                                                hoursSet ? `${row.hours.trim()}h per session` : null,
+                                                row.slotMode ? `team of ${row.slots.length}` : null,
+                                                row.continuity === true ? 'same lead every time' : null,
+                                                quotaParts.length > 0
+                                                    ? `${quotaParts.join(', ')}${quotaPeriod === undefined ? '' : ` ${quotaPeriod.label}`}`
+                                                    : null,
+                                                categorySet ? row.category.trim() : null,
+                                            ]} />
                                         </td>
                                         <td className="py-1 pr-2 align-top">
                                             {/* In slot mode these chips would be dropped by
@@ -1056,17 +1908,33 @@ export const TaskTable = ({ rows, errors, bands, onChange, onAdd, onRemove }) =>
                                             )}
                                         </td>
                                         <td className="py-1 pr-2 align-top">
-                                            <div className="flex flex-wrap gap-1">
-                                                {WEEKDAY_STRIP.map(({ day, label }) => (
-                                                    <Toggle
-                                                        key={day}
-                                                        pressed={row.days.includes(day)}
-                                                        onClick={() => toggleDay(row, day)}
-                                                        label={label}
-                                                        ariaLabel={`Task row ${index + 1}: ${label}`}
-                                                    />
-                                                ))}
-                                            </div>
+                                            {/* In monthly mode these chips would be dropped
+                                                by the mapper (the engine refuses `days`
+                                                beside `recurrence`), so the cell says what
+                                                the task actually runs on instead of showing
+                                                a strip with no effect — exactly what the
+                                                band chips do in slot mode. The ticked days
+                                                are KEPT on the row, so switching back
+                                                restores them. */}
+                                            {monthly ? (
+                                                <p className="text-[9px] font-bold uppercase tracking-wider text-slate-400 leading-relaxed">
+                                                    {pattern === ''
+                                                        ? 'monthly — choose the pattern below'
+                                                        : pattern}
+                                                </p>
+                                            ) : (
+                                                <div className="flex flex-wrap gap-1">
+                                                    {WEEKDAY_STRIP.map(({ day, label }) => (
+                                                        <Toggle
+                                                            key={day}
+                                                            pressed={row.days.includes(day)}
+                                                            onClick={() => toggleDay(row, day)}
+                                                            label={label}
+                                                            ariaLabel={`Task row ${index + 1}: ${label}`}
+                                                        />
+                                                    ))}
+                                                </div>
+                                            )}
                                         </td>
                                         <td className="py-1 pr-2 align-top">
                                             {row.slotMode ? (
@@ -1084,24 +1952,21 @@ export const TaskTable = ({ rows, errors, bands, onChange, onAdd, onRemove }) =>
                                             )}
                                         </td>
                                         <td className="py-1 pr-2 align-top">
-                                            <button
-                                                type="button"
-                                                // A forced-open row REFUSES to fold, rather
-                                                // than folding and springing back open the
-                                                // moment the value is fixed — a box that
-                                                // disappears from under the cursor
-                                                // mid-correction is worse than a button
-                                                // that says why it will not close.
-                                                onClick={() => { if (!forcedOpen) toggleExpanded(row.id); }}
-                                                aria-expanded={open}
-                                                aria-label={`Task row ${index + 1}: hours and staffing`}
-                                                title={forcedOpen
-                                                    ? 'This task\'s hours or slots need fixing before it can be folded away'
-                                                    : 'Hours per session, and whether this shift needs a team'}
-                                                className="flex items-center gap-0.5 px-1 py-0.5 rounded text-[10px] font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400 hover:text-emerald-700 dark:hover:text-emerald-400 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors"
-                                            >
-                                                <Chevron size={12} /> More
-                                            </button>
+                                            {/* THE ARIA LABEL IS UNCHANGED ("hours and
+                                                staffing") even though the drawer now holds
+                                                six groups: it is the handle four sandbox
+                                                tests reach this control by, and renaming it
+                                                would be a churned assertion rather than a
+                                                measured change. The visible column heading
+                                                and the tooltip carry the wider meaning. */}
+                                            <DisclosureButton
+                                                open={open}
+                                                forcedOpen={forcedOpen}
+                                                onToggle={() => toggleExpanded(row.id)}
+                                                ariaLabel={`Task row ${index + 1}: hours and staffing`}
+                                                title="How often it repeats, how long a session is, how it is staffed, continuity, per-person limits and its category"
+                                                forcedTitle="Something behind this drawer needs fixing before it can be folded away"
+                                            />
                                         </td>
                                         <td className="py-1 align-top">
                                             <button
@@ -1146,16 +2011,36 @@ export const TaskTable = ({ rows, errors, bands, onChange, onAdd, onRemove }) =>
                 is what makes a band-gated task a supervision pairing rather than a closed shop.
             </p>
             <p className="mt-1 text-[10px] text-slate-500 dark:text-slate-400 leading-relaxed">
-                <span className="font-bold">Hours &amp; team</span> opens the rest of a task: how long
-                one session takes, and whether it needs a whole team on the shift at once —{' '}
-                {SLOTS_MIN}–{SLOTS_MAX} people, each with their own band and skill — instead of a lead
-                and a co-lead.
+                <span className="font-bold">More…</span> opens the rest of a task: whether it repeats
+                weekly or on the 3rd Wednesday of the month, how long one session takes, whether it needs
+                a whole team on the shift at once ({SLOTS_MIN}–{SLOTS_MAX} people, each with their own
+                band and skill) instead of a lead and a co-lead, whether the same person should keep it,
+                how many of it any one person may take, and what to call it.
             </p>
         </div>
     );
 };
 
-/** The four controls in their decided order: policy, then staff, then tasks. */
+/**
+ * The five controls in their decided order: departmental policy first (bands, hours,
+ * limits), then staff, then tasks — because everything in a row below is judged
+ * against something in a panel above it.
+ *
+ * TWO FACTS ARE DERIVED HERE RATHER THAN PASSED IN, both for the same reason: they are
+ * facts about rows that are already in scope, and computing them where both tables can
+ * be seen keeps ONE definition of each for the whole wizard.
+ *
+ *   workingDays          the department's week, from the task rows — read by the FTE
+ *                        gloss in the staff table above them.
+ *   staffNames           who is in this department, from the staff rows — read by the
+ *                        pair picker in the limits panel above them.
+ *
+ * `departmentMaxPerDay` is the third and it is a PARSE rather than a count: the staff
+ * drawer's placeholder has to be the figure the engine will actually apply, which is
+ * the department box when it holds a readable number and the engine's own default when
+ * it does not. `parseConcurrentPerDayCell` is the same function the mapper judges that
+ * box with, so the placeholder and the run cannot disagree.
+ */
 const RosterDemoWizardTables = ({
     bandInputs,
     bandsReason,
@@ -1164,6 +2049,9 @@ const RosterDemoWizardTables = ({
     hoursInputs,
     hoursErrors,
     onHoursChange,
+    rulesInputs,
+    rulesErrors,
+    onRulesChange,
     staffRows,
     staffErrors,
     onStaffChange,
@@ -1178,6 +2066,19 @@ const RosterDemoWizardTables = ({
     <div className="space-y-4">
         <BandBoundaryEditor inputs={bandInputs} onChange={onBandChange} reason={bandsReason} />
         <DepartmentHoursEditor inputs={hoursInputs} onChange={onHoursChange} errors={hoursErrors} />
+        <DepartmentLimitsEditor
+            inputs={rulesInputs}
+            onChange={onRulesChange}
+            errors={rulesErrors}
+            // Trimmed, non-blank and de-duplicated, in table order. A half-typed name
+            // is not a colleague anybody can be paired with, and a duplicate would
+            // give the select two identical options for one person.
+            staffNames={[...new Set(
+                (Array.isArray(staffRows) ? staffRows : [])
+                    .map((row) => (typeof row?.name === 'string' ? row.name.trim() : ''))
+                    .filter((name) => name !== ''),
+            )]}
+        />
         <StaffTable
             rows={staffRows}
             errors={staffErrors}
@@ -1188,7 +2089,24 @@ const RosterDemoWizardTables = ({
             // about the task rows two controls below, and computing it where both
             // tables are already in scope keeps one definition of "the
             // department's week" for the whole wizard.
-            workingDays={countWorkingDays(taskRows)}
+            //
+            // MONTHLY ROWS ARE EXCLUDED, and that is a correction rather than a
+            // refinement. A monthly row KEEPS its ticked weekdays (switch back and they
+            // are still there) but the mapper does not emit them, so counting them here
+            // would tell a 0.6-FTE colleague they "work 3 days a week" out of a
+            // five-day week that no task actually runs on. `RosterView` measures the
+            // same figure off the GENERATED config after a run, where a monthly task
+            // carries no `days` at all — so without this filter the caption above the
+            // Generate button and the caption under the load table would disagree about
+            // the same department.
+            workingDays={countWorkingDays(
+                (Array.isArray(taskRows) ? taskRows : [])
+                    .filter((row) => row?.calendarMode !== TASK_CALENDAR_MONTHLY),
+            )}
+            departmentMaxPerDay={
+                parseConcurrentPerDayCell(rulesInputs?.maxConcurrentPerDay).value
+                ?? ROSTER_V2_DEFAULTS.maxConcurrentPerDay
+            }
         />
         <TaskTable
             rows={taskRows}

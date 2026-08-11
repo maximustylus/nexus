@@ -84,7 +84,20 @@ vi.mock('../context/NexusContext', () => ({
 import { doc, collection, onSnapshot, setDoc, addDoc, query, where, getDoc, updateDoc } from 'firebase/firestore';
 import RosterView from './RosterView';
 import { DEMO_EXAMPLE_DEPARTMENT } from '../data/mockData';
-import { generateRosterV2, bandOfGrade } from '../utils/rosterEngineV2';
+// 🧪 ADDED for section 12 (the four arrangements). `DEMO_EXAMPLE_DEPARTMENT` above is
+// re-exported by the picker as its respiratory option — asserted to be the SAME object,
+// not a copy — so the ~30 assertions in sections 1–11 keep describing the fixture the
+// app actually loads.
+import {
+    DEMO_ARRANGEMENTS,
+    DEMO_PROVENANCE_INFERRED,
+    DEMO_PROVENANCE_INTERVIEWED,
+} from '../data/mockData';
+// `auditHardConstraints` is a SECOND, independent read-back of a finished roster. The
+// arrangements are checked with it as well as with `score.hardViolations`, because the
+// latter is the engine measuring its own output and this repo's rule is that a
+// zero-violation claim is measured rather than asserted.
+import { generateRosterV2, bandOfGrade, auditHardConstraints } from '../utils/rosterEngineV2';
 
 // --- HELPERS -----------------------------------------------------------------
 
@@ -94,8 +107,26 @@ const openConfigure = () => {
     fireEvent.click(screen.getByRole('button', { name: /configure/i }));
 };
 
+/**
+ * CHANGED: was `getByRole('button', { name: /load example department/i })`.
+ *
+ * The single "Load example department" button is now a PICKER of four arrangements,
+ * one per interviewed profession, so there is no longer a button by that name — there
+ * are four, and each says which team it loads. This helper clicks the RESPIRATORY one,
+ * which loads `DEMO_EXAMPLE_DEPARTMENT` (the picker holds it by alias, not by copy).
+ *
+ * That is why every assertion in this file that was written against "the example
+ * department" still means exactly what it meant: the fixture is byte-identical and this
+ * helper reaches it. The name is anchored (`^…$`) so it cannot start matching a fifth
+ * arrangement added later whose name happens to contain "Respiratory".
+ */
 const loadExample = () => {
-    fireEvent.click(screen.getByRole('button', { name: /load example department/i }));
+    fireEvent.click(screen.getByRole('button', { name: /^load respiratory & rehab$/i }));
+};
+
+/** Load one arrangement by the picker button's name. */
+const loadArrangement = (name) => {
+    fireEvent.click(screen.getByRole('button', { name: new RegExp(`^load ${name}$`, 'i') }));
 };
 
 /**
@@ -1792,4 +1823,610 @@ describe('demo mode: the roster speaks clinical English', () => {
         expect(screen.queryByText(/only record that it was attempted/i)).toBeNull();
         expect(screen.getByText(/also marked in the calendar above/i)).toBeTruthy();
     });
+});
+
+// ─── 12. FOUR SELECTABLE ARRANGEMENTS, ONE PER PROFESSION ─────────────────────
+//
+// The single example department became a PICKER of four, because one fixture could
+// only ever demonstrate one team's problem. Every test in this section is a claim
+// about a DIFFERENT capability, and each one is checked twice over:
+//
+//   1. AGAINST THE ENGINE, by running `generateRosterV2` on the fixture here and
+//      re-auditing the finished roster with `auditHardConstraints` — a second,
+//      independent read-back, not the engine's own self-report.
+//   2. IN THE RENDERED OUTPUT, by reading names out of the calendar's own day cells.
+//      That is the half that catches a field which the fixture states and the wizard
+//      drops: a `recurrence`, a `continuity`, a cohort `window` or a `quota` that did
+//      not survive the tables would produce a DIFFERENT roster on screen from the one
+//      the engine gives the fixture, and the last test in this section compares the
+//      two shift by shift for all four.
+//
+// WHY THE MONTH NAVIGATION EXISTS HERE AND NOWHERE ELSE IN THIS FILE: three of the
+// four claims are only visible ACROSS months. A clinic on the third Wednesday occurs
+// once per month, so "the same principal every time" cannot be seen in one month's
+// square; a four-month cohort block cannot be seen in one month at all.
+
+/** One arrangement by id, so a test names the team rather than an array index. */
+const arrangement = (id) => {
+    const found = DEMO_ARRANGEMENTS.find((entry) => entry.id === id);
+    if (!found) throw new Error(`No arrangement with id "${id}"`);
+    return found;
+};
+
+/**
+ * Walk the calendar to a named month, by pressing the same chevron a visitor would.
+ *
+ * The two buttons carry `aria-label`s now; before this section they were icon-only and
+ * unreachable by any query, which is why every other calendar assertion in this file
+ * is confined to the month the view opens on.
+ */
+const goToMonth = (label) => {
+    for (let guard = 0; guard < 30; guard += 1) {
+        if (screen.queryByText(new RegExp(`^${label}$`, 'i'))) return;
+        fireEvent.click(screen.getByRole('button', { name: /next month/i }));
+    }
+    throw new Error(`Could not reach ${label} in 30 presses of Next month`);
+};
+
+/**
+ * Every rendered shift in one day's square, as `{ task, staff, also }`.
+ *
+ * `staff` is `buildShiftStaffLabel`'s "Lead: X, Co: Y" and `also` is the extra line a
+ * three-or-more-person shift gets, so this reads the calendar exactly as a roster
+ * master does — including the people who do not fit the two-name display string.
+ */
+const shiftsInDay = (dateKey) => {
+    const cell = dayCell(dateKey);
+    if (!cell) throw new Error(`No calendar square for ${dateKey} — is the wrong month showing?`);
+    return Array.from(cell.querySelectorAll('button')).map((button) => {
+        const lines = Array.from(button.querySelectorAll('span')).map((span) => span.textContent.trim());
+        const staff = lines.find((line) => line.startsWith('Lead:')) || '';
+        const also = lines.find((line) => line.startsWith('Also:')) || '';
+        return {
+            task: lines[0] || '',
+            staff,
+            also,
+            names: [
+                ...(/Lead:\s*([^,]+)/.exec(staff)?.[1] ? [/Lead:\s*([^,]+)/.exec(staff)[1].trim()] : []),
+                ...(/Co:\s*(.+)$/.exec(staff)?.[1] ? [/Co:\s*(.+)$/.exec(staff)[1].trim()] : []),
+                ...(also === '' ? [] : also.replace(/^Also:\s*/, '').split(',').map((n) => n.trim())),
+            ].filter((n) => n !== ''),
+        };
+    });
+};
+
+/** Every date key the engine produced for `task`, in order. */
+const engineDatesFor = (result, task) => Object.keys(result.roster)
+    .sort()
+    .filter((dateKey) => result.roster[dateKey].some((shift) => shift.task === task));
+
+describe('demo mode: the arrangement picker offers four professions', () => {
+    it('shows one option per profession, each saying what it demonstrates', () => {
+        render(<RosterView user={VISITOR} />);
+        openConfigure();
+
+        expect(DEMO_ARRANGEMENTS).toHaveLength(4);
+        expect(screen.getByText(/load an example arrangement/i)).toBeTruthy();
+
+        for (const entry of DEMO_ARRANGEMENTS) {
+            // The button, by the name a visitor reads.
+            expect(
+                screen.getByRole('button', { name: new RegExp(`^load ${entry.name}$`, 'i') }),
+            ).toBeTruthy();
+            // …and its ONE LINE. The picker is a choice between capabilities, so the
+            // sentence that names the capability has to be on screen BEFORE the press.
+            expect(screen.getByText(entry.demonstrates)).toBeTruthy();
+        }
+
+        // The professions the roster owner is presenting to, in the order the meetings
+        // happen. Asserted as a list rather than four `getByRole`s so a fifth
+        // arrangement, or a reordering, has to come past this line.
+        expect(DEMO_ARRANGEMENTS.map((entry) => entry.id))
+            .toEqual(['respiratory', 'psychology', 'embryology', 'labs']);
+
+        expectNoFirestoreTraffic();
+    });
+
+    it('is the same fixture the old single button loaded, by alias and not by copy', () => {
+        // THE REASON EVERY ASSERTION ABOVE IN THIS FILE STILL MEANS SOMETHING. If the
+        // respiratory option held a COPY, this file's ~30 other tests would be checking
+        // a fixture nothing in the app loads.
+        expect(arrangement('respiratory').config).toBe(DEMO_EXAMPLE_DEPARTMENT);
+    });
+
+    it('accepts every arrangement, and re-audits every finished roster to zero', () => {
+        for (const entry of DEMO_ARRANGEMENTS) {
+            const result = generateRosterV2(entry.config);
+            expect(result.ok).toBe(true);
+            expect(result.score.hardViolations).toBe(0);
+
+            // A SECOND, INDEPENDENT READ-BACK. `score.hardViolations` is the engine's
+            // own measurement of its own output; this re-reads the finished roster
+            // through the audit entry point, so "no hard constraint was broken" is
+            // checked twice by two callers rather than asserted once.
+            const audit = auditHardConstraints(result.roster, entry.config);
+            expect(audit.ok).toBe(true);
+            expect(audit.count).toBe(0);
+            expect(audit.violations).toEqual([]);
+        }
+    });
+
+    it('marks the inferred arrangement as one, and only that one', () => {
+        // `provenance` and `correction` are two fields answering one question, and
+        // RosterView reads only `correction`. This is where they are held together: a
+        // future arrangement that says "interviewed" while carrying a health warning
+        // (or the reverse) fails here rather than shipping a caption that is wrong.
+        for (const entry of DEMO_ARRANGEMENTS) {
+            expect([DEMO_PROVENANCE_INFERRED, DEMO_PROVENANCE_INTERVIEWED]).toContain(entry.provenance);
+            if (entry.provenance === DEMO_PROVENANCE_INFERRED) {
+                expect(entry.correction).toBeTruthy();
+                expect(entry.correction.items.length).toBeGreaterThan(0);
+            } else {
+                expect(entry.correction).toBeNull();
+            }
+        }
+
+        // Exactly one is inferred, and it is the team nobody has interviewed.
+        const inferred = DEMO_ARRANGEMENTS.filter((entry) => entry.provenance === DEMO_PROVENANCE_INFERRED);
+        expect(inferred.map((entry) => entry.id)).toEqual(['respiratory']);
+    });
+
+    it('says the respiratory arrangement is not their service — before, during and after', () => {
+        render(<RosterView user={VISITOR} />);
+        openConfigure();
+
+        const correction = arrangement('respiratory').correction;
+
+        // BEFORE the press: readable without committing to anything.
+        expect(screen.getByText(correction.headline)).toBeTruthy();
+        // The checklist is not five bullet points on an unpressed option.
+        expect(screen.queryByText(correction.items[0])).toBeNull();
+
+        loadExample();
+
+        // ON LOADING: the body and every item on the correction checklist.
+        //
+        // `expectOnScreen` rather than `getByText`, and the reason is the behaviour
+        // itself: the body is now in TWO places at once — the picker's expanded option
+        // and the provenance notice beside the report, which appears the moment an
+        // arrangement is loaded rather than waiting for a draft. Two copies of a health
+        // warning is the safe number; a `getByText` here would fail on the second one.
+        expectOnScreen(correction.body);
+        // The checklist is the picker's, and only the picker's.
+        for (const item of correction.items) {
+            expect(screen.getByText(item)).toBeTruthy();
+        }
+        // Named individually so the checklist cannot quietly shrink to a headline.
+        expect(screen.getByText(/weekend cover duty/i)).toBeTruthy();
+
+        clickGenerate();
+
+        // AFTER drafting — and this is the assertion that matters, because the wizard
+        // is a modal and it has now closed. What the room looks at is a finished roster
+        // of their own service, so the caveat has to be beside the report too.
+        expect(screen.queryByRole('button', { name: /^load respiratory & rehab$/i })).toBeNull();
+        expectOnScreen(correction.body);
+        expectOnScreen(new RegExp(correction.headline.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i'));
+
+        expectNoFirestoreTraffic();
+    });
+
+    it('does not warn about somebody else\'s inference over a team typed in by hand', () => {
+        render(<RosterView user={VISITOR} />);
+        openConfigure();
+
+        setStaffRow(1, { name: 'Aisha Rahman' });
+        setStaffRow(2, { name: 'Ben Carter' });
+        setTaskName(1, 'Ward Round');
+        clickGenerate();
+
+        // The one direction this label must never be wrong in.
+        expect(screen.queryByText(arrangement('respiratory').correction.body)).toBeNull();
+        expectNoFirestoreTraffic();
+    });
+
+    it('carries each arrangement\'s own start date and run length', () => {
+        render(<RosterView user={VISITOR} />);
+        openConfigure();
+
+        for (const entry of DEMO_ARRANGEMENTS) {
+            loadArrangement(entry.name);
+            expect(screen.getByLabelText(/start date/i).value).toBe(entry.config.startDate);
+            expect(screen.getByLabelText(/^weeks$/i).value).toBe(String(entry.config.weeks));
+        }
+
+        // Not decoration for three of the four: a psychology run shorter than two
+        // months holds one occurrence of a monthly clinic and cannot show continuity;
+        // an embryology run shorter than a block shows a rota rather than a handover;
+        // the laboratory run starts on the 1st so its first quota period is a WHOLE
+        // month the engine will judge. Pinned so a "tidier" 4-week default cannot
+        // silently take the demonstration away.
+        expect(arrangement('psychology').config.weeks).toBeGreaterThanOrEqual(9);
+        expect(arrangement('embryology').config.weeks).toBeGreaterThan(17);
+        expect(arrangement('labs').config.startDate.endsWith('-01')).toBe(true);
+    });
+});
+
+// --- PSYCHOLOGY: the 3rd Wednesday, principals only, the same principal --------
+
+describe('demo mode: the psychology arrangement', () => {
+    const fixture = arrangement('psychology').config;
+    const expected = generateRosterV2(fixture);
+    const CLINIC = 'Complex Trauma Clinic';
+
+    it('runs the specialised clinic on the third Wednesday of each month, not weekly', () => {
+        const dates = engineDatesFor(expected, CLINIC);
+        // Three occurrences in twelve weeks — one per calendar month, which is the
+        // whole difference between `recurrence` and `days: [3]`.
+        expect(dates).toEqual(['2026-09-16', '2026-10-21', '2026-11-18']);
+
+        for (const dateKey of dates) {
+            const [year, month, day] = dateKey.split('-').map(Number);
+            // LOCAL date construction, never `new Date('YYYY-MM-DD')` — post-mortem B2.
+            expect(new Date(year, month - 1, day).getDay()).toBe(3); // a Wednesday
+            expect(Math.floor((day - 1) / 7) + 1).toBe(3); // the THIRD one
+        }
+
+        // And it is not simply every Wednesday: twelve weeks hold twelve of those.
+        expect(dates.length).toBe(3);
+    });
+
+    it('shows the same principal leading every occurrence, read out of the calendar', () => {
+        render(<RosterView user={VISITOR} />);
+        openConfigure();
+        loadArrangement('Psychology');
+        clickGenerate();
+
+        const leads = [];
+        for (const [dateKey, monthLabel] of [
+            ['2026-09-16', 'September 2026'],
+            ['2026-10-21', 'October 2026'],
+            ['2026-11-18', 'November 2026'],
+        ]) {
+            goToMonth(monthLabel);
+            const clinic = shiftsInDay(dateKey).find((shift) => shift.task === CLINIC);
+            expect(clinic).toBeTruthy();
+
+            // AND NOT ON THE OTHER WEDNESDAYS OF THE SAME MONTH. Without this the whole
+            // rendered test passes just as happily against `days: [3]` — every Wednesday
+            // — because the third one is still a Wednesday. Measured: this line is what
+            // makes the calendar itself, rather than only the fixture, say "monthly".
+            const [yy, mm, dd] = dateKey.split('-').map(Number);
+            for (const other of [dd - 14, dd - 7, dd + 7]) {
+                if (other < 1 || other > new Date(yy, mm, 0).getDate()) continue;
+                const otherKey = `${yy}-${String(mm).padStart(2, '0')}-${String(other).padStart(2, '0')}`;
+                expect(shiftsInDay(otherKey).map((shift) => shift.task)).not.toContain(CLINIC);
+            }
+
+            const lead = /Lead:\s*([^,]+)/.exec(clinic.staff)[1].trim();
+
+            // PRINCIPALS ONLY — checked by looking the name up in the fixture's own
+            // grades, not by trusting the engine's report.
+            const person = fixture.staff.find((entry) => entry.name === lead);
+            expect(bandOfGrade(person.grade, fixture.rules.bands)).toBe('principal');
+            leads.push(lead);
+        }
+
+        // CONTINUITY OF CARE: one clinician, three months, seen in the calendar.
+        expect(new Set(leads).size).toBe(1);
+        // …and the engine agrees it never had to break it.
+        expect(expected.score.breakdown.continuityBreaks).toBe(0);
+
+        // The co-lead slot is NOT band-gated, which is the supervision shape: bands
+        // gate the lead only, so a junior can sit in on a clinic they cannot hold.
+        expectNoFirestoreTraffic();
+    });
+
+    it('reports a 42-hour week as hours, and staffs everything else on weekdays', () => {
+        render(<RosterView user={VISITOR} />);
+        openConfigure();
+        loadArrangement('Psychology');
+
+        // The week is a TYPED value in the box that owns it, not a hidden fixture
+        // field — so the room can change it mid-demonstration.
+        expect(screen.getByLabelText(/standard working week/i).value).toBe('42');
+
+        clickGenerate();
+
+        // The hours model is live, so the load table gained its hours columns.
+        expect(expected.load[fixture.staff[0].name].weeklyCap).toBeGreaterThan(0);
+        expectOnScreen(/hours/i);
+
+        // Nothing at the weekend except the clinic's own weekday: every date the
+        // engine produced is Mon–Fri.
+        for (const dateKey of Object.keys(expected.roster)) {
+            const [year, month, day] = dateKey.split('-').map(Number);
+            const weekday = new Date(year, month - 1, day).getDay();
+            expect(weekday).toBeGreaterThanOrEqual(1);
+            expect(weekday).toBeLessThanOrEqual(5);
+        }
+
+        expect(expected.unfilled).toHaveLength(0);
+        expect(expected.warnings).toEqual([]);
+        expectNoFirestoreTraffic();
+    });
+});
+
+// --- EMBRYOLOGY: a trio, and three teams in four-month blocks ------------------
+
+describe('demo mode: the embryology arrangement', () => {
+    const fixture = arrangement('embryology').config;
+    const expected = generateRosterV2(fixture);
+    const WEEKEND = 'Weekend Laboratory Cover';
+    const TEAMS = {
+        A: fixture.staff.slice(0, 3).map((person) => person.name),
+        B: fixture.staff.slice(3, 6).map((person) => person.name),
+        C: fixture.staff.slice(6, 9).map((person) => person.name),
+    };
+
+    const weekendShifts = () => Object.entries(expected.roster)
+        .flatMap(([dateKey, shifts]) => shifts
+            .filter((shift) => shift.task === WEEKEND)
+            .map((shift) => ({ dateKey, assignees: shift.assignees })));
+
+    it('staffs every weekend shift with three people, one of each band', () => {
+        const weekends = weekendShifts();
+        expect(weekends.length).toBeGreaterThan(0);
+
+        for (const { assignees } of weekends) {
+            // THREE, not two. A `slots` list is one entry per person the shift needs,
+            // and the third of them has no place in the two-name display string —
+            // which is exactly the audit finding this arrangement exists to show.
+            expect(assignees).toHaveLength(3);
+            expect(new Set(assignees).size).toBe(3);
+
+            const bands = assignees.map((name) => {
+                const person = fixture.staff.find((entry) => entry.name === name);
+                return bandOfGrade(person.grade, fixture.rules.bands);
+            });
+            expect(bands.sort()).toEqual(['junior', 'principal', 'senior']);
+        }
+
+        // No slot went unstaffed anywhere in a nine-month run.
+        expect(expected.unfilled).toHaveLength(0);
+        expect(expected.score.hardViolations).toBe(0);
+    });
+
+    it('never puts two teams on one weekend shift, in any of the nine months', () => {
+        for (const { dateKey, assignees } of weekendShifts()) {
+            const owning = Object.entries(TEAMS).filter(([, names]) =>
+                assignees.some((name) => names.includes(name)));
+            // Exactly ONE team is present on the shift, and all three of its members.
+            expect(owning).toHaveLength(1);
+            const [, names] = owning[0];
+            expect(assignees.every((name) => names.includes(name))).toBe(true);
+            expect(dateKey).toBeTruthy();
+        }
+    });
+
+    it('keeps each team inside its own four-month block', () => {
+        const range = (team) => {
+            const dates = weekendShifts()
+                .filter(({ assignees }) => assignees.some((name) => TEAMS[team].includes(name)))
+                .map(({ dateKey }) => dateKey)
+                .sort();
+            return { first: dates[0], last: dates[dates.length - 1], count: dates.length };
+        };
+
+        // Team A's block ends 2026-12-31 and team B's opens the next day, so the two
+        // ranges cannot overlap — and neither reaches into the other's months. This is
+        // the cohort window binding, checked as dates rather than as a feeling.
+        const a = range('A');
+        const b = range('B');
+        expect(a.last < '2027-01-01').toBe(true);
+        expect(b.first >= '2027-01-01').toBe(true);
+        expect(b.last < '2027-05-01').toBe(true);
+        // TWO WHOLE BLOCKS, which is why the run is 36 weeks: one block is a rota,
+        // two is a handover.
+        expect(a.count).toBeGreaterThan(20);
+        expect(b.count).toBeGreaterThan(20);
+    });
+
+    it('renders the trio in the calendar, and team A nowhere near a team B weekend', () => {
+        render(<RosterView user={VISITOR} />);
+        openConfigure();
+        loadArrangement('Embryology');
+        clickGenerate();
+
+        // A weekend inside BLOCK A. The third assignee is on the "Also:" line — the
+        // display string only carries two names, so without that line one of the three
+        // would be invisible in the calendar.
+        goToMonth('September 2026');
+        const inBlockA = shiftsInDay('2026-09-12').find((shift) => shift.task === WEEKEND);
+        expect(inBlockA).toBeTruthy();
+        expect(inBlockA.names).toHaveLength(3);
+        expect(inBlockA.also).toMatch(/^Also:/);
+        expect(inBlockA.names.every((name) => TEAMS.A.includes(name))).toBe(true);
+
+        // A weekend inside BLOCK B, four months later. Team B's three, and not one
+        // member of team A — the property the whole windows feature exists for.
+        goToMonth('February 2027');
+        const inBlockB = shiftsInDay('2027-02-06').find((shift) => shift.task === WEEKEND);
+        expect(inBlockB).toBeTruthy();
+        expect(inBlockB.names).toHaveLength(3);
+        expect(inBlockB.names.every((name) => TEAMS.B.includes(name))).toBe(true);
+        for (const name of TEAMS.A) {
+            expect(inBlockB.names).not.toContain(name);
+        }
+
+        expectNoFirestoreTraffic();
+    });
+});
+
+// --- MEDICAL LABORATORY: a FLOOR, not a ceiling -------------------------------
+
+describe('demo mode: the medical laboratory arrangement', () => {
+    const fixture = arrangement('labs').config;
+    const expected = generateRosterV2(fixture);
+    const SATURDAY = 'Saturday Bench';
+    /** The months the run holds in their ENTIRETY — the only ones a floor is judged in. */
+    const WHOLE_MONTHS = ['2027-02', '2027-03'];
+
+    /** name -> month -> Set of DISTINCT Saturday dates. */
+    const saturdaysByPerson = () => {
+        const out = new Map();
+        for (const [dateKey, shifts] of Object.entries(expected.roster)) {
+            for (const shift of shifts) {
+                if (shift.task !== SATURDAY) continue;
+                for (const name of shift.assignees) {
+                    if (!out.has(name)) out.set(name, new Map());
+                    const months = out.get(name);
+                    const monthKey = dateKey.slice(0, 7);
+                    if (!months.has(monthKey)) months.set(monthKey, new Set());
+                    months.get(monthKey).add(dateKey);
+                }
+            }
+        }
+        return out;
+    };
+
+    it('declares the floor, and declares it exactly at the arithmetic the engine allows', () => {
+        const saturday = fixture.tasks.find((task) => task.name === SATURDAY);
+        // THE FIELD, named. Deleting `quota` from the fixture has to fail a test that
+        // says the word rather than only the ones that measure its effect.
+        expect(saturday.quota).toEqual({ per: 'month', min: 2 });
+
+        // AND THE ARITHMETIC, which is the reason this fixture has the shape it has.
+        // Demand equals supply: 8 people × 2 duties = 16, against a 4-Saturday month ×
+        // 4 slots = 16. One slot fewer is arithmetically impossible and the engine
+        // refuses it outright; more slack and the floor stops doing any work at all —
+        // measured, and the fixture's own comment records how that was found.
+        const demand = fixture.staff.length * saturday.quota.min;
+        const supply = 4 * saturday.slots.length;
+        expect(demand).toBe(16);
+        expect(supply).toBe(16);
+        expect(demand).toBeLessThanOrEqual(supply);
+    });
+
+    it('gives every scientist at least two DISTINCT Saturdays in every whole month', () => {
+        const counts = saturdaysByPerson();
+
+        // Everybody, not just most people — a floor that skips one person is the
+        // failure the report is supposed to name.
+        expect(counts.size).toBe(fixture.staff.length);
+
+        for (const person of fixture.staff) {
+            for (const monthKey of WHOLE_MONTHS) {
+                const dates = counts.get(person.name).get(monthKey);
+                // DISTINCT DATES, deliberately, and this is the load-bearing detail: a
+                // quota counts DUTIES, so "two Saturdays" and "two Saturday duties" are
+                // only the same sentence while one Saturday cannot hold two duties for
+                // one person. That is why this arrangement has ONE Saturday task rather
+                // than two, and counting dates rather than duties is what proves it.
+                expect(dates.size).toBeGreaterThanOrEqual(2);
+            }
+        }
+    });
+
+    it('reaches that floor with no hard violation and nothing left unstaffed', () => {
+        expect(expected.ok).toBe(true);
+        expect(expected.score.hardViolations).toBe(0);
+        expect(expected.unfilled).toHaveLength(0);
+
+        // ONE warning, and it is the engine being honest about its own horizon rather
+        // than a shortfall: the run ends four days into April, so the floor is not
+        // judged for a month it holds only part of. Asserted by shape — a genuine
+        // shortfall says "Quota floor not met", and this must not be that.
+        expect(expected.warnings).toHaveLength(1);
+        expect(expected.warnings[0]).toContain('2027-04');
+        expect(expected.warnings[0]).toContain('not judged');
+        expect(expected.warnings[0]).not.toContain('not met');
+    });
+
+    it('renders four names on every Saturday bench, and the weekdays as sessions', () => {
+        render(<RosterView user={VISITOR} />);
+        openConfigure();
+        loadArrangement('Medical Laboratory');
+        clickGenerate();
+
+        goToMonth('February 2027');
+
+        // Every Saturday in February 2027, read out of its own square.
+        const appearances = new Map(fixture.staff.map((person) => [person.name, 0]));
+        for (const dateKey of ['2027-02-06', '2027-02-13', '2027-02-20', '2027-02-27']) {
+            const bench = shiftsInDay(dateKey).find((shift) => shift.task === SATURDAY);
+            expect(bench).toBeTruthy();
+            // Four slots, so four people — two of whom exist only on the "Also:" line.
+            expect(bench.names).toHaveLength(4);
+            for (const name of bench.names) {
+                expect(appearances.has(name)).toBe(true);
+                appearances.set(name, appearances.get(name) + 1);
+            }
+        }
+
+        // THE SIGNATURE PROPERTY, IN THE RENDERED OUTPUT: every one of the six is on
+        // at least two of the four Saturday squares.
+        for (const [name, seen] of appearances) {
+            expect(seen).toBeGreaterThanOrEqual(2);
+            expect(name).toBeTruthy();
+        }
+
+        // A Sunday is not a working day here, so its square holds nothing.
+        expect(shiftsInDay('2027-02-07')).toEqual([]);
+
+        expectNoFirestoreTraffic();
+    });
+
+    it('states the 42-hour week in the box that owns it', () => {
+        render(<RosterView user={VISITOR} />);
+        openConfigure();
+        loadArrangement('Medical Laboratory');
+        expect(screen.getByLabelText(/standard working week/i).value).toBe('42');
+        expectNoFirestoreTraffic();
+    });
+});
+
+// --- THE ROUND TRIP: the tables drop nothing ---------------------------------
+
+describe('demo mode: every arrangement survives the wizard intact', () => {
+    /**
+     * THE TEST THAT MAKES THE OTHER TWELVE MEAN SOMETHING.
+     *
+     * Each arrangement's interesting field — a monthly `recurrence`, `continuity`, a
+     * `slots` list, a cohort `window`, a `quota`, a stated `weeklyHours` — has to
+     * travel from the frozen fixture, through the picker, into the wizard's rows, back
+     * out through `buildDemoRosterV2ConfigFromTables` and into the engine. A field
+     * dropped anywhere on that path produces a roster that is still valid, still
+     * violation-free, and QUIETLY DIFFERENT: a weekly clinic instead of a monthly one,
+     * a pair instead of a trio, everybody eligible every month.
+     *
+     * So the rendered calendar is compared against `generateRosterV2(fixture)` shift
+     * by shift, for the whole month the view opens on. Nothing is hardcoded: the
+     * expectation is the engine's own answer for the fixture.
+     */
+    it.each(DEMO_ARRANGEMENTS.map((entry) => [entry.name, entry.id]))(
+        'renders exactly the engine\'s own roster for %s',
+        (name, id) => {
+            const entry = arrangement(id);
+            const expected = generateRosterV2(entry.config);
+
+            render(<RosterView user={VISITOR} />);
+            openConfigure();
+            loadArrangement(name);
+            clickGenerate();
+
+            // The view opens on the month the run starts in.
+            expect(screen.getByText(expected.effectiveStart)).toBeTruthy();
+
+            const openingMonth = expected.effectiveStart.slice(0, 7);
+            const datesInMonth = Object.keys(expected.roster)
+                .filter((dateKey) => dateKey.startsWith(openingMonth))
+                .sort();
+            expect(datesInMonth.length).toBeGreaterThan(0);
+
+            for (const dateKey of datesInMonth) {
+                const rendered = shiftsInDay(dateKey);
+                const engineShifts = expected.roster[dateKey];
+
+                expect(rendered.map((shift) => shift.task)).toEqual(engineShifts.map((shift) => shift.task));
+                expect(rendered.map((shift) => shift.staff)).toEqual(engineShifts.map((shift) => shift.staff));
+                // …and everybody on the shift, including the people the two-name
+                // display string cannot carry.
+                expect(rendered.map((shift) => shift.names.length))
+                    .toEqual(engineShifts.map((shift) => shift.assignees.length));
+            }
+
+            expectNoFirestoreTraffic();
+        },
+    );
 });

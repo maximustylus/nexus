@@ -48,7 +48,13 @@ export function useSafeTimeouts() {
     const ids = useRef(/** @type {number[]} */ ([]));
 
     useEffect(() => {
-        return () => ids.current.forEach(clearTimeout);
+        // The array object in `ids.current` is never reassigned — `safeTimeout`
+        // only pushes into it — so capturing the reference at mount is equivalent
+        // to reading `ids.current` in the cleanup, and it is what
+        // react-hooks/exhaustive-deps wants to see (its warning is about refs
+        // that get *replaced*, which this one never is).
+        const timers = ids.current;
+        return () => timers.forEach(clearTimeout);
     }, []);
 
     const safeTimeout = useCallback((fn, ms) => {

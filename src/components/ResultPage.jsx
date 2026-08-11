@@ -569,7 +569,12 @@ export default function ResultPage() {
     const actionText = ctaBanner.action[lang] || ctaBanner.action.en;
     const shareText  = `${t.sharePrefix} ${tierLabel}.\n\n${t.shareTopRec} ${actionText}\n\n${t.sharePathway}`;
     if (navigator.share) {
-      try { await navigator.share({ title: 'NEXUS AURA Analysis', text: shareText, url: nexusUrl }); } catch {}
+      try {
+        await navigator.share({ title: 'NEXUS AURA Analysis', text: shareText, url: nexusUrl });
+      } catch {
+        // Ignored on purpose: navigator.share rejects when the user dismisses the
+        // OS share sheet, which is a cancellation, not an error to report.
+      }
     }
   };
 

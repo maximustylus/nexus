@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { db, auth } from '../firebase';
 import { doc, onSnapshot, setDoc } from 'firebase/firestore';
-import { Battery, BatteryCharging, BatteryWarning, BatteryFull, Users, Activity, Zap, X, Save, Lock, Bell, BellRing } from 'lucide-react';
+import { Users, Activity, Zap, X, Save, Lock, Bell, BellRing } from 'lucide-react';
 import { STAFF_LIST } from '../utils';
 
 // --- CONTEXT, DATA & FIREBASE MESSAGING ---

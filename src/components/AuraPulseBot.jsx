@@ -4,7 +4,7 @@ import {
 } from 'docx';
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { 
-  Bot, Bug, X, Send, BrainCircuit, Shield, Ghost, Users, Zap, RefreshCw, 
+  Bug, X, Send, BrainCircuit, Shield, Ghost, Users, Zap, RefreshCw,
   AlertTriangle, WifiOff, FileText, CheckCircle, Database, Trash2, Download, 
   Mic, ChevronLeft, CalendarCheck, Maximize2, Minimize2, Minus 
 } from 'lucide-react';
@@ -70,7 +70,10 @@ const SEND_COOLDOWN_MS = 2000;
 // =============================================================================
 // COMPONENT: Now fully controlled by props (isOpen, onClose, onOpen)
 // =============================================================================
-export default function AuraPulseBot({ isOpen, onClose, onOpen, user }) {
+// `onOpen` is bound as `_onOpen`: the prop is still part of this component's
+// accepted shape (App.jsx passes it) but nothing in here calls it — see the note
+// beside the refs below.
+export default function AuraPulseBot({ isOpen, onClose, onOpen: _onOpen, user }) {
     const { isDemo, auraHistory, setAuraHistory } = useNexus();
 
     // ── State ─────────────────────────────────────────────────────────────────
@@ -436,7 +439,7 @@ export default function AuraPulseBot({ isOpen, onClose, onOpen, user }) {
                     let description = line
                         .replace(/\|/g, '')        
                         .replace(dateStr, '')      
-                        .replace(/^[,\s\-]+/, '')  
+                        .replace(/^[,\s-]+/, '')
                         .trim();
                         
                     let title = description.split(',')[0]; 
@@ -742,7 +745,7 @@ export default function AuraPulseBot({ isOpen, onClose, onOpen, user }) {
 
             if (trimmedLine.startsWith('* ') || trimmedLine.startsWith('- ')) {
                 const bulletContent = formattedLine.map((part, j) => 
-                    typeof part === 'string' && j === 0 ? part.replace(/^[\*\-]\s/, '') : part
+                    typeof part === 'string' && j === 0 ? part.replace(/^[*-]\s/, '') : part
                 );
                 return (
                     <div key={i} className="flex items-start mt-1.5 ml-1">
@@ -1044,7 +1047,7 @@ export default function AuraPulseBot({ isOpen, onClose, onOpen, user }) {
                                                     {pendingLog.action && (
                                                         <div className="bg-slate-50 p-3.5 rounded-xl mb-4 border border-slate-100 text-center">
                                                             <p className="text-[9px] font-black text-slate-400 uppercase mb-1">Recommended Action</p>
-                                                            <p className="text-xs italic font-medium text-slate-600">"{pendingLog.action}"</p>
+                                                            <p className="text-xs italic font-medium text-slate-600">&quot;{pendingLog.action}&quot;</p>
                                                         </div>
                                                     )}
                                                     {pendingLog.phase === 'ILL' && (
