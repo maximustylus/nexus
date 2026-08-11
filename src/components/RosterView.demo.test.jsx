@@ -140,11 +140,38 @@ const addRow = (which) => {
     fireEvent.click(which === 'staff' ? buttons[0] : buttons[1]);
 };
 
-const setBandBound = (band, bound, value) => {
-    fireEvent.change(
-        screen.getByLabelText(`${band} band ${bound === 'min' ? 'lowest' : 'highest'} grade`),
-        { target: { value } },
-    );
+/**
+ * The band boundaries are a RULER now, not six number boxes (v2.0 work).
+ *
+ * That is a deliberate change of kind, not of styling: the bands are DERIVED from
+ * where two dividers sit, so a gap, an overlap, an inverted band and an empty box
+ * are no longer things a user can express. The old `setBandBound(band, bound, n)`
+ * helper — and the two tests that fed it an invalid value to watch the validator
+ * catch it — described a control that no longer exists.
+ *
+ * `dividers()[0]` is the junior|senior boundary, `[1]` is senior|principal, in DOM
+ * order. `aria-valuenow` is the grade the divider sits on, which is the junior max
+ * and the senior max respectively; the other four numbers follow from those two.
+ */
+const dividers = () => screen.getAllByRole('slider');
+
+const dividerValue = (index) => Number(dividers()[index].getAttribute('aria-valuenow'));
+
+/** Nudge a divider with the keyboard, the way a keyboard user would. */
+const nudgeDivider = (index, key, times = 1) => {
+    for (let i = 0; i < times; i += 1) {
+        fireEvent.keyDown(dividers()[index], { key });
+    }
+};
+
+/** Drive a divider to an exact grade, whichever direction that is. */
+const setDivider = (index, target) => {
+    let guard = 0;
+    while (dividerValue(index) !== target && guard < 40) {
+        nudgeDivider(index, dividerValue(index) < target ? 'ArrowRight' : 'ArrowLeft');
+        guard += 1;
+    }
+    expect(dividerValue(index)).toBe(target);
 };
 
 /**
@@ -380,10 +407,13 @@ describe('demo mode: Configure → Load example department → Generate', () => 
 
         // The band editor holds the boundaries the fixture's grades were tuned
         // against — this is what makes "exactly one unfilled slot" reproducible.
-        expect(screen.getByLabelText('Junior band lowest grade').value).toBe('7');
-        expect(screen.getByLabelText('Junior band highest grade').value).toBe('12');
-        expect(screen.getByLabelText('Senior band lowest grade').value).toBe('13');
-        expect(screen.getByLabelText('Principal band highest grade').value).toBe('17');
+        // Read off the ruler's two dividers: junior ends at AH12, senior ends at
+        // AH14, so the fixture's boundaries are junior 7–12 / senior 13–14 /
+        // principal 15–17. (Was four number-box assertions before the ruler.)
+        expect(dividerValue(0)).toBe(12);
+        expect(dividerValue(1)).toBe(14);
+        expectOnScreen(/Junior\s*AH7[–-]AH12/i);
+        expectOnScreen(/Principal\s*AH15[–-]AH17/i);
 
         // The gated task's chips are ticked, and the grade range beside them is
         // rendered from those boundaries.
@@ -640,61 +670,60 @@ describe('demo mode: an unfillable configuration', () => {
 // ─── 4. THE BAND BOUNDARY EDITOR ──────────────────────────────────────────────
 
 describe('demo mode: the band boundary editor', () => {
-    it('disables Generate and shows validateGradeBands\' reason on a gap', () => {
+    /*
+     * REPLACED WHEN THE RULER LANDED (v2.0). Two tests used to live here: one fed
+     * the old number boxes a gap (junior ends AH11, senior starts AH13, so AH12 is
+     * in no band) and one fed them an overlap and an empty string, then asserted
+     * that `validateGradeBands`' reason appeared and Generate went disabled.
+     *
+     * Neither state is expressible any more, and that is the point of the control:
+     * the bands are derived from two dividers that constrain each other, so there
+     * is no gap to leave, nothing to overlap, and no box to empty. Keeping tests
+     * that manufacture an impossible state would have meant keeping the boxes.
+     *
+     * The stronger claim replaces them below: the invalid states are UNREACHABLE.
+     * `RosterView.wizard.test.jsx` drives both dividers to every extreme by
+     * keyboard and by pointer and asserts the partition survives; this test states
+     * the same property from the visitor's side, where the consequence lives —
+     * Generate stays available because there is nothing to refuse.
+     */
+    it('cannot express a gap or an overlap, so Generate is never blocked by the bands', () => {
         render(<RosterView user={VISITOR} />);
         openConfigure();
         loadExample();
 
-        // A generatable configuration to start from, so the only thing under test
-        // is the boundary edit.
         expect(generateIsDisabled()).toBe(false);
 
-        // Junior now ends at AH11 while senior still starts at AH13 — AH12 is in
-        // no band at all, which is the dangerous case: Sam Wilson (AH12) would be
-        // silently unable to lead every band-gated task.
-        setBandBound('Junior', 'max', '11');
-
-        expect(generateIsDisabled()).toBe(true);
-        expectOnScreen(/leave AH12 in no band at all/i);
-
-        clickGenerate();
-        expect(screen.getByText(/no sandbox roster yet/i)).toBeTruthy();
-
-        // Put it back and the button returns.
-        setBandBound('Junior', 'max', '12');
+        // Drive the lower divider hard down and the upper hard up, past each other
+        // and past both ends of the scale. After every attempt the bands must still
+        // partition AH7–AH17 and the configuration must still be generatable.
+        nudgeDivider(0, 'ArrowLeft', 25);
+        nudgeDivider(1, 'ArrowRight', 25);
+        expect(dividerValue(0)).toBeLessThan(dividerValue(1));
         expect(generateIsDisabled()).toBe(false);
+
+        // And the other way: lower divider up past the upper one.
+        nudgeDivider(0, 'ArrowRight', 25);
+        expect(dividerValue(0)).toBeLessThan(dividerValue(1));
+        expect(generateIsDisabled()).toBe(false);
+
+        // No band-partition reason can be on screen, because none is reachable.
+        expect(screen.queryByText(/in no band at all/i)).toBeNull();
+        expect(screen.queryByText(/overlap/i)).toBeNull();
         expectNoFirestoreTraffic();
     });
 
-    it('refuses an overlap, and an emptied box, with a reason about that box', () => {
-        render(<RosterView user={VISITOR} />);
-        openConfigure();
-        loadExample();
-
-        setBandBound('Senior', 'min', '11');
-        expectOnScreen(/overlap/i);
-        expect(generateIsDisabled()).toBe(true);
-
-        setBandBound('Senior', 'min', '13');
-        setBandBound('Senior', 'max', '');
-        // Not coerced to 0 and not silently defaulted — the reason is about the
-        // empty box the user is standing in.
-        expectOnScreen(/band bounds are whole grade numbers/i);
-        expect(generateIsDisabled()).toBe(true);
-        expectNoFirestoreTraffic();
-    });
-
-    it('moves the grade range shown beside a task\'s chips in the same keystroke', () => {
+    it('moves the grade range shown beside a task\'s chips as a divider moves', () => {
         render(<RosterView user={VISITOR} />);
         openConfigure();
         loadExample();
 
         expect(screen.getAllByText('AH13–AH17').length).toBeGreaterThan(0);
 
-        // Widen senior downwards: senior AH11–14, junior AH7–10. Still a valid
-        // partition, so the range beside the Senior/Principal chips must follow.
-        setBandBound('Junior', 'max', '10');
-        setBandBound('Senior', 'min', '11');
+        // Widen senior downwards by moving the junior|senior divider to AH10:
+        // junior AH7–10, senior AH11–14, principal AH15–17. Still a valid
+        // partition by construction, so the Senior/Principal chip range follows.
+        setDivider(0, 10);
 
         expect(screen.queryByText('AH13–AH17')).toBeNull();
         expect(screen.getAllByText('AH11–AH17').length).toBeGreaterThan(0);

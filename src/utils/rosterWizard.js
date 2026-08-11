@@ -215,6 +215,210 @@ export const describeBandRange = (selected, bands = DEFAULT_GRADE_BANDS) => {
     return spans.map(([min, max]) => (min === max ? `AH${min}` : `AH${min}–AH${max}`)).join(', ');
 };
 
+// --- THE BAND RULER -----------------------------------------------------------
+//
+// The band editor is ONE ruler with TWO draggable dividers, not six number boxes.
+// That is a correctness change wearing a UI change's clothes.
+//
+// With six independent numbers a user can express a GAP (AH12 in no band at all),
+// an OVERLAP (two bands claiming AH12) or a partition that does not reach the ends
+// of the scale, and the only defence is `validateGradeBands` complaining after the
+// fact. With dividers those states are not reachable: the three bands are DERIVED
+// from where the dividers sit —
+//
+//     junior = [7, a]        senior = [a + 1, b]        principal = [b + 1, 17]
+//
+// — so contiguity and full coverage of AH7–AH17 are properties of the arithmetic
+// rather than things to check afterwards. The ONLY illegal state left to defend
+// against is an EMPTY band, which is exactly `7 <= a < b <= 16`, and that is what
+// `bandDividerLimits` enforces by letting each divider's travel be bounded by its
+// neighbours. A divider cannot cross another divider, so it cannot invert a band.
+//
+// The scale, the band names and the band ORDER all come from the engine's own
+// exports rather than being retyped here, so the ruler cannot draw a scale, or a
+// number of bands, that `validateGradeBands` would refuse.
+//
+// Everything here is PURE and DOM-free: the constraint arithmetic is testable
+// without a renderer, and `RosterDemoWizardTables` stays presentation-only.
+
+/**
+ * The AH scale as plain numbers, `[7 … 17]`, derived from the engine's
+ * `GRADE_SCALE` so there is one definition of "which grades exist".
+ */
+export const RULER_GRADES = Object.freeze(
+    GRADE_SCALE.map((grade) => Number(String(grade).replace(/^AH/i, ''))),
+);
+
+const RULER_MIN = RULER_GRADES[0];
+const RULER_MAX = RULER_GRADES[RULER_GRADES.length - 1];
+
+/**
+ * The dividers, low to high — one between each adjacent pair of bands.
+ *
+ * Derived from `BAND_NAMES` rather than hard-coded as two, because "how many
+ * dividers" is not an independent fact: it is `bands - 1`, and writing `2` here
+ * would be a second place to update if the engine's band list ever changed.
+ *
+ * Divider `i` is identified by the grade at which the band BELOW it ends, which
+ * is the value the slider reports as `aria-valuenow`.
+ */
+export const BAND_DIVIDERS = Object.freeze(
+    BAND_NAMES.slice(0, -1).map((below, index) =>
+        Object.freeze({ below, above: BAND_NAMES[index + 1] }),
+    ),
+);
+
+/**
+ * How far may divider `index` travel, given where its neighbours sit?
+ * `{ min, max }`, inclusive, in grade numbers.
+ *
+ * The floor is one grade above the divider below it (or the bottom of the scale);
+ * the ceiling is one grade below the divider above it (or one below the top of the
+ * scale, so the topmost band always keeps at least AH17). These are the numbers the
+ * slider publishes as `aria-valuemin` / `aria-valuemax`, so the value a screen
+ * reader announces as the limit is the same value Home and End actually reach.
+ */
+export const bandDividerLimits = (dividers, index) => {
+    const list = Array.isArray(dividers) ? dividers : [];
+    const below = index > 0 ? list[index - 1] : null;
+    const above = index < list.length - 1 ? list[index + 1] : null;
+    return {
+        min: Number.isInteger(below) ? below + 1 : RULER_MIN,
+        max: Number.isInteger(above) ? above - 1 : RULER_MAX - 1,
+    };
+};
+
+/** Divider positions -> the band spans they imply. Total: always a partition. */
+const segmentsFromDividers = (dividers) =>
+    BAND_NAMES.map((band, index) => ({
+        band,
+        min: index === 0 ? RULER_MIN : dividers[index - 1] + 1,
+        max: index === dividers.length ? RULER_MAX : dividers[index],
+    }));
+
+/**
+ * `inputs` (the wizard's band state, unchanged in shape) -> everything the ruler
+ * needs to draw itself and everything a slider needs to describe itself:
+ *
+ *   {
+ *     dividers,          // [a, b] — grade at which each band below a divider ends
+ *     limits,            // [{ min, max }, …] — legal travel, one per divider
+ *     segments,          // [{ band, min, max }, …] — the regions, low to high
+ *     bands,             // the same thing as a `rules.bands` object
+ *     representsInputs,  // does the ruler show the state it was handed?
+ *   }
+ *
+ * `representsInputs` is the honesty flag. The ruler can only draw a partition, so
+ * when it is handed something that is not one (a half-typed state left behind by
+ * the old six-box editor, or a caller passing bands from elsewhere) it draws the
+ * NEAREST partition and reports `false`, and the component says so on screen. It
+ * does NOT fire a change to correct the state — a control that rewrites its own
+ * value on render generates against boundaries the user never chose, which is the
+ * failure the six-box editor's comment argued against and still applies. The first
+ * deliberate move adopts what the ruler is showing; until then the discrepancy is
+ * visible and `validateGradeBands` is still the thing blocking Generate.
+ */
+export const bandRulerModel = (inputs) => {
+    const parsed = inputsToBands(inputs);
+
+    const dividers = [];
+    for (let index = 0; index < BAND_DIVIDERS.length; index += 1) {
+        const { below } = BAND_DIVIDERS[index];
+        const wanted = Array.isArray(parsed[below]) ? parsed[below][1] : null;
+        // A blank or unreadable box has no position on a ruler at all, so it falls
+        // back to the shipped cut — never to 0, which is off the scale entirely.
+        const fallback = DEFAULT_GRADE_BANDS[below][1];
+        const requested = Number.isInteger(wanted) ? wanted : fallback;
+        // Floor from the divider already placed; the ceiling leaves one grade for
+        // every band still above this divider, including the topmost.
+        const floor = index === 0 ? RULER_MIN : dividers[index - 1] + 1;
+        const ceiling = RULER_MAX - (BAND_DIVIDERS.length - index);
+        dividers.push(Math.min(Math.max(requested, floor), ceiling));
+    }
+
+    const segments = segmentsFromDividers(dividers);
+    const bands = {};
+    for (const segment of segments) bands[segment.band] = [segment.min, segment.max];
+
+    const representsInputs = BAND_NAMES.every(
+        (band) =>
+            Array.isArray(parsed[band])
+            && parsed[band][0] === bands[band][0]
+            && parsed[band][1] === bands[band][1],
+    );
+
+    return {
+        dividers,
+        limits: dividers.map((_, index) => bandDividerLimits(dividers, index)),
+        segments,
+        bands,
+        representsInputs,
+    };
+};
+
+/**
+ * Ask for divider `index` to sit at grade `requested`. Returns the clamped result
+ * and the `onBandChange(band, bound, value)` patches that express it:
+ *
+ *   { ok, value, dividers, segments, patches: [[band, bound, string], …] }
+ *
+ * CLAMPED, NOT REFUSED. A ruler that ignores a drag past its neighbour feels
+ * broken; one that lets it through expresses an overlap. So an out-of-range
+ * request stops at the limit. This is the one place in this wizard where silently
+ * correcting the input is right, and the reason is narrow: the input is a POINTER
+ * POSITION or an arrow key, not a number somebody typed and can re-read.
+ *
+ * PATCHES ARE MINIMAL AND COMPLETE. They carry every bound whose current string
+ * differs from the partition being committed — normally exactly two (the band
+ * below ends here, the band above starts one grade later), and more only when the
+ * incoming state was not a partition, in which case the first deliberate move
+ * adopts the whole of what the ruler has been showing. Emitting only one side of a
+ * divider is precisely how a gap or an overlap would get into the state, so the
+ * two sides always travel together.
+ *
+ * The caller must apply all of them before the next render. `RosterView`'s
+ * `patchBandInput` uses the functional `setState(prev => …)` form, and React
+ * batches the calls made from one event handler into a single re-render, so no
+ * intermediate non-partition is ever rendered, validated or generated from.
+ */
+export const moveBandDivider = (inputs, index, requested) => {
+    const model = bandRulerModel(inputs);
+    if (!Number.isInteger(index) || index < 0 || index >= model.dividers.length) {
+        return { ok: false, value: null, dividers: model.dividers, segments: model.segments, patches: [] };
+    }
+
+    const { min, max } = model.limits[index];
+    const wanted = Number.isInteger(requested) ? requested : model.dividers[index];
+    const value = Math.min(Math.max(wanted, min), max);
+
+    const dividers = model.dividers.map((entry, position) => (position === index ? value : entry));
+    const segments = segmentsFromDividers(dividers);
+
+    const patches = [];
+    for (const segment of segments) {
+        const current = inputs && typeof inputs === 'object' ? inputs[segment.band] : undefined;
+        if (String(current?.min) !== String(segment.min)) patches.push([segment.band, 'min', String(segment.min)]);
+        if (String(current?.max) !== String(segment.max)) patches.push([segment.band, 'max', String(segment.max)]);
+    }
+
+    return { ok: true, value, dividers, segments, patches };
+};
+
+/**
+ * A fraction along the ruler (0 = the left edge of AH7, 1 = the right edge of
+ * AH17) -> the divider value whose LINE is nearest that point.
+ *
+ * The scale has 11 grades and therefore 12 boundary lines. Line `k` sits after
+ * grade `RULER_MIN + k - 1`, which is the divider value; rounding rather than
+ * flooring is what makes a drag snap to the nearest line rather than to whichever
+ * cell the pointer happens to be inside. Deliberately UNCLAMPED — `moveBandDivider`
+ * owns the clamp, so there is exactly one clamp and one place to test it.
+ */
+export const bandDividerAtFraction = (fraction) => {
+    const clamped = Number.isFinite(fraction) ? Math.min(Math.max(fraction, 0), 1) : 0;
+    return RULER_MIN - 1 + Math.round(clamped * RULER_GRADES.length);
+};
+
 // --- PER-CELL PARSERS ---------------------------------------------------------
 
 /** The FTE range the wizard accepts. The engine allows anything in (0, 1]. */

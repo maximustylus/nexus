@@ -856,17 +856,104 @@ export const appendRosterAlert = (messages, alert) => {
 /** Neither `undefined` nor `null` may ever reach a file. Both become empty. */
 const exportText = (value) => (value === undefined || value === null ? '' : String(value));
 
+
+// --- 2a-pre. WHO IS ON THE SHIFT (multi-assignee support) ---------------------
+//
+// Closes the limit `mockData.js` was written around: *"with `coLeads > 1` the
+// engine puts the extra people in `assignees`, which `downloadCSV`/`downloadICS`
+// do not read, so the exports would be silently incomplete."* Both exporters now
+// read `assignees`.
+//
+// FOUR SHIFT SHAPES REACH HERE, and one reader has to serve all of them:
+//
+//   1. `generateRoster` (V1, the live engine)  — `lead` + `coLead` + `staff`.
+//   2. `generateRosterV2`                      — the same three PLUS `assignees`,
+//      which is authoritative for the third person onward (a `coLeads: 2`
+//      pairing group, or a `slots:` trio).
+//   3. the demo transform / a pre-6-May document — `lead` (or a bare `staff`)
+//      and nothing else.
+//   4. anything hand-edited or swap-mutated, which may DISAGREE with itself.
+//
+// SHAPE 4 IS WHY `lead`/`coLead` ARE READ FIRST AND `assignees` ONLY AFTER THEM.
+// `applyShiftSubstitution` (section 1c) rewrites `lead`, `coLead` and `staff` on
+// an accepted swap and does NOT touch `assignees`, so on a V2 shift that has been
+// swapped, `assignees` still names the clinician who handed the duty over. Order
+// of preference decides what that costs:
+//
+//   • trusting `assignees` first would put the DEPARTED person in the Assignees
+//     column and in the calendar event, flatly contradicting the Lead column
+//     beside it;
+//   • reading the authoritative pair first, as here, keeps the current holders
+//     first and leaves the stale name trailing as an extra assignee — so a trio
+//     that has been swapped exports FOUR names.
+//
+// Four names on a three-person shift is visibly odd; a departed clinician
+// exported as its lead is not. Neither is correct, and the exporters cannot make
+// stale data fresh: the real repair is for `applyShiftSubstitution` to maintain
+// `assignees`, which is a change to the swap contract and is deliberately NOT
+// made here. It is logged in the ledger in section 2d.
+
 /**
- * The display string for a shift, tolerant of every shape that reaches here.
+ * Everybody on a shift, in publication order, deduplicated, never `undefined`.
  *
- * Live documents written before 6 May 2026 and the demo transform both omit
- * `coLead`; `buildShiftStaffLabel` already handles that, and the empty-lead case
- * yields '' rather than the literal `Lead: undefined` (audit M7).
+ * Order: `lead`, then `coLead`, then whatever `assignees` adds. For every shift
+ * this repo's two engines actually produce, that is exactly `assignees` — V2
+ * writes `assignees[0] === lead` and `assignees[1] === coLead` — so the
+ * reordering is invisible except on the self-contradicting shape 4 above.
+ *
+ * A bare-`staff` legacy shift yields `[]`, the same as it already yields an empty
+ * Lead cell: identity is never parsed back out of a formatted display string
+ * (`readShiftIdentities` in section 1c documents why that rule exists).
+ *
+ * Values are String-coerced rather than type-filtered, matching `csvField` and
+ * `escapeICSText`: a non-string in `assignees` shows up as visible nonsense in
+ * one cell instead of a person silently vanishing from the roster.
  */
-const shiftStaffText = (shift) => {
+const shiftAssigneeNames = (shift) => {
+    const names = [];
+    const seen = new Set();
+
+    const add = (value) => {
+        const name = exportText(value).trim();
+        if (name === '' || seen.has(name)) return;
+        seen.add(name);
+        names.push(name);
+    };
+
+    add(shift.lead);
+    add(shift.coLead);
+    if (Array.isArray(shift.assignees)) shift.assignees.forEach(add);
+
+    return names;
+};
+
+/**
+ * The human display text for a shift's people, tolerant of every shape above.
+ *
+ * ONE AND TWO PEOPLE ARE UNCHANGED, byte for byte: `shift.staff` is used
+ * verbatim when it is a non-empty string, which is what the calendar renders and
+ * what every existing ICS pin expects. The empty-lead case yields '' rather than
+ * the literal `Lead: undefined` (audit M7).
+ *
+ * THREE OR MORE gets a new convention, and it is a JUDGMENT CALL:
+ * `Lead: A, Co: B, Also: C, D`. It cannot come from `buildShiftStaffLabel` —
+ * that function's output is pinned byte-exact by `generateRoster`'s 23
+ * characterization tests and is written into live Firestore documents, so the
+ * two-name display string keeps exactly one definition and this longer form is
+ * assembled here, in the exporter, where nothing else can read it. The multi-slot
+ * ledger (`rosterEngineV2.js` section 10, item 1) suggested `Lead: X, Co: Y, +1`;
+ * a count would not satisfy "list every assignee", so the names are spelled out.
+ * The commas are escaped by `escapeICSText` on the way into SUMMARY.
+ */
+const shiftPeopleText = (shift) => {
+    const names = shiftAssigneeNames(shift);
+
+    if (names.length > 2) {
+        return `Lead: ${names[0]}, Co: ${names[1]}, Also: ${names.slice(2).join(', ')}`;
+    }
     if (typeof shift.staff === 'string' && shift.staff.trim() !== '') return shift.staff;
-    const lead = exportText(shift.lead).trim();
-    return lead === '' ? '' : buildShiftStaffLabel(lead, shift.coLead);
+    if (names.length === 0) return '';
+    return buildShiftStaffLabel(names[0], names[1]);
 };
 
 
@@ -968,7 +1055,7 @@ export const buildICS = (rosterData, options = {}) => {
             uidCounts.set(base, seen);
             const uid = `${seen === 1 ? base : `${base}-${seen}`}${ICS_UID_DOMAIN}`;
 
-            const summary = `[${exportText(shift.task)}] ${shiftStaffText(shift)}`.trimEnd();
+            const summary = `[${exportText(shift.task)}] ${shiftPeopleText(shift)}`.trimEnd();
 
             // A shift with no `week` (demo transform, legacy documents) drops the
             // prefix entirely rather than printing `Week undefined -` (audit M7).
@@ -1019,14 +1106,30 @@ const csvField = (value) => {
 };
 
 /**
+ * How the Assignees cell separates names. A SEMICOLON, not a comma: a comma
+ * would be indistinguishable from the column separator to anybody reading the
+ * file by eye, and a name that legitimately contains a comma (`Wong, Ying Xian`)
+ * would then be unrecoverable even after RFC 4180 unquoting. The trailing space
+ * is for the human reading the cell in Excel; a machine splitting on `;` should
+ * trim. Judgment call, flagged in section 2d.
+ */
+const ASSIGNEE_SEPARATOR = '; ';
+
+/**
  * The roster as a CSV, as a string.
  *
- * Column order and header text are unchanged — dedicated Lead and Co-Lead
- * columns, for cleaner Excel filtering. Absent `week`/`coLead` (demo transform,
- * pre-6-May documents) are empty cells, never the string `undefined` (M7).
+ * THE FIRST SIX COLUMNS ARE UNCHANGED, byte for byte — `Date,Week,Task,Category,
+ * Lead,Co-Lead`, with the same values from the same fields — because roster
+ * masters have saved workbooks and filters against them. A SEVENTH column,
+ * `Assignees`, is APPENDED: the full ordered team, semicolon-separated, so a
+ * shift holding three or more people is no longer exported as two.
+ *
+ * Absent `week`/`coLead` (demo transform, pre-6-May documents) are empty cells,
+ * never the string `undefined` (M7), and that now covers the new column too — a
+ * shift with no readable assignee gets an empty cell, not `undefined`.
  */
 export const buildCSV = (rosterData) => {
-    const header = ['Date', 'Week', 'Task', 'Category', 'Lead', 'Co-Lead'];
+    const header = ['Date', 'Week', 'Task', 'Category', 'Lead', 'Co-Lead', 'Assignees'];
     const rows = [header.map(csvField).join(',')];
 
     const source = rosterData && typeof rosterData === 'object' ? rosterData : {};
@@ -1036,8 +1139,14 @@ export const buildCSV = (rosterData) => {
             const shifts = source[date];
             (Array.isArray(shifts) ? shifts : []).forEach((rawShift) => {
                 const s = rawShift && typeof rawShift === 'object' ? rawShift : {};
+                // `csvField` quotes the cell if a name contains a comma, a quote
+                // or a newline, and de-weaponises a leading `=`/`+`/`-`/`@`
+                // exactly as it does for every other field (M10).
+                const assignees = shiftAssigneeNames(s).join(ASSIGNEE_SEPARATOR);
                 rows.push(
-                    [date, s.week, s.task, s.category, s.lead, s.coLead].map(csvField).join(','),
+                    [date, s.week, s.task, s.category, s.lead, s.coLead, assignees]
+                        .map(csvField)
+                        .join(','),
                 );
             });
         });
@@ -1072,3 +1181,60 @@ export const downloadICS = (rosterData) => {
 export const downloadCSV = (rosterData) => {
     downloadBlob(buildCSV(rosterData), 'text/csv', 'AURA_Roster_Merged.csv');
 };
+
+
+// --- 2d. THE EXPORTS' LIMITS LEDGER ------------------------------------------
+//
+// What a roster master can do today and get a surprising or incomplete file.
+// Measured where it says measured, FLAGGED where a judgment call was made rather
+// than a fact found — same convention as `rosterEngineV2.js` sections 9 and 10.
+// Written after multi-assignee support landed, so items 1-4 are that feature's.
+//
+//  1. A SWAPPED SHIFT CAN EXPORT ONE NAME TOO MANY. `applyShiftSubstitution`
+//     (section 1c) maintains `lead`, `coLead` and `staff` and does NOT maintain
+//     `assignees`, so after a colleague covers the lead of a three-person shift
+//     the export lists the new lead, the co-lead, the DEPARTED lead and the third
+//     assignee — four names for three duties. `shiftAssigneeNames` reads the
+//     authoritative pair first so the stale name trails rather than leads, which
+//     makes the staleness visible instead of authoritative. → FLAGGED: the repair
+//     belongs in the swap contract (maintain `assignees` there), not in the
+//     exporters, and it is not made yet.
+//  2. THE `Also:` CONVENTION IS NEW AND UNRATIFIED. Three or more people export
+//     as `Lead: A, Co: B, Also: C, D` in the ICS SUMMARY. Nothing else in the app
+//     writes that string: the calendar cell and the swap modal still render
+//     `shift.staff`, which is `buildShiftStaffLabel(lead, coLead)` and still shows
+//     two names. So the SAME SHIFT reads as a trio in the .ics and a pair on
+//     screen. → FLAGGED for the roster owner: `rosterEngineV2.js` section 10 item
+//     1 asks for one display convention across calendar, CSV and ICS; this is
+//     three quarters of it.
+//  3. `Assignees` SEPARATES ON `'; '`, WHICH IS A CHOICE, NOT A STANDARD. RFC 4180
+//     has no list-inside-a-field convention. A consumer splitting on `';'` must
+//     trim; one splitting on `', '` will be wrong. Also, the CSV keeps `Lead` and
+//     `Co-Lead` AND repeats both inside `Assignees` — deliberate redundancy so the
+//     old columns stay byte-compatible, but it does mean the same name appears
+//     twice in a row.
+//  4. A SHIFT WHOSE ONLY RECORD IS A BARE `staff` NAME EXPORTS NO ASSIGNEES. A
+//     pre-6-May document has `staff: 'Brandon'` and no `lead`, and identity is
+//     never parsed back out of a display string (the rule `readShiftIdentities`
+//     exists to enforce). Its Lead, Co-Lead and Assignees cells are all empty
+//     while the ICS SUMMARY still shows the name, because SUMMARY falls back to
+//     `staff` verbatim. Pre-existing for Lead/Co-Lead; item 4 only records that
+//     the new column inherits it rather than fixing it.
+//  5. NO VTIMEZONE, AND EVERY EVENT IS ALL-DAY. `DTSTART;VALUE=DATE` carries no
+//     time and no timezone, so a shift is a whole day in the importer's calendar
+//     whatever hours it actually runs — and the hours model in
+//     `rosterEngineV2.js` now knows those durations. The ICS does not read them.
+//  6. FOLDING COUNTS CODE POINTS, NOT OCTETS (§3.1 wants octets). Documented at
+//     `foldICSLine`: non-ASCII names fold late, which errs long rather than
+//     splitting a surrogate pair. A team of four with long non-ASCII names on one
+//     shift can therefore emit a SUMMARY line over 75 bytes.
+//  7. THE FORMULA GUARD CHANGES THE DATA IT PROTECTS. A task or a person legitimately
+//     named starting `-` or `@` is exported with a leading apostrophe (M10's fix),
+//     so the CSV is not a faithful round-trip of the roster document.
+//  8. NEITHER EXPORT CARRIES `unfilled`. A roster with slots nobody could staff
+//     exports as though those slots did not exist — the CSV has no row and the
+//     ICS no event for a gap, and nothing in either file says a gap was reported.
+//     That is the single biggest hole in both formats and it predates every
+//     feature above: the engine's core value is that it refuses out loud, and the
+//     file a roster master actually opens is silent about the refusal.
+//     → FLAGGED: needs a decision about whether gaps belong in the same file.

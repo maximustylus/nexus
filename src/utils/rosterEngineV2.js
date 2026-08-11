@@ -91,10 +91,64 @@
 //      COUNTED (`score.breakdown.continuityBreaks`) and NAMED (a `warnings` entry
 //      giving both dates and, where the engine knows it, the reason), because
 //      knowing WHEN continuity broke is the whole point of having asked for it.
+//   9. HOURS ARE A SECOND CURRENCY, AND THE WHOLE MODEL IS OPT-IN. Until v1.8.1
+//      this engine counted DUTIES only, which cannot express a 42-hour week. A
+//      task may now carry `hours` (default `DEFAULT_TASK_HOURS` = 4, because
+//      these teams' tasks are sessions — clinic, rounds, group, review — not
+//      whole days), and a person a `weeklyHours` (default 42) and a
+//      `maxHoursPerDay` (default `weeklyHours / 5`). Same-day durations SUM
+//      against the daily cap and one Monday–Sunday week's durations sum against
+//      the weekly cap; both are scaled by FTE and both are HARD, so a slot that
+//      would breach either is `unfilled` with a reason naming the hours, the
+//      date and what the person already holds. The FOUR-WEEK total is WARNED on
+//      and never enforced — see section 0c for why that window is genuinely
+//      rolling and why a week-bucketed version of it would have been a decoy.
+//      OPT-IN, and this is the load-bearing part: the model is inert unless the
+//      configuration MENTIONS one of those four fields (`hoursModelRequested`).
+//      A department that has never heard of hours gets the roster, the `load`
+//      shape and the `score.breakdown` it got before hours existed, byte for
+//      byte — including a department whose `maxPerDay` is 3, which under an
+//      always-on model would suddenly break a 12h day against an 8.4h cap and
+//      change a roster nobody asked to change. Section 0c owns the predicate,
+//      the defaults and the caps; the honest cost of the choice is at the foot
+//      of this header.
+//  10. A SHIFT MAY BE A TEAM, AND THE LEAD IS THEN THE HIGHEST GRADE ON IT.
+//      Until v1.8.2 a shift held one lead plus at most one co-lead per pairing
+//      group, so the embryologists' weekend rule — a principal, a senior AND a
+//      junior, together, on one shift — was inexpressible. A task may now carry
+//      `slots: [{ band, requiresSkill, role }, …]`, ONE ENTRY PER PERSON THE
+//      SHIFT NEEDS, and each entry is filled INDEPENDENTLY through the same
+//      candidate pipeline with its OWN band and skill gate. `slots` REPLACES
+//      `leads`/`coLeads` rather than refining them, and validation refuses a task
+//      carrying both, for the same reason `days` + `recurrence` is refused: there
+//      is no reading of "one lead plus a co-lead AND a list of three slots" that
+//      is not one of the two with extra words.
+//      WHO IS THE LEAD, decided with the roster owner: the assignee holding the
+//      HIGHEST GRADE present. Not the first slot, not the first filled — the
+//      highest grade, because that is who the department holds accountable for
+//      the shift, and it stays right when a slot goes unfilled and the trio
+//      becomes a pair. An UNGRADED assignee never outranks a graded one (the
+//      engine does not invent data — section 0b's rule, applied to ranking
+//      instead of eligibility), ties break by the existing candidate tie-break,
+//      and `coLead` is the SECOND assignee, so the `Lead: X, Co: Y` display
+//      string, the calendar, the swap flow and both exporters keep working
+//      unchanged. `assignees` carries everybody, lead first. The cost of that
+//      compatibility — a third assignee is invisible in `staff`, in the calendar
+//      and in both exports — is at the foot of this file, in the roster master's
+//      words, because it is the biggest judgment call in the feature.
+//      PER-TASK AND THEREFORE INERT: a task with no `slots` key reads and writes
+//      exactly what it did before this section existed. There is no global
+//      switch to get wrong.
 //
 // WHAT THIS ENGINE DELIBERATELY DOES NOT DO (left as clean seams, not oversights):
 // no local-search / hill-climbing improvement pass over the constructed roster;
-// no hours-based limits (max hours per week, per cycle, or continuous duty); no
+// no continuous-duty / rest-between-duties limit, and no ENFORCED rolling window
+// of any length (the four-week total is measured and warned about, never gated);
+// no HOURS-WEIGHTED FAIRNESS — the candidate comparator still ranks by DUTY
+// COUNT over FTE, so with mixed durations the engine shares out sessions rather
+// than hours and `score.breakdown.hoursImbalance` can be large while
+// `loadImbalance` is 0 (the number is reported precisely so that this is
+// visible rather than assumed away); no
 // cross-block "border data" carried between successive generation runs; no
 // band-aware LOAD TARGETS — `knowledgeBase.js`'s TIME_MATRIX says an AH15 should
 // spend 15% of their time on clinical work against an AH7's 80%, and this engine
@@ -123,6 +177,34 @@
 // pin deliberately and landed the refusal — see `rosterEngineV2.grades.test.js`
 // ("refuses a task whose band and skill pools do not intersect").
 //
+// Added by the hours model, and the same kind of deliberate: a per-person
+// `weeklyHours` does NOT imply a per-person `maxHoursPerDay` (a 21-hour week
+// still inherits the department's 8.4-hour day, because the two fields answer
+// different questions and guessing one from the other would silently halve
+// somebody's availability); `weeklyHours` and `fte` MULTIPLY rather than override
+// (`weeklyHours: 21` on a 0.5-FTE person is 10.5 hours, which is almost certainly
+// not what was meant — the ledger at the foot of this file says so out loud); the
+// weekly window is the GENERATED week, so hours worked in a previous run are
+// invisible to it exactly as `consecutiveRunBefore`'s are; and the four-week
+// warning needs 28 days of run to have a window at all, so a three-week
+// generation can never fire it.
+//
+// Added by multi-slot shifts, and deliberate in the same way: NO PREFERENCE ORDER
+// between slot entries — every entry is filled by the same scarcity ordering as
+// every other slot in the day, so listing the principal first does not make it
+// more likely to be staffed than the junior (what decides that is scarcity, and
+// the trio is exactly the case where the scarce entry SHOULD win); NO
+// CROSS-ENTRY EXCLUSION beyond "not the same person twice" — two entries that
+// both accept seniors may both be filled by seniors, and a `slots` list is a set
+// of requirements rather than a description of a hierarchy; and NO `leadBands`
+// AND NO `continuity` alongside `slots` — both of those gate or follow a
+// CONFIGURED lead slot, and with `slots` the lead is DERIVED from the grades
+// present, so both are validation refusals rather than fields that quietly do
+// nothing. A slot's band is a SINGLE band, not a list: `{ band: 'senior' }` is
+// "a senior fills this", and "a senior or a principal" is expressed by leaving
+// the band off the entry and letting the grade ranking decide the lead, or by
+// two tasks. Widening that to a list is additive and was not asked for.
+//
 // ==============================================================================
 
 // The `.js` extension is explicit (the rest of the repo omits it) so this
@@ -145,7 +227,53 @@ export const ROSTER_V2_DEFAULTS = Object.freeze({
     category: 'CORE',
     maxConcurrentPerDay: 2,
     maxConsecutiveDays: 6,
+    /** See `DEFAULT_TASK_HOURS` — one definition, two names. */
+    taskHours: 4,
+    /** See `DEFAULT_WEEKLY_HOURS`. */
+    weeklyHours: 42,
 });
+
+/**
+ * How long is a task nobody gave a duration to? FOUR HOURS.
+ *
+ * Field research, not a guess: the medical-lab-scientist and psychology teams
+ * whose 42-hour weeks this model exists to express configure SESSIONS — a
+ * clinic, a ward round, a therapy group, a reporting block — and two of them
+ * make a working day. The alternative default (8, "a task is a whole day") would
+ * have made every pre-hours configuration illegal against its own 8.4-hour cap
+ * the moment somebody switched the model on, which is the opposite of a default.
+ *
+ * Exported because a UI must be able to SHOW the number it is silently applying,
+ * and because a test that hard-codes 4 is pinning a coincidence rather than the
+ * contract.
+ */
+export const DEFAULT_TASK_HOURS = ROSTER_V2_DEFAULTS.taskHours;
+
+/** The contracted week both teams work, in hours. `rules.weeklyHours` overrides. */
+export const DEFAULT_WEEKLY_HOURS = ROSTER_V2_DEFAULTS.weeklyHours;
+
+/** The divisor in `defaultMaxHoursPerDay`, named so that it is arguable. */
+const DAYS_WORKED_PER_WEEK = 5;
+
+/**
+ * A weekly figure -> the daily cap it implies: FIVE working days.
+ *
+ * 42 / 5 = 8.4, which is the number the lab's own roster sheet carries. It is a
+ * DERIVATION and not a truth — a team working a four-day compressed week wants
+ * 10.5, and says so with an explicit `rules.maxHoursPerDay`. Exported so the
+ * wizard can display the derived cap next to the field it derives from instead of
+ * re-implementing the division and drifting from it.
+ */
+export const defaultMaxHoursPerDay = (weeklyHours) => weeklyHours / DAYS_WORKED_PER_WEEK;
+
+/** Nobody may be rostered more than a calendar day, or a task be longer than one. */
+const MAX_HOURS_PER_DAY_CEILING = 24;
+
+/** A week holds 168 hours; a `weeklyHours` above that is a typo, not a policy. */
+const MAX_HOURS_PER_WEEK_CEILING = 168;
+
+/** Weeks in the rolling total the engine reports and warns about. */
+const ROLLING_WINDOW_WEEKS = 4;
 
 /** Days in a generated week, always Monday-first. */
 const DAYS_PER_WEEK = 7;
@@ -157,6 +285,25 @@ const DAYS_PER_WEEK = 7;
  * tolerance is a constant, so the comparison stays deterministic.
  */
 const RATIO_EPSILON = 1e-9;
+
+/**
+ * Hours are compared with the same kind of tolerance, for the same reason: an
+ * effective cap is a PRODUCT of two floats (`8.4 * 0.6` is `5.04` only to a
+ * human; the double is `5.040000000000001`), so an exact `>` would refuse a slot
+ * that exactly fills somebody's day and report it as an hours breach. A roster
+ * master reading "would take Ada to 5.04h, over her 5.04h limit" would be
+ * entitled to conclude the engine was broken.
+ */
+const HOURS_EPSILON = 1e-9;
+
+/**
+ * Two decimal places, the rounding this file's numeric OUTPUT uses everywhere.
+ *
+ * Defined here rather than beside the scorer (where it lived until the hours
+ * model needed it) because section 4's rejection prose has to render an hours
+ * figure and there is one definition of "how this engine writes a number down".
+ */
+const round2 = (value) => Math.round(value * 100) / 100;
 
 /**
  * Shape predicates, shared by the validator, the normalisers and the band
@@ -374,6 +521,299 @@ const bandSetGradeLabel = (bandNames, bands) => {
         .join(', ');
 };
 
+// --- 0c. THE HOURS MODEL ------------------------------------------------------
+//
+// Until this section existed the engine counted DUTIES. A duty count cannot
+// express the two facts the field research actually turned up — that medical lab
+// scientists and psychologists both work a 42-HOUR WEEK, and that lab scientists
+// additionally work two or more SATURDAYS a month — because two duties may be two
+// hours or two days and nothing in the configuration could say which.
+//
+// FOUR FIELDS, in the two places they belong:
+//
+//   task.hours            how long one occurrence of this task takes. Absent
+//                         means `DEFAULT_TASK_HOURS` (4 — a session, not a day).
+//   staff.weeklyHours     that person's contracted week. Absent means
+//                         `rules.weeklyHours`, which itself defaults to 42.
+//   staff.maxHoursPerDay  that person's daily ceiling. Absent means
+//                         `rules.maxHoursPerDay`, which defaults to
+//                         `defaultMaxHoursPerDay(weeklyHours)` = 8.4.
+//   rules.*               the departmental defaults for the two above.
+//
+// BOTH CAPS ARE SCALED BY FTE AND BOTH ARE HARD. A 0.6-FTE clinician on a 42-hour
+// contract may hold 25.2 hours a week and 5.04 hours a day. A slot that would
+// breach either goes to `unfilled` naming the hours, the date and what the person
+// already holds that day — never a silent double-book, which is this engine's one
+// non-negotiable rule.
+//
+// THE WEEK IS MONDAY–SUNDAY, and it is the GENERATED week: `generateRosterV2`
+// always starts on a Monday (`snapToMonday`) and walks whole 7-day blocks, so the
+// week the cap applies over is exactly the week `shift.week` names. `weekStartOf`
+// below is the calendar half of that and is deliberately NOT `snapToMonday` — see
+// its comment, because the two disagree about Sunday ON PURPOSE and picking the
+// wrong one moves a Saturday-and-Sunday lab weekend into two different weeks.
+//
+// WHY THE FOUR-WEEK TOTAL IS A ROLLING 28 DAYS AND NOT FOUR BUCKETS. The field
+// research carries the Singapore Medical Council's pattern of a ceiling per
+// four-week cycle, and enforcing a rolling window is deferred — so this engine
+// MEASURES the window and warns. The measurement is over every 28-day window that
+// fits inside the run, one window per start date, NOT over groups of four whole
+// weeks. That is not fussiness: with the weekly cap already hard at
+// `weeklyHours * fte`, four whole weeks can never sum above four times it, so a
+// bucketed "four-week check" is arithmetically incapable of firing. It would be a
+// test that cannot fail — a decoy, which is the specific thing this repository has
+// found in its own suites before. A window that straddles bucket boundaries CAN
+// exceed the total (measured: 176h against a 168h ceiling, from a fortnight
+// front-loaded on one side of the seam and back-loaded on the other), which is
+// precisely the fatigue pattern a four-week rule exists to catch.
+//
+// OPT-IN. Everything in this section is inert unless `hoursModelRequested` says
+// the configuration mentioned one of the four fields. Design rule 9 in the file
+// header argues that choice and states its cost; the ledger at the foot of the
+// file states it again in the roster master's words.
+
+/** A duration this engine will accept: a real number of hours inside the day. */
+const isUsableHours = (value, ceiling) =>
+    typeof value === 'number' && Number.isFinite(value) && value > 0 && value <= ceiling;
+
+/** `undefined`/`null` mean "not stated"; every other value is checked, never coerced. */
+const isStated = (value) => value !== undefined && value !== null;
+
+/**
+ * Did this configuration ASK for the hours model? The one predicate, read by the
+ * validator, the generator, the scorer and the audit, so the four cannot disagree
+ * about whether hours are in force.
+ *
+ * Deliberately a mention test and not a value test: `rules: { weeklyHours: 42 }`
+ * turns the model on even though 42 is also the default, because typing the
+ * department's contracted week is exactly how a roster master says "hours
+ * matter here". There is no way to ask for hours and get them ignored.
+ */
+const hoursModelRequested = (config) => {
+    if (!isPlainObject(config)) return false;
+
+    const { rules, staff, tasks } = config;
+    if (isPlainObject(rules) && (isStated(rules.weeklyHours) || isStated(rules.maxHoursPerDay))) {
+        return true;
+    }
+    if (Array.isArray(staff)) {
+        for (const person of staff) {
+            if (!isPlainObject(person)) continue;
+            if (isStated(person.weeklyHours) || isStated(person.maxHoursPerDay)) return true;
+        }
+    }
+    if (Array.isArray(tasks)) {
+        for (const task of tasks) {
+            if (!isPlainObject(task)) continue;
+            if (isStated(task.hours)) return true;
+        }
+    }
+    return false;
+};
+
+/**
+ * `rules` -> the departmental hours defaults in force, fully resolved.
+ *
+ * `maxHoursPerDay` is derived from whatever `weeklyHours` ended up being, so a
+ * department that sets only `weeklyHours: 35` gets a 7-hour day rather than the
+ * shipped 8.4 — the derivation follows the field that was actually typed.
+ */
+const resolveHoursRules = (rules) => {
+    const raw = isPlainObject(rules) ? rules : {};
+    const weeklyHours = isUsableHours(raw.weeklyHours, MAX_HOURS_PER_WEEK_CEILING)
+        ? raw.weeklyHours
+        : ROSTER_V2_DEFAULTS.weeklyHours;
+    const maxHoursPerDay = isUsableHours(raw.maxHoursPerDay, MAX_HOURS_PER_DAY_CEILING)
+        ? raw.maxHoursPerDay
+        : defaultMaxHoursPerDay(weeklyHours);
+    return { weeklyHours, maxHoursPerDay };
+};
+
+/**
+ * An hours figure as a roster master would write it: `8.4h`, `12h`, `4.5h`.
+ *
+ * Rounded through `round2` — the same rounding `load` and `score` publish — so
+ * the number in an `unfilled` reason and the number in the load table are the
+ * same number, and a floating-point tail never reaches a sentence.
+ */
+const formatHours = (value) => `${round2(value)}h`;
+
+// --- 0d. MULTI-SLOT SHIFTS ----------------------------------------------------
+//
+// `leads` + `coLeads` describes a shift as ONE person in charge plus a helper.
+// The embryologists' weekend service is not that shape: a witnessing session
+// needs a PRINCIPAL, a SENIOR and a JUNIOR, together, on the same day, and each
+// of the three is a distinct staffing requirement with its own eligibility rule.
+// Counting to three with `leads: 1, coLeads: 2` cannot say it, because the band
+// gate applies to the lead only and both co-leads would be ungated.
+//
+// SO A TASK MAY LIST ITS SLOTS:
+//
+//   slots: [
+//     { band: 'principal', role: 'Principal embryologist' },
+//     { band: 'senior',    role: 'Senior embryologist', requiresSkill: 'Witnessing' },
+//     { band: 'junior',    role: 'Junior embryologist' },
+//   ]
+//
+// ONE ENTRY PER PERSON THE SHIFT NEEDS. Every field is optional: an entry with no
+// `band` may be filled by any grade, an entry with no `requiresSkill` adds no
+// skill of its own (the TASK's `requiresSkill`, if any, still applies to every
+// entry — a task-wide requirement is a property of the work, exactly as it is for
+// a co-lead today), and `role` is a LABEL, carried only so that an `unfilled`
+// entry can say WHICH of three otherwise identical slots failed.
+//
+// WHAT THIS SECTION OWNS: the shape, the labels, and the two gate predicates that
+// the construction gate (section 4), the reason strings (section 4) and the
+// read-back audit (section 6) all read, so those three can never disagree about
+// whether somebody may fill an entry. The lead-ranking rule lives in section 5,
+// beside the tie-break it defers to; the assignment loop's use of all of it is in
+// section 7; the honest limits are at the foot of the file.
+//
+// LABELS ARE MADE UNIQUE, because "which slot?" is the whole point of the reason
+// string. Two entries that would both read `junior slot` become `junior slot 1`
+// and `junior slot 2`, in configuration order. A `role` is used verbatim (trimmed
+// — it goes into a sentence rather than being matched against anything), and an
+// entry with neither `role` nor `band` reads `slot 1`.
+
+/**
+ * The rank an assignee with no recorded grade sorts at. BELOW AH7, so a graded
+ * assignee always outranks an ungraded one and the trio's lead is never somebody
+ * whose grade the department has not recorded. `-Infinity` would have been the
+ * obvious sentinel and is a trap: two ungraded assignees would compare
+ * `-Infinity - -Infinity` = `NaN`, and a comparator returning `NaN` sorts
+ * arbitrarily — the one thing this engine may not do.
+ */
+const GRADE_UNKNOWN_RANK = 0;
+
+/**
+ * The `role` a slot carries INSIDE the assignment loop while it is being filled.
+ *
+ * Not `'lead'` and not `'coLead'`, because it is neither until the day's entries
+ * are resolved and section 5 ranks them — the two existing roles are branched on
+ * in four places, and quietly reusing one of them is how a field comes to mean two
+ * things (post-mortem A-RC1). What reaches `unfilled` is the entry's LABEL, not
+ * this token; nothing outside the loop reads it.
+ */
+const MULTI_SLOT_ROLE = 'slot';
+
+/**
+ * A canonical grade as a sortable number. Called ONCE per person, in
+ * `normaliseStaff`, so that ranking a trio's assignees never re-parses a grade
+ * string and the audit and the generator cannot disagree about who outranks whom.
+ */
+const gradeRankOf = (grade) => {
+    const number = parseGradeNumber(grade);
+    return number === null ? GRADE_UNKNOWN_RANK : number;
+};
+
+/**
+ * Does this person meet the SKILL this one entry adds? An entry with no
+ * `requiresSkill` adds nothing, which is not the same as adding "no skill".
+ *
+ * THE task's own `requiresSkill` is not checked here — it is checked once, for
+ * every slot of every kind, where it always was.
+ */
+const slotSkillMet = (person, entry) =>
+    entry.requiresSkill === null || person.skills.has(entry.requiresSkill);
+
+/**
+ * Does this person's BAND satisfy this entry? An entry with no `band` accepts any
+ * grade INCLUDING an unrecorded one; an entry with a band never accepts an
+ * unrecorded grade, exactly as `leadBands` never does (section 0b: absent is not
+ * zero, and membership that cannot be verified is not membership).
+ */
+const slotBandMet = (person, entry) =>
+    entry.bandSet === null || (person.band !== null && entry.bandSet.has(person.band));
+
+/**
+ * Could this person fill this entry AT ALL — both of the entry's own gates and
+ * the task's skill? The composition, in one place, for the two callers that need
+ * the boolean rather than the reason: the structural warnings and the audit's
+ * read-back matching.
+ */
+const canFillSlot = (person, task, entry) =>
+    (!task.requiresSkill || person.skills.has(task.requiresSkill)) &&
+    slotSkillMet(person, entry) &&
+    slotBandMet(person, entry);
+
+/**
+ * Every skill an entry's holder must have, task-wide first, deduplicated — the
+ * list the `unfilled` reason reads from. Repeating the task's own skill on an
+ * entry is legal and says nothing new, so it is not said twice in the sentence.
+ */
+const slotSkillsRequired = (task, entry) => {
+    const skills = [];
+    if (task.requiresSkill) skills.push(task.requiresSkill);
+    if (entry !== null && entry.requiresSkill !== null && entry.requiresSkill !== task.requiresSkill) {
+        skills.push(entry.requiresSkill);
+    }
+    return skills;
+};
+
+/** `['CPET']` -> `'skill CPET'`; `['CPET','ICSI']` -> `'skills CPET and ICSI'`. */
+const skillsPhrase = (skills) =>
+    skills.length === 1 ? `skill ${skills[0]}` : `skills ${skills.join(' and ')}`;
+
+/**
+ * The label an entry is known by in prose, BEFORE deduplication: its `role` if it
+ * has one, else its band, else the bare word. One definition, read by
+ * `normaliseSlots` and by the validator's refusal strings, so the name a roster
+ * master is refused over is the name they would have seen in `unfilled`.
+ */
+const slotBaseLabel = (entry) => {
+    if (isNonEmptyString(entry?.role)) return entry.role.trim();
+    if (typeof entry?.band === 'string' && BAND_ORDER.includes(entry.band)) return `${entry.band} slot`;
+    return 'slot';
+};
+
+/**
+ * `slots` -> the engine's internal entries, or `null` for "this task is staffed
+ * the old way". Validation has already refused every shape this cannot read.
+ *
+ * `bandSet` exists beside `band` because the band LABEL helpers of section 0b
+ * take a set, and building one per candidate inside the assignment loop would be
+ * a set allocation per person per slot per day.
+ */
+const normaliseSlots = (value) => {
+    if (!Array.isArray(value) || value.length === 0) return null;
+
+    const bases = value.map(slotBaseLabel);
+    const total = new Map();
+    for (const base of bases) total.set(base, (total.get(base) || 0) + 1);
+    const seen = new Map();
+
+    return value.map((raw, index) => {
+        const band = typeof raw?.band === 'string' && BAND_ORDER.includes(raw.band) ? raw.band : null;
+        const base = bases[index];
+        // Numbered ONLY when it would otherwise be ambiguous: a lone junior slot
+        // reads `junior slot`, and three of them read `junior slot 1..3`.
+        let label = base;
+        if (total.get(base) > 1) {
+            const nth = (seen.get(base) || 0) + 1;
+            seen.set(base, nth);
+            label = `${base} ${nth}`;
+        }
+
+        return {
+            index,
+            band,
+            bandSet: band === null ? null : new Set([band]),
+            requiresSkill: isNonEmptyString(raw?.requiresSkill) ? raw.requiresSkill : null,
+            role: isNonEmptyString(raw?.role) ? raw.role.trim() : null,
+            label,
+        };
+    });
+};
+
+/**
+ * How many people does one occurrence of this task need? The slot count for a
+ * multi-slot task, and the lead+co-lead count for every other. Read by the
+ * demand counters and by the skill-shortfall warning, so a `slots` task is
+ * counted in the same currency as the tasks beside it.
+ */
+const perDayDemand = (task) =>
+    (task.slots === null ? task.leads + task.coLeads : task.slots.length);
+
 // --- 1. DATE PRIMITIVES (post-mortem Block B) --------------------------------
 //
 // `auraEngine.js` keeps its own private `isRealDateKey` and a UTC-based
@@ -455,6 +895,32 @@ export const snapToMonday = (date) => {
     const day = date.getDay();
     return addDays(date, day === 0 ? 1 : 1 - day);
 };
+
+/**
+ * The Monday that OPENED `date`'s Monday–Sunday week.
+ *
+ * READ THE NEXT SENTENCE BEFORE USING EITHER OF THESE. This is NOT
+ * `snapToMonday`, and the difference is Sunday and only Sunday: `snapToMonday`
+ * moves a Sunday FORWARD (it answers a policy question — "the roster master typed
+ * a Sunday; which Monday did they mean?"), while this moves a Sunday BACK (it
+ * answers a calendar question — "which week does this duty fall in?"). Using
+ * `snapToMonday` here would put a lab scientist's Saturday and the Sunday beside
+ * it in two different weeks, so a Sat+Sun weekend would be charged half to a week
+ * that had already been capped and half to the next one, and the 42-hour cap would
+ * quietly stop meaning anything on the one shape of week it exists to govern.
+ *
+ * It agrees with `shift.week`, which is what makes `load.hoursPerWeek[i]` and
+ * `week: i + 1` the same week: the generator walks whole 7-day blocks from a
+ * Monday, so offsets 0–6 are Mon–Sun and this function maps every one of them to
+ * the block's own Monday.
+ */
+export const weekStartOf = (date) => {
+    const day = date.getDay();
+    return addDays(date, day === 0 ? -(DAYS_PER_WEEK - 1) : 1 - day);
+};
+
+/** The same answer as a key: `'2026-09-13'` (a Sunday) -> `'2026-09-07'`. */
+const weekStartKeyOf = (dateKey) => toLocalDateKey(weekStartOf(parseLocalDateKey(dateKey)));
 
 // --- 1b. MONTHLY RECURRENCE ---------------------------------------------------
 //
@@ -601,6 +1067,14 @@ export const validateRosterV2Config = (config) => {
 
     const { startDate, weeks, staff, tasks, rules } = config;
 
+    /**
+     * Whether the hours model is in force at all. Every hours FIELD is validated
+     * whenever it is present — a typo is never silently ignored — but the one
+     * hours REFUSAL is gated on this, because it reads defaults that a
+     * configuration which never mentioned hours never asked to be judged by.
+     */
+    const hoursActive = hoursModelRequested(config);
+
     // --- start date -----------------------------------------------------------
     if (!isDateKey(startDate)) {
         return invalid('Choose a valid start date (YYYY-MM-DD) before generating.');
@@ -689,6 +1163,28 @@ export const validateRosterV2Config = (config) => {
             }
         }
 
+        // Hours are OPTIONAL, and stating either of them switches the whole hours
+        // model on for the configuration (`hoursModelRequested`). Both are checked
+        // whenever they are present, so a typo cannot be silently ignored on its
+        // way to becoming somebody's ceiling. Fractions are legal — 8.4 is the
+        // shipped daily cap and 37.5 is a common contract.
+        if (isStated(person.weeklyHours)) {
+            if (typeof person.weeklyHours !== 'number' || !Number.isFinite(person.weeklyHours)) {
+                return invalid(`${name}'s weeklyHours must be a number of hours, e.g. ${DEFAULT_WEEKLY_HOURS} — leave it out to use the department's figure.`);
+            }
+            if (person.weeklyHours <= 0 || person.weeklyHours > MAX_HOURS_PER_WEEK_CEILING) {
+                return invalid(`${name}'s weeklyHours is ${person.weeklyHours} — it must be greater than 0 and at most ${MAX_HOURS_PER_WEEK_CEILING} (the number of hours in a week).`);
+            }
+        }
+        if (isStated(person.maxHoursPerDay)) {
+            if (typeof person.maxHoursPerDay !== 'number' || !Number.isFinite(person.maxHoursPerDay)) {
+                return invalid(`${name}'s maxHoursPerDay must be a number of hours, e.g. ${defaultMaxHoursPerDay(DEFAULT_WEEKLY_HOURS)} — leave it out to use the department's figure.`);
+            }
+            if (person.maxHoursPerDay <= 0 || person.maxHoursPerDay > MAX_HOURS_PER_DAY_CEILING) {
+                return invalid(`${name}'s maxHoursPerDay is ${person.maxHoursPerDay} — it must be greater than 0 and at most ${MAX_HOURS_PER_DAY_CEILING} (the number of hours in a day).`);
+            }
+        }
+
         // A grade is OPTIONAL — but a grade that is present and unreadable is
         // rejected rather than treated as absent, because "absent" silently
         // removes somebody from every band-restricted lead slot and a typo
@@ -725,6 +1221,60 @@ export const validateRosterV2Config = (config) => {
         const band = bandOfGradeNumber(number, bands);
         if (band !== null) inBandCount[band] += 1;
     }
+
+    /**
+     * Which band does this RAW staff entry sit in? `null` for a grade that is
+     * absent, blank or unreadable — the validator's own copy of the resolution
+     * `normaliseStaff` performs once, needed here because the band-composed
+     * refusals below run BEFORE normalisation exists. One definition inside this
+     * function, read by every refusal that has to ask the question.
+     */
+    const rawBandOf = (person) => {
+        const grade = person?.grade;
+        const gradeIsBlank = typeof grade === 'string' && grade.trim() === '';
+        if (grade === undefined || grade === null || gradeIsBlank) return null;
+        const number = parseGradeNumber(grade);
+        if (number === null) return null;
+        return bandOfGradeNumber(number, bands);
+    };
+
+    // --- hours rules ----------------------------------------------------------
+    // Validated BEFORE the tasks for the same reason the bands are: a task's
+    // `hours` is judged against the daily caps these two fields set, and a cap
+    // that is itself nonsense cannot judge whether a 6-hour clinic fits in
+    // anybody's day. A non-object `rules` is left to the rules block further
+    // down, which owns that reason string.
+    const rawRules = isPlainObject(rules) ? rules : {};
+    if (isStated(rawRules.weeklyHours)) {
+        if (typeof rawRules.weeklyHours !== 'number' || !Number.isFinite(rawRules.weeklyHours)) {
+            return invalid(`rules.weeklyHours must be a number of hours, e.g. ${DEFAULT_WEEKLY_HOURS} — the contracted working week.`);
+        }
+        if (rawRules.weeklyHours <= 0 || rawRules.weeklyHours > MAX_HOURS_PER_WEEK_CEILING) {
+            return invalid(`rules.weeklyHours is ${rawRules.weeklyHours} — it must be greater than 0 and at most ${MAX_HOURS_PER_WEEK_CEILING} (the number of hours in a week).`);
+        }
+    }
+    if (isStated(rawRules.maxHoursPerDay)) {
+        if (typeof rawRules.maxHoursPerDay !== 'number' || !Number.isFinite(rawRules.maxHoursPerDay)) {
+            return invalid(`rules.maxHoursPerDay must be a number of hours, e.g. ${defaultMaxHoursPerDay(DEFAULT_WEEKLY_HOURS)} — leave it out and it is derived from rules.weeklyHours over a ${DAYS_WORKED_PER_WEEK}-day week.`);
+        }
+        if (rawRules.maxHoursPerDay <= 0 || rawRules.maxHoursPerDay > MAX_HOURS_PER_DAY_CEILING) {
+            return invalid(`rules.maxHoursPerDay is ${rawRules.maxHoursPerDay} — it must be greater than 0 and at most ${MAX_HOURS_PER_DAY_CEILING} (the number of hours in a day).`);
+        }
+    }
+
+    /**
+     * Everybody's EFFECTIVE daily hours ceiling — the departmental or personal
+     * cap, scaled by FTE — so the task loop below can ask whether one occurrence
+     * of a task fits in anybody's day at all.
+     */
+    const hoursRules = resolveHoursRules(rawRules);
+    const dailyHoursCaps = staff.map((person) => {
+        const fte = typeof person.fte === 'number' ? person.fte : ROSTER_V2_DEFAULTS.fte;
+        const cap = isUsableHours(person.maxHoursPerDay, MAX_HOURS_PER_DAY_CEILING)
+            ? person.maxHoursPerDay
+            : hoursRules.maxHoursPerDay;
+        return { name: person.name, fte, cap: cap * fte };
+    });
 
     // --- tasks ----------------------------------------------------------------
     if (!Array.isArray(tasks) || tasks.length === 0) {
@@ -828,8 +1378,134 @@ export const validateRosterV2Config = (config) => {
             }
         }
 
+        // --- MULTI-SLOT SHIFTS ------------------------------------------------
+        //
+        // `slots` REPLACES `leads`/`coLeads`, and the three mutual-exclusion
+        // refusals come FIRST — before this block inspects a single entry —
+        // because "you cannot combine these two fields" is a more useful sentence
+        // than a complaint about one of the fields being combined. It sits after
+        // the `leads`/`coLeads` type checks for the same reason in reverse:
+        // `leads: 'two'` is a typo in `leads`, whatever else the task carries.
+        if (isStated(task.slots)) {
+            if (!Array.isArray(task.slots)) {
+                return invalid(`Task ${name}'s slots must be an array of slot objects — one entry per person the shift needs, e.g. [{ band: 'principal' }, { band: 'senior' }, { band: 'junior' }] — or left out so the task is staffed with leads and coLeads.`);
+            }
+            if (task.slots.length === 0) {
+                return invalid(`Task ${name} has slots: [], so its shift would need nobody at all. Give one entry per person the shift needs, or leave slots out and use leads/coLeads.`);
+            }
+            for (const field of ['leads', 'coLeads']) {
+                if (isStated(task[field])) {
+                    return invalid(`Task ${name} sets both slots and ${field} — a shift is staffed either as one lead plus co-leads (leads/coLeads) or as a list of slots, never both. Remove whichever one is not meant.`);
+                }
+            }
+            if (isStated(task.leadBands)) {
+                return invalid(`Task ${name} sets both slots and leadBands — with slots the shift's lead is whichever assignee holds the highest grade, so there is no separate lead slot for leadBands to gate. Put the band on the slot entry that must hold it, e.g. { band: 'principal' }.`);
+            }
+            // `continuity: false` is the documented way to say "no", so it is not
+            // a combination at all. `true` is.
+            if (task.continuity === true) {
+                return invalid(`Task ${name} sets both slots and continuity — continuity keeps the same LEAD across occurrences, and with slots the lead is derived from the grades on the shift rather than configured, so there would be no lead slot to keep. Remove continuity, or staff the task with leads/coLeads.`);
+            }
+
+            for (let s = 0; s < task.slots.length; s += 1) {
+                const entry = task.slots[s];
+                const at = `Task ${name}'s slot ${s + 1}`;
+
+                if (!isPlainObject(entry)) {
+                    return invalid(`${at} is not a slot object — expected { band, requiresSkill, role }, e.g. { band: 'senior', role: 'Witness' }.`);
+                }
+                if (isStated(entry.band) && (typeof entry.band !== 'string' || !BAND_ORDER.includes(entry.band))) {
+                    return invalid(`${at} names the band ${JSON.stringify(entry.band)}, which is not a band — use ${BAND_ORDER.join(', ')} (lower case), or leave band out so that any grade may fill the slot.`);
+                }
+                if (isStated(entry.role) && !isNonEmptyString(entry.role)) {
+                    return invalid(`${at} has a role that is not a label — give it a name such as 'Principal embryologist', or leave it out.`);
+                }
+                if (isStated(entry.requiresSkill)) {
+                    if (!isNonEmptyString(entry.requiresSkill)) {
+                        return invalid(`${at}'s requiresSkill must be a skill name, or left out for "anybody may fill it".`);
+                    }
+                    // The slot-level twin of the task-level unknown-skill refusal,
+                    // loud for the same reason: a misspelled skill on one entry of
+                    // a trio leaves that entry unfilled on every single date.
+                    if (!skillsHeld.has(entry.requiresSkill)) {
+                        return invalid(`${at} requires skill ${entry.requiresSkill}, which nobody in the staff pool holds. Check the spelling, or add the skill to whoever is competent.`);
+                    }
+                }
+
+                // THE ELIGIBILITY FLOOR, and the composed twin of the empty-band
+                // and skill-x-band refusals one level down: an entry whose own
+                // gates nobody in the pool can pass would be unfilled on every
+                // date of the run, which is a typo discovered by a clinician on a
+                // Saturday rather than by the roster master at configure time.
+                const entryBand = isStated(entry.band) ? entry.band : null;
+                const entrySkill = isNonEmptyString(entry.requiresSkill) ? entry.requiresSkill : null;
+                if (entryBand === null && entrySkill === null) continue;
+
+                const qualified = staff.filter((person) => {
+                    if (entryBand !== null && rawBandOf(person) !== entryBand) return false;
+                    const skills = Array.isArray(person?.skills) ? person.skills : [];
+                    if (entrySkill !== null && !skills.includes(entrySkill)) return false;
+                    if (isNonEmptyString(task.requiresSkill) && !skills.includes(task.requiresSkill)) return false;
+                    return true;
+                });
+
+                if (qualified.length === 0) {
+                    const wantedBand = entryBand === null ? null : new Set([entryBand]);
+                    const needs = [];
+                    if (wantedBand !== null) {
+                        needs.push(`a grade in the ${bandSetLabel(wantedBand)} band (${bandSetGradeLabel(wantedBand, bands)})`);
+                    }
+                    for (const skill of slotSkillsRequired(
+                        { requiresSkill: isNonEmptyString(task.requiresSkill) ? task.requiresSkill : null },
+                        { requiresSkill: entrySkill },
+                    )) {
+                        needs.push(`skill ${skill}`);
+                    }
+                    return invalid(`${at} (${slotBaseLabel(entry)}) needs ${needs.join(' and ')}, and nobody in the staff pool qualifies, so that slot would be unfilled on every date. Check the grades and the skills, widen the slot, or move the band boundaries.`);
+                }
+            }
+        }
+
         if (task.category !== undefined && task.category !== null && !isNonEmptyString(task.category)) {
             return invalid(`Task ${name}'s category must be a non-empty label.`);
+        }
+
+        // `hours` is how long ONE occurrence takes. Absent means
+        // `DEFAULT_TASK_HOURS`, and stating it switches the hours model on.
+        if (isStated(task.hours)) {
+            if (typeof task.hours !== 'number' || !Number.isFinite(task.hours)) {
+                return invalid(`Task ${name}'s hours must be a number of hours, e.g. ${DEFAULT_TASK_HOURS} for a half-day session — leave it out and ${DEFAULT_TASK_HOURS} is assumed.`);
+            }
+            if (task.hours <= 0 || task.hours > MAX_HOURS_PER_DAY_CEILING) {
+                return invalid(`Task ${name}'s hours is ${task.hours} — it must be greater than 0 and at most ${MAX_HOURS_PER_DAY_CEILING} (a task cannot be longer than a day).`);
+            }
+        }
+
+        // THE HOURS TWIN OF THE UNKNOWN-SKILL AND EMPTY-BAND REFUSALS: a task that
+        // is longer than anybody's day could never be staffed by anybody, on any
+        // date, so every slot it demands would be unfilled. Loud, at configure
+        // time, because a 12-hour task in a department of 8.4-hour days is a
+        // decimal point in the wrong place and not a policy.
+        //
+        // Only when the configuration ASKED for hours. Without that gate a solo
+        // 0.4-FTE staff pool — whose effective cap is 3.36h against the assumed
+        // 4h session — would start being refused for a configuration that has
+        // never mentioned an hour in its life.
+        if (hoursActive) {
+            const taskHours = isUsableHours(task.hours, MAX_HOURS_PER_DAY_CEILING)
+                ? task.hours
+                : ROSTER_V2_DEFAULTS.taskHours;
+            let roomiest = null;
+            for (const entry of dailyHoursCaps) {
+                if (roomiest === null || entry.cap > roomiest.cap) roomiest = entry;
+            }
+            if (roomiest !== null && taskHours > roomiest.cap + HOURS_EPSILON) {
+                const stated = isStated(task.hours) ? '' : ` (no hours given, so ${formatHours(ROSTER_V2_DEFAULTS.taskHours)} is assumed)`;
+                const scaled = roomiest.fte === 1
+                    ? ''
+                    : ` (${formatHours(roomiest.cap / roomiest.fte)} scaled by their ${roomiest.fte} FTE)`;
+                return invalid(`Task ${name} takes ${formatHours(taskHours)}${stated}, which is longer than every staff member's daily hours limit — the roomiest is ${roomiest.name}'s ${formatHours(roomiest.cap)}${scaled}, so every slot of this task would be unfilled on every date. Shorten the task, raise maxHoursPerDay, or give it to somebody whose day can hold it.`);
+            }
         }
 
         // `leadBands` restricts who may LEAD. Absent means "any grade may lead",
@@ -867,12 +1543,7 @@ export const validateRosterV2Config = (config) => {
             // configure time, like either gate alone.
             if (isNonEmptyString(task.requiresSkill)) {
                 const bothCount = staff.reduce((sum, person) => {
-                    const grade = person?.grade;
-                    const gradeIsBlank = typeof grade === 'string' && grade.trim() === '';
-                    if (grade === undefined || grade === null || gradeIsBlank) return sum;
-                    const number = parseGradeNumber(grade);
-                    if (number === null) return sum;
-                    const band = bandOfGradeNumber(number, bands);
+                    const band = rawBandOf(person);
                     if (band === null || !wanted.has(band)) return sum;
                     const skills = Array.isArray(person?.skills) ? person.skills : [];
                     return skills.includes(task.requiresSkill) ? sum + 1 : sum;
@@ -941,17 +1612,53 @@ export const validateRosterV2Config = (config) => {
  * audit and the generator cannot disagree about who is in which band.
  * `grade: null` / `band: null` both mean "not recorded".
  */
-const normaliseStaff = (staff, defaultMaxPerDay, bands = DEFAULT_GRADE_BANDS) =>
+const normaliseStaff = (
+    staff,
+    defaultMaxPerDay,
+    bands = DEFAULT_GRADE_BANDS,
+    hoursRules = resolveHoursRules(null),
+) =>
     staff.map((person) => {
         const grade = normaliseGrade(person.grade);
+        const fte = typeof person.fte === 'number' ? person.fte : ROSTER_V2_DEFAULTS.fte;
+
+        // The two hours ceilings are resolved to EFFECTIVE, FTE-SCALED figures
+        // here and nowhere else, so the gate, the audit, the reason strings and
+        // `load.weeklyCap` are all reading one number. `contractedWeeklyHours` is
+        // kept beside them because a reason string has to be able to say "42h
+        // scaled by their 0.6 FTE" rather than only the product.
+        //
+        // A personal `weeklyHours` does NOT imply a personal `maxHoursPerDay`:
+        // somebody on a 21-hour contract who works three full days is a real
+        // arrangement, and deriving 4.2h/day from their week would silently
+        // forbid it. Header, foot of file, and the ledger all say so.
+        const contractedWeeklyHours = isUsableHours(person.weeklyHours, MAX_HOURS_PER_WEEK_CEILING)
+            ? person.weeklyHours
+            : hoursRules.weeklyHours;
+        const contractedMaxHoursPerDay = isUsableHours(person.maxHoursPerDay, MAX_HOURS_PER_DAY_CEILING)
+            ? person.maxHoursPerDay
+            : hoursRules.maxHoursPerDay;
+
         return {
             name: person.name,
-            fte: typeof person.fte === 'number' ? person.fte : ROSTER_V2_DEFAULTS.fte,
+            fte,
             skills: new Set(Array.isArray(person.skills) ? person.skills : []),
             unavailable: new Set(Array.isArray(person.unavailable) ? person.unavailable : []),
             maxPerDay: isPositiveInt(person.maxPerDay) ? person.maxPerDay : defaultMaxPerDay,
             grade,
             band: grade === null ? null : bandOfGradeNumber(parseGradeNumber(grade), bands),
+            /**
+             * The grade as a number that sorts, for the one rule that ranks people
+             * rather than gating them: which assignee of a multi-slot shift is its
+             * lead. An unrecorded grade ranks below AH7 (`GRADE_UNKNOWN_RANK`) and
+             * therefore never outranks a recorded one.
+             */
+            gradeRank: gradeRankOf(grade),
+            contractedWeeklyHours,
+            contractedMaxHoursPerDay,
+            /** Both caps as the engine compares them: contract × FTE. */
+            weeklyHoursCap: contractedWeeklyHours * fte,
+            dailyHoursCap: contractedMaxHoursPerDay * fte,
         };
     });
 
@@ -984,6 +1691,7 @@ const normaliseTasks = (tasks) =>
         // a behavioural one. Validation has already refused a task that set both,
         // so nothing a roster master typed is being discarded.
         const recurrence = normaliseRecurrence(task.recurrence);
+        const slots = normaliseSlots(task.slots);
 
         return {
             name: task.name,
@@ -993,10 +1701,30 @@ const normaliseTasks = (tasks) =>
                 : (Array.isArray(task.days) ? [...task.days] : [...ROSTER_V2_DEFAULTS.days]),
             recurrence,
             continuity: task.continuity === true,
-            leads: isPositiveInt(task.leads) ? task.leads : ROSTER_V2_DEFAULTS.leads,
-            coLeads: isNonNegativeInt(task.coLeads) ? task.coLeads : ROSTER_V2_DEFAULTS.coLeads,
+            // A MULTI-SLOT TASK HAS NEITHER, and says so rather than carrying the
+            // defaults it will never use.
+            //
+            // `coLeads: 0` is LOAD-BEARING and pinned by a test: phase 2 of the
+            // assignment loop opens `task.coLeads` co-lead slots for every running
+            // task, so a 1 here would hang a fourth, ungated person off the
+            // embryologists' trio. `leads: 0` is belt and braces in the same spirit
+            // as `days: []` above and honestly labelled as such — phase 1 branches
+            // on `slots` before it ever looks at `leads`, and `perDayDemand` reads
+            // the slot count, so mutating this zero changes no output. It is here so
+            // that a normalised task never DESCRIBES itself as needing a lead it
+            // does not have.
+            leads: slots !== null ? 0 : (isPositiveInt(task.leads) ? task.leads : ROSTER_V2_DEFAULTS.leads),
+            coLeads: slots !== null ? 0 : (isNonNegativeInt(task.coLeads) ? task.coLeads : ROSTER_V2_DEFAULTS.coLeads),
+            slots,
             category: isNonEmptyString(task.category) ? task.category : ROSTER_V2_DEFAULTS.category,
             leadBands: normaliseLeadBands(task.leadBands),
+            // Always present, always a number, whether or not the hours model is
+            // in force — one task shape, and the value a future always-on model
+            // would use is already visible in a debugger today. What the OPT-IN
+            // predicate decides is whether anything reads it.
+            hours: isUsableHours(task.hours, MAX_HOURS_PER_DAY_CEILING)
+                ? task.hours
+                : ROSTER_V2_DEFAULTS.taskHours,
         };
     });
 
@@ -1033,14 +1761,30 @@ const REJECT_BAND = 'band';
 const REJECT_LEAVE = 'leave';
 const REJECT_ON_TASK = 'onTask';
 const REJECT_CAPACITY = 'capacity';
+/**
+ * Adding this task's `hours` to what they already hold today would pass their
+ * effective daily ceiling. Sits immediately after `REJECT_CAPACITY` because it is
+ * the same KIND of fact — a resource today has consumed — and it is the finer of
+ * the two: `REJECT_CAPACITY` counts duties, this one measures them. Both are
+ * reported, and never merged, because "two duties is your limit" and "twelve hours
+ * is over your limit" are different sentences to the person reading the roster.
+ */
+const REJECT_DAILY_HOURS = 'dailyHours';
+/** The same, over the Monday–Sunday week `weekStartOf` defines. */
+const REJECT_WEEKLY_HOURS = 'weeklyHours';
 const REJECT_PAIR = 'pair';
 const REJECT_CONSECUTIVE = 'consecutive';
 
 /**
- * The same seven facts as a clause a roster master can read, for the one place
+ * The same nine facts as a clause a roster master can read, for the one place
  * that has to explain a rejection in prose rather than count it: the warning that
  * says why a continuity task changed lead. Written in the past tense and without
  * the date, because the sentence they are dropped into already carries it.
+ *
+ * EVERY rejection code must appear here. The consumer distinguishes "no clause
+ * known" (`null`) from "no constraint stopped them", so a missing key would not
+ * fall back gracefully — it would put the word `undefined` into a sentence a
+ * clinician reads, which is audit finding M7 in a new costume.
  */
 const CONTINUITY_REJECTION_PROSE = Object.freeze({
     [REJECT_SKILL]: 'no longer holds the skill the task requires',
@@ -1048,6 +1792,8 @@ const CONTINUITY_REJECTION_PROSE = Object.freeze({
     [REJECT_LEAVE]: 'was on leave that day',
     [REJECT_ON_TASK]: 'was already on that task that day',
     [REJECT_CAPACITY]: 'was already at their daily duty limit',
+    [REJECT_DAILY_HOURS]: 'would have gone over their daily hours limit',
+    [REJECT_WEEKLY_HOURS]: 'would have gone over their weekly hours limit',
     [REJECT_PAIR]: 'was blocked by a forbidden pairing',
     [REJECT_CONSECUTIVE]: 'was at the consecutive-day limit',
 });
@@ -1091,6 +1837,10 @@ const rejectionFor = ({
     person,
     task,
     role,
+    // MULTI-SLOT: the ONE entry of `task.slots` being filled, or `null` for a
+    // `leads`/`coLeads` slot. Every gate below is unchanged when it is `null`,
+    // which is every slot of every task that does not use the field.
+    entry = null,
     dateKey,
     date,
     dutiesOnDate,
@@ -1098,8 +1848,20 @@ const rejectionFor = ({
     forbidMap,
     dutiesByDate,
     maxConsecutiveDays,
+    // The hours model, passed in rather than reached for: `hoursActive` false
+    // makes this function byte-for-byte the function it was before hours existed,
+    // and the two maps are then never even read.
+    hoursActive = false,
+    hoursOnDate = null,
+    hoursThisWeek = null,
 }) => {
     if (task.requiresSkill && !person.skills.has(task.requiresSkill)) {
+        return REJECT_SKILL;
+    }
+    // MULTI-SLOT: this ENTRY's own skill, on top of the task-wide one directly
+    // above. Reported as the same fact — a missing competency — because that is
+    // what it is, and the reason string names both skills.
+    if (entry !== null && !slotSkillMet(person, entry)) {
         return REJECT_SKILL;
     }
     // The band gate, and ONLY on the lead slot. `person.band === null` (no grade
@@ -1111,6 +1873,13 @@ const rejectionFor = ({
             return REJECT_BAND;
         }
     }
+    // MULTI-SLOT: the band gate of THIS ENTRY, on exactly the terms `leadBands`
+    // gates a lead. A `slots` task can never also carry `leadBands` (validation
+    // refuses the pair), so the two branches are mutually exclusive rather than
+    // composed.
+    if (entry !== null && !slotBandMet(person, entry)) {
+        return REJECT_BAND;
+    }
     if (person.unavailable.has(dateKey)) {
         return REJECT_LEAVE;
     }
@@ -1119,6 +1888,22 @@ const rejectionFor = ({
     }
     if ((dutiesOnDate.get(person.name) || 0) >= person.maxPerDay) {
         return REJECT_CAPACITY;
+    }
+
+    // SAME-DAY DURATIONS SUM, then the week's do. Both against FTE-scaled
+    // ceilings, both HARD: the slot is left unfilled rather than staffed by
+    // somebody the roster would have worked past their contract. `+ HOURS_EPSILON`
+    // is on the CAP side, so a duty that exactly fills a day is allowed — see the
+    // constant for why an exact `>` would refuse `5.04 > 5.04`.
+    if (hoursActive) {
+        const already = hoursOnDate.get(person.name) || 0;
+        if (already + task.hours > person.dailyHoursCap + HOURS_EPSILON) {
+            return REJECT_DAILY_HOURS;
+        }
+        const thisWeek = hoursThisWeek.get(person.name) || 0;
+        if (thisWeek + task.hours > person.weeklyHoursCap + HOURS_EPSILON) {
+            return REJECT_WEEKLY_HOURS;
+        }
     }
 
     const forbidden = forbidMap.get(person.name);
@@ -1157,37 +1942,101 @@ const rejectionFor = ({
  * both gates apply, `in band` counts those who cleared the skill gate too, so
  * the numbers still narrow left to right and never double-count anybody.
  */
-const describeEmptyPool = ({ task, role, dateKey, tally, poolSize }) => {
+/**
+ * How many hours-blocked people an `unfilled` reason names before it stops.
+ *
+ * A JUDGMENT CALL, flagged as one. Naming everybody is the honest default this
+ * engine reaches for everywhere else, but an hours-bound slot in a 30-person
+ * department would produce a paragraph in a table cell, and the names it drops are
+ * recoverable from `load.hoursPerWeek`. The count is always stated, so the reason
+ * never pretends to be complete when it is not.
+ */
+const HOURS_DETAIL_LIMIT = 3;
+
+/**
+ * Why exactly can this ONE person not add this ONE task today? The sentence the
+ * aggregate tally cannot say, because hours are a quantity rather than a flag.
+ *
+ * Reads, for example:
+ *   Ada would reach 12h on 2026-09-16, over their 8.4h daily limit (already on
+ *   Ward Round 4h, Clinic 4h)
+ *
+ *   Ben would reach 44h in the week of 2026-09-14, over their 42h weekly limit
+ *   (40h already assigned)
+ *
+ * "their" is deliberate: the engine knows names and grades and holds no opinion
+ * about anybody's pronouns, and inventing one to make a sentence flow would be a
+ * fact the roster master never entered.
+ */
+const hoursBreachClause = ({ person, task, kind, dateKey, weekStartKey, assignedToday, hoursToday, hoursThisWeek }) => {
+    if (kind === REJECT_WEEKLY_HOURS) {
+        return `${person.name} would reach ${formatHours(hoursThisWeek + task.hours)} in the week of ${weekStartKey}, over their ${formatHours(person.weeklyHoursCap)} weekly limit (${formatHours(hoursThisWeek)} already assigned)`;
+    }
+
+    const held = assignedToday.length === 0
+        ? 'nothing else assigned that day'
+        : `already on ${assignedToday.map((entry) => `${entry.task} ${formatHours(entry.hours)}`).join(', ')}`;
+    return `${person.name} would reach ${formatHours(hoursToday + task.hours)} on ${dateKey}, over their ${formatHours(person.dailyHoursCap)} daily limit (${held})`;
+};
+
+const describeEmptyPool = ({ task, role, dateKey, tally, poolSize, hoursDetail = [], entry = null }) => {
     const qualified = poolSize - tally[REJECT_SKILL];
-    // Only the lead slot is band-gated, so only the lead slot may say "band".
-    const bandGated = role === 'lead' && task.leadBands !== null;
+    // Only the lead slot is band-gated, so only the lead slot may say "band" —
+    // and, since multi-slot shifts, only a slot entry that carries a band.
+    const bandGated = entry === null
+        ? (role === 'lead' && task.leadBands !== null)
+        : entry.bandSet !== null;
+    const gatingBands = entry === null ? task.leadBands : entry.bandSet;
     const inBand = qualified - tally[REJECT_BAND];
+    // The task's skill plus, for a multi-slot entry, its own — so a trio's senior
+    // slot reads "skills Witnessing and ICSI" rather than naming only one of them.
+    const skills = slotSkillsRequired(task, entry);
 
     const parts = [];
-    if (task.requiresSkill) parts.push(`${qualified} qualified`);
+    if (skills.length > 0) parts.push(`${qualified} qualified`);
     else if (!bandGated) parts.push(`${poolSize} in pool`);
     if (bandGated) parts.push(`${inBand} in band`);
 
     if (tally[REJECT_LEAVE]) parts.push(`${tally[REJECT_LEAVE]} on leave`);
     if (tally[REJECT_CAPACITY]) parts.push(`${tally[REJECT_CAPACITY]} at daily limit`);
+    // Worded to be unmistakably the HOURS limit and not `at daily limit`, which is
+    // the duty-count one directly above it. Two constraints, two sentences.
+    if (tally[REJECT_DAILY_HOURS]) parts.push(`${tally[REJECT_DAILY_HOURS]} over their daily hours limit`);
+    if (tally[REJECT_WEEKLY_HOURS]) parts.push(`${tally[REJECT_WEEKLY_HOURS]} over their weekly hours limit`);
     if (tally[REJECT_ON_TASK]) parts.push(`${tally[REJECT_ON_TASK]} already on this task`);
     if (tally[REJECT_PAIR]) parts.push(`${tally[REJECT_PAIR]} blocked by a forbidden pairing`);
     if (tally[REJECT_CONSECUTIVE]) parts.push(`${tally[REJECT_CONSECUTIVE]} at the consecutive-day limit`);
 
-    const bandLabel = bandGated ? bandSetLabel(task.leadBands) : '';
+    const bandLabel = bandGated ? bandSetLabel(gatingBands) : '';
+    // WHICH SLOT FAILED, and this is the whole reason a slot entry carries a
+    // label: `Weekend Witnessing junior slot` says which third of the trio could
+    // not be staffed, where `Weekend Witnessing slot` would leave a roster master
+    // reading three identical sentences.
+    const which = entry === null ? `${task.name} ${role}` : `${task.name} ${entry.label}`;
 
     let head;
-    if (task.requiresSkill && bandGated) {
-        head = `no available staff hold skill ${task.requiresSkill} and sit in the ${bandLabel} band for ${task.name} ${role} on ${dateKey}`;
-    } else if (task.requiresSkill) {
-        head = `no available staff hold skill ${task.requiresSkill} for ${task.name} ${role} on ${dateKey}`;
+    if (skills.length > 0 && bandGated) {
+        head = `no available staff hold ${skillsPhrase(skills)} and sit in the ${bandLabel} band for ${which} on ${dateKey}`;
+    } else if (skills.length > 0) {
+        head = `no available staff hold ${skillsPhrase(skills)} for ${which} on ${dateKey}`;
     } else if (bandGated) {
-        head = `no available ${bandLabel}-band staff for ${task.name} ${role} on ${dateKey}`;
+        head = `no available ${bandLabel}-band staff for ${which} on ${dateKey}`;
     } else {
-        head = `no available staff for ${task.name} ${role} on ${dateKey}`;
+        head = `no available staff for ${which} on ${dateKey}`;
     }
 
-    return `${head} (${parts.join(', ')})`;
+    // The hours detail hangs off the end rather than inside the tally, because the
+    // tally is a set of counts that narrow left to right and these are whole
+    // sentences about named people. Absent entirely when hours bound nobody, so a
+    // reason that has nothing to do with hours never mentions them.
+    if (hoursDetail.length === 0) return `${head} (${parts.join(', ')})`;
+
+    const shown = hoursDetail.slice(0, HOURS_DETAIL_LIMIT);
+    const hidden = hoursDetail.length - shown.length;
+    const tail = hidden === 0
+        ? ''
+        : `; and ${hidden} other${hidden === 1 ? '' : 's'} over an hours limit`;
+    return `${head} (${parts.join(', ')}) — ${shown.join('; ')}${tail}`;
 };
 
 // --- 5. CANDIDATE SELECTION --------------------------------------------------
@@ -1259,6 +2108,32 @@ const compareContinuityCandidates = (a, b) => {
  */
 const continuitySignature = (leads) => [...leads].sort().join(' ');
 
+/**
+ * MULTI-SLOT: the order a shift's assignees are published in — LEAD FIRST.
+ *
+ *   1. highest grade first, because that is the decided rule for who leads a
+ *      team shift (`GRADE_UNKNOWN_RANK` puts an assignee with no recorded grade
+ *      last, so they never outrank somebody whose grade the department holds);
+ *   2. then `compareCandidates` — the SAME fairness tie-break the engine used to
+ *      pick these people — evaluated on the candidate snapshot taken at the
+ *      moment each was chosen, which is the only state in which the comparator's
+ *      inputs were ever true;
+ *   3. and `compareCandidates` ends in a name comparison over unique names, so
+ *      this is a TOTAL order: no two assignees can compare equal, and the
+ *      published order cannot depend on the host's sort implementation.
+ *
+ * `slots` order does NOT appear anywhere in it. Two principals on one shift are
+ * ranked by fairness, not by which entry named them, because the entries are
+ * requirements and not a hierarchy.
+ */
+const orderMultiSlotFills = (fills) =>
+    [...fills].sort((a, b) => {
+        if (a.candidate.gradeRank !== b.candidate.gradeRank) {
+            return b.candidate.gradeRank - a.candidate.gradeRank;
+        }
+        return compareCandidates(a.candidate, b.candidate);
+    });
+
 // --- 6. HARD VS SOFT CONSTRAINTS ---------------------------------------------
 //
 // The published Nurse Rostering Problem literature (INRC-II and its lineage)
@@ -1268,13 +2143,17 @@ const continuitySignature = (leads) => [...leads].sort().join(' ');
 //   HARD — violating one makes the roster INFEASIBLE. This engine never
 //   violates a hard constraint; a slot it cannot fill within them goes to
 //   `unfilled` instead. Skill match, LEAD BAND, availability,
-//   one-assignment-per-slot, daily capacity, `forbidPairs`,
-//   `maxConsecutiveDays`.
+//   one-assignment-per-slot, daily capacity, DAILY HOURS, WEEKLY HOURS,
+//   `forbidPairs`, `maxConsecutiveDays`, and — for a multi-slot task — EVERY
+//   SLOT'S OWN GATE and THE LEAD BEING THE HIGHEST GRADE ON THE SHIFT.
 //
 //   SOFT — violating one is legal but undesirable. These are ALLOWED and
 //   COUNTED, never enforced: load imbalance against the FTE-weighted target,
 //   one person repeatedly drawing the same task, uneven weekend distribution,
-//   and isolated single working days.
+//   isolated single working days, HOURS imbalance against the FTE-weighted
+//   target, and the FOUR-WEEK rolling total (warned about in `warnings`, and
+//   deliberately not a `breakdown` component — it is a threshold that either
+//   tripped or did not, not a quantity to weigh against four others).
 //
 // `score.hardViolations` is not asserted to be zero — it is MEASURED by
 // re-auditing the finished roster (`auditHardConstraints`). That is the
@@ -1317,6 +2196,44 @@ export const SOFT_PENALTY_WEIGHTS = Object.freeze({
     continuityBreaks: 2,
 });
 
+/**
+ * The hours model's weight, in a SEPARATE overlay — and this is a transitional
+ * state, not a design.
+ *
+ * `SOFT_PENALTY_WEIGHTS` above is pinned by two compatibility gates:
+ * `rosterEngineV2.test.js` ("exposes its soft weights so they can be changed in
+ * one visible place") asserts its exact key list, and
+ * `rosterEngineV2.psych.test.js` ("carries the four original weights unchanged,
+ * plus continuityBreaks, frozen") asserts its exact shape. Those gates are the
+ * proof that this change is additive, so they are not editable by the change that
+ * wants to extend them. This is the SAME transitional device, for the SAME reason,
+ * that `ALL_SOFT_PENALTY_WEIGHTS` was when `continuityBreaks` landed: the
+ * orchestrator moved the pins deliberately and merged the tables in one commit.
+ * → MERGE THIS IN and delete the overlay once those two pins are moved; it is a
+ * one-line change and the scorer already reads the merged view below.
+ *
+ * WEIGHT 0.25, and it is a JUDGMENT CALL flagged for review. `loadImbalance` is
+ * measured in DUTIES and this is measured in HOURS, so weighting them equally
+ * would silently make hours drift matter four times as much as duty drift for no
+ * reason anybody argued. 0.25 says "four hours of drift is worth one duty of
+ * drift", i.e. exactly one default session — defensible, arithmetically neutral,
+ * and as uncalibrated as the other five. The number to read is the plain
+ * `breakdown.hoursImbalance`; `softPenalty` was only ever a comparison.
+ */
+export const HOURS_SOFT_PENALTY_WEIGHTS = Object.freeze({
+    hoursImbalance: 0.25,
+});
+
+/**
+ * Every soft weight this engine actually applies. The scorer reads THIS, so a
+ * breakdown key can never be weighted by `undefined` — which would make
+ * `softPenalty` `NaN` and turn "worse than that configuration" into "unknown".
+ */
+const ALL_SOFT_PENALTY_WEIGHTS = Object.freeze({
+    ...SOFT_PENALTY_WEIGHTS,
+    ...HOURS_SOFT_PENALTY_WEIGHTS,
+});
+
 const HARD_RULE_SKILL = 'skill';
 /**
  * The lead of a band-restricted task holds a grade outside its bands (or holds
@@ -1330,8 +2247,82 @@ const HARD_RULE_ONE_PER_SLOT = 'onePerSlot';
 const HARD_RULE_CAPACITY = 'dailyCapacity';
 const HARD_RULE_FORBID_PAIR = 'forbidPair';
 const HARD_RULE_CONSECUTIVE = 'maxConsecutiveDays';
+/**
+ * Somebody's assigned durations on one date sum above their FTE-scaled daily
+ * ceiling. Audited exactly as the band rule is — off the finished roster, so a
+ * swap tool that moves a 4-hour clinic onto an already-full day is caught after
+ * the fact and not merely prevented during construction.
+ */
+const HARD_RULE_DAILY_HOURS = 'dailyHours';
+/** The same over one Monday–Sunday week, whichever weeks the roster spans. */
+const HARD_RULE_WEEKLY_HOURS = 'weeklyHours';
+/**
+ * MULTI-SLOT: somebody on a `slots` shift fills no slot they qualify for. Audited
+ * as a MATCHING rather than a per-person check — see `unmatchableAssignees` — so
+ * that a trio of {principal, senior, junior} slots holding three seniors is
+ * caught even though every one of them satisfies SOME slot.
+ */
+const HARD_RULE_SLOT_GATE = 'slotGate';
+/**
+ * MULTI-SLOT: the shift's `lead` is not the highest grade on it. The decided rule
+ * is a rule about the finished shift, so it is audited off the finished shift —
+ * which also catches a swap tool that moves a junior into the lead field and
+ * leaves a principal beside them.
+ */
+const HARD_RULE_LEAD_GRADE = 'leadGrade';
 
-const round2 = (value) => Math.round(value * 100) / 100;
+/**
+ * MULTI-SLOT, THE READ-BACK: which of these assignees can NO valid assignment of
+ * people to slots account for?
+ *
+ * WHY A MATCHING AND NOT A LOOP. Checking each person against "some slot they
+ * qualify for" passes a shift that holds three seniors against
+ * {principal, senior, junior} — every senior satisfies the senior slot, and the
+ * check would report nothing while the principal slot sits empty and the shift
+ * is a lie. The question is whether the people on the shift can be given
+ * DISTINCT slots, which is bipartite matching, so that is what this does
+ * (Kuhn's augmenting path — the roster shapes here are three or four wide).
+ *
+ * DETERMINISTIC, and its bias is documented rather than hidden: assignees are
+ * processed in `assignees` order, so when a shift holds more people than its
+ * slots can absorb, the ones reported are the LATER ones in that order. Names
+ * not in the staff pool are skipped — they carry no skills or band to match on,
+ * and the availability rule has already reported them.
+ */
+const unmatchableAssignees = (names, task, byName) => {
+    const slots = task.slots;
+    const eligible = names.map((name) => {
+        const person = byName.get(name);
+        if (!person) return null;
+        const indices = [];
+        for (let i = 0; i < slots.length; i += 1) {
+            if (canFillSlot(person, task, slots[i])) indices.push(i);
+        }
+        return indices;
+    });
+
+    /** slot index -> the assignee index currently holding it, or -1. */
+    const owner = new Array(slots.length).fill(-1);
+
+    const seat = (personIndex, visited) => {
+        for (const slotIndex of eligible[personIndex]) {
+            if (visited.has(slotIndex)) continue;
+            visited.add(slotIndex);
+            if (owner[slotIndex] === -1 || seat(owner[slotIndex], visited)) {
+                owner[slotIndex] = personIndex;
+                return true;
+            }
+        }
+        return false;
+    };
+
+    const unmatchable = [];
+    for (let i = 0; i < names.length; i += 1) {
+        if (eligible[i] === null) continue;
+        if (!seat(i, new Set())) unmatchable.push(names[i]);
+    }
+    return unmatchable;
+};
 
 /** Everyone named on a shift, whichever field carries them. */
 const shiftAssignees = (shift) =>
@@ -1393,6 +2384,21 @@ const runsExceeding = (dates, limit) => {
  * Pure, and callable on any candidate roster — including one this engine did not
  * build. Returns `{ ok: true, count, violations }`, or `{ ok: false, reason }`
  * if the config it is being judged against is itself invalid.
+ *
+ * The two HOURS rules are audited on exactly the terms the band rule is: from the
+ * finished roster, against the same FTE-scaled caps and the same epsilon the
+ * construction gate used, and only when the configuration asks for the hours model
+ * (`hoursModelRequested`). A configuration that never mentions hours gets the
+ * violation list it got before hours existed — which matters most for the
+ * department whose `maxPerDay` is 3, whose three 4-hour sessions would otherwise
+ * start failing an 8.4-hour cap it never set.
+ *
+ * The two MULTI-SLOT rules are gated the same way, but per TASK rather than per
+ * configuration: they run only for a task that carries `slots`, so a roster built
+ * from `leads`/`coLeads` is audited by exactly the rules that existed before
+ * `slots` did. A shift naming a task the configuration does not have is audited by
+ * neither, for the same reason it contributes no hours: nothing knows what its
+ * slots were meant to be.
  */
 export const auditHardConstraints = (roster, config) => {
     const validation = validateRosterV2Config(config);
@@ -1410,7 +2416,13 @@ export const auditHardConstraints = (roster, config) => {
         : ROSTER_V2_DEFAULTS.maxConsecutiveDays;
     const forbidPairs = Array.isArray(rules.forbidPairs) ? rules.forbidPairs : [];
 
-    const staff = normaliseStaff(config.staff, maxConcurrentPerDay, resolveGradeBands(rules));
+    const hoursActive = hoursModelRequested(config);
+    const staff = normaliseStaff(
+        config.staff,
+        maxConcurrentPerDay,
+        resolveGradeBands(rules),
+        resolveHoursRules(rules),
+    );
     const tasks = normaliseTasks(config.tasks);
     const byName = new Map(staff.map((person) => [person.name, person]));
     const byTask = new Map(tasks.map((task) => [task.name, task]));
@@ -1419,9 +2431,21 @@ export const auditHardConstraints = (roster, config) => {
     const violations = [];
     const add = (rule, detail, date, task) => violations.push({ rule, date, task, detail });
 
+    /**
+     * weekStartKey -> (name -> hours), accumulated across the whole roster rather
+     * than per day, because the weekly cap spans days. Keyed by the Monday that
+     * OPENED each week (`weekStartKeyOf`) rather than by an index off
+     * `config.startDate`, so a roster carrying dates outside the run — which any
+     * roster handed to this pure function may — is still audited against the week
+     * it actually falls in.
+     */
+    const hoursByWeekStart = new Map();
+
     for (const dateKey of Object.keys(roster).sort()) {
         const shifts = roster[dateKey];
         const dutiesToday = new Map();
+        /** name -> hours held on this date, for the daily hours rule. */
+        const hoursToday = new Map();
         /** taskName -> [names], for the repeat and pairing checks. */
         const onTask = new Map();
 
@@ -1450,6 +2474,44 @@ export const auditHardConstraints = (roster, config) => {
                 }
             }
 
+            // MULTI-SLOT, both decided rules, read back off the finished shift.
+            // Scoped to `slots` tasks: a `leads`/`coLeads` task is ALLOWED a junior
+            // lead beside a senior co-lead — that is the shadowing arrangement
+            // section 0b's rule 6 exists to make expressible — so neither rule may
+            // leak onto one.
+            if (task && task.slots !== null) {
+                const known = people.filter((name) => byName.has(name));
+
+                for (const name of unmatchableAssignees(people, task, byName)) {
+                    add(
+                        HARD_RULE_SLOT_GATE,
+                        `${name} is on ${shift.task} but no slot of it that they qualify for is free (its slots are ${task.slots.map((entry) => entry.label).join(', ')})`,
+                        dateKey,
+                        shift.task,
+                    );
+                }
+
+                // "The lead is the highest grade present." Stated as "nobody on the
+                // shift outranks the lead", because equal grades are a tie and a tie
+                // is not a violation.
+                if (isNonEmptyString(shift.lead) && byName.has(shift.lead)) {
+                    const leadRank = byName.get(shift.lead).gradeRank;
+                    const senior = known.find((name) => byName.get(name).gradeRank > leadRank);
+                    if (senior !== undefined) {
+                        const describeGrade = (name) => {
+                            const grade = byName.get(name).grade;
+                            return grade === null ? 'no grade recorded' : grade;
+                        };
+                        add(
+                            HARD_RULE_LEAD_GRADE,
+                            `${shift.lead} (${describeGrade(shift.lead)}) leads ${shift.task}, but ${senior} (${describeGrade(senior)}) is on the same shift — the lead of a multi-slot shift is its highest grade`,
+                            dateKey,
+                            shift.task,
+                        );
+                    }
+                }
+            }
+
             if (!onTask.has(shift.task)) onTask.set(shift.task, []);
 
             for (const name of people) {
@@ -1465,6 +2527,14 @@ export const auditHardConstraints = (roster, config) => {
                     add(HARD_RULE_AVAILABILITY, `${name} is unavailable on ${dateKey}`, dateKey, shift.task);
                 }
                 dutiesToday.set(name, (dutiesToday.get(name) || 0) + 1);
+                // A shift whose task is not in the configuration has no knowable
+                // duration, so it contributes no hours rather than a guessed 4 —
+                // the same reason the skill and band rules above say nothing about
+                // a task they cannot look up. It is already reported by whichever
+                // rule noticed the person or the shape.
+                if (hoursActive && task) {
+                    hoursToday.set(name, (hoursToday.get(name) || 0) + task.hours);
+                }
                 onTask.get(shift.task).push(name);
             }
         }
@@ -1490,6 +2560,48 @@ export const auditHardConstraints = (roster, config) => {
             const person = byName.get(name);
             if (person && count > person.maxPerDay) {
                 add(HARD_RULE_CAPACITY, `${name} holds ${count} duties, limit ${person.maxPerDay}`, dateKey, null);
+            }
+        }
+
+        // The hours twin of the duty-capacity rule directly above, and the
+        // read-back half of the gate in `rejectionFor`. Same epsilon on the cap
+        // side, so a day filled exactly to the ceiling is legal here too — the
+        // audit and the gate must agree about the boundary or a roster the engine
+        // built would fail its own audit.
+        if (hoursActive) {
+            const weekStartKey = weekStartKeyOf(dateKey);
+            if (!hoursByWeekStart.has(weekStartKey)) hoursByWeekStart.set(weekStartKey, new Map());
+            const week = hoursByWeekStart.get(weekStartKey);
+
+            for (const [name, hours] of hoursToday) {
+                const person = byName.get(name);
+                if (!person) continue;
+                if (hours > person.dailyHoursCap + HOURS_EPSILON) {
+                    add(
+                        HARD_RULE_DAILY_HOURS,
+                        `${name} holds ${formatHours(hours)}, limit ${formatHours(person.dailyHoursCap)}`,
+                        dateKey,
+                        null,
+                    );
+                }
+                week.set(name, (week.get(name) || 0) + hours);
+            }
+        }
+    }
+
+    if (hoursActive) {
+        for (const weekStartKey of [...hoursByWeekStart.keys()].sort()) {
+            for (const [name, hours] of hoursByWeekStart.get(weekStartKey)) {
+                const person = byName.get(name);
+                if (!person) continue;
+                if (hours > person.weeklyHoursCap + HOURS_EPSILON) {
+                    add(
+                        HARD_RULE_WEEKLY_HOURS,
+                        `${name} holds ${formatHours(hours)} in the week of ${weekStartKey}, limit ${formatHours(person.weeklyHoursCap)}`,
+                        weekStartKey,
+                        null,
+                    );
+                }
             }
         }
     }
@@ -1554,6 +2666,20 @@ export const auditHardConstraints = (roster, config) => {
  *                     skipped rather than counted as two breaks: the gap is
  *                     already reported in `unfilled`, and the incumbent resuming
  *                     after it is continuity holding, not breaking twice.
+ *   hoursImbalance    the SAME deviation measure as `loadImbalance`, in HOURS
+ *                     rather than duties — total absolute deviation from each
+ *                     person's FTE-weighted share of the hours actually
+ *                     generated. Present in `breakdown` only when the
+ *                     configuration asks for the hours model, exactly as
+ *                     `continuityBreaks` is. It is a SEPARATE component and not a
+ *                     replacement, because the two disagree in the one case that
+ *                     matters: the engine's fairness comparator ranks candidates
+ *                     by DUTY COUNT, so a department whose tasks differ in length
+ *                     can be perfectly balanced on duties (`loadImbalance` 0) and
+ *                     badly unbalanced on hours. That gap is REPORTED rather than
+ *                     closed — closing it means an hours-weighted comparator,
+ *                     which changes who gets every duty and is its own piece of
+ *                     measurable work.
  *
  * Returns `{ ok: true, hardViolations, softPenalty, breakdown }`, or
  * `{ ok: false, reason }` for an invalid config.
@@ -1563,17 +2689,21 @@ export const scoreRoster = (roster, config) => {
     if (!audit.ok) return { ok: false, reason: audit.reason };
 
     const rules = isPlainObject(config.rules) ? config.rules : {};
+    const hoursActive = hoursModelRequested(config);
     const staff = normaliseStaff(
         config.staff,
         isPositiveInt(rules.maxConcurrentPerDay)
             ? rules.maxConcurrentPerDay
             : ROSTER_V2_DEFAULTS.maxConcurrentPerDay,
         resolveGradeBands(rules),
+        resolveHoursRules(rules),
     );
     const tasks = normaliseTasks(config.tasks);
+    const byTaskName = new Map(tasks.map((task) => [task.name, task]));
 
     const duties = new Map(staff.map((person) => [person.name, 0]));
     const weekendDuties = new Map(staff.map((person) => [person.name, 0]));
+    const hours = new Map(staff.map((person) => [person.name, 0]));
     /** taskName -> (name -> count) */
     const perTask = new Map(tasks.map((task) => [task.name, new Map()]));
 
@@ -1589,6 +2719,14 @@ export const scoreRoster = (roster, config) => {
 
                 const task = perTask.get(shift.task);
                 if (task) task.set(name, (task.get(name) || 0) + 1);
+
+                // A shift naming a task the configuration does not have carries no
+                // knowable duration, and contributes no hours rather than a
+                // guessed default — the same rule the audit follows.
+                const definition = byTaskName.get(shift.task);
+                if (hoursActive && definition) {
+                    hours.set(name, hours.get(name) + definition.hours);
+                }
             }
         }
     }
@@ -1673,11 +2811,18 @@ export const scoreRoster = (roster, config) => {
         // configuration that does not use the feature is byte-identical to the
         // one it produced before the feature existed.
         ...(continuityTasks.length > 0 ? { continuityBreaks } : {}),
+        // The same rule, for the same reason, one feature later.
+        ...(hoursActive ? { hoursImbalance: round2(deviation(hours)) } : {}),
     };
 
     const softPenalty = round2(
         Object.entries(breakdown).reduce(
-            (sum, [key, value]) => sum + SOFT_PENALTY_WEIGHTS[key] * value,
+            // `ALL_SOFT_PENALTY_WEIGHTS`, not `SOFT_PENALTY_WEIGHTS`: the exported
+            // table is pinned by two compatibility gates and cannot yet carry
+            // `hoursImbalance`, and a missing weight would multiply into `NaN`.
+            // The two tables hold identical values for every key they share, so
+            // this changes no non-hours score.
+            (sum, [key, value]) => sum + ALL_SOFT_PENALTY_WEIGHTS[key] * value,
             0,
         ),
     );
@@ -1702,6 +2847,13 @@ export const scoreRoster = (roster, config) => {
  *     warnings,         // [ sentence, … ]
  *   }
  *
+ * When the configuration asks for the hours model, and ONLY then, every `load`
+ * entry additionally carries `hours` (the total assigned), `hoursPerWeek` (one
+ * figure per generated week, index `i` being the week `shift.week === i + 1`
+ * names) and `weeklyCap` (`weeklyHours * fte`, the figure the hard weekly gate
+ * compares against). A configuration that never mentions hours gets the four-key
+ * `load` entry it got before hours existed.
+ *
  * and on a configuration error `{ ok: false, reason }` — nothing else, so a
  * caller cannot mistake a refusal for an empty roster.
  *
@@ -1721,9 +2873,28 @@ export const scoreRoster = (roster, config) => {
  * same reason a CPET task is, and the department's one principal is not spent on
  * a duty anybody could have led.
  *
+ * It includes the HOURS GATE for exactly the same reason, and the failure it
+ * prevents is the sharpest instance of the general one: a 6-hour clinic and a
+ * 2-hour review both fit an empty 8.4-hour day, but once the review is placed the
+ * clinic fits nobody. Ordering by scarcity WITHOUT counting hours would fill the
+ * loose 2-hour slot first, every time, and then report the 6-hour clinic as
+ * unstaffable — a shortage the engine manufactured, indistinguishable in
+ * `unfilled` from a real one.
+ *
  * Leads are still filled before co-leads (two phases, each internally ordered by
  * scarcity). That ordering is what makes it impossible for a pairing group to
  * end up holding a co-lead with no lead to attach them to.
+ *
+ * A MULTI-SLOT TASK'S ENTRIES ARE EACH A SLOT IN THEIR OWN RIGHT, and they are
+ * filled in PHASE 1 alongside the lead slots of every other task — because that
+ * is what they are: staffing requirements that stand or fall on their own, none
+ * of them dependent on another being filled first. So the department's one
+ * principal is not spent on an ungated duty while a principal-gated slot entry
+ * waits, and — the case this feature exists for — a trio whose junior entry
+ * cannot be staffed still fills the other two and reports ONE `unfilled` entry
+ * naming the junior slot. There is no co-lead phase for such a task; the shift's
+ * `lead` and `coLead` are DERIVED from the grades of whoever filled its entries
+ * (section 5's ranking), not from which slot they filled.
  *
  * WHICH DAYS A TASK RUNS ON. A task with `days` runs on those weekdays of every
  * week; a task with `recurrence` runs on the nth (or last) named weekday of each
@@ -1758,8 +2929,10 @@ export const generateRosterV2 = (config) => {
         : ROSTER_V2_DEFAULTS.maxConsecutiveDays;
     const forbidPairs = Array.isArray(rules.forbidPairs) ? rules.forbidPairs : [];
     const bands = resolveGradeBands(rules);
+    const hoursActive = hoursModelRequested(config);
+    const hoursRules = resolveHoursRules(rules);
 
-    const staff = normaliseStaff(config.staff, maxConcurrentPerDay, bands);
+    const staff = normaliseStaff(config.staff, maxConcurrentPerDay, bands, hoursRules);
     const tasks = normaliseTasks(config.tasks);
     const forbidMap = buildForbidMap(forbidPairs, staff.map((person) => person.name));
 
@@ -1816,6 +2989,26 @@ export const generateRosterV2 = (config) => {
      * break count and the warning.
      */
     const continuityHistory = new Map();
+    /**
+     * dateKey -> (name -> hours held that date), the daily gate's state. Kept
+     * beside `dutiesByDate` rather than inside it because the two rules count
+     * different things and merging them would make either one's mutation
+     * untestable in isolation.
+     */
+    const hoursByDate = new Map();
+    /**
+     * dateKey -> (name -> [{ task, hours }]), in assignment order. Exists ONLY so
+     * that an hours refusal can say what the person already holds that day —
+     * "already on Ward Round 4h, Clinic 4h" is the difference between a reason and
+     * a number.
+     */
+    const assignmentsByDate = new Map();
+    /**
+     * One map per generated week, index `week`. The weekly window is the generated
+     * Monday–Sunday block, which is exactly the loop's own `week` — see
+     * `weekStartOf` for why that is a calendar fact rather than a convenience.
+     */
+    const hoursByWeek = Array.from({ length: config.weeks }, () => new Map());
 
     const roster = {};
     const unfilled = [];
@@ -1831,6 +3024,23 @@ export const generateRosterV2 = (config) => {
         if (ungraded.length > 0) {
             warnings.push(
                 `${ungraded.length === 1 ? '1 staff member has' : `${ungraded.length} staff members have`} no job grade recorded (${ungraded.join(', ')}), so they cannot lead ${bandGatedTasks.length === 1 ? 'the band-restricted task' : `any of the ${bandGatedTasks.length} band-restricted tasks`}. They remain eligible for every other duty, and may still co-lead those tasks.`,
+            );
+        }
+    }
+
+    // The MULTI-SLOT twin of the warning above, said separately because the
+    // sentence it needs is a different sentence: an ungraded colleague cannot fill
+    // a BANDED SLOT ENTRY either, and there is no "may still co-lead" consolation
+    // to offer them — every entry of a multi-slot task is a slot in its own right,
+    // so what is left to them is the entries that carry no band.
+    const bandGatedSlotTasks = tasks.filter(
+        (task) => task.slots !== null && task.slots.some((entry) => entry.band !== null),
+    );
+    if (bandGatedSlotTasks.length > 0) {
+        const ungraded = staff.filter((person) => person.grade === null).map((person) => person.name);
+        if (ungraded.length > 0) {
+            warnings.push(
+                `${ungraded.length === 1 ? '1 staff member has' : `${ungraded.length} staff members have`} no job grade recorded (${ungraded.join(', ')}), so they cannot fill any band-restricted slot of ${bandGatedSlotTasks.length === 1 ? 'the multi-slot task' : `the ${bandGatedSlotTasks.length} multi-slot tasks`}. They remain eligible for every slot that carries no band, and for every other duty.`,
             );
         }
     }
@@ -1852,10 +3062,26 @@ export const generateRosterV2 = (config) => {
         }
         if (task.requiresSkill) {
             const holders = staff.filter((person) => person.skills.has(task.requiresSkill));
-            const needed = task.leads + task.coLeads;
+            const needed = perDayDemand(task);
             if (holders.length < needed) {
                 warnings.push(
                     `Task ${task.name} needs ${needed} ${needed === 1 ? 'person' : 'people'} per day but only ${holders.length} ${holders.length === 1 ? 'holds' : 'hold'} skill ${task.requiresSkill}, so some slots cannot be filled on any day.`,
+                );
+            }
+        }
+        // The hours twin of the ungraded-staff warning, and the SUB-refusal case:
+        // validation refuses a task longer than EVERYBODY's day, so what is left
+        // here is a task longer than SOME people's day — which is invisible in the
+        // roster (they are simply never on it) and is almost always a part-timer
+        // whose FTE-scaled cap cannot hold one session. Named, once, per task,
+        // because "why is Scott never on the long clinic?" has one answer.
+        if (hoursActive) {
+            const tooLongFor = staff
+                .filter((person) => task.hours > person.dailyHoursCap + HOURS_EPSILON)
+                .map((person) => `${person.name} (${formatHours(person.dailyHoursCap)})`);
+            if (tooLongFor.length > 0) {
+                warnings.push(
+                    `Task ${task.name} takes ${formatHours(task.hours)}, which is longer than the daily hours limit of ${tooLongFor.length === 1 ? '1 staff member' : `${tooLongFor.length} staff members`} (${tooLongFor.join(', ')}), so they can never be rostered on it.`,
                 );
             }
         }
@@ -1876,11 +3102,46 @@ export const generateRosterV2 = (config) => {
                 );
             }
         }
+        // MULTI-SLOT: the same warning one field over, and grouped by GATE rather
+        // than reported per entry, because two identical junior slots in a
+        // department with one junior is ONE fact ("you asked for two, there is
+        // one") and not two. Validation has already refused a gate nobody can pass
+        // at all; this is the narrower and commoner case, and it is a warning
+        // rather than a refusal for the same reason its `leadBands` twin is — the
+        // roster is still worth generating, with the shortfall visible in
+        // `unfilled` on every date.
+        if (task.slots !== null) {
+            /** gate signature -> the labels of the entries sharing it. */
+            const byGate = new Map();
+            for (const entry of task.slots) {
+                const key = `${entry.band === null ? '' : entry.band}|${entry.requiresSkill === null ? '' : entry.requiresSkill}`;
+                if (!byGate.has(key)) byGate.set(key, { entry, labels: [] });
+                byGate.get(key).labels.push(entry.label);
+            }
+
+            for (const { entry, labels } of byGate.values()) {
+                const qualified = staff.filter((person) => canFillSlot(person, task, entry));
+                if (qualified.length >= labels.length) continue;
+
+                const gate = [];
+                if (entry.bandSet !== null) {
+                    gate.push(`from the ${bandSetLabel(entry.bandSet)} band (${bandSetGradeLabel(entry.bandSet, bands)})`);
+                }
+                const gateSkills = slotSkillsRequired(task, entry);
+                if (gateSkills.length > 0) gate.push(`holding ${skillsPhrase(gateSkills)}`);
+
+                warnings.push(
+                    `Task ${task.name} needs ${labels.length} ${labels.length === 1 ? 'person' : 'people'} ${gate.length === 0 ? 'per day' : `${gate.join(' ')} per day`} (${labels.join(', ')}), but only ${qualified.length} ${qualified.length === 1 ? 'person qualifies' : 'people qualify'}, so some of those slots cannot be filled on any day.`,
+                );
+            }
+        }
     }
 
     // --- the assignment loop --------------------------------------------------
     let totalDemand = 0;
     let totalCapacity = 0;
+    /** The hours twin of `totalDemand`, for the structural warning at the end. */
+    let totalDemandHours = 0;
 
     for (let week = 0; week < config.weeks; week += 1) {
         for (let offset = 0; offset < DAYS_PER_WEEK; offset += 1) {
@@ -1903,15 +3164,37 @@ export const generateRosterV2 = (config) => {
 
             dutiesByDate.set(dateKey, new Map());
             const dutiesOnDate = dutiesByDate.get(dateKey);
+            hoursByDate.set(dateKey, new Map());
+            const hoursOnDate = hoursByDate.get(dateKey);
+            assignmentsByDate.set(dateKey, new Map());
+            const assignmentsOnDate = assignmentsByDate.get(dateKey);
+            // The generated week IS the Monday–Sunday window, so the loop's own
+            // index is the bucket. Asserted by construction rather than derived
+            // from the date, and pinned by a test that a Sunday duty lands in the
+            // week its Monday opened.
+            const hoursThisWeek = hoursByWeek[week];
 
-            for (const task of running) totalDemand += task.leads + task.coLeads;
+            for (const task of running) totalDemand += perDayDemand(task);
             for (const person of staff) {
                 if (!person.unavailable.has(dateKey)) totalCapacity += person.maxPerDay;
             }
+            for (const task of running) totalDemandHours += perDayDemand(task) * task.hours;
 
-            /** taskName -> { onTaskToday, leads, coLeads } for this date. */
+            /**
+             * taskName -> { onTaskToday, leads, coLeads, slotFills } for this date.
+             *
+             * `slotFills` is the multi-slot half and stays SEPARATE from
+             * `leads`/`coLeads` rather than reusing them: a slot entry is neither
+             * until the day's entries are all resolved and section 5 ranks them, and
+             * pushing one into `leads` would make the continuity machinery, the
+             * co-lead round-robin and the orphan guard all read a lead that does not
+             * exist yet.
+             */
             const dayState = new Map(
-                running.map((task) => [task.name, { onTaskToday: new Set(), leads: [], coLeads: [] }]),
+                running.map((task) => [
+                    task.name,
+                    { onTaskToday: new Set(), leads: [], coLeads: [], slotFills: [] },
+                ]),
             );
 
             // `unfilled` is collected per day and emitted in READING order (lead
@@ -1933,6 +3216,11 @@ export const generateRosterV2 = (config) => {
              */
             const evaluateSlot = (slot) => {
                 const { task, role } = slot;
+                // MULTI-SLOT: which entry of `task.slots` this slot is, or `null`
+                // for a lead or co-lead slot. Every gate, tally and reason string
+                // below behaves exactly as it did before `slots` existed when it is
+                // `null`, which is every slot of every task that does not use it.
+                const entry = slot.entry === undefined ? null : slot.entry;
                 const { onTaskToday } = dayState.get(task.name);
 
                 // Continuity inverts the per-task tie-break, for this slot only.
@@ -1953,9 +3241,19 @@ export const generateRosterV2 = (config) => {
                     [REJECT_LEAVE]: 0,
                     [REJECT_ON_TASK]: 0,
                     [REJECT_CAPACITY]: 0,
+                    [REJECT_DAILY_HOURS]: 0,
+                    [REJECT_WEEKLY_HOURS]: 0,
                     [REJECT_PAIR]: 0,
                     [REJECT_CONSECUTIVE]: 0,
                 };
+
+                /**
+                 * One readable sentence per person the HOURS gate turned away, in
+                 * staff order. Built here, where the numbers that produced the
+                 * rejection are still in hand, rather than reconstructed later
+                 * from a tally that has thrown them away.
+                 */
+                const hoursDetail = [];
 
                 let eligible = 0;
                 let best = null;
@@ -1971,6 +3269,14 @@ export const generateRosterV2 = (config) => {
                         // department's only in-band clinician — the stranding
                         // failure MRV exists to prevent, in a new costume.
                         role,
+                        // A slot entry's own band and skill are counted here for the
+                        // third time in the same argument: the principal entry of a
+                        // weekend trio is the scarce one, and a scarcity measure
+                        // blind to it would spend the department's only free
+                        // principal on the ungated entry beside it and then report
+                        // the principal slot as unstaffable — a shortage the engine
+                        // manufactured.
+                        entry,
                         dateKey,
                         date,
                         dutiesOnDate,
@@ -1978,10 +3284,30 @@ export const generateRosterV2 = (config) => {
                         forbidMap,
                         dutiesByDate,
                         maxConsecutiveDays,
+                        // And the hours gate is counted here for the same reason,
+                        // one constraint later: an hours-tight slot must be
+                        // recognised as the scarce one, or it loses its candidates
+                        // to a slot anybody's remaining day could have absorbed.
+                        hoursActive,
+                        hoursOnDate,
+                        hoursThisWeek,
                     });
 
                     if (watched !== null && incumbents.includes(person.name)) {
                         watched.set(person.name, rejection);
+                    }
+
+                    if (rejection === REJECT_DAILY_HOURS || rejection === REJECT_WEEKLY_HOURS) {
+                        hoursDetail.push(hoursBreachClause({
+                            person,
+                            task,
+                            kind: rejection,
+                            dateKey,
+                            weekStartKey: toLocalDateKey(addDays(start, week * DAYS_PER_WEEK)),
+                            assignedToday: assignmentsOnDate.get(person.name) || [],
+                            hoursToday: hoursOnDate.get(person.name) || 0,
+                            hoursThisWeek: hoursThisWeek.get(person.name) || 0,
+                        }));
                     }
 
                     if (rejection) {
@@ -1998,27 +3324,53 @@ export const generateRosterV2 = (config) => {
                         // Read by `compareContinuityCandidates` only. Present on
                         // every candidate so there is one candidate shape.
                         taskLeads: leadsByTask.get(task.name).get(person.name) || 0,
+                        // Read by `orderMultiSlotFills` only, and present here for
+                        // the same reason `taskLeads` is: one candidate shape, and
+                        // the snapshot the lead ranking reads is the snapshot the
+                        // fairness comparator ranked.
+                        gradeRank: person.gradeRank,
                     };
                     if (best === null || compare(candidate, best) < 0) {
                         best = candidate;
                     }
                 }
 
-                return { eligible, best, tally, watched };
+                return { eligible, best, tally, watched, hoursDetail };
             };
 
-            const assign = (slot, name) => {
+            const assign = (slot, candidate) => {
                 const { task } = slot;
                 const state = dayState.get(task.name);
+                // The whole candidate rather than only the name, because a
+                // multi-slot shift's lead is ranked from the snapshot the engine
+                // chose them on. Every other use is `candidate.name`, unchanged.
+                const { name } = candidate;
 
                 duties.set(name, duties.get(name) + 1);
                 dutiesOnDate.set(name, (dutiesOnDate.get(name) || 0) + 1);
+
+                // The hours ledger the gate reads. Kept up to date on EVERY
+                // assignment, hours model or not, so that the two states cannot
+                // drift apart depending on a flag — the flag decides whether the
+                // gate consults them, not whether they are true.
+                hoursOnDate.set(name, (hoursOnDate.get(name) || 0) + task.hours);
+                hoursThisWeek.set(name, (hoursThisWeek.get(name) || 0) + task.hours);
+                if (!assignmentsOnDate.has(name)) assignmentsOnDate.set(name, []);
+                assignmentsOnDate.get(name).push({ task: task.name, hours: task.hours });
 
                 const byTask = dutiesByTask.get(name);
                 byTask.set(task.name, (byTask.get(task.name) || 0) + 1);
 
                 state.onTaskToday.add(name);
-                if (slot.role === 'lead') {
+                // `onTaskToday` above is also what stops one person taking two
+                // entries of the same multi-slot shift: it is per task per day, and
+                // `rejectionFor` reads it as `REJECT_ON_TASK` for every slot of any
+                // kind. The trio rule needs no separate machinery.
+                if (slot.role === MULTI_SLOT_ROLE) {
+                    // Neither a lead nor a co-lead yet — see `dayState`. Section 5
+                    // decides which of them is which once the day is resolved.
+                    state.slotFills.push({ entry: slot.entry, candidate });
+                } else if (slot.role === 'lead') {
                     state.leads.push(name);
                     const leadCounts = leadsByTask.get(task.name);
                     leadCounts.set(name, (leadCounts.get(name) || 0) + 1);
@@ -2088,27 +3440,48 @@ export const generateRosterV2 = (config) => {
                             entry: {
                                 date: dateKey,
                                 task: chosenSlot.task.name,
-                                role: chosenSlot.role,
+                                // MULTI-SLOT: the entry's LABEL, so that a roster
+                                // master reading three unfilled lines for one trio
+                                // can tell which of the three failed. `'lead'` and
+                                // `'coLead'` are unchanged for every other task.
+                                role: chosenSlot.role === MULTI_SLOT_ROLE
+                                    ? chosenSlot.entry.label
+                                    : chosenSlot.role,
                                 reason: describeEmptyPool({
                                     task: chosenSlot.task,
                                     role: chosenSlot.role,
                                     dateKey,
                                     tally: chosenEvaluation.tally,
                                     poolSize: staff.length,
+                                    hoursDetail: chosenEvaluation.hoursDetail,
+                                    entry: chosenSlot.role === MULTI_SLOT_ROLE ? chosenSlot.entry : null,
                                 }),
                             },
                         });
                         continue;
                     }
 
-                    assign(chosenSlot, chosenEvaluation.best.name);
+                    assign(chosenSlot, chosenEvaluation.best);
                 }
             };
 
             // --- phase 1: every lead slot on this day, scarcest first ---------
+            //
+            // And every SLOT ENTRY of every multi-slot task, in the same phase and
+            // the same scarcity ordering: an entry is a staffing requirement that
+            // stands on its own, not a co-lead hanging off somebody else's slot, so
+            // it competes with the day's lead slots rather than queueing behind
+            // them. Filling all of them together is also what lets a trio lose its
+            // junior and keep its principal and senior.
             let order = 0;
             const leadSlots = [];
             for (const task of running) {
+                if (task.slots !== null) {
+                    for (const entry of task.slots) {
+                        leadSlots.push({ task, role: MULTI_SLOT_ROLE, entry, order: order += 1 });
+                    }
+                    continue;
+                }
                 for (let i = 0; i < task.leads; i += 1) {
                     leadSlots.push({ task, role: 'lead', order: order += 1 });
                 }
@@ -2162,6 +3535,12 @@ export const generateRosterV2 = (config) => {
             }
 
             // --- phase 2: co-lead slots, scarcest first -----------------------
+            //
+            // A multi-slot task passes through both arms of this loop without
+            // effect, and that is `normaliseTasks` forcing its `coLeads` to 0
+            // rather than a special case here: it has no lead, so it takes the
+            // orphan arm, and it asks for no co-leads, so the arm's loop runs zero
+            // times. Every entry it needed was filled in phase 1.
             const coLeadSlots = [];
             for (const task of running) {
                 const state = dayState.get(task.name);
@@ -2194,6 +3573,41 @@ export const generateRosterV2 = (config) => {
             // --- emit the day's shift objects, in task order ------------------
             for (const task of running) {
                 const state = dayState.get(task.name);
+
+                // MULTI-SLOT: ONE shift object holding every entry that filled —
+                // which is the whole point, since the department's rule is that the
+                // three of them are on the same shift. The lead is the highest grade
+                // present and `coLead` the next (section 5), so `staff`,
+                // `buildShiftStaffLabel` and every consumer of the two-name shape
+                // keep working; `assignees` carries the full team in the same order.
+                //
+                // A shift is emitted for a PARTIALLY filled trio: two of three
+                // staffed is a real shift plus one `unfilled` entry naming the third,
+                // not a cancelled day. If NO entry filled there is no shift at all,
+                // which is the same convention the lead-less branch below follows.
+                if (task.slots !== null) {
+                    if (state.slotFills.length === 0) continue;
+
+                    const assignees = orderMultiSlotFills(state.slotFills)
+                        .map((fill) => fill.candidate.name);
+                    const [lead] = assignees;
+                    const coLead = assignees.length > 1 ? assignees[1] : undefined;
+
+                    const shift = {
+                        task: task.name,
+                        lead,
+                        ...(coLead === undefined ? {} : { coLead }),
+                        staff: buildShiftStaffLabel(lead, coLead),
+                        category: task.category,
+                        week: week + 1,
+                        assignees,
+                    };
+
+                    if (!roster[dateKey]) roster[dateKey] = [];
+                    roster[dateKey].push(shift);
+                    continue;
+                }
+
                 if (state.leads.length === 0) continue;
 
                 // One shift object per pairing group, so the two-name shape the
@@ -2240,11 +3654,89 @@ export const generateRosterV2 = (config) => {
         );
     }
 
+    if (hoursActive) {
+        // The hours twin of the duty-slot warning above, and a sharper instrument:
+        // a department can have enough BODIES for every slot and still be asking
+        // for more hours than its contracts hold, which is the whole reason this
+        // model exists. Measured against contracted weeks × FTE × weeks generated,
+        // which is the same ceiling the hard weekly gate enforces — leave alone
+        // by how much any one week is over, which `unfilled` already says.
+        const totalContractedHours = staff.reduce(
+            (sum, person) => sum + person.weeklyHoursCap * config.weeks,
+            0,
+        );
+        if (totalDemandHours > totalContractedHours + HOURS_EPSILON) {
+            warnings.push(
+                `This configuration asks for ${formatHours(totalDemandHours)} of work but the team's contracted hours across ${config.weeks} ${config.weeks === 1 ? 'week' : 'weeks'} total ${formatHours(totalContractedHours)}, so some slots cannot be filled.`,
+            );
+        }
+    }
+
+    // --- the rolling four-week total: MEASURED AND WARNED, NEVER ENFORCED ------
+    //
+    // The field research carries the Singapore Medical Council's four-week-cycle
+    // ceiling, and enforcing a rolling window is deliberately deferred — a rolling
+    // gate has to decide what to do about hours already committed earlier in the
+    // window, which is a scheduling policy nobody has been asked about yet.
+    //
+    // Every 28-day window that fits inside the run, one per start date, NOT four
+    // whole weeks: the weekly cap is already hard, so four whole weeks can never
+    // sum above four times it and a bucketed check could not fire at all. A window
+    // straddling the seam between two capped weeks can, and does.
+    //
+    // A run shorter than 28 days has no window and therefore no warning. That is
+    // stated here and in the ledger, because a silent absence of warnings is the
+    // one thing this engine must never be mistaken for.
+    if (hoursActive) {
+        const runDays = config.weeks * DAYS_PER_WEEK;
+        const windowDays = ROLLING_WINDOW_WEEKS * DAYS_PER_WEEK;
+
+        if (runDays >= windowDays) {
+            const dayKeys = Array.from({ length: runDays }, (_, i) => toLocalDateKey(addDays(start, i)));
+
+            for (const person of staff) {
+                const ceiling = person.weeklyHoursCap * ROLLING_WINDOW_WEEKS;
+                const daily = dayKeys.map((key) => (hoursByDate.get(key)?.get(person.name)) || 0);
+
+                let worst = null;
+                for (let from = 0; from + windowDays <= runDays; from += 1) {
+                    let total = 0;
+                    for (let i = from; i < from + windowDays; i += 1) total += daily[i];
+                    // Strictly greater, so the first of several equal peaks is the
+                    // one reported — deterministic, and the earliest window is the
+                    // one a roster master would look at first.
+                    if (worst === null || total > worst.total + HOURS_EPSILON) {
+                        worst = { total, from };
+                    }
+                }
+
+                if (worst !== null && worst.total > ceiling + HOURS_EPSILON) {
+                    warnings.push(
+                        `${person.name} is rostered ${formatHours(worst.total)} in the ${windowDays} days from ${dayKeys[worst.from]} to ${dayKeys[worst.from + windowDays - 1]}, above the ${formatHours(ceiling)} a ${formatHours(person.contractedWeeklyHours)} week at ${person.fte} FTE implies over ${ROLLING_WINDOW_WEEKS} weeks. Every individual week is inside its limit — this is the rolling total, which this engine reports and does not enforce.`,
+                    );
+                }
+            }
+        }
+    }
+
     // --- load -----------------------------------------------------------------
     const totalDuties = [...duties.values()].reduce((sum, n) => sum + n, 0);
     const load = {};
     for (const person of staff) {
         const count = duties.get(person.name);
+        // One figure per generated week, index i being the week `shift.week === i+1`
+        // names, summed from the same per-week maps the hard gate used — so a
+        // roster master comparing `hoursPerWeek[0]` against `weeklyCap` is reading
+        // the very numbers the engine refused a slot over, not a recomputation of
+        // them that could disagree.
+        const weeklyRaw = hoursByWeek.map((week) => week.get(person.name) || 0);
+        const hoursPerWeek = weeklyRaw.map(round2);
+        // Summed from the RAW weekly figures and rounded once, not from the rounded
+        // ones: `hours` has to equal the roster's total assigned hours, and adding
+        // up 52 separately-rounded weeks would let a fraction of an hour appear out
+        // of nowhere in the annual figure.
+        const totalHours = round2(weeklyRaw.reduce((sum, n) => sum + n, 0));
+
         load[person.name] = {
             duties: count,
             fte: person.fte,
@@ -2253,6 +3745,14 @@ export const generateRosterV2 = (config) => {
             // very large pool the figure is coarse and the shares will not sum
             // to exactly 1; `duties` is the exact number.
             share: totalDuties === 0 ? 0 : round2(count / totalDuties),
+            // Present only when the configuration asked for hours, exactly as
+            // `score.breakdown.hoursImbalance` is: a department that has never
+            // heard of hours reads the `load` entry it has always read.
+            ...(hoursActive ? {
+                hours: totalHours,
+                hoursPerWeek,
+                weeklyCap: round2(person.weeklyHoursCap),
+            } : {}),
         };
     }
 
@@ -2325,3 +3825,184 @@ export const measureRosterLoad = (roster, staffNames) => {
         rostered: names.filter((name) => everRostered.has(name)).length,
     };
 };
+
+// --- 9. THE HOURS MODEL'S LIMITS LEDGER --------------------------------------
+//
+// What a roster master can still type and get a surprising or wrong roster from,
+// in the same spirit as the header's other ledgers: measured where it says
+// measured, and flagged where a judgment call was made rather than a fact found.
+// Every item here is a real behaviour of the code above, not a hypothetical.
+//
+//  1. THE MODEL IS OFF UNTIL YOU MENTION IT. A department that sets
+//     `maxPerDay: 4` and no hours field gets four 4-hour sessions — a 16-hour day
+//     — with no hours warning, because nothing asked for hours. The four fields
+//     that switch it on are `task.hours`, `staff.weeklyHours`,
+//     `staff.maxHoursPerDay` and `rules.weeklyHours` / `rules.maxHoursPerDay`;
+//     `rules: { weeklyHours: 42 }` is the cheapest way to say "hours matter", and
+//     it costs nothing because 42 is also the default. THIS IS THE BIGGEST
+//     JUDGMENT CALL IN THE MODEL and it was made for the byte-identity rule: an
+//     always-on model changes the roster of every existing configuration whose
+//     `maxPerDay` is above 2. Flagged for the roster owner: if the answer is
+//     "hours should always apply", the change is to make `hoursModelRequested`
+//     return `true` and to accept that some existing rosters move.
+//  2. FAIRNESS IS STILL COUNTED IN DUTIES, NOT HOURS. Give one clinician the 6-hour
+//     clinics and another the 2-hour reviews and the engine will call that fair —
+//     `loadImbalance` 0, `hoursImbalance` large. The number is reported; the
+//     comparator is unchanged. An hours-weighted comparator is the obvious next
+//     piece of work and it changes who gets every duty, so it is not smuggled in
+//     here.
+//  3. A PART-TIMER'S DAY DOES NOT DIVIDE. 0.6 FTE on the shipped defaults is a
+//     5.04-hour day, which holds ONE 4-hour session and wastes 1.04 hours — so a
+//     0.6-FTE colleague gets 50% of a full-timer's sessions, not 60%, even though
+//     their weekly ceiling is exactly 60%. Measured: 5 duties against 10 over one
+//     week. Sessions are indivisible and the engine will not split one.
+//  4. `weeklyHours` AND `fte` MULTIPLY. `{ weeklyHours: 21, fte: 0.5 }` is a
+//     10.5-hour week, not a 21-hour one. Two ways of saying "half time" applied at
+//     once is almost certainly a mistake, and the engine does not detect it.
+//  5. A PERSONAL WEEK DOES NOT IMPLY A PERSONAL DAY. `weeklyHours: 21` alone
+//     leaves the 8.4-hour daily cap in place (deliberate — three full days is a
+//     real arrangement). Somebody who wanted 4.2-hour days has to say
+//     `maxHoursPerDay: 4.2` as well.
+//  6. THE FOUR-WEEK TOTAL IS A WARNING AND NOTHING ELSE. It fires only when a
+//     28-day window actually exceeds the ceiling, it needs a run of at least 28
+//     days to have a window at all, and a 3-week generation therefore cannot fire
+//     it however heavy the weeks are. It also cannot see across generation runs,
+//     so four separate one-month runs each report nothing.
+//  7. THE WEEKLY WINDOW IS THE GENERATED WEEK. Hours worked in a previously
+//     generated block are invisible, exactly as `consecutiveRunBefore`'s days are.
+//     Generate a month at a time and the 42-hour cap restarts at each run — a lab
+//     scientist can finish one run having worked Saturday and open the next one on
+//     Sunday with a full week's allowance.
+//  8. `hoursImbalance`'s WEIGHT (0.25) IS UNCALIBRATED, like the other five, and
+//     it lives in a SEPARATE frozen table (`HOURS_SOFT_PENALTY_WEIGHTS`) only
+//     because two compatibility pins hold `SOFT_PENALTY_WEIGHTS`' exact shape. The
+//     tables want merging; see the comment on the overlay.
+//  9. AN UNFILLED REASON NAMES AT MOST THREE HOURS-BLOCKED PEOPLE
+//     (`HOURS_DETAIL_LIMIT`) and then says how many more there were. The others
+//     are recoverable from `load.hoursPerWeek`, but they are not in the sentence.
+// 10. A SHIFT WHOSE TASK IS NOT IN THE CONFIGURATION CONTRIBUTES NO HOURS to the
+//     audit or the score. Nothing the engine builds can do that; a roster edited
+//     by hand or by a future swap tool can, and its hours would silently not
+//     count. The shape itself is already reported by the availability rule.
+// 11. `load.hours` AND THE SUM OF `load.hoursPerWeek` CAN DISAGREE, in the last
+//     hundredth of an hour, for a duration with more than two decimal places.
+//     `hours` is the roster's real total rounded ONCE; `hoursPerWeek` is each week
+//     rounded for display. Measured: four duties of 1.125h give `hours: 4.5` and
+//     weeks of `1.13` that add to 4.52. `hours` is the authoritative figure. No
+//     duration anybody will type has this property, and the alternative — a total
+//     that is the sum of rounded weeks — would report hours nobody worked.
+// 12. HOURS ARE NOT TIMES. A 4-hour task has no start time, so two 4-hour duties
+//     on one day are 8 hours of work and NOT a statement that they do not
+//     overlap. Continuous-duty limits, rest between duties and any notion of a
+//     shift clashing with another in the clock sense remain outside this engine.
+
+// --- 10. MULTI-SLOT SHIFTS' LIMITS LEDGER ------------------------------------
+//
+// The same ledger, for the feature above: what a roster master can type today and
+// get a surprising or wrong roster from. Measured where it says measured, and
+// FLAGGED where a judgment call was made rather than a fact found, because a
+// judgment call buried in a comment is a decision nobody made.
+//
+//  1. ONLY TWO OF THE TEAM ARE VISIBLE OUTSIDE `assignees`. THIS IS THE BIGGEST
+//     JUDGMENT CALL IN THE FEATURE and it was the decided design: `staff` is
+//     `buildShiftStaffLabel(lead, coLead)`, so the embryologists' trio reads
+//     `Lead: Priya, Co: Sanjay` and the JUNIOR APPEARS NOWHERE — not in the
+//     calendar cell, not in the CSV, not in the ICS `SUMMARY`. Everybody is in
+//     `assignees`, and every consumer that reads it (this engine's audit and
+//     `measureRosterLoad`) sees all three. The compatibility was the point — one
+//     definition of the display string, post-mortem A-RC1 — but the cost lands on
+//     the person least likely to be reading the JSON. → FLAGGED FOR THE ROSTER
+//     OWNER: a third name needs either a new display convention
+//     (`Lead: X, Co: Y, +1`) or a shift-detail view, and both are UI work outside
+//     this file.
+//  2. THE SWAP FLOW CAN ONLY MOVE THE FIRST TWO. `swapRole` is `'lead' | 'coLead'`
+//     (`auraEngine.js`), so a trio's third assignee has no role to swap and no way
+//     to arrange cover through the app. Nothing breaks — the shift shape is exactly
+//     what the swap code expects — but the junior's duty is not swappable.
+//     Consequence of item 1, and the same fix closes it.
+//  3. THE SANDBOX PANEL'S ROLE CHIP READS "UNKNOWN DUTY" for a multi-slot unfilled
+//     entry. `unfilled[].role` carries the SLOT LABEL (`'Junior embryologist'`),
+//     which is the whole point of the label, but `RosterView` renders that field
+//     through `describeShiftRole`, which knows only `lead` and `coLead`. The reason
+//     string beneath it names the slot correctly. → One line of UI, deliberately
+//     not taken here: this change touches the engine only.
+//  4. A SLOT'S BAND IS ONE BAND. `{ band: 'senior' }` cannot be widened to
+//     "senior or principal"; leaving the band off means ANY grade, including an
+//     unrecorded one. So "a second senior, or a principal if no senior is free" is
+//     not expressible — and expressing it as two tasks changes which shift the two
+//     people are on, which is the thing this feature exists to control.
+//  5. `slots` REFUSES `leadBands` AND `continuity`, and both refusals are JUDGMENT
+//     CALLS rather than facts. `leadBands` gates a configured lead slot that no
+//     longer exists, and `continuity` follows one; the alternatives were to gate
+//     the DERIVED lead after the fact (which can only be satisfied by unfilling
+//     slots the engine already staffed — a fallback this engine refuses to invent)
+//     or to let both fields quietly do nothing. Refusing is the least surprising of
+//     the three, and it is reversible. → Flagged for review: a department that
+//     wants "the same principal on the weekend trio every week" is asking for
+//     continuity over a multi-slot shift, and today the answer is no.
+//  6. THE LEAD IS THE HIGHEST GRADE, NOT THE MOST SENIOR PERSON. Grade is what the
+//     engine has. Two AH15s where the department knows perfectly well which one
+//     runs the weekend are a TIE, settled by FTE-weighted fairness and then by
+//     name — so the lead of an all-equal-grade shift ROTATES between people day to
+//     day (measured: a three-person pool over five days produced three different
+//     leads). Deterministic, and probably not what a department that wants a named
+//     shift leader expects.
+//  7. WHERE GRADES TIE, THE LEAST LOADED PERSON LEADS — which is not always the
+//     one you would expect. The tie-break is `compareCandidates`, the engine's
+//     FTE-weighted fairness comparator, read from the candidate snapshot taken at
+//     the moment each person was chosen. MEASURED: a two-entry shift whose scarce
+//     entry only Zoe can fill, on a Saturday where Zoe already holds 5 weekday
+//     duties and Ann holds none, is led by ANN — the specialist is seated first and
+//     still sorts second, because fairness outranks the order the slots happened to
+//     be filled in. Deterministic, pinned by test, and defensible; also the single
+//     most surprising consequence of "ties break by the existing tie-break order".
+//     → Flagged: a department that means "the scarce qualification leads" is
+//     asking for a different rule, and the entry it holds is the place to say so
+//     once somebody decides what that rule is.
+//  8. AN UNGRADED ASSIGNEE CAN STILL END UP LEADING — when they are the only
+//     person on the shift, or when everybody on it is ungraded. The rule is that
+//     they never OUTRANK a graded colleague, not that they never lead. A department
+//     with no grades recorded at all gets multi-slot shifts led by fairness order.
+//  9. NO CROSS-ENTRY EXCLUSION. Two entries that both accept seniors may both be
+//     filled by seniors, and the roster is then a shift of two seniors with no
+//     junior — legal, because that is what the configuration asked for. What is
+//     forbidden is only the same PERSON twice.
+// 10. MORE SLOTS THAN PEOPLE IS LEGAL. `slots` of any length is accepted; a
+//     five-slot task in a two-person department produces three `unfilled` entries
+//     every single date, plus the demand-versus-capacity warning. Nothing refuses
+//     it, because "you have listed more slots than you have staff" is sometimes
+//     exactly the fact a roster master wants to see priced.
+// 11. FAIRNESS IS STILL ONE GLOBAL POOL. `score.breakdown.taskRepetition` judges a
+//     multi-slot task's counts against everybody ELIGIBLE FOR THE TASK — the skill
+//     holders, or the whole pool — and NOT against the people eligible for the
+//     particular entry they filled. So a department with one principal is charged
+//     repetition for that principal appearing on every trio, exactly as the
+//     `leadBands` ledger already documents for lead slots. `softPenalty` stays
+//     comparable between two staffings of the same configuration; it is not
+//     comparable between a slotted and an unslotted version of the same
+//     department.
+// 12. THE AUDIT BLAMES THE LATER NAME. When a shift holds more people than its
+//     slots can absorb, `unmatchableAssignees` walks `assignees` in order, so the
+//     violation names whoever could not be seated LAST rather than whoever is
+//     "wrong". Deterministic, and it is a report of a shape problem rather than an
+//     accusation about a person.
+// 13. A HAND-EDITED SHIFT CAN HOLD A LEAD WHO FILLS NO SLOT. The two audit rules
+//     are independent: `slotGate` says everybody can be seated, `leadGrade` says
+//     nobody outranks the lead. A roster that fails both reports both, and neither
+//     rule repairs anything — this engine reports, and construction is where
+//     correctness is enforced.
+// 14. `role` IS A LABEL AND NOTHING ELSE. It is trimmed, it is never matched
+//     against a staff member, a skill or a grade, and two entries may carry the
+//     same one (they are then numbered in `unfilled`). Naming an entry
+//     `'Principal embryologist'` does NOT make it principal-only; `band` does.
+// 15. EVERY SLOT ENTRY OUTRANKS EVERY CO-LEAD SLOT IN THE DAY, because entries are
+//     filled in phase 1 and co-leads in phase 2. MEASURED: two people, a
+//     lead-plus-co-lead clinic and a two-entry trio, one duty each — the clinic's
+//     LEAD and the trio's FIRST entry are staffed, and the trio's second entry and
+//     the clinic's CO-LEAD both go unfilled. A department that would rather have a
+//     staffed co-lead than a third person on the trio cannot say so today. Pinned
+//     by test so the decision is visible rather than emergent.
+// 16. THERE IS NO WIZARD FOR ANY OF THIS. `slots` is engine-only: the sandbox's
+//     task table writes `days`, `leadBands` and a co-lead toggle, so a roster
+//     master cannot configure a trio from the UI, and `DEMO_EXAMPLE_DEPARTMENT`
+//     does not use one. Until that lands, the feature is reachable only from code.

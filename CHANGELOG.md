@@ -59,6 +59,61 @@ Firestore rule, blocked on decision D6.
 
 ---
 
+## [1.9.0] - 2026-08-09
+
+Engine capability for the remaining two interviewed teams, plus the band ruler. **Read
+the reachability note below before assuming any of this is usable from the app yet.**
+
+### Added
+
+- **Hours model.** Per-task `hours` (default **4** — the teams' duties are sessions, not
+  days), per-staff/rules `weeklyHours` (default 42) and `maxHoursPerDay` (default 8.4).
+  Same-day durations **sum** against a per-person daily cap scaled by FTE, and a weekly
+  cap per ISO week — both **hard**, so a breach is an `unfilled` slot naming the hours,
+  never a quiet overload. A rolling four-week total is reported and warned on (the
+  Singapore Medical Council 320h pattern from the field research; enforcing the rolling
+  window is deferred). `load` gains `hours`, `hoursPerWeek`, `weeklyCap`;
+  `auditHardConstraints` catches an hours breach on read-back. 89 tests.
+- **Multi-slot shifts.** A task can declare `slots: [{ band, requiresSkill, role }, …]` —
+  one entry per person, each with its own gate — which is how the embryologists actually
+  staff weekend service (principal + senior + junior *together*). The **highest-graded
+  assignee becomes the accountable `lead`**, `coLead` is the second, and `assignees`
+  carries everybody lead-first, so the calendar, the swap flow and the exports keep
+  working unchanged. 89 tests.
+- **Multi-assignee exports.** CSV gains a seventh `Assignees` column (the first six are
+  byte-identical to before); ICS `SUMMARY` keeps its exact one- and two-person form and
+  gains `Lead: A, Co: B, Also: C` at three or more. Closes the documented limit that a
+  third assignee vanished silently from both files.
+- **The band boundary editor is now a ruler.** Two draggable dividers over AH7–AH17,
+  fully keyboard-operable (`role="slider"`, arrows, Home/End) with the numeric ranges
+  rendered as text alongside. A gap, an overlap, an inverted band and an empty box are no
+  longer *expressible* — the dividers constrain each other — so the class of error the old
+  six number boxes validated after the fact cannot occur. The validation call is kept as a
+  backstop.
+- **`firestore.rules` — a complete proposal, deliberately INERT.** The repo has never had
+  a rules file. This one is derived from an actual sweep of every Firestore path the code
+  touches, with a runbook (`firestore.rules.README.md`) covering Rules Playground cases,
+  deploy, and immediate rollback. It is **not** referenced from `firebase.json` and the
+  deploy workflow is untouched, so nothing changes until a human wires it up. It also
+  documents which current behaviours it would break — chiefly that any of the ten
+  directory members can rewrite the master roster today (`RosterView.jsx:813`), which the
+  proposal restricts to admins.
+
+### Notes — reachability, stated plainly
+
+**The hours model and multi-slot shifts are not reachable from any surface of the app.**
+`generateRosterV2` has one non-test caller — the *sandbox* branch — and the sandbox mapper
+emits no `hours`, `weeklyHours`, `maxHoursPerDay` or `slots` field. That is 1,722 engine
+lines and 178 tests of capability that no user can currently invoke. It was found by an
+independent audit, not by the agents that built it, and the wiring is the next task.
+Logged here rather than quietly deferred, because a changelog that implies otherwise is
+the failure mode this project keeps a post-mortem about.
+
+Live-mode generation is still the original V1 engine, whose output remains byte-identical
+(verified 36/36 comparisons by the auditor, independently of the build agents' claims).
+
+1053 tests (was 835). Independent audit: `ROSTER_QC_AUDIT_FOUNDATIONS.md`.
+
 ## [1.8.1] - 2026-08-08
 
 ### Fixed
