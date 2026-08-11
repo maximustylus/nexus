@@ -33,7 +33,7 @@
 
 import React from 'react';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { render, screen, cleanup, fireEvent } from '@testing-library/react';
+import { render, screen, cleanup, fireEvent, within, act } from '@testing-library/react';
 
 // --- MOCKS (hoisted above the imports below by Vitest) ------------------------
 
@@ -55,6 +55,14 @@ vi.mock('firebase/firestore', () => ({
     addDoc: vi.fn(() => Promise.resolve({ id: 'mock' })),
     getDoc: vi.fn(() => Promise.resolve({ exists: () => false })),
     serverTimestamp: vi.fn(() => 'mock-timestamp'),
+    // 🤝 Added with the coverage-request listener RosterView now owns: this file
+    // drives LIVE mode, so `query`/`where` really are called on mount. The
+    // listener's snapshot is never delivered here (`onSnapshot` returns an
+    // unsubscribe and calls nothing), so the wizard assertions below are
+    // unaffected — they are about the two live textareas, not about coverage.
+    query: vi.fn(() => ({ __mock: 'query' })),
+    where: vi.fn(() => ({ __mock: 'where' })),
+    updateDoc: vi.fn(() => Promise.resolve()),
 }));
 
 vi.mock('../context/NexusContext', () => ({
@@ -62,7 +70,7 @@ vi.mock('../context/NexusContext', () => ({
     NexusProvider: ({ children }) => children,
 }));
 
-import { setDoc } from 'firebase/firestore';
+import { setDoc, addDoc, onSnapshot } from 'firebase/firestore';
 import RosterView from './RosterView';
 import { BandBoundaryEditor } from './RosterDemoWizardTables';
 import { LIVE_ROSTER_DEFAULTS } from '../utils/auraEngine';
@@ -81,6 +89,20 @@ const LIVE_TEXTAREA_CLASS =
     'input-field w-full mt-1 h-20 font-mono text-xs bg-white dark:bg-slate-900 border dark:border-slate-700 rounded p-2 text-slate-800 dark:text-white';
 
 const openConfigure = () => fireEvent.click(screen.getByRole('button', { name: /configure/i }));
+
+/**
+ * The subscriptions to `system_data/roster_2026`, as opposed to the coverage-request
+ * QUERY listener RosterView also opens in live mode.
+ *
+ * 🤝 ADDED with one-tap cover: this file's claim is that the person view costs no
+ * extra read of the roster document, and that claim is unchanged. It was previously
+ * expressed as `onSnapshot` having been called exactly once, which stopped being the
+ * same statement the moment the view acquired a second, unrelated listener — so the
+ * roster listener is now identified rather than counted globally. The coverage
+ * listener is asserted separately, so "two listeners" cannot quietly become three.
+ */
+const rosterListenerCalls = () =>
+    onSnapshot.mock.calls.filter(([target]) => target?.__mock !== 'query');
 
 /**
  * The lower divider's `aria-label`, spelled out. Used for both the presence
@@ -200,6 +222,110 @@ describe('live mode: the Configure wizard is exactly what it was', () => {
     });
 });
 
+// ─── LIVE MODE: THE PERSON VIEW IS A SECOND WAY TO *READ* ─────────────────────
+//
+// "My week" is available in live mode too, because a clinician asking when THEY are
+// on is the same question in both universes. The constraint on it is that it changes
+// nothing else: it must default to the grid (so an existing user who never presses
+// it sees exactly what they saw yesterday), it must add no control to the live
+// wizard, and it must not read or write anything of its own — it re-reads the
+// document the listener already delivered.
+
+describe('live mode: my week reads the live document and adds nothing to it', () => {
+    /** A day in the month the calendar opens on, which is the current one. */
+    const liveDayKey = (dayOfMonth) => {
+        const today = new Date();
+        return `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(dayOfMonth).padStart(2, '0')}`;
+    };
+
+    it('defaults to the department grid, and adds no control to the wizard', () => {
+        render(<RosterView user={BRANDON} />);
+
+        expect(screen.getByRole('button', { name: /^department$/i }).getAttribute('aria-pressed'))
+            .toBe('true');
+        expect(screen.getByRole('button', { name: /^my week$/i }).getAttribute('aria-pressed'))
+            .toBe('false');
+        // The grid is what is on screen: one square per day of the current month.
+        expect(document.querySelector('[data-roster-view="person"]')).toBeNull();
+        expect(document.querySelectorAll('[data-date]').length).toBeGreaterThan(0);
+
+        // …and the wizard is still exactly the two textareas, with no slider, no
+        // table and — the check that matters for the person view — no `<select>`.
+        openConfigure();
+        expectNoSandboxTables();
+    });
+
+    it('lists the signed-in user\'s own duties out of the live document, and nobody else\'s', () => {
+        render(<RosterView user={BRANDON} />);
+
+        // The live listener, answered with a document in the shape
+        // `system_data/roster_2026` really holds.
+        const dateKey = liveDayKey(15);
+        const liveDoc = {
+            [dateKey]: [
+                { task: 'EFT', lead: 'Brandon', coLead: 'Derlinder', staff: 'Lead: Brandon, Co: Derlinder', week: 1, category: 'CORE' },
+                { task: 'NC', lead: 'Ying Xian', coLead: 'Fadzlynn', staff: 'Lead: Ying Xian, Co: Fadzlynn', week: 1, category: 'CORE' },
+            ],
+        };
+        // CHANGED (one-tap cover): one listener on the ROSTER DOCUMENT. The view also
+        // opens a `shift_swaps` query listener in live mode; that is asserted below.
+        expect(rosterListenerCalls()).toHaveLength(1);
+        act(() => {
+            rosterListenerCalls()[0][1]({ exists: () => true, data: () => liveDoc });
+        });
+
+        // Both shifts are in the grid…
+        expect(within(document.querySelector(`[data-date="${dateKey}"]`)).getAllByRole('button'))
+            .toHaveLength(2);
+
+        fireEvent.click(screen.getByRole('button', { name: /^my week$/i }));
+        const panel = document.querySelector('[data-roster-view="person"]');
+        expect(panel).toBeTruthy();
+
+        // …and exactly one of them is Brandon's.
+        expect(within(panel).getByRole('heading', { name: 'Brandon' })).toBeTruthy();
+        const list = within(panel).getByRole('list');
+        expect(within(list).getAllByRole('listitem')).toHaveLength(1);
+        expect(within(list).getByText('EFT')).toBeTruthy();
+        expect(within(list).getByText('Lead')).toBeTruthy();
+        expect(within(list).getByText(/with Derlinder/)).toBeTruthy();
+        expect(within(list).queryByText('NC')).toBeNull();
+        expect(within(list).queryByText(/Ying Xian/)).toBeNull();
+
+        // Live mode's person IS the signed-in user: there is nothing to choose, and
+        // therefore no `<select>` anywhere in this universe.
+        expect(screen.queryByLabelText(/show whose duties/i)).toBeNull();
+        expect(document.querySelectorAll('select')).toHaveLength(0);
+
+        // A live roster carries no session lengths, so no hours and no total are
+        // shown rather than a default being printed as though somebody set it.
+        expect(within(panel).queryByText(/in total/i)).toBeNull();
+        expect(within(list).queryByText(/h$/)).toBeNull();
+
+        // ONE listener on the roster document, no second read of it, and nothing
+        // written. CHANGED (one-tap cover): the coverage-request listener is counted
+        // explicitly rather than folded into a global count, so switching view still
+        // cannot add a subscription and neither can this feature add a third.
+        expect(rosterListenerCalls()).toHaveLength(1);
+        expect(onSnapshot).toHaveBeenCalledTimes(2);
+        expect(setDoc).not.toHaveBeenCalled();
+        expect(addDoc).not.toHaveBeenCalled();
+    });
+
+    it('says so plainly when there is no live roster to read', () => {
+        render(<RosterView user={BRANDON} />);
+        fireEvent.click(screen.getByRole('button', { name: /^my week$/i }));
+
+        // The listener has not answered, so the calendar is empty — and the person
+        // view says that is what it is, rather than showing an empty list that reads
+        // as "you are off all month".
+        const panel = document.querySelector('[data-roster-view="person"]');
+        expect(within(panel).getByText(/no roster on screen/i)).toBeTruthy();
+        expect(within(panel).queryAllByRole('listitem')).toHaveLength(0);
+        expect(setDoc).not.toHaveBeenCalled();
+    });
+});
+
 // ─── DEMO MODE: THE TEXTAREAS ARE GONE ────────────────────────────────────────
 
 describe('demo mode: the wizard is the tables, and only the tables', () => {
@@ -246,7 +372,8 @@ describe('demo mode: the wizard is the tables, and only the tables', () => {
         render(<RosterView user={BRANDON} />);
         openConfigure();
 
-        expect(screen.getByRole('button', { name: /generate sandbox roster/i }).disabled).toBe(true);
+        // RENAMED (language pass): "Generate Sandbox Roster" -> "Draft roster".
+        expect(screen.getByRole('button', { name: /^draft roster$/i }).disabled).toBe(true);
         expect(screen.getByText(/add at least one person to the staff table/i)).toBeTruthy();
         expect(setDoc).not.toHaveBeenCalled();
     });
@@ -584,7 +711,8 @@ describe('demo mode: the band boundary ruler', () => {
 
         // `validateRosterV2Config` refuses, and its reason quotes the boundary
         // numbers the ruler is showing — which is the proof they reached the engine.
-        const generate = screen.getByRole('button', { name: /generate sandbox roster/i });
+        // RENAMED (language pass): "Generate Sandbox Roster" -> "Draft roster".
+        const generate = screen.getByRole('button', { name: /^draft roster$/i });
         expect(generate.disabled).toBe(true);
         expect(screen.getByText(/Senior-band staff \(AH13–AH14\)/)).toBeTruthy();
 

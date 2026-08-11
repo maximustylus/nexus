@@ -59,6 +59,81 @@ Firestore rule, blocked on decision D6.
 
 ---
 
+## [1.10.0] - 2026-08-12
+
+The engine capability from v1.9.0 becomes reachable, the roster starts telling the truth
+in the calendar rather than in a list underneath it, and coverage requests move out of the
+AI chat panel into the roster itself.
+
+### Added
+
+- **Hours and multi-slot shifts are now reachable.** v1.9.0 shipped 1,722 engine lines and
+  178 tests that no user could invoke — the audit caught it and the changelog said so. The
+  sandbox wizard now has an **Hours** column per task, a **department working week**
+  control, and a **slot editor** for tasks that need several people together (the
+  embryologists' principal+senior+junior weekend trios), all behind a per-row expander so
+  the common case stays legible. Verified by feeding mapper-built configs — not
+  hand-written ones — straight into the engine and observing the roster change.
+- **Unfilled slots render inside the day cell.** The engine's honesty used to live in a
+  list below the grid. A day where *every* slot failed produces no roster key at all, so
+  it was indistinguishable from a day with nothing scheduled; those cells are now drawn
+  from `unfilled`, with the reason reachable as text and as an accessible attribute.
+- **"My week" — a person view.** A toggle between the department grid and one person's
+  duties: date, task, their role, hours. Read-only rendering of the same data; the grid
+  stays the default.
+- **Language pass.** "Draft roster" rather than "Generate Sandbox Roster"; an FTE of 0.6
+  reads as the days it means; "not staffed" rather than "unfilled". Internal vocabulary
+  no longer reaches the screen.
+- **One-tap cover.** Coverage requests are answered on the shift itself, in the roster,
+  with the badge and the request card where the week is visible. `AuraPulseBot` no longer
+  reads `shift_swaps` at all — the chat detour is gone. Every guarantee from v1.6.1 is
+  preserved and independently re-verified: read-back before `APPROVED`, mechanical
+  substitution, `swapRole` recorded at request time, legacy shift shapes tolerated, admin
+  on-behalf requests, and the duplicate-request guard.
+- **`CoverageWatcher` — an always-mounted notifier.** See the fix below; this is the
+  component that keeps the one-tap move from costing the notification.
+
+### Fixed
+
+- **A coverage request could reach nobody.** Moving the listener into `RosterView` was
+  right for *answering* but wrong for *noticing*: `RosterView` is mounted only when the
+  Roster tab is open (`App.jsx`), whereas the chat panel it replaced was mounted always
+  and force-opened itself. A colleague on Dashboard, Pulse or Feeds would never learn a
+  request existed — ROSTER_QC_AUDIT.md **M5 returning by a different route**, found by
+  audit and not by the change that caused it. There is now exactly one surface that
+  **notices** (`CoverageWatcher`, always mounted, live mode only, no mutation logic, and
+  silent while the roster is on screen so there is never a second banner over the real
+  thing) and exactly one that **answers** (the roster, which owns the verified sequence).
+  Nine regression tests, including that a listener error still surfaces when the roster
+  is visible — because a broken listener means the roster is showing nothing either.
+- **The wizard printed a false claim about the feature it configures.** With the hours
+  boxes blank it read *"Hours are not being counted … AURA will not apply the 42h week
+  unless you type it."* That is false: the engine applies its defaults regardless.
+  Measured — one person, ten 8h tasks in a day, no rules at all: nine unfilled slots
+  reasoning *"over their 8.4h daily limit"*. Both branches now say hours **are** counted
+  and differ only in whose limits apply. There is no way to switch hours off, and the
+  screen that configures them no longer implies there is.
+
+### Notes
+
+- **Additivity re-checked directly**, because the hours defaults raised a fair doubt: a
+  config naming no hours at all produces byte-identical output against the v1.8.1 engine.
+  The reason is worth recording — the pre-existing **duty** cap (2/day) binds before the
+  hours cap, since two default 4h sessions is 8h against an 8.4h ceiling. Hours become
+  the binding constraint only if a task is longer than ~4.2h or the duty cap is raised.
+- **Still unreachable from any surface** (audit-enumerated, honestly listed rather than
+  implied fixed): `continuity`, `recurrence`, `forbidPairs`, `maxConsecutiveDays`,
+  `maxConcurrentPerDay`, `staff.maxPerDay`, `task.category`. Cohort windows and quotas do
+  not exist in the engine yet — they are the two genuinely missing primitives.
+- **`npm run lint` still exits 2.** No ESLint config has ever existed in this repo, so the
+  `--max-warnings 0` gate has never run. A trial run reports 362 problems, almost all
+  `process is not defined` in test files (an environment misconfiguration, not defects).
+  Open as P0.7.
+- Live-mode generation remains the original V1 engine, byte-identical.
+
+1213 tests (was 1053). Independent audits: `ROSTER_QC_AUDIT_FOUNDATIONS.md`,
+`ROSTER_QC_AUDIT_SURFACES.md`.
+
 ## [1.9.0] - 2026-08-09
 
 Engine capability for the remaining two interviewed teams, plus the band ruler. **Read

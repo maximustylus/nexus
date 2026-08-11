@@ -28,17 +28,32 @@
  * so renaming or deleting a row can no longer leave a skill behind attached to
  * somebody who is not in the pool.
  *
- * WHAT IS DELIBERATELY *NOT* HERE: `leads` is fixed at 1 per task. The engine
- * refuses `leads: 0`, and `downloadCSV`/`downloadICS` only render one lead and
- * one co-lead, so a spinner up to 3 would produce exports that silently drop
- * people. Co-lead is a yes/no toggle for the same reason.
+ * WHAT IS DELIBERATELY *NOT* HERE: `leads` is fixed at 1 per task, and co-lead
+ * is a yes/no toggle. The engine refuses `leads: 0`, and a lead-plus-co-lead
+ * shift is the only shape `buildShiftStaffLabel` can write, so a spinner up to 3
+ * would produce a display string that silently drops people. A shift that really
+ * needs three or four people is expressed the other way instead — as a SLOT LIST
+ * (see the slots section below), which the engine staffs entry by entry and
+ * reports in `assignees`.
+ *
+ * HOURS AND SLOTS ARE BOTH OPT-IN, AND BLANK MEANS BLANK. A task with no hours
+ * typed emits no `hours` key at all, and the two department hours boxes emit no
+ * `rules.weeklyHours` / `rules.maxHoursPerDay` while they are empty. That is not
+ * laziness: `hoursModelRequested` in the engine switches the WHOLE hours model on
+ * as soon as a configuration MENTIONS one of those fields, so emitting the
+ * default 42 unasked would start refusing slots — on an hours ceiling nobody
+ * typed — for every department that has never heard of hours. The wizard says so
+ * on screen where the boxes are.
  * ==============================================================================
  */
 
 import {
     DEFAULT_GRADE_BANDS,
+    DEFAULT_TASK_HOURS,
+    DEFAULT_WEEKLY_HOURS,
     GRADE_SCALE,
     ROSTER_V2_DEFAULTS,
+    defaultMaxHoursPerDay,
     isDateKey,
     validateGradeBands,
 // The `.js` extension is explicit, matching `rosterEngineV2.js`'s own import of
@@ -81,6 +96,47 @@ export const WEEKDAY_STRIP = Object.freeze([
 export const DEFAULT_STAFF_ROWS = 5;
 export const DEFAULT_TASK_ROWS = 3;
 
+/**
+ * Hours ceilings, as ARITHMETIC rather than as a copy of the engine's policy.
+ *
+ * `rosterEngineV2` refuses a task longer than 24h and a week longer than 168h,
+ * but both of its ceilings are module-private and the engine is not editable this
+ * phase — so re-stating them here would be a second definition that could drift.
+ * These two are derived from the calendar instead (`24` hours in a day, seven of
+ * those in a week), which is the same number for a reason that cannot change, and
+ * `validateRosterV2Config` still runs on the finished config in `RosterView`, so
+ * the engine remains the backstop rather than this file being the authority.
+ */
+export const HOURS_IN_A_DAY = 24;
+export const HOURS_IN_A_WEEK = HOURS_IN_A_DAY * 7;
+
+/**
+ * How many slots one shift may list in the wizard.
+ *
+ * The engine accepts one or more; the WIZARD offers two to four, which is the
+ * range the embryology and lab interviews actually described (a witnessing trio,
+ * occasionally a fourth pair of hands). One slot is not offered because it is
+ * lead-with-no-co-lead written the long way round, and the plain shape already
+ * says that. This is a UI range, not a validation rule — the mapper below accepts
+ * any non-empty list, so a longer list arriving from a fixture is mapped rather
+ * than truncated.
+ */
+export const SLOTS_MIN = 2;
+export const SLOTS_MAX = 4;
+
+/** The slot editor's "no band named" option value: any grade may fill the slot. */
+export const ANY_BAND = '';
+
+/**
+ * The two department hours boxes, both EMPTY — what the wizard opens with, and what
+ * it is reset to when the sandbox is entered or left.
+ *
+ * A function rather than a frozen constant so that each caller owns its object and
+ * no `setState` can be handed the same reference twice; empty rather than
+ * `{ weeklyHours: '42' }` for the reason spelled out in this file's header.
+ */
+export const EMPTY_HOURS_INPUTS = () => ({ weeklyHours: '', maxHoursPerDay: '' });
+
 // --- ROW FACTORIES ------------------------------------------------------------
 //
 // Rows need a key that survives a removal, so they carry an `id`. The counter is
@@ -115,8 +171,41 @@ export const createStaffRow = (seed = {}) => ({
 });
 
 /**
+ * ONE SLOT of a multi-slot shift: which band must fill it, and what skill it
+ * needs. Both optional — `band: ''` is "any grade may take this one", and a blank
+ * skill adds no skill of its own.
+ *
+ * `band` and `requiresSkill` are RAW STRINGS for the same reason `fte` is: a
+ * half-typed skill name has to survive a keystroke. The id exists so removing the
+ * middle slot of three cannot renumber React's keys underneath the other two.
+ */
+export const createTaskSlot = (seed = {}) => ({
+    id: nextRowId('slot'),
+    band: typeof seed.band === 'string' && BAND_NAMES.includes(seed.band) ? seed.band : ANY_BAND,
+    requiresSkill: typeof seed.requiresSkill === 'string' ? seed.requiresSkill : '',
+});
+
+/**
+ * The slot list a task starts with the moment somebody switches it to slot mode:
+ * `SLOTS_MIN` entries, both open to ANY GRADE.
+ *
+ * Deliberately not `[principal, junior]` or any other pairing. A default that
+ * named bands would be this file inventing a departmental hierarchy the visitor
+ * never typed, and the engine's own note says a slot list is a set of
+ * requirements rather than a description of a hierarchy.
+ */
+export const createDefaultTaskSlots = () =>
+    Array.from({ length: SLOTS_MIN }, () => createTaskSlot());
+
+/**
  * A task row. `leadBands` is an array of band names (empty = open to every
  * grade), `days` an array of engine day numbers, `coLead` a boolean.
+ *
+ * `hours` is a RAW STRING and `''` means "use the engine's default" — never 0.
+ * `slotMode` is the opt-in switch for a multi-slot shift: `false` keeps the row
+ * exactly the lead + optional co-lead shape it has always had, and the `slots`
+ * list sits beside it unread until the switch is on, so turning slot mode off and
+ * on again does not lose what was typed.
  */
 export const createTaskRow = (seed = {}) => ({
     id: nextRowId('task'),
@@ -126,6 +215,18 @@ export const createTaskRow = (seed = {}) => ({
         : [],
     days: Array.isArray(seed.days) ? [...seed.days] : [...ROSTER_V2_DEFAULTS.days],
     coLead: seed.coLeads === undefined ? true : Number(seed.coLeads) > 0,
+    // Blank = the engine's DEFAULT_TASK_HOURS, which the wizard shows as the
+    // input's placeholder rather than filling in. A number seeded from a fixture
+    // becomes its own string so the cell is editable from the first keystroke.
+    hours: typeof seed.hours === 'number' && Number.isFinite(seed.hours)
+        ? String(seed.hours)
+        : (typeof seed.hours === 'string' ? seed.hours : ''),
+    // A fixture that already carries `slots` opens in slot mode; everything else
+    // opens in the shape it always had.
+    slotMode: Array.isArray(seed.slots) && seed.slots.length > 0,
+    slots: Array.isArray(seed.slots) && seed.slots.length > 0
+        ? seed.slots.map((entry) => createTaskSlot(entry))
+        : createDefaultTaskSlots(),
     // Carried, not edited — see the header note.
     ...(typeof seed.requiresSkill === 'string' && seed.requiresSkill.trim() !== ''
         ? { requiresSkill: seed.requiresSkill }
@@ -421,6 +522,9 @@ export const bandDividerAtFraction = (fraction) => {
 
 // --- PER-CELL PARSERS ---------------------------------------------------------
 
+/** One definition of "the value of this cell, with the whitespace taken off". */
+const trimmed = (value) => (typeof value === 'string' ? value.trim() : '');
+
 /** The FTE range the wizard accepts. The engine allows anything in (0, 1]. */
 export const FTE_MIN = 0.1;
 export const FTE_MAX = 1.0;
@@ -444,6 +548,57 @@ export const parseFteCell = (raw) => {
         return { ok: false, value: null, reason: `FTE ${value} is outside ${FTE_MIN}–${FTE_MAX}. A 3-day week is 0.6; 1.0 is full time.` };
     }
     return { ok: true, value, reason: null };
+};
+
+/**
+ * How many days a week this department actually runs: the number of DISTINCT
+ * weekdays ticked across every task.
+ *
+ * Accepts either the wizard's task ROWS or a generated config's task list —
+ * both carry `days` as engine day numbers — so the figure the wizard shows while
+ * somebody is typing and the figure the report shows after a run come from one
+ * function. A task with no `days` (a monthly `recurrence`, which this wizard
+ * cannot express but a fixture could) contributes nothing rather than throwing.
+ */
+export const countWorkingDays = (items) => {
+    const seen = new Set();
+    for (const item of Array.isArray(items) ? items : []) {
+        for (const day of Array.isArray(item?.days) ? item.days : []) {
+            if (Number.isInteger(day) && day >= 0 && day <= 6) seen.add(day);
+        }
+    }
+    return seen.size;
+};
+
+/**
+ * An FTE, in the words a clinician uses about their own contract: `0.6` on a
+ * five-day department is `'works 3 days a week'`.
+ *
+ * COMPUTED FROM THE DEPARTMENT'S OWN WEEK, never from a hard-coded 5. A lab that
+ * runs Saturdays has a six-day week, and telling its 0.6 part-timer they work
+ * three days would be wrong by half a day — so `workingDays` comes from
+ * `countWorkingDays` above and the answer follows it.
+ *
+ * `''` when there is nothing honest to say: no days ticked anywhere (the
+ * department has no week yet), or an FTE that is not a positive number. The
+ * caller keeps showing the number itself either way — this is a gloss on the
+ * figure, never a replacement for it.
+ *
+ * A non-integer result says `about`, and is rounded to one decimal: `0.6` of a
+ * six-day week really is 3.6 days, and rounding that to "4 days" would overstate
+ * somebody's contract in the direction that gets them rostered.
+ */
+export const describeFteAsDays = (fte, workingDays) => {
+    const value = typeof fte === 'number' ? fte : Number(fte);
+    if (!Number.isFinite(value) || value <= 0) return '';
+    if (!Number.isInteger(workingDays) || workingDays <= 0) return '';
+
+    const days = Math.round(value * workingDays * 10) / 10;
+    if (days <= 0) return '';
+    const unit = days === 1 ? 'day' : 'days';
+    return Number.isInteger(days)
+        ? `works ${days} ${unit} a week`
+        : `works about ${days} ${unit} a week`;
 };
 
 /**
@@ -480,6 +635,123 @@ export const parseAwayCell = (raw) => {
     return { ok: true, dates: [...new Set(tokens)], reason: null };
 };
 
+/**
+ * An hours cell -> `{ ok, value, reason }`, where `value` is `null` for BLANK.
+ *
+ * `null` is the load-bearing part: it means "this key is not emitted at all", and
+ * the caller spreads it away rather than writing a 0 or a 42. Zero would be a task
+ * that takes no time (the engine refuses it, correctly); 42 typed on the user's
+ * behalf would switch the whole hours model on for a department that never
+ * mentioned hours. Blank has to survive all the way to the config as ABSENCE.
+ *
+ * Shaped exactly like `parseFteCell` — same return keys, same "refuse, never
+ * clamp" rule, same habit of quoting what could not be read — because the two are
+ * read by the same loop and rendered by the same per-cell error line.
+ */
+const parseHoursCell = (raw, { label, ceiling, example, blankMeans }) => {
+    const trimmed = typeof raw === 'string' ? raw.trim() : String(raw ?? '').trim();
+    if (trimmed === '') return { ok: true, value: null, reason: null };
+
+    const value = Number(trimmed);
+    if (!Number.isFinite(value)) {
+        return {
+            ok: false,
+            value: null,
+            reason: `${label} "${trimmed}" is not a number of hours — use a number like ${example}. ${blankMeans}`,
+        };
+    }
+    if (value <= 0 || value > ceiling) {
+        return {
+            ok: false,
+            value: null,
+            reason: `${label} ${value} must be more than 0 and at most ${ceiling}. ${blankMeans}`,
+        };
+    }
+    return { ok: true, value, reason: null };
+};
+
+/** How long ONE occurrence of a task takes. Blank = `DEFAULT_TASK_HOURS`. */
+export const parseTaskHoursCell = (raw) =>
+    parseHoursCell(raw, {
+        label: 'Hours',
+        ceiling: HOURS_IN_A_DAY,
+        example: DEFAULT_TASK_HOURS,
+        blankMeans: `Leave it blank and AURA assumes ${DEFAULT_TASK_HOURS}h per session.`,
+    });
+
+/** The department's contracted week. Blank = hours are not tracked at all. */
+export const parseWeeklyHoursCell = (raw) =>
+    parseHoursCell(raw, {
+        label: 'Standard working week',
+        ceiling: HOURS_IN_A_WEEK,
+        example: DEFAULT_WEEKLY_HOURS,
+        blankMeans: 'Leave it blank and AURA counts duties only, not hours.',
+    });
+
+/** The department's daily ceiling. Blank = derived from the week, or untracked. */
+export const parseDailyHoursCell = (raw) =>
+    parseHoursCell(raw, {
+        label: 'Longest working day',
+        ceiling: HOURS_IN_A_DAY,
+        example: defaultMaxHoursPerDay(DEFAULT_WEEKLY_HOURS),
+        blankMeans: 'Leave it blank and AURA divides the working week over 5 days.',
+    });
+
+/**
+ * The daily cap the engine will actually apply, given what is typed in the two
+ * department boxes — so the wizard can SHOW the derived number instead of
+ * re-implementing the division. Mirrors `resolveHoursRules`: the derivation
+ * follows the week that was typed, not the shipped one.
+ */
+export const derivedDailyHours = (weeklyRaw) => {
+    const weekly = parseWeeklyHoursCell(weeklyRaw);
+    return defaultMaxHoursPerDay(weekly.ok && weekly.value !== null ? weekly.value : DEFAULT_WEEKLY_HOURS);
+};
+
+/**
+ * A task row's slot list -> `{ ok, slots, reason }`, ready for `task.slots`.
+ *
+ * Each entry keeps `band` only when a band was named (an entry with no band is
+ * open to any grade, and the engine reads an absent `band` as exactly that), and
+ * `requiresSkill` only when a skill was typed. An empty list is REFUSED rather
+ * than silently falling back to lead + co-lead: a shift the user has told the
+ * wizard needs a team, and which then quietly generates as one person plus a
+ * helper, is the class of silence this whole module exists to avoid.
+ */
+export const parseTaskSlots = (rawSlots) => {
+    const list = Array.isArray(rawSlots) ? rawSlots : [];
+
+    if (list.length === 0) {
+        return {
+            ok: false,
+            slots: [],
+            reason: 'This shift is set to a list of slots but the list is empty, so the shift would need nobody at all. Add a slot for each person it needs, or switch it back to one lead plus a co-lead.',
+        };
+    }
+
+    const slots = [];
+    for (let index = 0; index < list.length; index += 1) {
+        const entry = list[index];
+        const band = trimmed(entry?.band);
+        const skill = trimmed(entry?.requiresSkill);
+
+        if (band !== '' && !BAND_NAMES.includes(band)) {
+            return {
+                ok: false,
+                slots: [],
+                reason: `Slot ${index + 1} names the band "${band}", which is not one of ${BAND_NAMES.join(', ')}. Choose a band, or leave it as any grade.`,
+            };
+        }
+
+        slots.push({
+            ...(band === '' ? {} : { band }),
+            ...(skill === '' ? {} : { requiresSkill: skill }),
+        });
+    }
+
+    return { ok: true, slots, reason: null };
+};
+
 /** Is this string one of `GRADE_SCALE`? `''` (not recorded) is fine too. */
 const gradeCellReason = (raw) => {
     const trimmed = typeof raw === 'string' ? raw.trim() : '';
@@ -489,8 +761,6 @@ const gradeCellReason = (raw) => {
 };
 
 // --- THE MAPPING --------------------------------------------------------------
-
-const trimmed = (value) => (typeof value === 'string' ? value.trim() : '');
 
 /**
  * 🧪 SANDBOX: the wizard's tables -> a `generateRosterV2` config.
@@ -508,7 +778,8 @@ const trimmed = (value) => (typeof value === 'string' ? value.trim() : '');
  *     bands,         // the parsed boundaries (even when they are invalid)
  *     bandsReason,   // validateGradeBands' reason, or null
  *     staffErrors,   // { [rowId]: { name?, grade?, fte?, away? } }
- *     taskErrors,    // { [rowId]: { days? } }
+ *     taskErrors,    // { [rowId]: { days?, hours?, slots? } }
+ *     hoursErrors,   // { weeklyHours?, maxHoursPerDay? } — department-level
  *   }
  *
  * ROWS WITH A BLANK NAME ARE IGNORED — the wizard opens with five of them and
@@ -525,6 +796,21 @@ const trimmed = (value) => (typeof value === 'string' ? value.trim() : '');
  * "unknown", bars that person from leading band-gated tasks, and warns by name —
  * and that warning is the point: it is surfaced in the sandbox report.
  *
+ * A BLANK HOURS BOX IS OMITTED TOO, and for a bigger reason than the grade. The
+ * engine's hours model is opt-in on MENTION: `rules: { weeklyHours: 42 }` turns it
+ * on even though 42 is also the default. So emitting 42 for an empty box would
+ * start refusing slots against an hours ceiling nobody typed, and would change the
+ * roster of every department that has never heard of hours. Blank stays blank all
+ * the way down; typing either box, or any task's hours, is what switches the model
+ * on, and the wizard says so beside the boxes.
+ *
+ * A SLOT LIST REPLACES `leads`/`coLeads`, IT DOES NOT REFINE THEM. The engine
+ * refuses a task carrying `slots` alongside `leads`, `coLeads`, `leadBands` or
+ * `continuity: true` — measured, all five refusals, not inferred from the
+ * comments — so a slot-mode row emits `slots` and NONE of those keys, and the
+ * wizard hides the band chips and the co-lead toggle for that row rather than
+ * showing controls whose value would be dropped here.
+ *
  * Pure. No React, no dates-from-now, no I/O.
  */
 export const buildDemoRosterV2ConfigFromTables = ({
@@ -533,6 +819,9 @@ export const buildDemoRosterV2ConfigFromTables = ({
     staffRows = [],
     taskRows = [],
     bandInputs,
+    // The two department hours boxes, as raw strings: `{ weeklyHours,
+    // maxHoursPerDay }`. Both blank by default, which means "do not track hours".
+    hoursInputs = null,
     // Department policy the tables have no column for (maxConcurrentPerDay,
     // maxConsecutiveDays). "Load example department" supplies it; a typed-in
     // team leaves it empty and gets the engine's documented defaults.
@@ -540,6 +829,7 @@ export const buildDemoRosterV2ConfigFromTables = ({
 } = {}) => {
     const staffErrors = {};
     const taskErrors = {};
+    const hoursErrors = {};
 
     // --- band boundaries ------------------------------------------------------
     // Checked FIRST and reported first: a task's chips are meaningless while the
@@ -547,6 +837,17 @@ export const buildDemoRosterV2ConfigFromTables = ({
     const bands = inputsToBands(bandInputs);
     const bandCheck = validateGradeBands(bands);
     const bandsReason = bandCheck.valid ? null : bandCheck.reason;
+
+    // --- department hours -----------------------------------------------------
+    // Department-level, like the bands, so it is judged with them rather than
+    // inside a row loop. Each box reports its own reason; both are blockers,
+    // because a run generated against half of a typed hours policy is a roster
+    // built to an ceiling the roster master did not set.
+    const weeklyHours = parseWeeklyHoursCell(hoursInputs?.weeklyHours);
+    const maxHoursPerDay = parseDailyHoursCell(hoursInputs?.maxHoursPerDay);
+    if (!weeklyHours.ok) hoursErrors.weeklyHours = weeklyHours.reason;
+    if (!maxHoursPerDay.ok) hoursErrors.maxHoursPerDay = maxHoursPerDay.reason;
+    const hoursRulesReason = hoursErrors.weeklyHours || hoursErrors.maxHoursPerDay || null;
 
     // --- staff ---------------------------------------------------------------
     const staff = [];
@@ -605,11 +906,33 @@ export const buildDemoRosterV2ConfigFromTables = ({
         const name = trimmed(row?.name);
         if (name === '') continue;
 
+        // Collected per row rather than returned on the first failure, the way the
+        // staff loop already does it: a row with an unreadable hours cell AND no
+        // days ticked has two things wrong with it, and showing one at a time
+        // costs the visitor a Generate press per mistake.
+        const errors = {};
+
         const days = Array.isArray(row?.days) ? [...row.days].sort((a, b) => a - b) : [];
         if (days.length === 0) {
-            const reason = `Task ${name} has no days ticked, so it would generate nothing at all. Pick at least one day.`;
-            taskErrors[row.id] = { days: reason };
-            if (!firstTaskReason) firstTaskReason = reason;
+            errors.days = `Task ${name} has no days ticked, so it would generate nothing at all. Pick at least one day.`;
+        }
+
+        const hours = parseTaskHoursCell(row?.hours);
+        if (!hours.ok) errors.hours = `Task ${name}: ${hours.reason}`;
+
+        // Read only in slot mode. A slot list left behind by somebody who switched
+        // the mode back off is not validated and not emitted — it is not part of
+        // what this row means any more.
+        const slotMode = row?.slotMode === true;
+        const slotList = slotMode ? parseTaskSlots(row?.slots) : { ok: true, slots: [], reason: null };
+        if (!slotList.ok) errors.slots = `Task ${name}: ${slotList.reason}`;
+
+        if (Object.keys(errors).length > 0) {
+            taskErrors[row.id] = errors;
+            // `days` first, unchanged in wording and in precedence, because it is
+            // the one this wizard has always reported and the sandbox tests read
+            // it verbatim.
+            if (!firstTaskReason) firstTaskReason = errors.days || errors.hours || errors.slots;
             continue;
         }
 
@@ -620,12 +943,25 @@ export const buildDemoRosterV2ConfigFromTables = ({
         tasks.push({
             name,
             days,
-            leads: 1,
-            coLeads: row?.coLead === false ? 0 : 1,
-            // No chips ticked = open to every grade, which is how every task
-            // behaved before grades existed. `leadBands: []` is refused by the
-            // engine (nothing could satisfy it), so the key is omitted instead.
-            ...(leadBands.length > 0 ? { leadBands } : {}),
+            // EITHER a slot list OR lead + co-lead, never both keys — the engine
+            // refuses `slots` beside `leads`, `coLeads` OR `leadBands`, and
+            // `coLeads: 0` is refused just as loudly as `coLeads: 1`. So slot mode
+            // omits all three, and the band chips and the co-lead toggle are
+            // hidden for that row in the table rather than silently ignored here.
+            ...(slotMode
+                ? { slots: slotList.slots }
+                : {
+                    leads: 1,
+                    coLeads: row?.coLead === false ? 0 : 1,
+                    // No chips ticked = open to every grade, which is how every
+                    // task behaved before grades existed. `leadBands: []` is
+                    // refused by the engine (nothing could satisfy it), so the key
+                    // is omitted instead.
+                    ...(leadBands.length > 0 ? { leadBands } : {}),
+                }),
+            // Blank hours = no key at all, so a department that never typed an
+            // hour gets the roster it got before hours existed, byte for byte.
+            ...(hours.value === null ? {} : { hours: hours.value }),
             ...(typeof row?.requiresSkill === 'string' && row.requiresSkill.trim() !== ''
                 ? { requiresSkill: row.requiresSkill.trim() }
                 : {}),
@@ -641,18 +977,24 @@ export const buildDemoRosterV2ConfigFromTables = ({
     // tables moot.
     let reason = null;
     if (bandsReason) reason = bandsReason;
+    else if (hoursRulesReason) reason = hoursRulesReason;
     else if (firstStaffReason) reason = firstStaffReason;
     else if (firstTaskReason) reason = firstTaskReason;
     else if (staff.length === 0) reason = 'Add at least one person to the staff table before generating.';
     else if (tasks.length === 0) reason = 'Add at least one task to the task table before generating.';
 
     if (reason !== null) {
-        return { ok: false, reason, config: null, bands, bandsReason, staffErrors, taskErrors };
+        return { ok: false, reason, config: null, bands, bandsReason, staffErrors, taskErrors, hoursErrors };
     }
 
     const rules = {
         ...(extraRules && typeof extraRules === 'object' ? extraRules : {}),
         bands,
+        // The two boxes win over anything `extraRules` carried, exactly as `bands`
+        // does, and are ABSENT while the boxes are blank — see the note at the top
+        // of this function for why an empty box must not become 42.
+        ...(weeklyHours.value === null ? {} : { weeklyHours: weeklyHours.value }),
+        ...(maxHoursPerDay.value === null ? {} : { maxHoursPerDay: maxHoursPerDay.value }),
     };
 
     return {
@@ -663,5 +1005,6 @@ export const buildDemoRosterV2ConfigFromTables = ({
         bandsReason,
         staffErrors,
         taskErrors,
+        hoursErrors,
     };
 };

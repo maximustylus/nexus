@@ -60,6 +60,15 @@ vi.mock('firebase/firestore', () => ({
     ),
     getDoc: vi.fn(() => Promise.resolve({ exists: () => false })),
     serverTimestamp: vi.fn(() => 'mock-timestamp'),
+    // 🤝 Added with the coverage-request listener RosterView now owns. This file
+    // drives live mode, so the listener is created on mount; `onSnapshot` above
+    // hands it the same document-shaped snapshot it hands the roster listener,
+    // which `readCoverageRequests` reads as "no requests" (it tolerates a snapshot
+    // with no `docs`). The inline coverage flow itself is tested end to end in
+    // `RosterView.coverage.test.jsx`.
+    query: vi.fn(() => ({ __mock: 'query' })),
+    where: vi.fn(() => ({ __mock: 'where' })),
+    updateDoc: vi.fn(() => Promise.resolve()),
 }));
 
 vi.mock('../context/NexusContext', () => ({
@@ -152,7 +161,14 @@ const chooseColleague = (name) => {
     fireEvent.change(selectOffering(name), { target: { value: name } });
 };
 
-const submitSwap = () => fireEvent.click(screen.getByRole('button', { name: /submit request|arrange cover/i }));
+/**
+ * RELABELLED (one-tap cover): the submit button said "Submit Request" / "Arrange
+ * Cover" and now names the colleague — "Ask Derlinder to cover", or "Arrange cover
+ * with Derlinder" on the admin on-behalf path. Same button, same handler, same
+ * `addDoc`; only the words changed, so this helper matches the new wording. Every
+ * assertion below is unmodified.
+ */
+const submitSwap = () => fireEvent.click(screen.getByRole('button', { name: /ask .+ to cover|arrange cover/i }));
 
 // ─── 1. buildSwapRequestSignature — THE M12 GUARD, AS A PURE FUNCTION ─────────
 
@@ -216,7 +232,9 @@ describe('demo mode raises no native dialog (P8.3)', () => {
         render(<RosterView user={VISITOR} />);
         openConfigure();
         fireEvent.click(screen.getByRole('button', { name: /load example department/i }));
-        fireEvent.click(screen.getByRole('button', { name: /generate sandbox roster/i }));
+        // RENAMED (language pass): the sandbox Generate button said "Generate Sandbox
+        // Roster" and now says "Draft roster". Live mode's label is unchanged.
+        fireEvent.click(screen.getByRole('button', { name: /^draft roster$/i }));
 
         // The flow really ran — the sandbox report is on screen.
         expect(screen.getByText(/could not be staffed/i)).toBeTruthy();
@@ -248,7 +266,7 @@ describe('demo mode raises no native dialog (P8.3)', () => {
 
         // The engine's own wording, in the app's own markup.
         expect(screen.getAllByText(/appears twice in the staff pool/i).length).toBeGreaterThan(0);
-        const generate = screen.getByRole('button', { name: /generate sandbox roster/i });
+        const generate = screen.getByRole('button', { name: /^draft roster$/i });
         expect(generate.disabled).toBe(true);
 
         fireEvent.click(generate);
@@ -261,7 +279,7 @@ describe('demo mode raises no native dialog (P8.3)', () => {
         render(<RosterView user={VISITOR} />);
         openConfigure();
         fireEvent.click(screen.getByRole('button', { name: /load example department/i }));
-        fireEvent.click(screen.getByRole('button', { name: /generate sandbox roster/i }));
+        fireEvent.click(screen.getByRole('button', { name: /^draft roster$/i }));
 
         openSwapModalFor('Inpatient Rounds');
         // Demo grants the admin path, so the visitor holds no duty and must pick

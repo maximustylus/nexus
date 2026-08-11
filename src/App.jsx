@@ -24,6 +24,7 @@ import SmartReportView from './components/SmartReportView';
 import RosterView from './components/RosterView';
 import WellbeingView from './components/WellbeingView';
 import AuraPulseBot from './components/AuraPulseBot';
+import CoverageWatcher from './components/CoverageWatcher';
 import ProfileView from './components/ProfileView'; 
 import FeedsView from './components/FeedsView';
 import FeedbackWidget from './components/FeedbackWidget';
@@ -103,14 +104,24 @@ export default function App() {
   const [notifications, setNotifications] = useState([]);
   const [isBellOpen, setIsBellOpen] = useState(false);
 
-  // 🛡️ M5: AuraPulseBot's coverage-request listener calls `onOpen()` to force the
-  // panel open for an urgent shift swap. That prop was never passed, so
-  // `if (onOpen) onOpen()` was a no-op and the request never surfaced.
+  // 🛡️ M5, and its second life. AuraPulseBot's coverage-request listener used to
+  // call `onOpen()` to force the panel open for an urgent shift swap, and that prop
+  // was never passed, so the request never surfaced. The listener has since moved
+  // out of the chat panel entirely: the ROSTER answers requests now, and
+  // `CoverageWatcher` (always mounted, below) is what notices them — because
+  // RosterView is view-gated, so it cannot be the thing that tells you.
+  // `openAura` is kept for the chat panel's other modes, which still use it.
   // These are stable (useCallback, no deps) on purpose: the listener effect must
   // not re-subscribe on every App render, because each re-subscribe re-delivers
   // every PENDING request as an `added` change.
   const openAura  = useCallback(() => setIsAuraOpen(true), []);
   const closeAura = useCallback(() => setIsAuraOpen(false), []);
+  // Takes the recipient of a coverage request to the surface that can answer it.
+  // Closes the admin panel too, since it renders instead of the roster.
+  const openRoster = useCallback(() => {
+    setIsAdminOpen(false);
+    setCurrentView('roster');
+  }, []);
 
   const [isDark, setIsDark] = useState(() => {
     if (typeof window !== 'undefined') {
@@ -633,6 +644,16 @@ export default function App() {
                 <FeedbackWidget user={user} />
                 <AuraGreeting openAuraChat={openAura} dailyPatientLoad={145} />
                 <AuraPulseBot isOpen={isAuraOpen} onClose={closeAura} onOpen={openAura} user={user} />
+                {/* 🛡️ ALWAYS MOUNTED, and that is the point. RosterView — which
+                    owns the verified accept/decline sequence — is view-gated
+                    below, so once the coverage listener moved out of the chat
+                    panel a request reached NOBODY unless the recipient happened
+                    to open the Roster tab. This notices; the roster answers. */}
+                <CoverageWatcher
+                  user={user}
+                  isRosterVisible={currentView === 'roster' && !isAdminOpen}
+                  onOpenRoster={openRoster}
+                />
               </>
             }
           >

@@ -11,20 +11,36 @@ import {
 import { DEMO_PERSONAS, LIVE_PERSONAS } from '../config/personas';
 import { db } from '../firebase'; 
 import { getFunctions, httpsCallable } from 'firebase/functions';
-import { doc, setDoc, getDoc, updateDoc, arrayUnion, collection, query, where, onSnapshot } from 'firebase/firestore';
+import { doc, setDoc, getDoc, updateDoc, arrayUnion } from 'firebase/firestore';
 import { useNexus } from '../context/NexusContext';
-// 🛡️ P2/P3/P6 — every decision the swap flow makes is a pure function in
-// auraEngine.js, unit-tested in auraEngine.swap.test.js. This component keeps
-// only the Firestore I/O and the wording.
-import {
-    planSwapApplication,
-    findAppliedSwapShift,
-    describeShiftRole,
-    resetMessagesPreservingAlerts,
-    appendRosterAlert,
-    pendingRosterAlerts,
-    ROSTER_ALERT_MODE,
-} from '../utils/auraEngine';
+// 🤝 THE COVERAGE-REQUEST SURFACE HAS MOVED OUT OF THIS COMPONENT.
+//
+// Until this change, AURA subscribed to `shift_swaps`, force-opened this panel for
+// an incoming request (`ROSTER_ALERT`), and carried the Accept / Decline buttons
+// and the whole verified mutation sequence. A colleague being asked to cover a
+// clinical shift had to answer it inside a conversation with a wellbeing
+// assistant. That surface now lives in `RosterView` — a badge on the shift and an
+// inline card — next to the roster the request is about.
+//
+// WHAT WENT WITH IT, and why exactly one surface owns this:
+//   • the `onSnapshot` query on `shift_swaps` (including its M8 error callback,
+//     which is reproduced on the new listener — a `permission-denied` still
+//     surfaces, in the roster card, and did not vanish);
+//   • `handleSwapResponse`, which performed read → plan → write → read-back →
+//     verify → APPROVED. `RosterView.respondToCoverageRequest` performs the same
+//     sequence with the same locked helpers (`planSwapApplication`,
+//     `findAppliedSwapShift`), so none of v1.6.1's guarantees moved or softened.
+//   • the ROSTER_ALERT bubble and its buttons.
+//
+// Two live listeners would have meant two Accept buttons for one shift and two
+// clients racing the same roster write. Duplicate notification of a clinical
+// hand-over is worse than a redundant code path, so the path was removed rather
+// than left alongside.
+//
+// `resetMessagesPreservingAlerts` STAYS. It is what stopped a session reset from
+// destroying an un-answered request (M5), and it is correct for any history that
+// still contains one; with no listener here, it behaves as a plain replacement.
+import { resetMessagesPreservingAlerts } from '../utils/auraEngine';
 
 // ─── CLOUD FUNCTION LINK ──────────────────────────────────────────────────────
 const functions = getFunctions(undefined, 'us-central1');
@@ -68,10 +84,6 @@ export default function AuraPulseBot({ isOpen, onClose, onOpen, user }) {
     const [isOnline,         setIsOnline]         = useState(navigator.onLine);
     const [liveMemory,       setLiveMemory]       = useState(null);
     const [isListening,      setIsListening]      = useState(false);
-    // 🛡️ M8: a Firestore rules denial on the swap listener used to be completely
-    // invisible — coverage requests simply stopped arriving with no error
-    // anywhere. This is the surface for it.
-    const [swapListenerError, setSwapListenerError] = useState(null);
 
     const messages = auraHistory;
     const setMessages = setAuraHistory;
@@ -82,14 +94,11 @@ export default function AuraPulseBot({ isOpen, onClose, onOpen, user }) {
     const lastSendRef    = useRef(0);
     const timeoutsRef    = useRef([]);
 
-    // 🛡️ M5: `onOpen` is held in a ref so the swap subscription does not depend
-    // on its identity. App.jsx passes a stable useCallback, but an inline arrow
-    // from any future caller would otherwise re-subscribe on every parent
-    // render — and every re-subscribe re-delivers each PENDING request as an
-    // `added` change.
-    const onOpenRef = useRef(onOpen);
-    useEffect(() => { onOpenRef.current = onOpen; }, [onOpen]);
-
+    // `onOpen` is still accepted (App.jsx passes it, and `AuraGreeting` uses the
+    // same callback) but NOTHING in this component force-opens the panel any more.
+    // The one caller was the coverage-request listener, which has moved to
+    // RosterView: a shift hand-over is answered in the roster, so AURA no longer
+    // interrupts to deliver one.
     const safeTimeout = useCallback((fn, ms) => {
         const id = setTimeout(fn, ms);
         timeoutsRef.current.push(id);
@@ -119,67 +128,12 @@ export default function AuraPulseBot({ isOpen, onClose, onOpen, user }) {
         window.dispatchEvent(new CustomEvent('aura-toggled', { detail: isOpen }));
     }, [isOpen]);
 
-    // ── SHIFT SWAP LISTENER ──────────────────────────────────────────
-    // Demo-mode guard stays first: a simulation must never subscribe to, or act
-    // on, live coverage requests.
-    const targetStaffName = user?.name;
-
-    useEffect(() => {
-        if (isDemo || !targetStaffName) return;
-
-        const q = query(
-            collection(db, 'shift_swaps'),
-            where('targetStaff', '==', targetStaffName),
-            where('status', '==', 'PENDING')
-        );
-
-        const unsubscribe = onSnapshot(
-            q,
-            (snapshot) => {
-                setSwapListenerError(null);
-                snapshot.docChanges().forEach((change) => {
-                    if (change.type !== 'added') return;
-
-                    const data = change.doc.data();
-                    const roleNote = data.swapRole
-                        ? `\n\n_They currently hold this shift as **${describeShiftRole(data.swapRole)}**, and that is the duty you would take on._`
-                        : '';
-
-                    // 🛡️ M5: force the panel open. `onOpen` was never passed by
-                    // App.jsx, so this was a no-op and an urgent request sat in
-                    // a closed panel with no badge and no indicator.
-                    if (onOpenRef.current) onOpenRef.current();
-
-                    // 🛡️ M5: appendRosterAlert de-duplicates by docId. Alerts now
-                    // survive a session reset, so a re-subscribe (which
-                    // re-delivers every PENDING doc as `added`) must not stack a
-                    // second set of Accept buttons for the same request.
-                    setMessages(prev => appendRosterAlert(prev, {
-                        role: 'bot',
-                        text: `🔔 **URGENT COVERAGE REQUEST**\n\n**${data.requestedBy}** has requested to swap their **${data.originalTask}** shift on **${data.originalShiftDate}** with you.${roleNote}\n\n_Reason provided:_ "${data.reason || 'None provided'}"\n\nWould you like to accept this coverage?`,
-                        mode: ROSTER_ALERT_MODE,
-                        swapData: {
-                            docId: change.doc.id,
-                            ...data
-                        }
-                    }));
-                });
-            },
-            // 🛡️ M8: without this callback a `permission-denied` was swallowed
-            // entirely and the feature just stopped existing.
-            (error) => {
-                console.error('[AURA] Coverage request listener failed:', error.code, error.message);
-                setSwapListenerError(
-                    error.code === 'permission-denied'
-                        ? 'I am not permitted to read coverage requests, so I cannot alert you to shift swaps. Please tell an administrator.'
-                        : 'I lost the connection to coverage requests. Reload the page to start listening again.'
-                );
-            }
-        );
-
-        return () => unsubscribe();
-    }, [isDemo, targetStaffName, setMessages]);
-
+    // ── SHIFT SWAP LISTENER — DELIBERATELY ABSENT ────────────────────────────
+    // It lives in `RosterView` now (see the import note at the top of this file):
+    // the query, the M8 error callback and the verified accept/decline sequence all
+    // moved together, and exactly one of them is live so one request can only ever
+    // be answered once.
+    //
     // ── Session start ─────────────────────────────────────────────────────────
     const startSession = useCallback((persona) => {
         setSelectedPersona(persona);
@@ -395,132 +349,17 @@ export default function AuraPulseBot({ isOpen, onClose, onOpen, user }) {
         }
     }, [handleSend]);
 
-    // ── Handle Swap Response ──────────────────────────────────────────────────
+    // ── Handle Swap Response — MOVED, NOT DELETED ────────────────────────────
     //
-    // 🛡️ Rewritten for ROSTER_TODO.md P2 + P6. What was wrong before:
+    // The accept/decline sequence that used to sit here is now
+    // `RosterView.respondToCoverageRequest`. It is the same order, with the same
+    // locked pure helpers deciding everything: read the roster →
+    // `planSwapApplication` → write one day → READ THE DOCUMENT BACK →
+    // `findAppliedSwapShift` → and only then `status: 'APPROVED'`. A refusal, a
+    // failed verification or a throw still leaves the request PENDING and says so
+    // where the person can see it. Nothing about A1, A3, A-RC4, M9 or M11 was
+    // relaxed by the move; what changed is which screen it happens on.
     //
-    //   A1  it matched `shift.staff === swapData.requestedBy` — a display string
-    //       ("Lead: Brandon, Co: Ying Xian") against a bare name ("Brandon") — so
-    //       `.map()` matched nothing, `updateDoc` wrote byte-identical data, and
-    //       nothing threw.
-    //   A2  the write it intended (`{ ...shift, staff: user.name }`) would have
-    //       left `lead`/`coLead` on the old person AND destroyed the display
-    //       string the ICS export interpolates.
-    //   M9  `status: 'APPROVED'` was written FIRST, before the roster was even
-    //       read, with no rollback: a dropped connection left an APPROVED ledger
-    //       entry against an untouched roster, and the request no longer matched
-    //       the PENDING query so it never resurfaced for anyone.
-    //   A-RC4 the success line was a hardcoded literal, emitted regardless of
-    //       outcome — including down all three silent no-op branches.
-    //
-    // The order is now: read → plan → write roster → READ BACK AND VERIFY →
-    // mark APPROVED → report what was actually observed. A failure anywhere
-    // before the verified read-back leaves the request PENDING and says so.
-    const handleSwapResponse = async (swapData, isAccepted, msgIndex) => {
-        if (!swapData || !swapData.docId) return;
-        setLoading(true);
-
-        /**
-         * Answered: retire the alert's buttons and append the outcome.
-         * Matched by docId as well as index — alerts now survive a session reset,
-         * which re-orders them, so the index alone is no longer a safe handle.
-         */
-        const resolveAlert = (text) => {
-            setMessages(prev => {
-                const next = prev.map((m, i) => (
-                    (i === msgIndex || m?.swapData?.docId === swapData.docId)
-                        ? { ...m, swapData: null }
-                        : m
-                ));
-                next.push({ role: 'bot', text, mode: 'ASSISTANT' });
-                return next;
-            });
-        };
-
-        /**
-         * NOT answered: the request is still PENDING, so the Accept / Decline
-         * buttons deliberately stay on screen. A no-match must be a visible
-         * failure the user can retry, never a success message.
-         */
-        const refuse = (text) => {
-            setMessages(prev => [...prev, { role: 'bot', text, isError: true, mode: 'ASSISTANT' }]);
-        };
-
-        const coveringStaff = user?.name;
-
-        try {
-            const swapRef = doc(db, 'shift_swaps', swapData.docId);
-
-            if (!isAccepted) {
-                await updateDoc(swapRef, { status: 'DENIED' });
-                // 🛡️ M4: the old copy claimed "{requester} will be notified".
-                // Nothing in the app reads `shift_swaps` by `requestedBy`, so no
-                // such notification exists. Owner/requester notification is a
-                // separate piece of work; until it lands, say what is true.
-                resolveAlert(`Got it — I have marked the request as declined and left the ${swapData.originalTask} shift on ${swapData.originalShiftDate} with ${swapData.requestedBy}. I cannot notify them yet, so please let ${swapData.requestedBy} know directly that they still need coverage.`);
-                return;
-            }
-
-            // ── ACCEPT ────────────────────────────────────────────────────────
-            const rosterRef = doc(db, 'system_data', 'roster_2026');
-            const rosterSnap = await getDoc(rosterRef);
-
-            // All the judgment lives in planSwapApplication: it locates the shift
-            // by date + task + the requester holding `swapRole`, tolerates the
-            // pre-6-May legacy shape, and refuses rather than guessing.
-            const plan = planSwapApplication({
-                roster: rosterSnap.exists() ? rosterSnap.data() : null,
-                swap: swapData,
-                coveringStaff,
-            });
-
-            if (!plan.ok) {
-                // No roster write. No APPROVED. Request stays PENDING.
-                console.warn('[AURA] Swap not applied:', plan.reason, { swapData, coveringStaff });
-                refuse(`⚠️ **I could not apply this swap, so nothing has been changed.** The request is still pending.\n\n_Why:_ ${plan.reason}\n\nPlease sort the cover out with ${swapData.requestedBy} directly, or ask an administrator to check the roster for ${swapData.originalShiftDate}.`);
-                return;
-            }
-
-            await updateDoc(rosterRef, { [plan.dateKey]: plan.shifts });
-
-            // 🛡️ A-RC4: the write is not evidence. Read the document back and
-            // find the substitution in it before claiming anything.
-            const verifySnap = await getDoc(rosterRef);
-            const observedShift = verifySnap.exists()
-                ? findAppliedSwapShift({
-                      roster: verifySnap.data(),
-                      swap: swapData,
-                      coveringStaff,
-                      role: plan.role,
-                  })
-                : null;
-
-            if (!observedShift) {
-                console.error('[AURA] Swap write could not be verified on read-back:', { swapData, coveringStaff, plan });
-                refuse(`⚠️ **I sent the roster change but could not confirm it afterwards, so I have NOT marked this swap approved.** The request is still pending and the roster may not have been updated.\n\nPlease check the roster for ${swapData.originalShiftDate} yourself before relying on this, and tell ${swapData.requestedBy} the cover is not confirmed.`);
-                return;
-            }
-
-            // 🛡️ M9: only now — after a verified roster write — does the ledger
-            // record an approval.
-            await updateDoc(swapRef, {
-                status: 'APPROVED',
-                approvedAt: new Date().toISOString(),
-            });
-
-            // 🛡️ Every fact in this sentence comes from the document that was
-            // just read back, not from a literal.
-            resolveAlert(`✅ Done, and verified against the master roster: the ${swapData.originalTask} shift on ${swapData.originalShiftDate} now reads **${observedShift.staff}**. You are covering it as **${describeShiftRole(plan.role)}** in place of ${swapData.requestedBy}.`);
-        } catch (err) {
-            console.error('[AURA] Swap Response Error:', err);
-            // The ledger is only ever flipped after a verified roster write, so
-            // a throw here cannot have left an APPROVED entry behind.
-            refuse(`⚠️ Database error while processing this swap: ${err?.message || 'unknown error'}. I have not marked it approved, so the request is still pending — please check the roster before relying on it.`);
-        } finally {
-            setLoading(false);
-        }
-    };
-
     const confirmLog = useCallback(async () => {
         if (!pendingLog) return;
         setLoading(true);
@@ -918,9 +757,6 @@ export default function AuraPulseBot({ isOpen, onClose, onOpen, user }) {
     };
 
     const isAnonymous = selectedPersona?.id === 'anon';
-    // 🛡️ M5: the Identity Matrix does not render `messages`, so a preserved
-    // coverage request would still be invisible until a persona was picked.
-    const outstandingAlerts = pendingRosterAlerts(messages);
     const inputLength = input.length;
     const isNearLimit = inputLength > MAX_INPUT * 0.8;
 
@@ -1033,34 +869,15 @@ export default function AuraPulseBot({ isOpen, onClose, onOpen, user }) {
                             </div>
                         )}
 
-                        {/* 🛡️ M8: the swap listener failing used to be completely
-                            invisible — coverage requests simply never arrived. */}
-                        {swapListenerError && chatSize !== 'minimized' && (
-                            <div className="shrink-0 flex items-center gap-2 px-4 py-2 bg-red-50 border-b border-red-200">
-                                <AlertTriangle size={12} className="text-red-600 flex-shrink-0" />
-                                <p className="text-[10px] font-semibold text-red-700">{swapListenerError}</p>
-                            </div>
-                        )}
+                        {/* 🛡️ M8 lives on the roster's coverage card now: the
+                            listener whose failure this banner reported is there,
+                            and so is the message. Nothing about a shift swap is
+                            reported in this panel any more. */}
 
                         {chatSize !== 'minimized' && (
                             <div className="flex-1 overflow-y-auto p-5 bg-slate-50 dark:bg-slate-950/50 scroll-smooth">
                                 {view === 'SELECT' ? (
                                     <div className="space-y-5 animate-in fade-in duration-300">
-                                        {/* 🛡️ M5: the request is waiting, but this view
-                                            renders personas, not messages. Say so here
-                                            rather than letting it sit unseen. */}
-                                        {outstandingAlerts.length > 0 && (
-                                            <div className="p-3 rounded-2xl bg-amber-50 border border-amber-200 ring-2 ring-amber-400/50 shadow-lg flex items-start gap-2">
-                                                <CalendarCheck size={14} className="text-amber-600 shrink-0 mt-0.5" />
-                                                <p className="text-[10px] font-bold text-amber-900 leading-relaxed">
-                                                    {outstandingAlerts.length === 1
-                                                        ? '1 urgent coverage request is waiting for your answer.'
-                                                        : `${outstandingAlerts.length} urgent coverage requests are waiting for your answer.`}
-                                                    {' '}Select any persona below to view and respond to {outstandingAlerts.length === 1 ? 'it' : 'them'}.
-                                                </p>
-                                            </div>
-                                        )}
-
                                         <div className="text-center">
                                             <div className="w-10 h-10 bg-indigo-500/10 rounded-2xl flex items-center justify-center mx-auto mb-2 border border-indigo-500/20">
                                                 <Users size={20} className="text-indigo-500" />
@@ -1083,18 +900,18 @@ export default function AuraPulseBot({ isOpen, onClose, onOpen, user }) {
                                         {messages.map((m, i) => {
                                             const isAssistant = m.mode === 'ASSISTANT' || m.mode === 'RESEARCH';
                                             const isDataEntry = m.mode === 'DATA_ENTRY';
-                                            const isAlert = m.mode === ROSTER_ALERT_MODE;
-                                            const bubbleStyle = m.role === 'user' 
+                                            // The ROSTER_ALERT bubble is gone with the
+                                            // listener that produced it; a coverage
+                                            // request is answered in the roster now.
+                                            const bubbleStyle = m.role === 'user'
                                                 ? (isAnonymous ? 'bg-purple-600 text-white rounded-tr-none' : 'bg-indigo-600 text-white rounded-tr-none')
-                                                : m.isError 
+                                                : m.isError
                                                     ? 'bg-red-50 text-red-600 rounded-tl-none border border-red-200'
-                                                    : isAlert
-                                                        ? 'bg-amber-50 text-amber-900 rounded-tl-none border border-amber-200 shadow-xl ring-2 ring-amber-400/50'
-                                                        : isDataEntry
-                                                            ? 'bg-slate-900 text-emerald-50 rounded-tl-none border border-emerald-900 shadow-lg'
-                                                            : isAssistant 
-                                                                ? 'bg-slate-800 text-blue-50 rounded-tl-none border border-slate-700 shadow-lg'
-                                                                : 'bg-white text-slate-700 rounded-tl-none border border-slate-100 shadow-sm';
+                                                    : isDataEntry
+                                                        ? 'bg-slate-900 text-emerald-50 rounded-tl-none border border-emerald-900 shadow-lg'
+                                                        : isAssistant
+                                                            ? 'bg-slate-800 text-blue-50 rounded-tl-none border border-slate-700 shadow-lg'
+                                                            : 'bg-white text-slate-700 rounded-tl-none border border-slate-100 shadow-sm';
 
                                             const hasTimelineDates = m.action && /\b\d{1,2}\s[A-Za-z]{3,9}\s\d{4}\b/.test(m.action);
 
@@ -1161,24 +978,6 @@ export default function AuraPulseBot({ isOpen, onClose, onOpen, user }) {
                                                             </div>
                                                         )}
 
-                                                        {isAlert && m.swapData && (
-                                                            <div className="mt-4 pt-3 border-t border-amber-200 grid grid-cols-2 gap-2">
-                                                                <button 
-                                                                    onClick={() => handleSwapResponse(m.swapData, false, i)}
-                                                                    disabled={loading}
-                                                                    className="py-2.5 bg-white text-slate-500 hover:bg-slate-50 border border-slate-200 disabled:opacity-50 text-[11px] font-black uppercase tracking-wider rounded-xl transition-all"
-                                                                >
-                                                                    Decline
-                                                                </button>
-                                                                <button 
-                                                                    onClick={() => handleSwapResponse(m.swapData, true, i)}
-                                                                    disabled={loading}
-                                                                    className="py-2.5 bg-emerald-500 hover:bg-emerald-600 text-white disabled:opacity-50 text-[11px] font-black uppercase tracking-wider rounded-xl shadow-lg transition-all flex items-center justify-center gap-1.5"
-                                                                >
-                                                                    <CalendarCheck size={14} /> Accept Swap
-                                                                </button>
-                                                            </div>
-                                                        )}
 
                                                         {isDataEntry && m.db_workload && m.db_workload.target_collection && m.db_workload.target_collection !== 'null' && m.role === 'bot' && !m.isGreeting && (
                                                             <div className="mt-4 pt-3 border-t border-emerald-900/50">

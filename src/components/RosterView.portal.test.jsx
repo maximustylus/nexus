@@ -28,6 +28,14 @@ vi.mock('firebase/firestore', () => ({
     collection: vi.fn(),
     addDoc: vi.fn(),
     serverTimestamp: vi.fn(),
+    // 🤝 Added with the coverage-request listener RosterView now owns. Vitest
+    // throws on any import the mock factory does not define, so every Firestore
+    // entry point the component imports has to appear here even in a demo-mode
+    // test where none of them is called.
+    query: vi.fn(),
+    where: vi.fn(),
+    getDoc: vi.fn(() => Promise.resolve({ exists: () => false })),
+    updateDoc: vi.fn(() => Promise.resolve()),
 }));
 vi.mock('../context/NexusContext', () => ({
     useNexus: () => ({ isDemo: true }),
