@@ -91,6 +91,7 @@ import { DEMO_EXAMPLE_DEPARTMENT } from '../data/mockData';
 import {
     DEMO_ARRANGEMENTS,
     DEMO_PROVENANCE_INFERRED,
+    DEMO_PROVENANCE_FICTIONAL,
     DEMO_PROVENANCE_INTERVIEWED,
 } from '../data/mockData';
 // `auditHardConstraints` is a SECOND, independent read-back of a finished roster. The
@@ -121,12 +122,31 @@ const openConfigure = () => {
  * arrangement added later whose name happens to contain "Respiratory".
  */
 const loadExample = () => {
-    fireEvent.click(screen.getByRole('button', { name: /^load respiratory & rehab$/i }));
+    loadArrangementById('respiratory');
 };
 
-/** Load one arrangement by the picker button's name. */
+/**
+ * CHANGED AGAIN: the picker is a <select>, not five buttons.
+ *
+ * It was five stacked cards each with a "Load <team>" button — a menu on a desktop
+ * and a wall of text on a phone, which is where visiting colleagues actually open
+ * this. One native dropdown costs one tap and no vertical space, so there is no
+ * button to click any more; the arrangement is chosen by its option value (the
+ * stable `id`, not the display name, so renaming a team does not break 60 tests).
+ */
+const arrangementSelect = () => screen.getByLabelText(/load an example arrangement/i);
+
+const loadArrangementById = (id) => {
+    fireEvent.change(arrangementSelect(), { target: { value: id } });
+};
+
+/** Load one arrangement by the name a visitor reads in the dropdown. */
 const loadArrangement = (name) => {
-    fireEvent.click(screen.getByRole('button', { name: new RegExp(`^load ${name}$`, 'i') }));
+    const entry = DEMO_ARRANGEMENTS.find(
+        (candidate) => candidate.name.toLowerCase() === String(name).toLowerCase(),
+    );
+    if (!entry) throw new Error(`No arrangement named "${name}"`);
+    loadArrangementById(entry.id);
 };
 
 /**
@@ -1900,29 +1920,49 @@ const engineDatesFor = (result, task) => Object.keys(result.roster)
     .sort()
     .filter((dateKey) => result.roster[dateKey].some((shift) => shift.task === task));
 
-describe('demo mode: the arrangement picker offers four professions', () => {
-    it('shows one option per profession, each saying what it demonstrates', () => {
+describe('demo mode: the arrangement picker is one dropdown', () => {
+    it('offers every arrangement as an option, and describes the chosen one', () => {
         render(<RosterView user={VISITOR} />);
         openConfigure();
 
-        expect(DEMO_ARRANGEMENTS).toHaveLength(4);
-        expect(screen.getByText(/load an example arrangement/i)).toBeTruthy();
+        expect(DEMO_ARRANGEMENTS).toHaveLength(5);
 
+        // ONE control, not one card per team. It was five stacked panels, each with a
+        // Load button and its own paragraph — a menu on a desktop, a wall of text on
+        // the phone a visiting colleague actually opens. A native <select> is one tap
+        // and no vertical space, and the OS renders it as a full-height wheel.
+        const picker = arrangementSelect();
+        expect(picker.tagName).toBe('SELECT');
+        expect(screen.queryByRole('button', { name: /^load /i })).toBeNull();
+
+        // Every arrangement is reachable, by the name a visitor reads.
         for (const entry of DEMO_ARRANGEMENTS) {
-            // The button, by the name a visitor reads.
             expect(
-                screen.getByRole('button', { name: new RegExp(`^load ${entry.name}$`, 'i') }),
+                within(picker).getByRole('option', { name: entry.name }),
             ).toBeTruthy();
-            // …and its ONE LINE. The picker is a choice between capabilities, so the
-            // sentence that names the capability has to be on screen BEFORE the press.
-            expect(screen.getByText(entry.demonstrates)).toBeTruthy();
         }
 
-        // The professions the roster owner is presenting to, in the order the meetings
-        // happen. Asserted as a list rather than four `getByRole`s so a fifth
+        // The capability sentence follows the CHOICE now, rather than all five being on
+        // screen at once. Nothing is claimed before a team is picked…
+        for (const entry of DEMO_ARRANGEMENTS) {
+            expect(screen.queryByText(entry.demonstrates)).toBeNull();
+        }
+
+        // …and exactly the chosen one's sentence appears after.
+        loadArrangementById('psychology');
+        const psychology = DEMO_ARRANGEMENTS.find((entry) => entry.id === 'psychology');
+        expect(screen.getByText(psychology.demonstrates)).toBeTruthy();
+        for (const entry of DEMO_ARRANGEMENTS) {
+            if (entry.id === 'psychology') continue;
+            expect(screen.queryByText(entry.demonstrates)).toBeNull();
+        }
+
+        // The order a visitor meets them in: the fictional quick demo FIRST, because a
+        // first look should be one tap to a filled calendar, then the four real
+        // professions in the order the meetings happen. Asserted as a list so a sixth
         // arrangement, or a reordering, has to come past this line.
         expect(DEMO_ARRANGEMENTS.map((entry) => entry.id))
-            .toEqual(['respiratory', 'psychology', 'embryology', 'labs']);
+            .toEqual(['marvel', 'respiratory', 'psychology', 'embryology', 'labs']);
 
         expectNoFirestoreTraffic();
     });
@@ -1957,7 +1997,16 @@ describe('demo mode: the arrangement picker offers four professions', () => {
         // future arrangement that says "interviewed" while carrying a health warning
         // (or the reverse) fails here rather than shipping a caption that is wrong.
         for (const entry of DEMO_ARRANGEMENTS) {
-            expect([DEMO_PROVENANCE_INFERRED, DEMO_PROVENANCE_INTERVIEWED]).toContain(entry.provenance);
+            // THREE kinds now. `FICTIONAL` was added with the Marvel quick demo, which
+            // is neither a real service nor a guess at one — "inferred" means "our best
+            // guess at YOUR department, please correct it", and a toy means no such
+            // thing. Folding it into `INFERRED` would have attached a correction
+            // checklist to a team that does not exist.
+            expect([
+                DEMO_PROVENANCE_INFERRED,
+                DEMO_PROVENANCE_INTERVIEWED,
+                DEMO_PROVENANCE_FICTIONAL,
+            ]).toContain(entry.provenance);
             if (entry.provenance === DEMO_PROVENANCE_INFERRED) {
                 expect(entry.correction).toBeTruthy();
                 expect(entry.correction.items.length).toBeGreaterThan(0);
@@ -1971,18 +2020,30 @@ describe('demo mode: the arrangement picker offers four professions', () => {
         expect(inferred.map((entry) => entry.id)).toEqual(['respiratory']);
     });
 
-    it('says the respiratory arrangement is not their service — before, during and after', () => {
+    it('says the respiratory arrangement is not their service — on choosing it, and after', () => {
         render(<RosterView user={VISITOR} />);
         openConfigure();
 
         const correction = arrangement('respiratory').correction;
 
-        // BEFORE the press: readable without committing to anything.
-        expect(screen.getByText(correction.headline)).toBeTruthy();
-        // The checklist is not five bullet points on an unpressed option.
+        // TIMING CHANGED WITH THE DROPDOWN, deliberately, and this is the one
+        // behavioural consequence worth stating. Before, all five options were
+        // expanded at once, so the caveat was readable BEFORE pressing anything —
+        // along with four other teams' descriptions and a wall of text on a phone.
+        // Now only the chosen arrangement renders, so the caveat arrives WITH the
+        // choice.
+        //
+        // The property that matters is unchanged: it is on screen from the moment the
+        // fixture is loaded, which is before anyone can read, draft or act on the
+        // roster it produced. Nothing is hidden, and nothing about this team's service
+        // is claimed while no team is chosen — asserted here.
+        expect(screen.queryByText(correction.headline)).toBeNull();
         expect(screen.queryByText(correction.items[0])).toBeNull();
 
         loadExample();
+
+        // ON CHOOSING: the headline is there immediately, not after a draft.
+        expectOnScreen(correction.headline);
 
         // ON LOADING: the body and every item on the correction checklist.
         //

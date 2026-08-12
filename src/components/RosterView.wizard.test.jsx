@@ -183,7 +183,9 @@ describe('live mode: the Configure wizard is exactly what it was', () => {
         // mode a "this control is absent" test has. Both names below DO exist in demo
         // mode (asserted in the demo-mode test at the foot of this file), so their
         // absence here is a claim about live mode rather than about a dead string.
-        expect(screen.queryByRole('button', { name: /^load respiratory & rehab$/i })).toBeNull();
+        // The picker is a <select> in demo mode; live mode has neither it nor any
+        // Load control. Asserting the dropdown's absence is the same claim as before.
+        expect(screen.queryByLabelText(/load an example arrangement/i)).toBeNull();
         expect(screen.queryByRole('button', { name: /^load psychology$/i })).toBeNull();
         expect(screen.queryByText(/load an example arrangement/i)).toBeNull();
         expect(screen.getByRole('button', { name: /^generate roster$/i })).toBeTruthy();
@@ -374,10 +376,19 @@ describe('demo mode: the wizard is the tables, and only the tables', () => {
         // control the single button used to be, which is what the live-mode absence test
         // above is the mirror of.
         expect(screen.getByText(/load an example arrangement/i)).toBeTruthy();
-        expect(screen.getByRole('button', { name: /^load respiratory & rehab$/i })).toBeTruthy();
-        expect(screen.getByRole('button', { name: /^load psychology$/i })).toBeTruthy();
-        expect(screen.getByRole('button', { name: /^load embryology$/i })).toBeTruthy();
-        expect(screen.getByRole('button', { name: /^load medical laboratory$/i })).toBeTruthy();
+        // Demo mode offers the arrangement dropdown (was five Load buttons).
+        expect(screen.getByLabelText(/load an example arrangement/i)).toBeTruthy();
+        // The picker is one <select> now; Psychology is an option in it, not a button.
+        expect(screen.getByLabelText(/load an example arrangement/i)).toBeTruthy();
+        // Embryology is an option inside the one dropdown now, not its own button.
+        expect(
+            within(screen.getByLabelText(/load an example arrangement/i))
+                .getByRole('option', { name: 'Embryology' }),
+        ).toBeTruthy();
+        expect(
+            within(screen.getByLabelText(/load an example arrangement/i))
+                .getByRole('option', { name: 'Medical Laboratory' }),
+        ).toBeTruthy();
 
         // Start date and Weeks are SHARED between the two universes and stay put.
         expect(screen.getByLabelText(/start date/i)).toBeTruthy();

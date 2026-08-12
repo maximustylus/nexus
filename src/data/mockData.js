@@ -282,6 +282,18 @@ export const DEMO_PROVENANCE_INFERRED = 'inferred';
 export const DEMO_PROVENANCE_INTERVIEWED = 'interviewed';
 
 /**
+ * Openly fictional — not a real service, and not inferred from one either.
+ *
+ * The other two provenance kinds answer "how much should you trust that this
+ * matches a real department?". This one answers "you should not: it is a toy, and
+ * it exists so a visitor on a phone can press one thing and watch the engine
+ * work." Kept distinct rather than folded into `INFERRED`, because inferred means
+ * "our best guess at YOUR service, please correct it" and this means no such
+ * thing.
+ */
+export const DEMO_PROVENANCE_FICTIONAL = 'fictional';
+
+/**
  * The respiratory arrangement, by ALIAS. Not a copy: `DEMO_EXAMPLE_DEPARTMENT` is the
  * frozen object every existing test already reads, and two objects that were meant to
  * be equal is how a fixture and its assertions drift apart.
@@ -563,7 +575,55 @@ export const DEMO_ARRANGEMENT_LABS = Object.freeze({
  *   config        `rosterEngineV2`'s input contract verbatim — handed straight to the
  *                 wizard's tables, and from there to `generateRosterV2`.
  */
+/**
+ * THE MARVEL TEAM — the quick demo, and deliberately the smallest thing here.
+ *
+ * Every other arrangement demonstrates a specific constraint a real profession
+ * described: a monthly principal-only clinic, a weekend trio on block rotation, a
+ * Saturday floor. This one demonstrates nothing except that the thing runs. It is
+ * five people, four ordinary weekday duties, no skills, no quotas, no windows, no
+ * hours overrides — so a visitor who opened the app on a phone in a corridor can
+ * pick it, press Draft, and see a filled calendar in one screen.
+ *
+ * The names are the ones this app has used for its sandbox since the beginning
+ * (`MOCK_STAFF` — Steve, Peter, Charles, Jean, Tony), spelled out in full so the
+ * staff table's placeholder can be one of them. Fictional, so no PDPA question
+ * arises even if a visitor screenshots it.
+ *
+ * Grades span all three bands so the band ruler has something to show, but NO task
+ * is band-gated: a first look should not open with a refusal.
+ */
+const DEMO_ARRANGEMENT_MARVEL = Object.freeze({
+  label: 'The Marvel Team (quick demo)',
+  startDate: '2026-09-07',
+  weeks: 2,
+  staff: Object.freeze([
+    Object.freeze({ name: 'Steve Rogers',   fte: 1,   grade: 'AH15', skills: Object.freeze([]), unavailable: Object.freeze([]) }),
+    Object.freeze({ name: 'Peter Parker',   fte: 1,   grade: 'AH8',  skills: Object.freeze([]), unavailable: Object.freeze([]) }),
+    Object.freeze({ name: 'Charles Xavier', fte: 1,   grade: 'AH16', skills: Object.freeze([]), unavailable: Object.freeze([]) }),
+    Object.freeze({ name: 'Jean Grey',      fte: 0.6, grade: 'AH13', skills: Object.freeze([]), unavailable: Object.freeze([]) }),
+    Object.freeze({ name: 'Tony Stark',     fte: 1,   grade: 'AH14', skills: Object.freeze([]), unavailable: Object.freeze([]) }),
+  ]),
+  tasks: Object.freeze([
+    Object.freeze({ name: 'Morning Clinic',    days: Object.freeze([1, 2, 3, 4, 5]), leads: 1, coLeads: 1, category: 'Clinical' }),
+    Object.freeze({ name: 'Ward Round',        days: Object.freeze([1, 2, 3, 4, 5]), leads: 1, coLeads: 0, category: 'Clinical' }),
+    Object.freeze({ name: 'Teaching Session',  days: Object.freeze([3]),             leads: 1, coLeads: 1, category: 'Education' }),
+    Object.freeze({ name: 'Equipment Check',   days: Object.freeze([5]),             leads: 1, coLeads: 0, category: 'Admin' }),
+  ]),
+  rules: Object.freeze({
+    bands: DEFAULT_GRADE_BANDS,
+  }),
+});
+
 export const DEMO_ARRANGEMENTS = Object.freeze([
+  Object.freeze({
+    id: 'marvel',
+    name: 'The Marvel Team',
+    demonstrates: 'The quickest look: five people, four ordinary duties, nothing gated. Press Draft and a filled calendar appears — start here, then try a real profession below.',
+    provenance: DEMO_PROVENANCE_FICTIONAL,
+    correction: null,
+    config: DEMO_ARRANGEMENT_MARVEL,
+  }),
   Object.freeze({
     id: 'respiratory',
     name: 'Respiratory & Rehab',

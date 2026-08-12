@@ -48,7 +48,15 @@ traceable to those documents.
 
 | Id | Severity | Defect |
 |---|---|---|
-| **P0.7** | Medium | **`npm run lint` has never worked.** No ESLint configuration file exists anywhere in the repository (`git ls-files \| grep -i eslint` returns nothing), so the `lint` script exits `2` on any invocation — "ESLint couldn't find a configuration file". Pre-existing; the deploy workflow never called it, so this was never surfaced by CI. Plan P0.7 in `ROSTER_TODO.md`. |
+| **D2/D3/D9** | High | **A mistyped availability window silently deletes a person from the roster.** A window whose dates fall outside the run makes that person eligible on zero dates — no error, no warning, no unfilled slot, because colleagues absorb the work. The engine already computes `neverRostered` and discards it: `measureRosterLoad` has no UI caller at all. One warning closes all three. `ROSTER_QC_AUDIT_PRIMITIVES.md`. |
+| **D5** | Medium | The slot "needs skill" input is reachable but unusable for a typed-in team. |
+| **D6** | Medium | The ESLint config disables `no-unused-vars` for the whole 6,824-line engine — the "passes by disabling things" failure. Two real findings sit behind it. |
+| **D7** | Low | `compileQuota`'s comment contradicts the validator on `max: 0`. |
+| **D8** | Low | The impossible-floor refusal ignores the hours model. |
+| **Live iOS zoom** | Low | The live-mode wizard's two textareas are still `text-xs`, so live mode still zooms on iOS. Their class strings are pinned byte-for-byte by a test; four clinicians, desktop. |
+
+*(**P0.7 is fixed** as of v1.11.0 — `npm run lint` runs, 76 files, 0 messages, and is a CI
+gate after the test step. It had never worked before: no ESLint config had ever existed.)*
 
 Additional lower-severity findings (C1/C3/C4 persistence and configuration drift,
 D-series verification gaps, E1/E4 documentation overstatement, the swap modal's
@@ -58,6 +66,90 @@ unlabelled `<select>`s — an accessibility gap noted during P8.3) are recorded 
 Firestore rule, blocked on decision D6.
 
 ---
+
+## [1.12.0] - 2026-08-12
+
+Built for the phone, because that is where visiting colleagues will actually open it.
+
+### Changed
+
+- **The arrangement picker is one dropdown.** It was five stacked cards, each with its own
+  Load button, description and warning block — a menu on a desktop and a wall of text on a
+  phone, which pushed the form itself off the first screen. A native `<select>` is the right
+  control precisely *because* it is native: iOS and Android render it as a full-height
+  wheel, so five options cost one tap and no vertical space, and it is keyboard- and
+  screen-reader-operable without any work. Only the chosen arrangement's description and
+  caveat render, so the panel is a fixed three lines regardless of how many professions we
+  support.
+- **One behavioural consequence, stated rather than buried:** the respiratory arrangement's
+  "this is not your service" caveat used to be readable *before* pressing anything, because
+  all five options were expanded. It now arrives *with* the choice. The property that
+  matters is unchanged and pinned by test — it is on screen from the moment the fixture
+  loads, before anyone can read, draft or act on the roster it produced.
+- **The staff-name placeholder is `e.g. Peter Parker`**, tying it to the Marvel names.
+
+### Added
+
+- **The Marvel Team, as the first option and deliberately the smallest thing here.** Every
+  other arrangement demonstrates a constraint a real profession described. This one
+  demonstrates only that the thing runs: five people, four ordinary weekday duties, no
+  skills, quotas, windows or hours overrides. Verified by running the engine — **10 days, 24
+  shifts, 0 unfilled, 0 warnings, nobody unrostered**, confirmed twice through an
+  independent audit. Someone who opens the app on a phone in a corridor picks it, taps
+  Draft, and sees a filled calendar on one screen.
+- **A third provenance kind, `fictional`.** "Inferred" means *our best guess at your
+  service, please correct it*; a Marvel team means no such thing. Folding it into `inferred`
+  would have attached a correction checklist to a department that does not exist.
+
+### Fixed — the mobile layout, against measured defects rather than guesswork
+
+Measured by rendering the wizard and walking every element, before and after:
+
+| | Before | After |
+|---|---|---|
+| Unconditional `overflow-x-auto` (wizard + result panel) | 3 | **0** |
+| Focusable fields under 16px | 42–48 | **0** |
+| Interactive elements with no minimum height | 111–114 | **0** |
+| Band-ruler divider hit area | 24×40px | **44×44px** |
+
+- **The tables no longer scroll sideways.** Below `sm:` each row becomes a stacked card —
+  column name above the field, full width — and reverts to a table from `sm:` up. **CSS
+  only, one DOM tree**: the `<table>` becomes `display:block`, `<thead>` hides, and column
+  headings come from one frozen object read by both the `<th>`s and the in-card labels. A
+  test asserts no `aria-label` in the wizard appears twice, which is what turns red if
+  someone later "fixes" mobile by forking the row into a second card list that drifts.
+- **iOS Safari no longer zooms the page on focus.** It does that to any input under 16px,
+  stranding the user at 1.4× with the modal off-screen. Every focusable field is now
+  `text-base sm:text-xs` via shared constants.
+- **44px touch targets** on buttons, chips, toggles and fields, relaxed at `sm:` where
+  density is wanted.
+- **The wizard is full-screen below `sm:`** with safe-area padding for notches and a
+  **sticky footer**, so Draft and Cancel are reachable without scrolling.
+- **The month becomes a one-column list on a phone**, each row naming its own weekday.
+  Seven columns at 375px is 48px per day — "EFT / Lead: Fadzlynn, Co: Derlinder" does not
+  fit at any legible size, and shrinking further is the same unreadable grid in smaller
+  type. Same shifts, same "not staffed" markers, same days.
+
+### Notes
+
+- **A dead-class discovery, flagged because it changes the desktop.** The drawers' `w-40`,
+  `w-36` and `w-48` never applied: `CELL_INPUT` carries `w-full`, which Tailwind emits
+  after the numeric widths. They are now `sm:w-40` etc., so mobile is unambiguously
+  full-width **and those desktop widths work for the first time** — a change nobody asked
+  for, which restores evident intent.
+- **Recommendation, not shipped:** "my week" is the right *default* on a phone; the
+  seven-column grid is a roster-builder's desktop affordance. Changing which view opens is a
+  behaviour change, not a layout one, so the grid stays the default.
+- **The live-mode wizard still has two `text-xs` textareas** and so still zooms on iOS.
+  Their class strings are pinned byte-for-byte by a test; four clinicians on desktop, out of
+  scope for this pass, stated rather than hidden.
+- **What no test here can tell you:** jsdom paints nothing. Spacing at 375px, tap feel,
+  whether the sticky footer seats flush, contrast of the new in-card labels, and dark mode at
+  every breakpoint all need a human with a phone.
+
+1554 tests (was 1525), **zero existing assertions changed** — the aria-label query idiom
+held through a full layout rewrite, which is the point of it. Lint exit 0. Both engines, the
+mapper and all five compatibility gates byte-identical.
 
 ## [1.11.0] - 2026-08-12
 

@@ -130,6 +130,71 @@ export const buildSwapRequestSignature = ({ originalShiftDate, originalTask, tar
 const STATUS_AUTO_DISMISS_MS = 6000;
 
 /**
+ * 📱 THE RESPONSIVE FLOOR, in three shared strings.
+ *
+ * `TOUCH` is 44px, the minimum target size both Apple's HIG and Material put a
+ * finger at, relaxed from `sm:` up where a mouse is doing the pointing and density
+ * is worth having. `FIELD_TEXT_*` is 16px on a phone for one specific reason: iOS
+ * Safari zooms the entire page when a focused `<input>`, `<select>` or `<textarea>`
+ * renders text under 16px, and it does not zoom back out — the visitor is stranded
+ * at 1.4× with the modal they were filling in off the side of the screen. Labels and
+ * captions are exempt because they cannot be focused.
+ */
+const TOUCH = 'min-h-11 sm:min-h-0';
+const FIELD_TEXT_SM = 'text-base sm:text-sm';
+
+/**
+ * The weekday column headings, and the weekday each day of a month falls on.
+ *
+ * ONE definition, because below `sm:` the seven-column grid becomes a one-column
+ * LIST and the column headings stop being on screen — so each row has to name its own
+ * weekday or the information the header row was carrying is simply lost. Two arrays
+ * would be two answers to "is index 0 Sunday".
+ */
+const WEEKDAY_HEADINGS = Object.freeze(['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']);
+
+/**
+ * 📱 THE LOAD TABLE'S COLUMN HEADINGS, in one object.
+ *
+ * Ten columns of numbers do not fit a phone, so below `sm:` each person's row becomes
+ * a card and every figure is printed under the name of its column. Those names are
+ * read from here by BOTH the `<th>` row and the in-card labels, so there is one
+ * spelling of "Busiest week" in the file — `RosterView.demo.test.jsx` reads the
+ * headings off `<th>` to check the hours columns appear and disappear with the hours
+ * model, and a second hard-coded copy in the cells is how that check would start
+ * passing while the cards said something else.
+ */
+const LOAD_HEADINGS = Object.freeze({
+    name: 'Name',
+    grade: 'Grade',
+    band: 'Band',
+    fte: 'FTE',
+    duties: 'Duties',
+    hours: 'Hours',
+    peak: 'Busiest week',
+    cap: 'Weekly cap',
+    perFte: 'Per FTE',
+    share: 'Share',
+});
+
+/**
+ * One cell of the load table: a labelled line in a card on a phone, a plain table
+ * cell from `sm:` up. Same construction as the wizard tables' `Cell`, and for the
+ * same reason — one markup tree, two layouts, no second renderer to drift.
+ */
+const LoadCell = ({ label, className = '', title, children }) => (
+    <td className={`flex justify-between gap-3 sm:table-cell ${className}`} title={title}>
+        <span
+            aria-hidden="true"
+            className="text-[10px] font-bold uppercase tracking-wider text-slate-400 sm:hidden"
+        >
+            {label}
+        </span>
+        <span className="text-right sm:text-left">{children}</span>
+    </td>
+);
+
+/**
  * 🧪 SANDBOX: what an `unfilled` entry's `role` should be CALLED on screen.
  *
  * `describeShiftRole` knows two roles, `'lead'` and `'coLead'`, and answers
@@ -285,7 +350,7 @@ const PersonRosterPanel = ({
                             id="roster-my-week-person"
                             value={person}
                             onChange={(e) => onPersonChange(e.target.value)}
-                            className="bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2 text-sm font-bold text-slate-800 dark:text-white focus:ring-2 focus:ring-emerald-500 outline-none"
+                            className={`w-full sm:w-auto bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2 ${FIELD_TEXT_SM} ${TOUCH} font-bold text-slate-800 dark:text-white focus:ring-2 focus:ring-emerald-500 outline-none`}
                         >
                             {people.map((name) => (
                                 <option key={name} value={name}>{name}</option>
@@ -490,7 +555,7 @@ const CoverageRequestsPanel = ({
                                                 onClick={() => onRespond(request, true)}
                                                 disabled={busy || blocked}
                                                 aria-label={`Cover ${label}`}
-                                                className="flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 disabled:bg-emerald-300 disabled:cursor-not-allowed text-white font-black text-[11px] uppercase tracking-wider transition-colors"
+                                                className={`flex items-center justify-center gap-1.5 px-4 py-2.5 ${TOUCH} rounded-xl bg-emerald-600 hover:bg-emerald-700 disabled:bg-emerald-300 disabled:cursor-not-allowed text-white font-black text-[11px] uppercase tracking-wider transition-colors`}
                                             >
                                                 <CalendarCheck size={14} />
                                                 {busy ? 'Checking the roster…' : 'Cover this shift'}
@@ -500,7 +565,7 @@ const CoverageRequestsPanel = ({
                                                 onClick={() => onRespond(request, false)}
                                                 disabled={busy || blocked}
                                                 aria-label={`Decline to cover ${label}`}
-                                                className="px-4 py-2.5 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-600 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed font-black text-[11px] uppercase tracking-wider transition-colors"
+                                                className={`px-4 py-2.5 ${TOUCH} rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-600 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed font-black text-[11px] uppercase tracking-wider transition-colors`}
                                             >
                                                 Decline
                                             </button>
@@ -1721,7 +1786,7 @@ const RosterView = ({ user }) => {
     const demoLoadHasHours = demoResult ? loadHasHours(demoResult.load) : false;
 
     return (
-        <div className="md:col-span-2 bg-white dark:bg-slate-800 p-6 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-700 animate-in fade-in relative z-10">
+        <div className="md:col-span-2 bg-white dark:bg-slate-800 p-4 sm:p-6 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-700 animate-in fade-in relative z-10">
             
             {/* HEADER */}
             <div className="flex flex-col md:flex-row justify-between items-center mb-6 gap-4">
@@ -1748,7 +1813,7 @@ const RosterView = ({ user }) => {
                                 type="button"
                                 aria-label="Previous month"
                                 onClick={() => handleMonthChange(-1)}
-                                className="p-1 hover:bg-slate-100 dark:hover:bg-slate-700 rounded transition-colors text-slate-500"
+                                className="inline-flex items-center justify-center min-h-11 min-w-11 sm:min-h-0 sm:min-w-0 p-2.5 sm:p-1 hover:bg-slate-100 dark:hover:bg-slate-700 rounded transition-colors text-slate-500"
                             >
                                 <ChevronLeft size={18} />
                             </button>
@@ -1761,7 +1826,7 @@ const RosterView = ({ user }) => {
                                 type="button"
                                 aria-label="Next month"
                                 onClick={() => handleMonthChange(1)}
-                                className="p-1 hover:bg-slate-100 dark:hover:bg-slate-700 rounded transition-colors text-slate-500"
+                                className="inline-flex items-center justify-center min-h-11 min-w-11 sm:min-h-0 sm:min-w-0 p-2.5 sm:p-1 hover:bg-slate-100 dark:hover:bg-slate-700 rounded transition-colors text-slate-500"
                             >
                                 <ChevronRight size={18} />
                             </button>
@@ -1769,7 +1834,11 @@ const RosterView = ({ user }) => {
                     </div>
                 </div>
 
-                <div className="flex gap-2">
+                {/* 📱 `flex-wrap` and `w-full`: four buttons plus a two-button group
+                    is about 470px of controls, which at 375px used to push the ICS
+                    button off the right-hand edge of the card. They wrap onto as many
+                    lines as they need on a phone and sit on one line from `sm:` up. */}
+                <div className="flex flex-wrap gap-2 w-full sm:w-auto justify-center sm:justify-end">
                     {/* 👤 THE SAME ROSTER, TWO WAYS OF READING IT.
                         Two buttons rather than a switch, because "which one am I
                         looking at" has to be readable at a glance — `aria-pressed`
@@ -1788,7 +1857,7 @@ const RosterView = ({ user }) => {
                             onClick={() => setRosterScope('department')}
                             aria-pressed={rosterScope === 'department'}
                             title="Everybody's duties, as a month grid"
-                            className={`flex gap-1.5 items-center px-3 py-2 font-bold text-xs transition-colors ${
+                            className={`flex gap-1.5 items-center justify-center px-3 py-2 min-h-11 sm:min-h-0 font-bold text-xs transition-colors ${
                                 rosterScope === 'department'
                                     ? 'bg-slate-700 text-white'
                                     : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700'
@@ -1801,7 +1870,7 @@ const RosterView = ({ user }) => {
                             onClick={() => setRosterScope('person')}
                             aria-pressed={rosterScope === 'person'}
                             title="One person's duties, listed"
-                            className={`flex gap-1.5 items-center px-3 py-2 font-bold text-xs transition-colors ${
+                            className={`flex gap-1.5 items-center justify-center px-3 py-2 min-h-11 sm:min-h-0 font-bold text-xs transition-colors ${
                                 rosterScope === 'person'
                                     ? 'bg-slate-700 text-white'
                                     : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700'
@@ -1810,13 +1879,13 @@ const RosterView = ({ user }) => {
                             <User size={14} /> My week
                         </button>
                     </div>
-                    <button onClick={() => setIsConfigOpen(true)} className="flex gap-2 items-center px-4 py-2 rounded bg-slate-100 font-bold text-xs hover:bg-slate-200 text-slate-600 transition-colors">
+                    <button onClick={() => setIsConfigOpen(true)} className={`flex gap-2 items-center justify-center px-4 py-2 ${TOUCH} rounded bg-slate-100 font-bold text-xs hover:bg-slate-200 text-slate-600 transition-colors`}>
                         <Settings size={14} /> Configure
                     </button>
-                    <button onClick={() => downloadCSV(rosterData)} className="flex gap-2 items-center px-4 py-2 rounded bg-green-100 text-green-700 font-bold text-xs hover:bg-green-200 transition-colors">
+                    <button onClick={() => downloadCSV(rosterData)} className={`flex gap-2 items-center justify-center px-4 py-2 ${TOUCH} rounded bg-green-100 text-green-700 font-bold text-xs hover:bg-green-200 transition-colors`}>
                         <FileSpreadsheet size={14} /> CSV
                     </button>
-                    <button onClick={() => downloadICS(rosterData)} className="flex gap-2 items-center px-4 py-2 rounded bg-indigo-600 text-white font-bold text-xs hover:bg-indigo-700 shadow-lg transition-colors">
+                    <button onClick={() => downloadICS(rosterData)} className={`flex gap-2 items-center justify-center px-4 py-2 ${TOUCH} rounded bg-indigo-600 text-white font-bold text-xs hover:bg-indigo-700 shadow-lg transition-colors`}>
                         <Download size={14} /> ICS
                     </button>
                 </div>
@@ -1865,17 +1934,41 @@ const RosterView = ({ user }) => {
                 />
             )}
 
-            {/* CALENDAR GRID */}
+            {/* CALENDAR GRID
+                📱 SEVEN COLUMNS BECOME ONE BELOW `sm:`, AND THE REASONING MATTERS.
+                At 375px a seven-column month grid gives each day about 48px of width.
+                The cells already render at 9px with a 90px inner scroller, and 48px is
+                not enough for "EFT" and "Lead: Fadzlynn, Co: Derlinder" at any size a
+                person can read — shrinking further is not a fix, it is the same
+                unreadable grid with smaller type. So below `sm:` the month lays out as
+                a LIST: one full-width row per day, in date order, each naming its own
+                weekday because the column headings it used to get that from are no
+                longer on screen.
+
+                NOTHING IS HIDDEN AND NOTHING IS ADDED. The same shifts, the same
+                "not staffed" markers, the same days — including the empty ones, which
+                are the days somebody is checking when they ask "am I off on the 12th".
+                The leading blanks before the 1st are the one exception: they exist only
+                to align a date under a weekday column, and with one column there is no
+                column to align to.
+
+                IS A ONE-PERSON LIST THE BETTER MOBILE DEFAULT? Honestly, yes — "My
+                week" is the view a clinician on a phone actually wants, and the grid is
+                a desktop affordance for whoever is building the roster. But changing
+                which view opens by default is a BEHAVIOUR change, not a layout one, and
+                an existing user who never pressed either button would find a different
+                screen than the one they left. So the grid stays the default and stays
+                readable; the recommendation is in the report, not in this commit. */}
             {rosterScope === 'department' && (
-            <div className="grid grid-cols-7 gap-px bg-slate-200 dark:bg-slate-700 rounded-xl overflow-hidden border border-slate-200 dark:border-slate-700">
-                {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(d => (
-                    <div key={d} className="bg-slate-50 dark:bg-slate-800 p-2 text-center text-xs font-bold text-slate-400 uppercase">
+            <div className="grid grid-cols-1 sm:grid-cols-7 gap-px bg-slate-200 dark:bg-slate-700 rounded-xl overflow-hidden border border-slate-200 dark:border-slate-700">
+                {WEEKDAY_HEADINGS.map(d => (
+                    <div key={d} className="hidden sm:block bg-slate-50 dark:bg-slate-800 p-2 text-center text-xs font-bold text-slate-400 uppercase">
                         {d}
                     </div>
                 ))}
-                
+
                 {Array.from({ length: firstDayIndex }).map((_, i) => (
-                    <div key={`empty-${i}`} className="bg-white dark:bg-slate-900 h-32" />
+                    <div key={`empty-${i}`} className="hidden sm:block bg-white dark:bg-slate-900 h-32" />
                 ))}
 
                 {Array.from({ length: daysInMonth }).map((_, i) => {
@@ -1888,10 +1981,24 @@ const RosterView = ({ user }) => {
                         // missing from" is a claim about WHICH square, and a test that
                         // cannot name the square can only check that the words exist
                         // somewhere on the page.
-                        <div key={day} data-date={dateKey} className="bg-white dark:bg-slate-900 h-32 p-1 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors relative group border-t border-l border-transparent hover:border-slate-200 dark:hover:border-slate-700">
-                            <span className="text-xs font-bold text-slate-400 absolute top-1 right-2">{day}</span>
-                            
-                            <div className="mt-5 flex flex-col gap-1 overflow-y-auto max-h-[90px] custom-scrollbar">
+                        <div key={day} data-date={dateKey} className="bg-white dark:bg-slate-900 min-h-14 sm:min-h-0 sm:h-32 p-2 sm:p-1 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors relative group border-t border-l border-transparent hover:border-slate-200 dark:hover:border-slate-700">
+                            {/* The date. In the grid it is the small number tucked into
+                                the top-right corner of the square; in the one-column list
+                                it is the row's heading and carries the weekday the column
+                                header used to supply. The number itself is one text node
+                                either way — the weekday is a sibling that disappears from
+                                `sm:` up, not a second copy of the date. */}
+                            <span className="flex items-baseline gap-1.5 text-xs font-bold text-slate-400 sm:absolute sm:top-1 sm:right-2 sm:gap-0">
+                                <span className="sm:hidden uppercase tracking-wider">
+                                    {WEEKDAY_HEADINGS[(firstDayIndex + i) % 7]}
+                                </span>
+                                <span>{day}</span>
+                            </span>
+
+                            {/* No inner scroller on a phone: a 90px window inside a
+                                48px-wide column was two scrollbars deep. The row grows to
+                                whatever the day holds instead, and the page scrolls. */}
+                            <div className="mt-1 sm:mt-5 flex flex-col gap-1 sm:overflow-y-auto sm:max-h-[90px] custom-scrollbar">
                                 {shifts.map((s, idx) => {
                                     // 🌟 UPDATED: Checks both Lead and Co-Lead safely
                                     const isMyShift = isDemo ? true : (s.lead === user?.name || s.coLead === user?.name || s.staff === user?.name);
@@ -1937,7 +2044,7 @@ const RosterView = ({ user }) => {
                                             key={idx} 
                                             onClick={() => handleShiftClick(s, dateKey)}
                                             disabled={!isMyShift && user?.role !== 'admin'}
-                                            className={`text-left text-[9px] font-bold px-1.5 py-1 rounded flex flex-col leading-tight shadow-sm transition-transform ${
+                                            className={`text-left text-xs sm:text-[9px] font-bold px-2 py-2 sm:px-1.5 sm:py-1 ${TOUCH} rounded flex flex-col leading-tight shadow-sm transition-transform ${
                                                 isMyShift || user?.role === 'admin' ? 'cursor-pointer hover:scale-[1.02] ring-1 ring-inset ring-transparent hover:ring-indigo-400' : 'cursor-default opacity-80'
                                             } ${
                                                 s.category === 'VC' ? 'bg-orange-50 text-orange-800 border border-orange-100 dark:bg-orange-900/30 dark:text-orange-400 dark:border-orange-800/50' :
@@ -1964,7 +2071,7 @@ const RosterView = ({ user }) => {
                                                 <span
                                                     data-coverage-badge={dateKey}
                                                     title={`${coverAsks.map((ask) => ask.requestedBy).filter(Boolean).join(', ') || 'A colleague'} asked you to cover this shift. Answer it in "Cover asked of you", above the calendar.`}
-                                                    className="mt-0.5 self-start px-1 py-px rounded border border-amber-400 bg-amber-100 text-amber-900 dark:bg-amber-900/40 dark:text-amber-300 dark:border-amber-700 text-[8px] font-black uppercase tracking-wide"
+                                                    className="mt-0.5 self-start px-1.5 py-0.5 sm:px-1 sm:py-px rounded border border-amber-400 bg-amber-100 text-amber-900 dark:bg-amber-900/40 dark:text-amber-300 dark:border-amber-700 text-[10px] sm:text-[8px] font-black uppercase tracking-wide"
                                                 >
                                                     Cover asked of you
                                                 </span>
@@ -2003,7 +2110,7 @@ const RosterView = ({ user }) => {
                                             tabIndex={0}
                                             aria-label={`Not staffed: ${slot.task}, ${duty}, ${formatRosterDateKey(slot.date)}. ${slot.reason}`}
                                             title={`Not staffed — ${duty}: ${slot.reason}`}
-                                            className="text-left text-[9px] font-bold px-1.5 py-1 rounded flex flex-col leading-tight border border-dashed border-slate-400 dark:border-slate-500 bg-transparent text-slate-500 dark:text-slate-400 focus:outline-none focus:ring-1 focus:ring-slate-500"
+                                            className={`text-left text-xs sm:text-[9px] font-bold px-2 py-2 sm:px-1.5 sm:py-1 ${TOUCH} rounded flex flex-col leading-tight border border-dashed border-slate-400 dark:border-slate-500 bg-transparent text-slate-500 dark:text-slate-400 focus:outline-none focus:ring-1 focus:ring-slate-500`}
                                         >
                                             <span className="uppercase tracking-tighter">
                                                 {`${slot.task} · not staffed`}
@@ -2284,15 +2391,17 @@ const RosterView = ({ user }) => {
                                 <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 flex items-center gap-1.5">
                                     <Users size={13} /> Load per person
                                 </p>
-                                <div className="overflow-x-auto">
-                                    <table className="w-full text-xs">
-                                        <thead>
+                                {/* No horizontal scroller below `sm:`: the rows are cards
+                                    there, so there is nothing to scroll sideways. */}
+                                <div className="sm:overflow-x-auto">
+                                    <table className="w-full text-xs block sm:table">
+                                        <thead className="hidden sm:table-header-group">
                                             <tr className="text-left text-slate-400">
-                                                <th className="font-bold uppercase text-[10px] py-1 pr-3">Name</th>
-                                                <th className="font-bold uppercase text-[10px] py-1 pr-3">Grade</th>
-                                                <th className="font-bold uppercase text-[10px] py-1 pr-3">Band</th>
-                                                <th className="font-bold uppercase text-[10px] py-1 pr-3">FTE</th>
-                                                <th className="font-bold uppercase text-[10px] py-1 pr-3">Duties</th>
+                                                <th className="font-bold uppercase text-[10px] py-1 pr-3">{LOAD_HEADINGS.name}</th>
+                                                <th className="font-bold uppercase text-[10px] py-1 pr-3">{LOAD_HEADINGS.grade}</th>
+                                                <th className="font-bold uppercase text-[10px] py-1 pr-3">{LOAD_HEADINGS.band}</th>
+                                                <th className="font-bold uppercase text-[10px] py-1 pr-3">{LOAD_HEADINGS.fte}</th>
+                                                <th className="font-bold uppercase text-[10px] py-1 pr-3">{LOAD_HEADINGS.duties}</th>
                                                 {/* Only when this run counted hours. A
                                                     duties-only run reads exactly the
                                                     table it has always read — the engine
@@ -2301,33 +2410,40 @@ const RosterView = ({ user }) => {
                                                     reporting a policy nobody set. */}
                                                 {demoLoadHasHours && (
                                                     <>
-                                                        <th className="font-bold uppercase text-[10px] py-1 pr-3">Hours</th>
-                                                        <th className="font-bold uppercase text-[10px] py-1 pr-3">Busiest week</th>
-                                                        <th className="font-bold uppercase text-[10px] py-1 pr-3">Weekly cap</th>
+                                                        <th className="font-bold uppercase text-[10px] py-1 pr-3">{LOAD_HEADINGS.hours}</th>
+                                                        <th className="font-bold uppercase text-[10px] py-1 pr-3">{LOAD_HEADINGS.peak}</th>
+                                                        <th className="font-bold uppercase text-[10px] py-1 pr-3">{LOAD_HEADINGS.cap}</th>
                                                     </>
                                                 )}
-                                                <th className="font-bold uppercase text-[10px] py-1 pr-3">Per FTE</th>
-                                                <th className="font-bold uppercase text-[10px] py-1">Share</th>
+                                                <th className="font-bold uppercase text-[10px] py-1 pr-3">{LOAD_HEADINGS.perFte}</th>
+                                                <th className="font-bold uppercase text-[10px] py-1">{LOAD_HEADINGS.share}</th>
                                             </tr>
                                         </thead>
-                                        <tbody>
+                                        <tbody className="block sm:table-row-group">
                                             {Object.entries(demoResult.load).map(([name, entry]) => (
-                                                <tr key={name} className="border-t border-slate-200 dark:border-slate-700">
-                                                    <td className="py-1 pr-3 font-bold text-slate-700 dark:text-slate-200">{name}</td>
+                                                <tr
+                                                    key={name}
+                                                    className="block sm:table-row border-t border-slate-200 dark:border-slate-700 py-2 sm:py-0"
+                                                >
+                                                    {/* The name is the card's HEADING on a phone, so it
+                                                        is the one cell with no label above it — printing
+                                                        "NAME" over somebody's name reads as a form field
+                                                        rather than as the row it belongs to. */}
+                                                    <td className="block sm:table-cell py-1 pr-3 font-bold text-slate-700 dark:text-slate-200">{name}</td>
                                                     {/* Requirement 6: the grade this run used, and the
                                                         band it resolved to under that run's boundaries.
                                                         "Not recorded" is said in words rather than left
                                                         blank — a blank cell reads as a rendering bug,
                                                         and "no grade" is a fact with consequences (it
                                                         bars this person from every band-gated lead). */}
-                                                    <td className="py-1 pr-3 text-slate-500 dark:text-slate-400">
+                                                    <LoadCell label={LOAD_HEADINGS.grade} className="py-1 pr-3 text-slate-500 dark:text-slate-400">
                                                         {demoRunGrades[name]?.grade || <span className="italic">not recorded</span>}
-                                                    </td>
-                                                    <td className="py-1 pr-3 text-slate-500 dark:text-slate-400">
+                                                    </LoadCell>
+                                                    <LoadCell label={LOAD_HEADINGS.band} className="py-1 pr-3 text-slate-500 dark:text-slate-400">
                                                         {demoRunGrades[name]?.band
                                                             ? bandLabel(demoRunGrades[name].band)
                                                             : <span className="italic">—</span>}
-                                                    </td>
+                                                    </LoadCell>
                                                     {/* The FTE, and what it MEANS. "0.6" is the
                                                         number the engine weighs fairness with;
                                                         "works 3 days a week" is the same fact in
@@ -2338,20 +2454,20 @@ const RosterView = ({ user }) => {
                                                         a five-day answer. Both are shown: the
                                                         number is what a payroll record holds and
                                                         what Per FTE is computed from. */}
-                                                    <td className="py-1 pr-3 text-slate-500 dark:text-slate-400">
+                                                    <LoadCell label={LOAD_HEADINGS.fte} className="py-1 pr-3 text-slate-500 dark:text-slate-400">
                                                         <span className="block">{entry.fte}</span>
                                                         {describeFteAsDays(entry.fte, demoRunWorkingDays) !== '' && (
                                                             <span className="block text-[10px] text-slate-400">
                                                                 {describeFteAsDays(entry.fte, demoRunWorkingDays)}
                                                             </span>
                                                         )}
-                                                    </td>
-                                                    <td className="py-1 pr-3 font-black text-slate-800 dark:text-white">{entry.duties}</td>
+                                                    </LoadCell>
+                                                    <LoadCell label={LOAD_HEADINGS.duties} className="py-1 pr-3 font-black text-slate-800 dark:text-white">{entry.duties}</LoadCell>
                                                     {demoLoadHasHours && (
                                                         <>
-                                                            <td className="py-1 pr-3 font-black text-slate-800 dark:text-white tabular-nums">
+                                                            <LoadCell label={LOAD_HEADINGS.hours} className="py-1 pr-3 font-black text-slate-800 dark:text-white tabular-nums">
                                                                 {typeof entry.hours === 'number' ? `${entry.hours}h` : '—'}
-                                                            </td>
+                                                            </LoadCell>
                                                             {/* THE CAP BINDS A WEEK, NOT A RUN,
                                                                 so the number to compare against it
                                                                 is the busiest single week — a
@@ -2368,7 +2484,8 @@ const RosterView = ({ user }) => {
                                                                 const cap = typeof entry.weeklyCap === 'number' ? entry.weeklyCap : null;
                                                                 const atCap = cap !== null && peak >= cap;
                                                                 return (
-                                                                    <td
+                                                                    <LoadCell
+                                                                        label={LOAD_HEADINGS.peak}
                                                                         className={`py-1 pr-3 tabular-nums ${atCap
                                                                             ? 'font-black text-amber-700 dark:text-amber-400'
                                                                             : 'text-slate-500 dark:text-slate-400'}`}
@@ -2377,16 +2494,16 @@ const RosterView = ({ user }) => {
                                                                             : undefined}
                                                                     >
                                                                         {`${peak}h`}
-                                                                    </td>
+                                                                    </LoadCell>
                                                                 );
                                                             })()}
-                                                            <td className="py-1 pr-3 text-slate-500 dark:text-slate-400 tabular-nums">
+                                                            <LoadCell label={LOAD_HEADINGS.cap} className="py-1 pr-3 text-slate-500 dark:text-slate-400 tabular-nums">
                                                                 {typeof entry.weeklyCap === 'number' ? `${entry.weeklyCap}h` : '—'}
-                                                            </td>
+                                                            </LoadCell>
                                                         </>
                                                     )}
-                                                    <td className="py-1 pr-3 text-slate-500 dark:text-slate-400">{entry.weighted}</td>
-                                                    <td className="py-1 text-slate-500 dark:text-slate-400">{Math.round(entry.share * 100)}%</td>
+                                                    <LoadCell label={LOAD_HEADINGS.perFte} className="py-1 pr-3 text-slate-500 dark:text-slate-400">{entry.weighted}</LoadCell>
+                                                    <LoadCell label={LOAD_HEADINGS.share} className="py-1 text-slate-500 dark:text-slate-400">{Math.round(entry.share * 100)}%</LoadCell>
                                                 </tr>
                                             ))}
                                         </tbody>
@@ -2423,11 +2540,11 @@ const RosterView = ({ user }) => {
 
             {/* --- MODAL: SWAP REQUEST --- */}
             {isSwapModalOpen && selectedShift && createPortal(
-                <div data-overlay="swap-modal" className="fixed inset-0 z-[120] flex items-center justify-center p-4">
+                <div data-overlay="swap-modal" className="fixed inset-0 z-[120] flex items-stretch sm:items-center justify-center p-0 sm:p-4">
                     <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={() => setIsSwapModalOpen(false)}></div>
-                    <div className="relative bg-white dark:bg-slate-900 w-full max-w-md rounded-2xl shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200 border border-slate-200 dark:border-slate-700">
+                    <div className="relative bg-white dark:bg-slate-900 w-full max-w-full sm:max-w-md h-full sm:h-auto overflow-y-auto sm:overflow-hidden rounded-none sm:rounded-2xl shadow-2xl animate-in zoom-in-95 duration-200 border-0 sm:border sm:border-slate-200 sm:dark:border-slate-700">
                         
-                        <div className="bg-gradient-to-r from-indigo-500 to-purple-500 p-4 flex justify-between items-center text-white">
+                        <div className="bg-gradient-to-r from-indigo-500 to-purple-500 p-4 pt-[max(1rem,env(safe-area-inset-top))] sm:pt-4 flex justify-between items-center text-white">
                             <div className="flex items-center gap-2">
                                 <ArrowRightLeft size={18} />
                                 {/* Plain language, and the same words the button
@@ -2436,12 +2553,12 @@ const RosterView = ({ user }) => {
                                     "shift swap request" with a system. */}
                                 <h3 className="text-sm font-black uppercase tracking-wider">Ask someone to cover</h3>
                             </div>
-                            <button onClick={() => setIsSwapModalOpen(false)} className="hover:bg-white/20 p-1 rounded-full transition-colors">
+                            <button onClick={() => setIsSwapModalOpen(false)} aria-label="Close" className="inline-flex items-center justify-center min-h-11 min-w-11 sm:min-h-0 sm:min-w-0 hover:bg-white/20 p-2.5 sm:p-1 rounded-full transition-colors">
                                 <X size={18} />
                             </button>
                         </div>
 
-                        <form onSubmit={submitSwapRequest} className="p-6">
+                        <form onSubmit={submitSwapRequest} className="p-4 sm:p-6 pb-[max(1rem,env(safe-area-inset-bottom))] sm:pb-6">
                             {statusSlot === 'swap' && statusBanner}
 
                             <div className="bg-slate-50 dark:bg-slate-800/50 p-4 rounded-xl border border-slate-200 dark:border-slate-700 mb-6">
@@ -2500,7 +2617,7 @@ const RosterView = ({ user }) => {
                                             required
                                             value={swapRoleChoice}
                                             onChange={(e) => setSwapRoleChoice(e.target.value)}
-                                            className="w-full bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-700 rounded-lg p-3 text-sm font-bold text-slate-800 dark:text-white focus:ring-2 focus:ring-indigo-500 outline-none"
+                                            className={`w-full bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-700 rounded-lg p-3 ${FIELD_TEXT_SM} ${TOUCH} font-bold text-slate-800 dark:text-white focus:ring-2 focus:ring-indigo-500 outline-none`}
                                         >
                                             <option value="" disabled>Select a duty...</option>
                                             {swapSubject.assignableRoles.map(({ role, holder }) => (
@@ -2518,7 +2635,7 @@ const RosterView = ({ user }) => {
                                         required
                                         value={swapTargetStaff}
                                         onChange={(e) => setSwapTargetStaff(e.target.value)}
-                                        className="w-full bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-700 rounded-lg p-3 text-sm font-bold text-slate-800 dark:text-white focus:ring-2 focus:ring-indigo-500 outline-none"
+                                        className={`w-full bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-700 rounded-lg p-3 ${FIELD_TEXT_SM} ${TOUCH} font-bold text-slate-800 dark:text-white focus:ring-2 focus:ring-indigo-500 outline-none`}
                                     >
                                         <option value="" disabled>Select a Colleague...</option>
                                         {/* 🛡️ A4 FIX: this was
@@ -2543,7 +2660,7 @@ const RosterView = ({ user }) => {
                                         value={swapReason}
                                         onChange={(e) => setSwapReason(e.target.value)}
                                         placeholder="e.g. Attending a medical conference..."
-                                        className="w-full bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-700 rounded-lg p-3 text-sm text-slate-800 dark:text-white focus:ring-2 focus:ring-indigo-500 outline-none h-20 resize-none"
+                                        className={`w-full bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-700 rounded-lg p-3 ${FIELD_TEXT_SM} text-slate-800 dark:text-white focus:ring-2 focus:ring-indigo-500 outline-none h-20 resize-none`}
                                     />
                                 </div>
                             </div>
@@ -2576,13 +2693,29 @@ const RosterView = ({ user }) => {
             )}
 
             {isConfigOpen && createPortal(
-                <div data-overlay="roster-config-wizard" className="fixed inset-0 bg-slate-900/60 backdrop-blur-md flex items-center justify-center z-[100] p-4">
+                <div
+                    data-overlay="roster-config-wizard"
+                    /* 📱 FULL-BLEED ON A PHONE, CENTRED DIALOG FROM `sm:` UP.
+                       The sandbox wizard is a band ruler, three policy panels and two
+                       tables. Inside a `p-4` box that is centred in a dimmed page, on a
+                       375px screen, it was a 343px-wide column with a scrollbar — the
+                       form the visitor came to use, viewed through a letterbox. Below
+                       `sm:` the panel now IS the screen: no overlay padding, no radius,
+                       no border, its own scroll, and the notch/home-bar insets padded
+                       for. LIVE MODE'S STRING IS THE LITERAL IT ALWAYS WAS — written out
+                       in full rather than composed, because `RosterView.wizard.test.jsx`
+                       pins the live wizard and a shared base string is exactly how a
+                       "sandbox only" change stops being sandbox only. */
+                    className={isDemo
+                        ? 'fixed inset-0 bg-slate-900/60 backdrop-blur-md flex items-stretch sm:items-center justify-center z-[100] p-0 sm:p-4'
+                        : 'fixed inset-0 bg-slate-900/60 backdrop-blur-md flex items-center justify-center z-[100] p-4'}
+                >
                     {/* 🧪 The sandbox wizard is WIDER, and scrolls: two tables and a
                         band editor do not fit the live wizard's max-w-lg. Live mode
                         keeps that width, and every class on it, exactly as before. */}
-                    <div className={`bg-white dark:bg-slate-800 w-full rounded-2xl shadow-2xl p-6 border border-slate-200 dark:border-slate-700 animate-in zoom-in-95 ${
-                        isDemo ? 'max-w-3xl max-h-[90vh] overflow-y-auto' : 'max-w-lg'
-                    }`}>
+                    <div className={isDemo
+                        ? 'bg-white dark:bg-slate-800 w-full max-w-3xl h-full sm:h-auto sm:max-h-[90vh] overflow-y-auto overscroll-contain rounded-none sm:rounded-2xl shadow-2xl p-4 sm:p-6 pt-[max(1rem,env(safe-area-inset-top))] sm:pt-6 border-0 sm:border sm:border-slate-200 sm:dark:border-slate-700 animate-in zoom-in-95'
+                        : 'bg-white dark:bg-slate-800 w-full rounded-2xl shadow-2xl p-6 border border-slate-200 dark:border-slate-700 animate-in zoom-in-95 max-w-lg'}>
                         
                         <div className="flex items-center gap-2 mb-4">
                             {isDemo && <span className="bg-emerald-100 text-emerald-700 text-[10px] font-bold px-2 py-0.5 rounded">SANDBOX MODE</span>}
@@ -2614,88 +2747,96 @@ const RosterView = ({ user }) => {
                             A typed-in team still works and is still the point of the
                             tables: a name alone is enough, and every column beside it is
                             optional. */}
+                        {/* 🧪 THE ARRANGEMENT PICKER — one dropdown, not five cards.
+                            This was five stacked panels, each with its own Load button, its
+                            own one-line description and (for the inferred one) its own
+                            warning block. On a desktop that is a menu; on a phone — which is
+                            where visiting colleagues will actually open this — it is a wall
+                            of text above the form they came to use, and the form itself was
+                            pushed off the first screen.
+
+                            A native <select> is the right control here precisely because it
+                            is native: iOS and Android render it as a full-height wheel, so
+                            five options cost one tap and zero vertical space, and it is
+                            keyboard- and screen-reader-operable without any work from us.
+                            Only the CHOSEN arrangement's description and warning render, so
+                            the panel is a fixed three lines tall instead of growing with the
+                            number of professions we support. */}
                         {isDemo && (
                             <div className="mb-4 p-3 rounded-xl bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800">
-                                <p className="text-[10px] font-black text-emerald-800 dark:text-emerald-300 uppercase tracking-widest">
+                                <label
+                                    htmlFor="roster-arrangement"
+                                    className="text-[10px] font-black text-emerald-800 dark:text-emerald-300 uppercase tracking-widest"
+                                >
                                     Load an example arrangement
-                                </p>
-                                <p className="text-[10px] text-emerald-700 dark:text-emerald-300 mt-1 leading-relaxed">
-                                    Four teams, four different rostering problems. Each fills the tables below in one
-                                    press, and every part of what it loads stays editable — including the fields that
-                                    make it interesting.
-                                </p>
+                                </label>
 
-                                <div className="mt-3 space-y-2">
-                                    {DEMO_ARRANGEMENTS.map((arrangement) => {
-                                        const loaded = demoArrangement?.id === arrangement.id;
-                                        return (
-                                            <div
-                                                key={arrangement.id}
-                                                data-arrangement={arrangement.id}
-                                                className={`p-2 rounded-lg border transition-colors ${
-                                                    loaded
-                                                        ? 'border-emerald-500 bg-white dark:bg-slate-900'
-                                                        : 'border-emerald-200/70 dark:border-emerald-800/70'
-                                                }`}
-                                            >
-                                                <div className="flex flex-col sm:flex-row sm:items-start gap-2">
-                                                    <button
-                                                        type="button"
-                                                        onClick={() => loadArrangement(arrangement)}
-                                                        className="shrink-0 flex items-center gap-2 px-3 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-[11px] uppercase tracking-wider transition-colors"
-                                                    >
-                                                        <Users size={14} /> Load {arrangement.name}
-                                                    </button>
-                                                    <p className="text-[10px] text-emerald-700 dark:text-emerald-300 leading-relaxed">
-                                                        {arrangement.demonstrates}
-                                                    </p>
-                                                </div>
+                                <select
+                                    id="roster-arrangement"
+                                    value={demoArrangement?.id || ''}
+                                    onChange={(event) => {
+                                        const chosen = DEMO_ARRANGEMENTS.find((entry) => entry.id === event.target.value);
+                                        if (chosen) loadArrangement(chosen);
+                                    }}
+                                    /* min-h-11 is a deliberate ~44px touch target — the size
+                                       both Apple's and Google's guidance put as the floor,
+                                       and the reason this is not the 32px the desktop rows
+                                       use. text-base stops iOS Safari zooming the whole page
+                                       on focus, which it does to any input under 16px. */
+                                    className="mt-2 w-full min-h-11 rounded-lg border border-emerald-300 dark:border-emerald-700 bg-white dark:bg-slate-900 px-3 py-2 text-base sm:text-sm font-bold text-slate-800 dark:text-white focus:ring-2 focus:ring-emerald-500 outline-none"
+                                >
+                                    <option value="">Choose a team to load…</option>
+                                    {DEMO_ARRANGEMENTS.map((entry) => (
+                                        <option key={entry.id} value={entry.id}>{entry.name}</option>
+                                    ))}
+                                </select>
 
-                                                {/* THE PROVENANCE WARNING. Present whenever the
-                                                    arrangement carries one, loaded or not — a
-                                                    visitor has to be able to read it BEFORE
-                                                    pressing, not only after. The checklist below it
-                                                    opens once the arrangement is loaded, because
-                                                    five bullet points on every unpressed option is
-                                                    a wall of text, and the moment they become
-                                                    actionable is the moment the roster exists. */}
-                                                {arrangement.correction && (
-                                                    <div className="mt-2 flex items-start gap-2 p-2 rounded-lg bg-amber-50 dark:bg-amber-900/20 border border-amber-300 dark:border-amber-800">
-                                                        <ShieldAlert size={14} className="text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
-                                                        <div>
-                                                            <p className="text-[10px] font-black text-amber-800 dark:text-amber-300 uppercase tracking-wide">
-                                                                {arrangement.correction.headline}
-                                                            </p>
-                                                            {loaded && (
-                                                                <>
-                                                                    <p className="text-[10px] text-amber-800 dark:text-amber-300 leading-relaxed mt-1">
-                                                                        {arrangement.correction.body}
-                                                                    </p>
-                                                                    <p className="text-[10px] font-bold text-amber-800 dark:text-amber-300 mt-1">
-                                                                        Please check every one of these:
-                                                                    </p>
-                                                                    <ul className="mt-0.5 list-disc list-outside pl-4 space-y-0.5">
-                                                                        {arrangement.correction.items.map((item) => (
-                                                                            <li key={item} className="text-[10px] text-amber-700 dark:text-amber-400 leading-relaxed">
-                                                                                {item}
-                                                                            </li>
-                                                                        ))}
-                                                                    </ul>
-                                                                </>
-                                                            )}
-                                                        </div>
-                                                    </div>
-                                                )}
-                                            </div>
-                                        );
-                                    })}
-                                </div>
+                                {/* The chosen option's one line. Before the dropdown this
+                                    sentence was on screen for all five at once; now it
+                                    follows the choice, which is when it is actually read. */}
+                                {demoArrangement ? (
+                                    <p
+                                        data-arrangement={demoArrangement.id}
+                                        className="text-[10px] text-emerald-700 dark:text-emerald-300 mt-2 leading-relaxed"
+                                    >
+                                        {demoArrangement.demonstrates}
+                                    </p>
+                                ) : (
+                                    <p className="text-[10px] text-emerald-700 dark:text-emerald-300 mt-2 leading-relaxed">
+                                        Five teams, five different rostering problems. Pick one and it fills the
+                                        tables below — everything it loads stays editable, including the parts that
+                                        make it interesting. Or just start typing your own team: a name alone is
+                                        enough.
+                                    </p>
+                                )}
 
-                                <p className="text-[10px] text-emerald-700 dark:text-emerald-300 mt-3 leading-relaxed">
-                                    Or fill in the tables below with your own team — a name alone is enough, and
-                                    anyone you leave blank is treated as full-time with no skills, no leave and no
-                                    grade recorded.
-                                </p>
+                                {/* THE PROVENANCE WARNING, for the chosen arrangement only.
+                                    It must be readable the moment the choice is made — a
+                                    visitor from the department this is a GUESS about should
+                                    never take it for a description of their service. */}
+                                {demoArrangement?.correction && (
+                                    <div className="mt-2 flex items-start gap-2 p-2 rounded-lg bg-amber-50 dark:bg-amber-900/20 border border-amber-300 dark:border-amber-800">
+                                        <ShieldAlert size={14} className="text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
+                                        <div className="min-w-0">
+                                            <p className="text-[10px] font-black text-amber-800 dark:text-amber-300 uppercase tracking-wide">
+                                                {demoArrangement.correction.headline}
+                                            </p>
+                                            <p className="text-[10px] text-amber-800 dark:text-amber-300 leading-relaxed mt-1">
+                                                {demoArrangement.correction.body}
+                                            </p>
+                                            <p className="text-[10px] font-bold text-amber-800 dark:text-amber-300 mt-1">
+                                                Please check every one of these:
+                                            </p>
+                                            <ul className="mt-0.5 list-disc list-outside pl-4 space-y-0.5">
+                                                {demoArrangement.correction.items.map((item) => (
+                                                    <li key={item} className="text-[10px] text-amber-700 dark:text-amber-400 leading-relaxed">
+                                                        {item}
+                                                    </li>
+                                                ))}
+                                            </ul>
+                                        </div>
+                                    </div>
+                                )}
                             </div>
                         )}
 
@@ -2706,7 +2847,7 @@ const RosterView = ({ user }) => {
                                     <input
                                         id="roster-start-date"
                                         type="date"
-                                        className="input-field w-full mt-1 font-bold bg-white dark:bg-slate-900 border dark:border-slate-700 rounded p-2 text-slate-800 dark:text-white"
+                                        className={`input-field w-full mt-1 font-bold bg-white dark:bg-slate-900 border dark:border-slate-700 rounded p-2 text-slate-800 dark:text-white${isDemo ? ' min-h-11 !text-base sm:min-h-0 sm:!text-sm' : ''}`}
                                         value={config.startDate}
                                         onChange={(e) => setConfig({...config, startDate: e.target.value})}
                                     />
@@ -2719,7 +2860,7 @@ const RosterView = ({ user }) => {
                                         min="1"
                                         max={MAX_ROSTER_WEEKS}
                                         step="1"
-                                        className="input-field w-full mt-1 font-bold bg-white dark:bg-slate-900 border dark:border-slate-700 rounded p-2 text-slate-800 dark:text-white"
+                                        className={`input-field w-full mt-1 font-bold bg-white dark:bg-slate-900 border dark:border-slate-700 rounded p-2 text-slate-800 dark:text-white${isDemo ? ' min-h-11 !text-base sm:min-h-0 sm:!text-sm' : ''}`}
                                         value={config.weeks}
                                         // 🛡️ M3 FIX: an empty field is kept as '' rather than becoming
                                         // parseInt('') === NaN. '' is rejected by validateRosterConfig,
@@ -2812,13 +2953,21 @@ const RosterView = ({ user }) => {
                             </p>
                         )}
 
-                        <div className="flex gap-2">
-                            <button onClick={() => setIsConfigOpen(false)} className="flex-1 py-3 text-slate-500 dark:text-slate-400 font-bold hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg transition-colors">Cancel</button>
+                        {/* 📱 A STICKY FOOTER ON A PHONE. Full-screen and scrolling, the
+                            two decisions — draft it, or give up — were at the bottom of a
+                            page of tables, so the answer to "how do I make it do the thing"
+                            was "keep scrolling". They now sit on the bottom edge of the
+                            scrollport with a rule above them and the home-bar inset padded,
+                            and revert to an ordinary row in the flow from `sm:` up. */}
+                        <div className={isDemo
+                            ? 'sticky sm:static bottom-0 z-10 -mx-4 -mb-4 sm:mx-0 sm:mb-0 px-4 pt-3 pb-[max(1rem,env(safe-area-inset-bottom))] sm:p-0 bg-white dark:bg-slate-800 border-t border-slate-200 dark:border-slate-700 sm:border-0 flex gap-2'
+                            : 'flex gap-2'}>
+                            <button onClick={() => setIsConfigOpen(false)} className={`flex-1 py-3 ${isDemo ? `${TOUCH} ` : ''}text-slate-500 dark:text-slate-400 font-bold hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg transition-colors`}>Cancel</button>
                             <button
                                 onClick={handleGenerateClick}
                                 disabled={!generateGate.valid}
                                 title={generateGate.valid ? undefined : generateGate.reason}
-                                className={`flex-1 py-3 text-white font-bold rounded-lg shadow-lg transition-colors flex justify-center items-center gap-2 disabled:bg-slate-300 dark:disabled:bg-slate-700 disabled:text-slate-500 disabled:shadow-none disabled:cursor-not-allowed ${isDemo ? 'bg-emerald-600 hover:bg-emerald-700' : 'bg-indigo-600 hover:bg-indigo-700'}`}
+                                className={`flex-1 py-3 text-white font-bold rounded-lg shadow-lg transition-colors flex justify-center items-center gap-2 disabled:bg-slate-300 dark:disabled:bg-slate-700 disabled:text-slate-500 disabled:shadow-none disabled:cursor-not-allowed ${isDemo ? `${TOUCH} bg-emerald-600 hover:bg-emerald-700` : 'bg-indigo-600 hover:bg-indigo-700'}`}
                             >
                                 {/* 🧪 It said "Simulate Check" while doing nothing at
                                     all. It generates a roster now, so it says so. */}

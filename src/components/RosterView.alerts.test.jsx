@@ -236,7 +236,9 @@ describe('demo mode raises no native dialog (P8.3)', () => {
         // option loads `DEMO_EXAMPLE_DEPARTMENT` — the same fixture, by alias — so this
         // test still generates the same sandbox roster it always did, and the P8.3 claim
         // it exists for (branded UI, never a native dialog) is untouched.
-        fireEvent.click(screen.getByRole('button', { name: /^load respiratory & rehab$/i }));
+        // CHANGED: the picker is a <select> now (one tap on a phone, no vertical
+        // space), so there is no Load button to click. Chosen by stable id.
+        fireEvent.change(screen.getByLabelText(/load an example arrangement/i), { target: { value: 'respiratory' } });
         // RENAMED (language pass): the sandbox Generate button said "Generate Sandbox
         // Roster" and now says "Draft roster". Live mode's label is unchanged.
         fireEvent.click(screen.getByRole('button', { name: /^draft roster$/i }));
@@ -288,7 +290,9 @@ describe('demo mode raises no native dialog (P8.3)', () => {
         // option loads `DEMO_EXAMPLE_DEPARTMENT` — the same fixture, by alias — so this
         // test still generates the same sandbox roster it always did, and the P8.3 claim
         // it exists for (branded UI, never a native dialog) is untouched.
-        fireEvent.click(screen.getByRole('button', { name: /^load respiratory & rehab$/i }));
+        // CHANGED: the picker is a <select> now (one tap on a phone, no vertical
+        // space), so there is no Load button to click. Chosen by stable id.
+        fireEvent.change(screen.getByLabelText(/load an example arrangement/i), { target: { value: 'respiratory' } });
         fireEvent.click(screen.getByRole('button', { name: /^draft roster$/i }));
 
         openSwapModalFor('Inpatient Rounds');

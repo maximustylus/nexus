@@ -93,14 +93,102 @@ import {
     parseFteCell,
 } from '../utils/rosterWizard';
 
+// --- 0. THE RESPONSIVE CONTRACT ------------------------------------------------
+//
+// MOST PEOPLE WHO OPEN THIS WILL OPEN IT ON A PHONE. A task row carries a name,
+// three band chips, seven day chips, a co-lead toggle, a disclosure and a remove
+// button; a staff row carries five fields and a disclosure. Neither fits in 375px,
+// and the two `overflow-x-auto` wrappers that used to hold them meant the answer on
+// a phone was "scroll sideways until you find the column you wanted" — a table
+// nobody can read one row of at a time.
+//
+// BELOW `sm:` EVERY ROW IS A CARD. The `<table>` becomes `display:block`, the header
+// row is hidden, each `<tr>` is a bordered block and each `<td>` is a full-width
+// block with its column's name printed above the control. From `sm:` up every one of
+// those declarations is reverted and the elements are a real table again, so the
+// desktop layout is what it always was.
+//
+// THERE IS ONE MARKUP TREE, and that is the whole design. The obvious alternative —
+// a `<div>` card list beside the `<table>`, one hidden at each breakpoint — is TWO
+// renderers for one row, and this file's discipline is that a second renderer
+// eventually disagrees with the first about which controls a row has. So the switch
+// is CSS only: the column headings live in one object that both the `<th>`s and the
+// in-card labels read, and every control, `aria-label`, `id`/`htmlFor` pairing and
+// error line exists exactly once in the tree.
+//
+// THE IN-CARD LABEL IS NOT A SECOND ACCESSIBLE NAME. It is `aria-hidden`, and every
+// field keeps the `aria-label` it already had — otherwise a screen reader would read
+// the column heading and then the field name for one control.
+//
+// ⚠️ iOS SAFARI ZOOMS THE WHOLE PAGE when a focused input's text is under 16px, and
+// it does not zoom back out: the visitor is left at 1.4× with the modal off-screen.
+// So every `<input>`, `<select>` and `<textarea>` is 16px on a phone and drops back
+// to the dense size from `sm:` up. Labels, helper text and headings may stay small —
+// they are not focusable, so they cannot trigger it.
+
+/** ≥16px on a phone; the dense size again from `sm:` up. */
+const FIELD_TEXT = 'text-base sm:text-xs';
+/** 44px, the floor both Apple's and Google's guidance put a touch target at. */
+const TOUCH = 'min-h-11 sm:min-h-0';
+/** …and for an icon-only control, which needs the width as well as the height. */
+const TOUCH_ICON = 'min-h-11 min-w-11 sm:min-h-0 sm:min-w-0';
+
+const RESPONSIVE_TABLE = 'w-full text-xs block sm:table';
+const RESPONSIVE_HEAD = 'hidden sm:table-header-group';
+const RESPONSIVE_BODY = 'block sm:table-row-group';
+/**
+ * A data row: a bordered card on a phone, an ordinary table row from `sm:` up.
+ *
+ * NO BACKGROUND, deliberately. A border, a radius and some padding are enough to
+ * read as a card against the panel behind it, and a background would need a `dark:`
+ * variant that then has to be reverted at `sm:` — where the `dark:` selector wins on
+ * specificity over the breakpoint's media query. One less thing to get wrong.
+ */
+const RESPONSIVE_ROW =
+    'block sm:table-row mb-3 sm:mb-0 p-3 sm:p-0 rounded-xl sm:rounded-none border sm:border-0 border-slate-200 dark:border-slate-700';
+/** A full-width row — a drawer or an error line — and its single cell. */
+const RESPONSIVE_FULL_ROW = 'block sm:table-row';
+const RESPONSIVE_FULL_CELL = 'block sm:table-cell';
+
+/**
+ * One cell of a responsive row.
+ *
+ * `label` is the column's heading. It is printed inside the card on a phone, where
+ * the real header row is hidden, and hidden from `sm:` up where the `<th>` carries
+ * it — so the two can never say different things about the same column.
+ */
+const Cell = ({ label, className = '', children }) => (
+    <td className={`block sm:table-cell ${className}`}>
+        {label ? (
+            <span
+                aria-hidden="true"
+                className="mb-1 block text-[10px] font-bold uppercase tracking-wider text-slate-400 sm:hidden"
+            >
+                {label}
+            </span>
+        ) : null}
+        {children}
+    </td>
+);
+
 /** Shared cell chrome, so the three controls cannot drift apart visually. */
 const CELL_INPUT =
-    'w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded px-2 py-1 text-xs text-slate-800 dark:text-white focus:ring-2 focus:ring-emerald-500 outline-none';
+    `w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded px-2 py-1 ${FIELD_TEXT} ${TOUCH} text-slate-800 dark:text-white focus:ring-2 focus:ring-emerald-500 outline-none`;
 const TH = 'text-left font-bold uppercase text-[10px] text-slate-400 py-1 pr-2';
 const ADD_ROW =
-    'mt-2 flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 text-slate-600 dark:text-slate-200 font-bold text-[10px] uppercase tracking-wider transition-colors';
+    `mt-2 flex items-center justify-center sm:justify-start gap-1.5 px-3 py-2 sm:px-2.5 sm:py-1.5 ${TOUCH} rounded-lg bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 text-slate-600 dark:text-slate-200 font-bold text-[10px] uppercase tracking-wider transition-colors`;
+/** An icon-only control — remove a row, a window, a slot, a pair. */
+const ICON_BUTTON =
+    `inline-flex items-center justify-center ${TOUCH_ICON} p-2 sm:p-1 rounded text-slate-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/30 transition-colors`;
 
-/** A pressed/unpressed pill. `aria-pressed` is the state, not the styling. */
+/**
+ * A pressed/unpressed pill. `aria-pressed` is the state, not the styling.
+ *
+ * The chips are the densest controls in the wizard — seven weekdays on one row —
+ * and at `px-1.5 py-0.5` they were about 16px tall, a third of a thumb. On a phone
+ * each one is a 44px target and the strip wraps onto as many lines as it needs;
+ * from `sm:` up the original density returns.
+ */
 const Toggle = ({ pressed, onClick, label, title, ariaLabel }) => (
     <button
         type="button"
@@ -108,7 +196,7 @@ const Toggle = ({ pressed, onClick, label, title, ariaLabel }) => (
         aria-pressed={pressed}
         aria-label={ariaLabel}
         title={title}
-        className={`px-1.5 py-0.5 rounded text-[10px] font-bold uppercase tracking-wide border transition-colors ${
+        className={`inline-flex items-center justify-center px-3 py-2 sm:px-1.5 sm:py-0.5 ${TOUCH} rounded text-[11px] sm:text-[10px] font-bold uppercase tracking-wide border transition-colors ${
             pressed
                 ? 'bg-emerald-600 border-emerald-600 text-white'
                 : 'bg-white dark:bg-slate-900 border-slate-300 dark:border-slate-600 text-slate-500 dark:text-slate-400 hover:border-emerald-400'
@@ -123,8 +211,8 @@ const RowErrors = ({ errors, colSpan }) => {
     const messages = Object.values(errors || {}).filter(Boolean);
     if (messages.length === 0) return null;
     return (
-        <tr>
-            <td colSpan={colSpan} className="pb-2">
+        <tr className={RESPONSIVE_FULL_ROW}>
+            <td colSpan={colSpan} className={`${RESPONSIVE_FULL_CELL} pb-2`}>
                 {messages.map((message) => (
                     <p
                         key={message}
@@ -174,7 +262,7 @@ const DisclosureButton = ({ open, forcedOpen, onToggle, ariaLabel, title, forced
             aria-expanded={open}
             aria-label={ariaLabel}
             title={forcedOpen ? forcedTitle : title}
-            className="flex items-center gap-0.5 px-1 py-0.5 rounded text-[10px] font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400 hover:text-emerald-700 dark:hover:text-emerald-400 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors"
+            className={`flex items-center gap-0.5 px-2 py-2 sm:px-1 sm:py-0.5 ${TOUCH} rounded text-[10px] font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400 hover:text-emerald-700 dark:hover:text-emerald-400 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors`}
         >
             <Chevron size={12} /> More
         </button>
@@ -194,7 +282,7 @@ const DRAWER_DIVIDER = 'pt-3 border-t border-slate-200 dark:border-slate-700';
 
 /** A small number box, the same chrome as the department hours fields. */
 const NUMBER_FIELD =
-    'w-20 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded px-2 py-1 text-xs font-bold tabular-nums text-slate-800 dark:text-white focus:ring-2 focus:ring-emerald-500 outline-none';
+    `w-24 sm:w-20 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded px-2 py-1 ${FIELD_TEXT} ${TOUCH} font-bold tabular-nums text-slate-800 dark:text-white focus:ring-2 focus:ring-emerald-500 outline-none`;
 
 // --- 1. BAND BOUNDARIES: THE RULER --------------------------------------------
 //
@@ -432,15 +520,22 @@ export const BandBoundaryEditor = ({ inputs, onChange, reason }) => {
                             onPointerCancel={endDrag}
                             onLostPointerCapture={endDrag}
                             style={{ left: pct(rulerLine(value)) }}
-                            className="absolute -top-1 -ml-3 h-10 w-6 cursor-ew-resize touch-none rounded focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-1 focus:ring-offset-slate-50 dark:focus:ring-offset-slate-900"
+                            // 📱 44×44 ON A PHONE. The hit area was 24×40 and the
+                            // visible grip 12×20 — keyboard-perfect and unusable with
+                            // a thumb. The box is what a finger has to land on, so it
+                            // is the box that grows; the grip stays a hairline-and-tab
+                            // so the ruler still reads as a ruler. From `sm:` up the
+                            // original 24×40 returns, because a mouse wants precision
+                            // and two 44px boxes one grade apart would overlap.
+                            className="absolute -top-1.5 -ml-[22px] h-11 w-11 sm:-top-1 sm:-ml-3 sm:h-10 sm:w-6 cursor-ew-resize touch-none rounded focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-1 focus:ring-offset-slate-50 dark:focus:ring-offset-slate-900"
                         >
                             <span
                                 aria-hidden="true"
-                                className="absolute inset-y-1 left-1/2 -ml-px w-0.5 rounded-full bg-slate-600 dark:bg-slate-200"
+                                className="absolute inset-y-2.5 sm:inset-y-1 left-1/2 -ml-px w-0.5 rounded-full bg-slate-600 dark:bg-slate-200"
                             />
                             <span
                                 aria-hidden="true"
-                                className="absolute left-1/2 top-1/2 h-5 w-3 -translate-x-1/2 -translate-y-1/2 rounded-sm border border-slate-500 bg-white shadow dark:border-slate-300 dark:bg-slate-800"
+                                className="absolute left-1/2 top-1/2 h-6 w-4 sm:h-5 sm:w-3 -translate-x-1/2 -translate-y-1/2 rounded-sm border border-slate-500 bg-white shadow dark:border-slate-300 dark:bg-slate-800"
                             />
                         </div>
                     );
@@ -533,7 +628,7 @@ export const BandBoundaryEditor = ({ inputs, onChange, reason }) => {
 // actually use, and it follows the first box as it is typed.
 
 const HOURS_FIELD =
-    'w-24 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded px-2 py-1 text-xs font-bold tabular-nums text-slate-800 dark:text-white focus:ring-2 focus:ring-emerald-500 outline-none';
+    `w-28 sm:w-24 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded px-2 py-1 ${FIELD_TEXT} ${TOUCH} font-bold tabular-nums text-slate-800 dark:text-white focus:ring-2 focus:ring-emerald-500 outline-none`;
 
 /**
  * The contracted week and the longest working day, in plain words.
@@ -562,7 +657,7 @@ export const DepartmentHoursEditor = ({ inputs, onChange, errors }) => {
                 is reported as not staffed, with the hours named, rather than quietly assigned.
             </p>
 
-            <div className="flex flex-wrap gap-4">
+            <div className="flex flex-wrap gap-x-4 gap-y-3">
                 <div>
                     <label className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase block mb-1" htmlFor="demo-weekly-hours">
                         Standard working week
@@ -705,7 +800,7 @@ export const DepartmentLimitsEditor = ({ inputs, onChange, errors, staffNames = 
                 aria-label={`Never on the same shift: ${label.toLowerCase()}`}
                 value={chosen(which)}
                 onChange={(e) => setPending((prev) => ({ ...prev, [which]: e.target.value }))}
-                className={`${CELL_INPUT} w-40`}
+                className={`${CELL_INPUT} sm:w-40`}
             >
                 <option value="">Choose someone</option>
                 {staffNames.map((name) => (
@@ -727,7 +822,7 @@ export const DepartmentLimitsEditor = ({ inputs, onChange, errors, staffNames = 
                 AURA uses the figure shown in it.
             </p>
 
-            <div className="flex flex-wrap gap-4">
+            <div className="flex flex-wrap gap-x-4 gap-y-3">
                 <div>
                     <label className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase block mb-1" htmlFor="demo-max-concurrent">
                         Most duties in one day
@@ -784,7 +879,7 @@ export const DepartmentLimitsEditor = ({ inputs, onChange, errors, staffNames = 
                         Add at least two named people to the staff table below and they can be paired here.
                     </p>
                 ) : (
-                    <div className="flex flex-wrap items-end gap-2">
+                    <div className="flex flex-col items-stretch sm:flex-row sm:flex-wrap sm:items-end gap-2">
                         {namePicker('a', 'First person')}
                         {namePicker('b', 'Second person')}
                         <button
@@ -816,7 +911,7 @@ export const DepartmentLimitsEditor = ({ inputs, onChange, errors, staffNames = 
                                     aria-label={`Remove pair ${index + 1}, ${a} and ${b}`}
                                     title="Let these two work together again"
                                     onClick={() => removePair(index)}
-                                    className="p-0.5 rounded text-slate-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/30 transition-colors"
+                                    className={ICON_BUTTON}
                                 >
                                     <Trash2 size={12} />
                                 </button>
@@ -840,6 +935,21 @@ export const DepartmentLimitsEditor = ({ inputs, onChange, errors, staffNames = 
 
 /** How many columns a staff row spans — used by the error line and the drawer. */
 const STAFF_COLUMNS = 6;
+
+/**
+ * The staff table's column headings, in one place.
+ *
+ * Read by the `<th>` row AND by each card's in-cell label, so the heading a phone
+ * shows above a field and the heading a desktop shows above the column are the same
+ * string by construction rather than by two people remembering to edit both.
+ */
+const STAFF_HEADINGS = Object.freeze({
+    name: 'Name',
+    grade: 'Grade',
+    fte: 'FTE',
+    away: 'Away (YYYY-MM-DD)',
+    more: 'Limits & dates',
+});
 
 /**
  * ONE PERSON'S HIDDEN HALF: how many duties they may hold in a day, and the dates
@@ -871,8 +981,8 @@ const StaffRowDetail = ({ row, index, departmentMaxPerDay, onChange }) => {
         onChange(row.id, { windows: windows.filter((entry) => entry.id !== windowId) });
 
     return (
-        <tr>
-            <td colSpan={STAFF_COLUMNS} className="pb-3">
+        <tr className={RESPONSIVE_FULL_ROW}>
+            <td colSpan={STAFF_COLUMNS} className={`${RESPONSIVE_FULL_CELL} pb-3`}>
                 <div className="rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/60 p-3 space-y-3">
 
                     {/* --- this person's own daily cap --- */}
@@ -926,7 +1036,7 @@ const StaffRowDetail = ({ row, index, departmentMaxPerDay, onChange }) => {
                             ) : (
                                 <div className="space-y-2">
                                     {windows.map((window, windowIndex) => (
-                                        <div key={window.id} className="flex flex-wrap items-end gap-2">
+                                        <div key={window.id} className="flex flex-col items-stretch sm:flex-row sm:flex-wrap sm:items-end gap-2">
                                             <div>
                                                 <label
                                                     className="text-[9px] font-bold text-slate-400 uppercase block"
@@ -941,7 +1051,7 @@ const StaffRowDetail = ({ row, index, departmentMaxPerDay, onChange }) => {
                                                     value={window.from}
                                                     placeholder="any earlier date"
                                                     onChange={(e) => patchWindow(window.id, { from: e.target.value })}
-                                                    className={`${CELL_INPUT} w-36`}
+                                                    className={`${CELL_INPUT} sm:w-36`}
                                                 />
                                             </div>
                                             <div>
@@ -958,7 +1068,7 @@ const StaffRowDetail = ({ row, index, departmentMaxPerDay, onChange }) => {
                                                     value={window.to}
                                                     placeholder="any later date"
                                                     onChange={(e) => patchWindow(window.id, { to: e.target.value })}
-                                                    className={`${CELL_INPUT} w-36`}
+                                                    className={`${CELL_INPUT} sm:w-36`}
                                                 />
                                             </div>
                                             <div>
@@ -975,7 +1085,7 @@ const StaffRowDetail = ({ row, index, departmentMaxPerDay, onChange }) => {
                                                     value={window.tasks}
                                                     placeholder="every task"
                                                     onChange={(e) => patchWindow(window.id, { tasks: e.target.value })}
-                                                    className={`${CELL_INPUT} w-48`}
+                                                    className={`${CELL_INPUT} sm:w-48`}
                                                 />
                                             </div>
                                             <button
@@ -983,7 +1093,7 @@ const StaffRowDetail = ({ row, index, departmentMaxPerDay, onChange }) => {
                                                 aria-label={`Remove staff row ${index + 1} window ${windowIndex + 1}`}
                                                 title="Remove this window"
                                                 onClick={() => removeWindow(window.id)}
-                                                className="mb-1 p-1 rounded text-slate-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/30 transition-colors"
+                                                className={`mb-1 ${ICON_BUTTON}`}
                                             >
                                                 <Trash2 size={13} />
                                             </button>
@@ -1064,21 +1174,25 @@ export const StaffTable = ({ rows, errors, onChange, onAdd, onRemove, workingDay
                 <Users size={13} /> Staff
             </p>
 
-            <div className="overflow-x-auto">
-                <table className="w-full text-xs">
-                    <thead>
+            {/* `sm:overflow-x-auto` rather than `overflow-x-auto`: below `sm:` the rows
+                are cards and there is nothing to scroll sideways, so a phone gets no
+                horizontal scroller at all. From `sm:` up it is a real table again and
+                the scroller is still the safety net it always was on a narrow tablet. */}
+            <div className="sm:overflow-x-auto">
+                <table className={RESPONSIVE_TABLE}>
+                    <thead className={RESPONSIVE_HEAD}>
                         <tr>
-                            <th className={TH}>Name</th>
-                            <th className={TH}>Grade</th>
-                            <th className={TH}>FTE</th>
-                            <th className={TH}>Away (YYYY-MM-DD)</th>
+                            <th className={TH}>{STAFF_HEADINGS.name}</th>
+                            <th className={TH}>{STAFF_HEADINGS.grade}</th>
+                            <th className={TH}>{STAFF_HEADINGS.fte}</th>
+                            <th className={TH}>{STAFF_HEADINGS.away}</th>
                             {/* The disclosure's own column, headed rather than blank:
                                 a nameless chevron is not discoverable. */}
-                            <th className={TH}>Limits &amp; dates</th>
+                            <th className={TH}>{STAFF_HEADINGS.more}</th>
                             <th className="w-8" />
                         </tr>
                     </thead>
-                    <tbody>
+                    <tbody className={RESPONSIVE_BODY}>
                         {rows.map((row, index) => {
                             const rowErrors = errors[row.id];
                             // A row whose HIDDEN cells are wrong opens itself, for the
@@ -1091,13 +1205,13 @@ export const StaffTable = ({ rows, errors, onChange, onAdd, onRemove, workingDay
 
                             return (
                                 <React.Fragment key={row.id}>
-                                    <tr>
-                                        <td className="py-1 pr-2 align-top">
+                                    <tr className={RESPONSIVE_ROW}>
+                                        <Cell label={STAFF_HEADINGS.name} className="py-1 pr-2 align-top">
                                             <input
                                                 type="text"
                                                 aria-label={`Staff row ${index + 1} name`}
                                                 value={row.name}
-                                                placeholder={index === 0 ? 'e.g. Aisha Rahman' : ''}
+                                                placeholder={index === 0 ? 'e.g. Peter Parker' : ''}
                                                 onChange={(e) => onChange(row.id, { name: e.target.value })}
                                                 className={CELL_INPUT}
                                             />
@@ -1122,8 +1236,8 @@ export const StaffTable = ({ rows, errors, onChange, onAdd, onRemove, workingDay
                                                     ? `${windowCount} availability ${windowCount === 1 ? 'window' : 'windows'}`
                                                     : null,
                                             ]} />
-                                        </td>
-                                        <td className="py-1 pr-2 align-top">
+                                        </Cell>
+                                        <Cell label={STAFF_HEADINGS.grade} className="py-1 pr-2 align-top">
                                             <select
                                                 aria-label={`Staff row ${index + 1} job grade`}
                                                 value={row.grade}
@@ -1135,15 +1249,15 @@ export const StaffTable = ({ rows, errors, onChange, onAdd, onRemove, workingDay
                                                     <option key={grade} value={grade}>{grade}</option>
                                                 ))}
                                             </select>
-                                        </td>
-                                        <td className="py-1 pr-2 align-top">
+                                        </Cell>
+                                        <Cell label={STAFF_HEADINGS.fte} className="py-1 pr-2 align-top">
                                             <input
                                                 type="text"
                                                 inputMode="decimal"
                                                 aria-label={`Staff row ${index + 1} FTE`}
                                                 value={row.fte}
                                                 onChange={(e) => onChange(row.id, { fte: e.target.value })}
-                                                className={`${CELL_INPUT} w-16`}
+                                                className={`${CELL_INPUT} sm:w-16`}
                                             />
                                             {/* What the figure means, in the words the person
                                                 whose contract it is would use. Read off the
@@ -1156,8 +1270,8 @@ export const StaffTable = ({ rows, errors, onChange, onAdd, onRemove, workingDay
                                                     {describeFteAsDays(parseFteCell(row.fte).value, workingDays)}
                                                 </p>
                                             )}
-                                        </td>
-                                        <td className="py-1 pr-2 align-top">
+                                        </Cell>
+                                        <Cell label={STAFF_HEADINGS.away} className="py-1 pr-2 align-top">
                                             <input
                                                 type="text"
                                                 aria-label={`Staff row ${index + 1} away dates`}
@@ -1166,8 +1280,8 @@ export const StaffTable = ({ rows, errors, onChange, onAdd, onRemove, workingDay
                                                 onChange={(e) => onChange(row.id, { away: e.target.value })}
                                                 className={CELL_INPUT}
                                             />
-                                        </td>
-                                        <td className="py-1 pr-2 align-top">
+                                        </Cell>
+                                        <Cell label={STAFF_HEADINGS.more} className="py-1 pr-2 align-top">
                                             <DisclosureButton
                                                 open={open}
                                                 forcedOpen={forcedOpen}
@@ -1176,19 +1290,24 @@ export const StaffTable = ({ rows, errors, onChange, onAdd, onRemove, workingDay
                                                 title="Their own daily duty cap, and the dates they are available"
                                                 forcedTitle="This person's daily cap or availability window needs fixing before it can be folded away"
                                             />
-                                        </td>
-                                        <td className="py-1 align-top">
+                                        </Cell>
+                                        {/* ONE remove button, not one per breakpoint. A second
+                                            copy hidden at the other width would be a second
+                                            element answering to `Remove staff row 1` — two
+                                            controls for one action, which is how the two start
+                                            disagreeing about whether the row can be removed. */}
+                                        <Cell className="py-1 align-top">
                                             <button
                                                 type="button"
                                                 aria-label={`Remove staff row ${index + 1}`}
                                                 title="Remove this person"
                                                 onClick={() => onRemove(row.id)}
                                                 disabled={rows.length <= 1}
-                                                className="p-1 rounded text-slate-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/30 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                                                className={`${ICON_BUTTON} disabled:opacity-30 disabled:cursor-not-allowed`}
                                             >
                                                 <Trash2 size={13} />
                                             </button>
-                                        </td>
+                                        </Cell>
                                     </tr>
                                     {open && (
                                         <StaffRowDetail
@@ -1239,6 +1358,15 @@ export const StaffTable = ({ rows, errors, onChange, onAdd, onRemove, workingDay
 /** How many columns a task row spans — used by the error line and the drawer. */
 const TASK_COLUMNS = 6;
 
+/** The task table's headings, in one place — see `STAFF_HEADINGS`. */
+const TASK_HEADINGS = Object.freeze({
+    name: 'Task',
+    bands: 'Who may lead',
+    days: 'Days',
+    coLead: 'Co-lead?',
+    more: 'Repeat, hours & limits',
+});
+
 /**
  * ONE TASK'S HIDDEN HALF: how often it repeats, how long it takes, how it is
  * staffed, whether the same person keeps it, how many of them one person may hold,
@@ -1280,8 +1408,8 @@ const TaskRowDetail = ({ row, index, bands, onChange }) => {
     const pattern = describeTaskRecurrence(row);
 
     return (
-        <tr>
-            <td colSpan={TASK_COLUMNS} className="pb-3">
+        <tr className={RESPONSIVE_FULL_ROW}>
+            <td colSpan={TASK_COLUMNS} className={`${RESPONSIVE_FULL_CELL} pb-3`}>
                 <div className="rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/60 p-3 space-y-3">
 
                     {/* --- 1. HOW OFTEN IT REPEATS ---------------------------------
@@ -1312,7 +1440,7 @@ const TaskRowDetail = ({ row, index, bands, onChange }) => {
 
                         {monthly ? (
                             <>
-                                <div className="flex flex-wrap items-end gap-2">
+                                <div className="flex flex-col items-stretch sm:flex-row sm:flex-wrap sm:items-end gap-2">
                                     <div>
                                         <label
                                             className="text-[9px] font-bold text-slate-400 uppercase block"
@@ -1325,7 +1453,7 @@ const TaskRowDetail = ({ row, index, bands, onChange }) => {
                                             aria-label={label('week of the month')}
                                             value={row.recurrenceOrdinal}
                                             onChange={(e) => onChange(row.id, { recurrenceOrdinal: e.target.value })}
-                                            className={`${CELL_INPUT} w-28`}
+                                            className={`${CELL_INPUT} sm:w-28`}
                                         >
                                             {/* NOT PREFILLED. There is no engine default
                                                 for "which Wednesday", so choosing the 1st
@@ -1350,7 +1478,7 @@ const TaskRowDetail = ({ row, index, bands, onChange }) => {
                                             aria-label={label('monthly weekday')}
                                             value={row.recurrenceWeekday}
                                             onChange={(e) => onChange(row.id, { recurrenceWeekday: e.target.value })}
-                                            className={`${CELL_INPUT} w-28`}
+                                            className={`${CELL_INPUT} sm:w-28`}
                                         >
                                             <option value="">Choose…</option>
                                             {/* The same strip the day chips are built
@@ -1408,7 +1536,7 @@ const TaskRowDetail = ({ row, index, bands, onChange }) => {
                                 // shown here cannot drift from the number applied.
                                 placeholder={String(DEFAULT_TASK_HOURS)}
                                 onChange={(e) => onChange(row.id, { hours: e.target.value })}
-                                className={`${CELL_INPUT} w-20 tabular-nums`}
+                                className={`${CELL_INPUT} sm:w-20 tabular-nums`}
                             />
                         </div>
                         <p className="text-[10px] text-slate-500 dark:text-slate-400 leading-relaxed max-w-md">
@@ -1466,7 +1594,7 @@ const TaskRowDetail = ({ row, index, bands, onChange }) => {
                             </p>
 
                             {row.slots.map((slot, slotIndex) => (
-                                <div key={slot.id} className="flex flex-wrap items-end gap-2">
+                                <div key={slot.id} className="flex flex-col items-stretch sm:flex-row sm:flex-wrap sm:items-end gap-2">
                                     <div>
                                         <label
                                             className="text-[9px] font-bold text-slate-400 uppercase block"
@@ -1479,7 +1607,7 @@ const TaskRowDetail = ({ row, index, bands, onChange }) => {
                                             aria-label={label(`slot ${slotIndex + 1} band`)}
                                             value={slot.band}
                                             onChange={(e) => patchSlot(slot.id, { band: e.target.value })}
-                                            className={`${CELL_INPUT} w-32`}
+                                            className={`${CELL_INPUT} sm:w-32`}
                                         >
                                             <option value={ANY_BAND}>Any grade</option>
                                             {/* The band's span under the CURRENT ruler,
@@ -1506,7 +1634,7 @@ const TaskRowDetail = ({ row, index, bands, onChange }) => {
                                             value={slot.requiresSkill}
                                             placeholder="e.g. Witnessing"
                                             onChange={(e) => patchSlot(slot.id, { requiresSkill: e.target.value })}
-                                            className={`${CELL_INPUT} w-40`}
+                                            className={`${CELL_INPUT} sm:w-40`}
                                         />
                                     </div>
                                     <button
@@ -1517,7 +1645,7 @@ const TaskRowDetail = ({ row, index, bands, onChange }) => {
                                             : 'Remove this slot'}
                                         onClick={() => removeSlot(slot.id)}
                                         disabled={row.slots.length <= SLOTS_MIN}
-                                        className="mb-1 p-1 rounded text-slate-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/30 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                                        className={`mb-1 ${ICON_BUTTON} disabled:opacity-30 disabled:cursor-not-allowed`}
                                     >
                                         <Trash2 size={13} />
                                     </button>
@@ -1615,7 +1743,7 @@ const TaskRowDetail = ({ row, index, bands, onChange }) => {
                         rather than discovered from a warning. */}
                     <div className={DRAWER_DIVIDER}>
                         <DrawerGroup label="How many of these one person takes">
-                            <div className="flex flex-wrap items-end gap-2">
+                            <div className="flex flex-col items-stretch sm:flex-row sm:flex-wrap sm:items-end gap-2">
                                 <div>
                                     <label
                                         className="text-[9px] font-bold text-slate-400 uppercase block"
@@ -1628,7 +1756,7 @@ const TaskRowDetail = ({ row, index, bands, onChange }) => {
                                         aria-label={label('per-person limit period')}
                                         value={row.quotaPer}
                                         onChange={(e) => onChange(row.id, { quotaPer: e.target.value })}
-                                        className={`${CELL_INPUT} w-40`}
+                                        className={`${CELL_INPUT} sm:w-40`}
                                     >
                                         <option value="">No limit</option>
                                         {QUOTA_PERIOD_OPTIONS.map((option) => (
@@ -1713,7 +1841,7 @@ const TaskRowDetail = ({ row, index, bands, onChange }) => {
                                     // would change the roster's appearance unasked.
                                     placeholder={ROSTER_V2_DEFAULTS.category}
                                     onChange={(e) => onChange(row.id, { category: e.target.value })}
-                                    className={`${CELL_INPUT} w-40`}
+                                    className={`${CELL_INPUT} sm:w-40`}
                                 />
                                 <p className="text-[10px] text-slate-500 dark:text-slate-400 leading-relaxed max-w-md">
                                     What kind of work this is — <span className="font-bold">Clinical</span>,{' '}
@@ -1792,21 +1920,23 @@ export const TaskTable = ({ rows, errors, bands, onChange, onAdd, onRemove }) =>
                 <ClipboardList size={13} /> Tasks
             </p>
 
-            <div className="overflow-x-auto">
-                <table className="w-full text-xs">
-                    <thead>
+            {/* See the staff table: no horizontal scroller below `sm:`, because below
+                `sm:` there is nothing to scroll — the row is a card. */}
+            <div className="sm:overflow-x-auto">
+                <table className={RESPONSIVE_TABLE}>
+                    <thead className={RESPONSIVE_HEAD}>
                         <tr>
-                            <th className={TH}>Task</th>
-                            <th className={TH}>Who may lead</th>
-                            <th className={TH}>Days</th>
-                            <th className={TH}>Co-lead?</th>
+                            <th className={TH}>{TASK_HEADINGS.name}</th>
+                            <th className={TH}>{TASK_HEADINGS.bands}</th>
+                            <th className={TH}>{TASK_HEADINGS.days}</th>
+                            <th className={TH}>{TASK_HEADINGS.coLead}</th>
                             {/* The disclosure's own column, headed rather than blank:
                                 a nameless chevron is not discoverable. */}
-                            <th className={TH}>Repeat, hours &amp; limits</th>
+                            <th className={TH}>{TASK_HEADINGS.more}</th>
                             <th className="w-8" />
                         </tr>
                     </thead>
-                    <tbody>
+                    <tbody className={RESPONSIVE_BODY}>
                         {rows.map((row, index) => {
                             const range = describeBandRange(row.leadBands, bands);
                             const rowErrors = errors[row.id];
@@ -1840,8 +1970,8 @@ export const TaskTable = ({ rows, errors, bands, onChange, onAdd, onRemove }) =>
 
                             return (
                                 <React.Fragment key={row.id}>
-                                    <tr>
-                                        <td className="py-1 pr-2 align-top min-w-[8rem]">
+                                    <tr className={RESPONSIVE_ROW}>
+                                        <Cell label={TASK_HEADINGS.name} className="py-1 pr-2 align-top sm:min-w-[8rem]">
                                             <input
                                                 type="text"
                                                 aria-label={`Task row ${index + 1} name`}
@@ -1875,8 +2005,8 @@ export const TaskTable = ({ rows, errors, bands, onChange, onAdd, onRemove }) =>
                                                     : null,
                                                 categorySet ? row.category.trim() : null,
                                             ]} />
-                                        </td>
-                                        <td className="py-1 pr-2 align-top">
+                                        </Cell>
+                                        <Cell label={TASK_HEADINGS.bands} className="py-1 pr-2 align-top">
                                             {/* In slot mode these chips would be dropped by
                                                 the mapper (the engine refuses `slots` beside
                                                 `leadBands`), so the cell says where the
@@ -1906,8 +2036,8 @@ export const TaskTable = ({ rows, errors, bands, onChange, onAdd, onRemove }) =>
                                                     </p>
                                                 </>
                                             )}
-                                        </td>
-                                        <td className="py-1 pr-2 align-top">
+                                        </Cell>
+                                        <Cell label={TASK_HEADINGS.days} className="py-1 pr-2 align-top">
                                             {/* In monthly mode these chips would be dropped
                                                 by the mapper (the engine refuses `days`
                                                 beside `recurrence`), so the cell says what
@@ -1935,8 +2065,8 @@ export const TaskTable = ({ rows, errors, bands, onChange, onAdd, onRemove }) =>
                                                     ))}
                                                 </div>
                                             )}
-                                        </td>
-                                        <td className="py-1 pr-2 align-top">
+                                        </Cell>
+                                        <Cell label={TASK_HEADINGS.coLead} className="py-1 pr-2 align-top">
                                             {row.slotMode ? (
                                                 <p className="text-[9px] font-bold uppercase tracking-wider text-slate-400 leading-relaxed">
                                                     second on the shift
@@ -1950,8 +2080,8 @@ export const TaskTable = ({ rows, errors, bands, onChange, onAdd, onRemove }) =>
                                                     title="One co-lead alongside the lead"
                                                 />
                                             )}
-                                        </td>
-                                        <td className="py-1 pr-2 align-top">
+                                        </Cell>
+                                        <Cell label={TASK_HEADINGS.more} className="py-1 pr-2 align-top">
                                             {/* THE ARIA LABEL IS UNCHANGED ("hours and
                                                 staffing") even though the drawer now holds
                                                 six groups: it is the handle four sandbox
@@ -1967,19 +2097,19 @@ export const TaskTable = ({ rows, errors, bands, onChange, onAdd, onRemove }) =>
                                                 title="How often it repeats, how long a session is, how it is staffed, continuity, per-person limits and its category"
                                                 forcedTitle="Something behind this drawer needs fixing before it can be folded away"
                                             />
-                                        </td>
-                                        <td className="py-1 align-top">
+                                        </Cell>
+                                        <Cell className="py-1 align-top">
                                             <button
                                                 type="button"
                                                 aria-label={`Remove task row ${index + 1}`}
                                                 title="Remove this task"
                                                 onClick={() => onRemove(row.id)}
                                                 disabled={rows.length <= 1}
-                                                className="p-1 rounded text-slate-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/30 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                                                className={`${ICON_BUTTON} disabled:opacity-30 disabled:cursor-not-allowed`}
                                             >
                                                 <Trash2 size={13} />
                                             </button>
-                                        </td>
+                                        </Cell>
                                     </tr>
                                     {open && (
                                         <TaskRowDetail
