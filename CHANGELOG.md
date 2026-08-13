@@ -36,9 +36,37 @@ not changed by this release.
 
 ## [Unreleased]
 
-The arrangement picker becomes **profession + shape**: MOH's own 28 allied health
-professions as vocabulary, and **five structures** — not one fabricated department per
-profession. Not released and not tagged; the version bump is a separate decision.
+Nothing yet.
+
+> ### Bumping the version is part of shipping, not a separate decision
+>
+> Standing instruction from the roster owner, **2026-08-14**: *"update NEXUS PWA's version
+> numbers correctly everytime we move forward with fixes, features."*
+>
+> - **Edit `package.json` `version` and nothing else.** `src/version.js` carries it to every
+>   screen; `src/version.test.js` fails the build if any file types a version by hand.
+> - **Which digit:** a stored-shape change an already-cached PWA client cannot read → **major**;
+>   a new capability that old clients ignore safely → **minor**; fixes and copy only → **patch**.
+> - **Then re-align the downstream copies in the same commit:** this file's top entry,
+>   `README.md`'s title line, its `Version-` badge, its *Supported Versions* table and its
+>   *Release History*, and `SECURITY.md`'s *Supported Versions* table. Nothing but
+>   `package.json` is authoritative. Five copies is four too many, but they are prose for
+>   humans, so the fix is to list them here — not to leave them to be found later.
+> - **Then tag it:** `git tag -a vX.Y.Z` on the commit that carries the bump, never before it.
+>   Every existing tag in this repo points at a commit whose `package.json` already reads that
+>   version, which is what makes `git checkout vX.Y.Z` mean anything.
+> - **The AURA engine version is not the app version.** It tracks the agent's capability tier,
+>   moves on its own, and is not touched by an app bump.
+
+---
+
+## [1.13.0] - 2026-08-14
+
+Two changes, and the second is what makes the first repeatable. The arrangement picker
+becomes **profession + shape**: MOH's own 28 allied health professions as vocabulary, and
+**five structures** — not one fabricated department per profession. And the app stops
+hand-typing its own version, because by v1.12.0 it was rendering three different wrong
+answers to "which version is this?" on the deployed site.
 
 ⚠️ **THIS SECTION REPLACES AN EARLIER UNRELEASED ENTRY, AND THE REPLACEMENT IS THE POINT.**
 That entry announced *twelve* arrangements, one per department, with 23 more to come so
@@ -136,6 +164,37 @@ their profession."*
   ignores the divider below **1** · honesty flag hard-wired true **1**. Every bound is
   derived from `BAND_NAMES`, so it re-measures itself for free when a fifth band arrives.
 
+- **`src/version.js` — the one place the app learns its own version**, exporting
+  `APP_VERSION` (`1.13.0`) and `APP_VERSION_LABEL` (`v1.13.0`) from `package.json`'s
+  `version`. This file has asserted since v1.6.0 that `package.json` is the single source of
+  truth for the app version. Nothing enforced it, and the drift was not hypothetical: the
+  deployed site was rendering **three** hand-typed literals **simultaneously**, all stale,
+  none agreeing with each other or with `package.json`'s `1.12.0` — see *Changed* below.
+  Nothing would ever have updated them, because nothing referenced them.
+
+  **An import, not a Vite `define`.** This repo has **no `vite.config.js` at all**; the build
+  runs on Vite's defaults and esbuild transforms `.jsx` natively. Adding a build config purely
+  to inject a string would newly place the app's build under a file that did not exist before,
+  and a `define` is invisible to `vitest.config.js`, so every test rendering these components
+  would have to learn about it too. A plain import needs no config and behaves identically in
+  the build and under test.
+
+- **`src/version.test.js` (3 tests) — the standing instruction, enforced by the suite rather
+  than by memory.** It strips comments from every non-test `.js`/`.jsx` under `src/` and then
+  FAILS if a version-shaped literal appears in code that renders. Comments are exempt on
+  purpose: this codebase annotates changes with the release that made them (`shipped v1.9.0`,
+  `RFC 5545 §3.3.11`), which is legitimate history and must stay writable — and that exemption
+  is the test's honest limit, stated in the file rather than discovered later. Two non-app
+  versions are named in an `ALLOWED` list so that adding a third is a deliberate act: the
+  **AURA engine's** `v2.3` capability tier, and RFC references.
+
+  Mutation-verified, **three mutations, all three caught**: re-adding the `v1.4` literal to
+  `AdminPanel.jsx`; hard-coding the current version *inside `version.js`* (which passed until
+  `version.js` was itself brought into the scan — the literal and the truth coincided at
+  `1.12.0`, so nothing noticed); and pointing the scan at a directory that does not exist —
+  the vacuous pass, which is the dangerous one, now caught by asserting the scan read files at
+  all.
+
 ### Changed
 
 - **AH7–AH10 is its own band, `nonExempt`. The grade scale has FOUR bands, not three.**
@@ -202,7 +261,54 @@ their profession."*
   `min-h-11` touch targets, from **one shared pair of class constants** so two controls
   cannot drift into two different touch targets.
 
+- **Three hand-typed version literals replaced by `APP_VERSION_LABEL`.** All three were live
+  on the deployed site at once, and all three were wrong:
+
+  | File | Was on screen | Where a clinician saw it |
+  |---|---|---|
+  | `src/App.jsx` | `v1.41-OFFICIAL` | sandbox banner |
+  | `src/components/WelcomeScreen.jsx` | `System v1.52` | landing footer |
+  | `src/components/AdminPanel.jsx` | `System Database v1.4` | admin header |
+
+  `package.json` said `1.12.0`. None of the three had any relationship to it, or to each
+  other. All three now render `v1.13.0` and will follow every future bump without anybody
+  remembering to look.
+
+  **A judgment call the owner can reverse.** `AdminPanel.jsx` said "System **Database** v1.4",
+  which could have meant a *schema* version rather than the app version. It is wired to the
+  app version, because there is **no schema-version constant anywhere in this codebase** —
+  so nothing would ever have moved a schema version either, and a second stale number is not
+  an improvement on one. If the intent was a schema version, the fix is a real schema
+  constant with something that maintains it, not a literal; say so and it changes.
+
 ### Notes
+
+- **Why this is `minor` and not `major`, established by reading the write path rather than by
+  reasoning about it.** The four-band split changed a *default* — `junior [7,12]` became
+  `nonExempt [7,10]` + `junior [11,12]` — and a stored three-band `rules.bands` object would
+  no longer validate as a partition. That is the fact that would have forced `2.0.0`, so it
+  was checked directly: **`rules.bands` is never persisted.**
+
+  - The only roster write in the app is `setDoc(doc(db, 'system_data', 'roster_2026'),
+    prepared.data, { merge: true })` in `RosterView.jsx`, and `prepared.data` is
+    `prepareRosterWrite`'s `generate(config)` **output** — dates mapped to shifts. The
+    `config` itself, `rules.bands` included, never leaves the browser. `prepareRosterWrite`
+    defaults to `generateRoster`, the V1 engine, which has no concept of bands.
+  - The matching read, the `onSnapshot` on the same document, sets `rosterData` from
+    `snap.data()` and reconstitutes no configuration.
+  - Every band-carrying identifier in `RosterView.jsx` is `demo`-prefixed
+    (`demoBandInputs`, `demoWizard.config`, `demoResult`), and `generateRosterV2` is called
+    in exactly one place — inside the demo path, which is latched three times against ever
+    reaching `setDoc`.
+  - Nothing persists the wizard's config client-side either: the only `localStorage` keys in
+    the app are theme, language and the AURA greeting date. No `sessionStorage`, no
+    `indexedDB`.
+  - Belt and braces regardless: `bandsOf(rules)` falls back to `DEFAULT_GRADE_BANDS` whenever
+    `rules.bands` is absent or not a plain object.
+
+  So no client already sitting in somebody's service-worker cache can be handed a document it
+  cannot read. **This says nothing about D8** (whether the 6 May shift-shape change should
+  itself have been `2.0.0`), which remains open in `ROSTER_HANDOFF.md` and is not reopened here.
 
 - **`mockData.js` stayed append-only where it had to.** `MOCK_STAFF`, `MOCK_STAFF_NAMES`,
   `MOCK_ROSTER`, `MOCK_PULSE_TRENDS` and `MOCK_TEAM_DATA` are byte-identical.

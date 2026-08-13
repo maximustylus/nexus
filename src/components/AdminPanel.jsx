@@ -14,7 +14,8 @@ import AdminWellbeingPanel from './AdminWellbeingPanel';
 // Utils & Data
 import { STAFF_LIST, STATUS_OPTIONS, DOMAIN_LIST } from '../utils';
 import { MOCK_STAFF_NAMES } from '../data/mockData'; 
-import { useNexus } from '../context/NexusContext';   
+import { useNexus } from '../context/NexusContext';
+import { APP_VERSION_LABEL } from '../version';   
 
 // STATIC VARIABLES
 const MONTH_LABELS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
@@ -345,7 +346,7 @@ const saveLoads = async () => {
                 <div className="mb-4 md:mb-0">
                     <h2 className="text-2xl font-black tracking-tight uppercase">Admin Control Center</h2>
                     <p className="text-xs text-slate-400 font-mono uppercase mt-1">
-                        System Database v1.4 • {activeTab === 'OPERATIONS' ? 'Workload Ops' : 'Wellbeing Ops'}
+                        System Database {APP_VERSION_LABEL} • {activeTab === 'OPERATIONS' ? 'Workload Ops' : 'Wellbeing Ops'}
                     </p>
                 </div>
                 

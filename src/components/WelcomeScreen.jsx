@@ -17,7 +17,8 @@ import {
     Sparkles, Building2 
 } from 'lucide-react';
 import { useNexus } from '../context/NexusContext';
-import { checkAccess } from '../utils'; 
+import { checkAccess } from '../utils';
+import { APP_VERSION_LABEL } from '../version'; 
 
 // Hoisted out of the component: a fixed, render-independent list. Inside the
 // body it was reallocated every render, which is what made
@@ -505,7 +506,7 @@ const WelcomeScreen = (props) => {
             {/* FOOTER */}
             <div className="relative z-10 mt-12 text-center opacity-50 pointer-events-none flex flex-col items-center gap-1">
                 <p className="text-[10px] font-black text-slate-500 dark:text-slate-400 tracking-[0.4em] uppercase">
-                    © 2026 Muhammad Alif • System v1.52
+                    © 2026 Muhammad Alif • System {APP_VERSION_LABEL}
                 </p>
             </div>
 

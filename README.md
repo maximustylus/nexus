@@ -1,6 +1,6 @@
-# NEXUS: Smart Operations Dashboard v1.7 [BETA]
+# NEXUS: Smart Operations Dashboard v1.13.0 [BETA]
 
-![Version](https://img.shields.io/badge/Version-v1.12.0-blue) ![Status](https://img.shields.io/badge/Status-Beta%20Phase-emerald) ![Org](https://img.shields.io/badge/Unit-Sport%20%26%20Exercise%20Medicine-indigo) ![Tech](https://img.shields.io/badge/AI-Gemini%20Powered-purple) ![AURA](https://img.shields.io/badge/AURA-v2.3%20Engine-blue) ![PWA](https://img.shields.io/badge/PWA-Native%20Push%20Enabled-blue) ![CI/CD](https://img.shields.io/badge/CI%2FCD-GitHub%20Actions-2ea44f)
+![Version](https://img.shields.io/badge/Version-v1.13.0-blue) ![Status](https://img.shields.io/badge/Status-Beta%20Phase-emerald) ![Org](https://img.shields.io/badge/Unit-Sport%20%26%20Exercise%20Medicine-indigo) ![Tech](https://img.shields.io/badge/AI-Gemini%20Powered-purple) ![AURA](https://img.shields.io/badge/AURA-v2.3%20Engine-blue) ![PWA](https://img.shields.io/badge/PWA-Native%20Push%20Enabled-blue) ![CI/CD](https://img.shields.io/badge/CI%2FCD-GitHub%20Actions-2ea44f)
 
 **NEXUS** (formerly IDC App) is a clinician-led innovation platform designed to revolutionise workload management, optimise skill-mix routing, and actively protect staff wellbeing at the Sport and Exercise Medicine Centre. 
 
@@ -145,9 +145,13 @@ This application is an operational and workload management tool. It is not a cli
 ### Supported Versions
 | Version | Status |
 | ------- | ------ |
-| 1.6.x   | **Active Beta** (Evaluated by Senior CEPs) |
-| 1.5.x   | Legacy Stable |
-| < 1.5   | Deprecated / Offline |
+| 1.13.x  | **Active Beta** (Evaluated by Senior CEPs) |
+| 1.12.x  | Legacy Stable |
+| < 1.12  | Deprecated / Offline |
+
+> This table is downstream of `package.json` `version`, as are the title line and the
+> `Version-` badge above, and `SECURITY.md`'s table of the same name. `package.json` is the only authoritative copy — see
+> [`CHANGELOG.md`](CHANGELOG.md) for the standing rule on bumping it.
 
 ### The "Data Firewall" and Security Policies
 1. **Strict Whitelisting (Backend Firewall):** Access is exclusively limited to pre-approved `@kkh.com.sg` email addresses via a master scalable allowlist array.
@@ -178,7 +182,25 @@ Beta testers should utilise Demo Mode to verify system integrity:
 > also lists the **known issues that are documented but not yet fixed**. The summaries
 > below are narrative highlights; where the two disagree, `CHANGELOG.md` is correct.
 
-### NEXUS v1.6 [Current Beta]
+### NEXUS v1.13.0 [Current Beta]
+* **Profession and Shape Arrangement Picker:** The Sandbox wizard now opens with two controls — MOH's own list of 28 allied health professions, and **five roster structures**, each attributed on screen to the profession that described it in interview. It replaces an earlier attempt at one fabricated department per profession; six invented arrangements were deleted rather than shipped.
+* **Four Grade Bands (correctness fix):** `nonExempt AH7–AH10 · junior AH11–AH12 · senior AH13–AH14 · principal AH15–AH17`. Non-exempt staff (associates, assistants, technologists) shared a band with junior clinicians, so any task gated on the junior band would let a non-exempt assistant lead it. 121 tests were repaired, of which one was a genuine fixture defect rather than a stale assertion.
+* **One Version, One Source:** the app now reads its version from `package.json` via `src/version.js`. Three hand-typed literals had drifted (`v1.41-OFFICIAL`, `System v1.52`, `System Database v1.4`) and all three were live on the deployed site at once. A test now fails the build if a version is typed by hand in rendering code.
+* **Band Ruler Property Test:** the grade-band ruler is swept across its whole input space and proven to draw a legal partition, or to say honestly that it could not — seven mutations of the ruler's maths, every one caught.
+* **Scope:** the roster work above is Sandbox-first. Live mode's generation path and its wizard are unchanged, and `system_data/roster_2026` keeps the same stored shape.
+
+### NEXUS v1.7.0 to v1.12.0
+> These eight releases were never narrated in this section. [`CHANGELOG.md`](CHANGELOG.md) is their only record and is the authoritative one; one line each here so the gap is visible rather than silent.
+* **v1.12.0** — the Sandbox wizard rebuilt for the phone, because that is where visiting colleagues actually open it.
+* **v1.11.0** — the engine's accumulated per-profession flags refactored into orthogonal primitives, plus the first working `npm run lint` in the repository's history (now a CI gate).
+* **v1.10.0** — v1.9.0's engine capability made reachable from the UI; the roster tells the truth in the calendar itself, and coverage requests moved out of the AI chat panel into the roster.
+* **v1.9.0** — engine capability for the remaining two interviewed teams, plus the band ruler.
+* **v1.8.1** — fixes, including the app header rendering on top of the open Configuration Wizard.
+* **v1.8.0** — the roster master release: job grades, band-gated tasks, monthly clinics and continuity of care, built from field interviews with four allied-health teams.
+* **v1.7.1** — all fixes: live-mode generation lands on the weekdays it claims, standards-compliant exports, and no native browser dialogs left in the roster view.
+* **v1.7.0** — a constraint-aware rostering engine in Sandbox mode, with live mode's original generator verified byte-identical across 720 configurations.
+
+### NEXUS v1.6
 * **Verification Infrastructure:** Introduced the project's first working test harness (Vitest, Testing Library, jsdom) with 23 characterization tests for the roster generator, and wired `npm test` into the GitHub Actions deploy workflow so a failing suite now blocks release.
 * **Roster Lead / Co-Lead Pairing:** Restructured generated shifts into a single paired object per task carrying explicit `lead` and `coLead` fields, with dedicated Lead and Co-Lead columns in the CSV export. **Note:** this changed the stored shape of `system_data/roster_2026` — see the *Breaking* entry in `CHANGELOG.md`.
 * **Safer Roster Generation:** Routed the destructive 4-week generation through the custom `ConfirmationModal` and added error handling to the write path.
@@ -204,7 +226,9 @@ Beta testers should utilise Demo Mode to verify system integrity:
 * **Auto-Rostering Framework:** Built the initial zero-conflict scheduling logic and unified calendar interfaces.
 * **Early AURA Integration:** Introduced the baseline conversational agent focused heavily on Motivational Interviewing (OARS) and basic administrative query routing.
 
-## Future Roadmap (Pending v1.8)
+## Future Roadmap (Not Yet Built)
+
+> Previously headed *"Pending v1.8"*. v1.8.0 shipped on 2026-08-08 and neither item below was part of it; nothing in `src/` references either today. The heading no longer names a version, so it cannot go stale again — these are unbuilt, not scheduled.
 
 * **Admin Security Audit Logs:** Implementation of a transparent access tracking system within the Admin Panel to monitor user logins, profile alterations, and data export events.
 * **Enterprise Scaling and Multi-Tenancy:** Transitioning the app from a hardcoded single-team environment to a dynamic, database-driven configuration. This will allow multiple departments to utilise NEXUS with completely isolated data sub-collections and custom organisation logos.

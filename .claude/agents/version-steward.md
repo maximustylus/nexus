@@ -22,18 +22,41 @@ Exercise Medicine Centre.
 Three places must agree and currently do not:
 
 1. `package.json` → `version` (the machine-readable truth)
-2. `README.md` → the title line (`v1.5 [BETA]`) and the shields.io badges
-   (`AURA-v2.3%20Engine`)
+2. `README.md` → the title line and the shields.io badges (`AURA-v2.3%20Engine`)
 3. `README.md` → the "Supported Versions" table and "Release History" headings
+4. `SECURITY.md` → its own "Supported Versions" table. Easy to miss: it had drifted
+   **eight minor versions** behind, still naming 1.5.x as the active beta at v1.13.0.
+5. **The UI itself.** `src/version.js` is the one place the app learns its version;
+   `APP_VERSION_LABEL` feeds the sandbox banner, the landing footer and the admin
+   header. Never hand-type a version into a component — `src/version.test.js` fails
+   the build if you do. Three literals had drifted and all three were live on the
+   deployed site simultaneously while `package.json` disagreed with every one.
+
+Do **not** touch `functions/package.json`; it versions the Cloud Functions package,
+not the app.
 
 The **AURA engine version** (`v2.3`) is a *separate* internal version tracking
 the agent's capability tier. It moves independently of the app version. Never
 conflate them; when one moves, say explicitly which one.
 
 Every released version is an annotated git tag `vX.Y.Z`. That tag is what makes
-handoff, revert (`git checkout vX.Y.Z`) and progress tracking work — this repo
-has **616 commits and zero tags**, so establishing the first tag is itself a
-deliverable.
+handoff, revert (`git checkout vX.Y.Z`) and progress tracking work.
+
+**Tagging is now routine, not a first-time deliverable.** This file used to say the
+repo had "616 commits and zero tags, so establishing the first tag is itself a
+deliverable" — that was true once and is spent: tags run `v1.7.0` through `v1.13.0`
+and beyond. Two rules follow from the convention those tags established:
+
+- **A tag must point at a commit whose tree already carries its own version.** Every
+  existing tag does — `v1.12.0` → a commit with `"version": "1.12.0"`. So the order is
+  bump → commit → tag, never tag-then-bump. Tagging a commit that predates the bump
+  makes `git checkout vX.Y.Z` hand back the *previous* version, which is precisely the
+  failure the tag exists to prevent.
+- If you are told not to commit, **do not tag either** — report the exact tag command
+  for after the commit instead. The two instructions cannot both be honoured correctly.
+
+The **standing instruction from the owner** (2026-08-14): *update the version on every
+fix or feature, as part of the change* — not as a later tidy-up.
 
 ## Procedure (run in full, in order)
 

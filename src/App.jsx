@@ -42,6 +42,7 @@ import ResultPage from './components/ResultPage';
 
 // UTILITIES
 import { STAFF_LIST, STAFF_IDS, MONTHS, checkAccess, TEAM_DIRECTORY } from './utils';
+import { APP_VERSION_LABEL } from './version';
 
 // ==========================================
 // CONFIGURATION & CONSTANTS
@@ -667,7 +668,7 @@ export default function App() {
                    <p className="text-[10px] text-emerald-600 font-medium">Simulation Data.</p>
                  </div>
               </div>
-              <div className="text-[10px] font-mono bg-emerald-100 text-emerald-700 px-2 py-1 rounded">v1.41-OFFICIAL</div>
+              <div className="text-[10px] font-mono bg-emerald-100 text-emerald-700 px-2 py-1 rounded">{APP_VERSION_LABEL}</div>
             </div>
           )}
 

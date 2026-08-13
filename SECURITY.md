@@ -6,9 +6,14 @@ We take the security and data privacy of the NEXUS platform very seriously. Curr
 
 | Version | Support Status |
 | ------- | -------------- |
-| 1.5.x   | Supported (Active Beta) |
-| 1.4.x   | Supported (Legacy Stable) |
-| < 1.4   | Unsupported |
+| 1.13.x  | Supported (Active Beta) |
+| 1.12.x  | Supported (Legacy Stable) |
+| < 1.12  | Unsupported |
+
+> This table must match the *Supported Versions* table in [`README.md`](README.md); both are
+> downstream of `package.json` `version`, which is the single authoritative copy. It had
+> drifted eight minor versions behind (it still named 1.5.x as the Active Beta at v1.13.0) —
+> the support boundary moves with each release and is not an independent policy.
 
 ## Reporting a Vulnerability
 
