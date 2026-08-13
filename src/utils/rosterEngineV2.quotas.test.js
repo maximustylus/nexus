@@ -1446,7 +1446,12 @@ describe('COMPOSITION: a cohort window against a multi-slot team shift', () => {
         staff: [
             { name: 'Pat', grade: 'AH16' },
             { name: 'Sam', grade: 'AH13' },
-            { name: 'Jun', grade: 'AH8', windows: [{ from: '2027-02-08', label: 'locum block' }] },
+            // Jun was AH8, chosen when `junior` meant AH7–AH12. AH7–AH10 is
+            // `nonExempt` since the four-band split, so the trio's `{ band: 'junior' }`
+            // slot needs a junior AHP — which is what this locum is. Every assertion
+            // below, the "(1 in band, 1 outside their cohort window)" reason included,
+            // is unchanged.
+            { name: 'Jun', grade: 'AH12', windows: [{ from: '2027-02-08', label: 'locum block' }] },
         ],
         tasks: [{
             name: 'Weekend Witnessing',

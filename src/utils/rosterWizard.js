@@ -101,7 +101,9 @@ import {
 } from './rosterEngineV2.js';
 
 /**
- * The three band names, lowest first.
+ * The band names, lowest first — four of them today (nonExempt, junior, senior,
+ * principal), and however many the engine declares tomorrow. Derived from
+ * `DEFAULT_GRADE_BANDS`, never a literal list.
  *
  * Taken from the engine's own export rather than retyped: the engine REFUSES
  * `leadBands: ['Senior']` (capital S is not a band), so the one list the UI
@@ -122,11 +124,22 @@ const trimmed = (value) => (typeof value === 'string' ? value.trim() : '');
 const isPlainObject = (value) =>
     typeof value === 'object' && value !== null && !Array.isArray(value);
 
-/** Title case for a band name, for chips and captions. `junior` -> `Junior`. */
-export const bandLabel = (band) =>
-    typeof band === 'string' && band.length > 0
-        ? band.charAt(0).toUpperCase() + band.slice(1)
-        : '';
+/**
+ * A band name as it appears on a chip or in a caption. `junior` -> `Junior`.
+ *
+ * A camel hump becomes a hyphenated word, so `nonExempt` -> `Non-exempt` rather
+ * than the `NonExempt` a bare capitalisation gives. That mattered the moment the
+ * fourth band arrived: the chips a roster master picks from are read, and
+ * `NonExempt` is a variable name, not a word. Mirrors `regionWordLabel` in the
+ * engine deliberately — the same key has to read the same way in a chip and in a
+ * refusal — and is derived rather than a lookup, so a fifth band needs no edit
+ * here.
+ */
+export const bandLabel = (band) => {
+    if (typeof band !== 'string' || band.length === 0) return '';
+    const spaced = band.replace(/([a-z0-9])([A-Z])/g, '$1-$2').toLowerCase();
+    return spaced.charAt(0).toUpperCase() + spaced.slice(1);
+};
 
 /**
  * The 7-day toggle strip, Monday first, carrying the engine's day numbers
@@ -533,7 +546,7 @@ export const describeBandRange = (selected, bands = DEFAULT_GRADE_BANDS) => {
 // With six independent numbers a user can express a GAP (AH12 in no band at all),
 // an OVERLAP (two bands claiming AH12) or a partition that does not reach the ends
 // of the scale, and the only defence is `validateGradeBands` complaining after the
-// fact. With dividers those states are not reachable: the three bands are DERIVED
+// fact. With dividers those states are not reachable: the bands are DERIVED
 // from where the dividers sit —
 //
 //     junior = [7, a]        senior = [a + 1, b]        principal = [b + 1, 17]
@@ -565,7 +578,7 @@ const RULER_MAX = RULER_GRADES[RULER_GRADES.length - 1];
 /**
  * The dividers, low to high — one between each adjacent pair of bands.
  *
- * Derived from `BAND_NAMES` rather than hard-coded as two, because "how many
+ * Derived from `BAND_NAMES` rather than hard-coded, because "how many
  * dividers" is not an independent fact: it is `bands - 1`, and writing `2` here
  * would be a second place to update if the engine's band list ever changed.
  *

@@ -79,22 +79,39 @@ const WEDNESDAY = '2026-09-09';
 
 /**
  * A graded department: one principal, two seniors, three juniors, and the
- * boundary grades of each band represented (AH7 and AH12 for junior, AH13 and
+ * boundary grades of each band represented (AH11 and AH12 for junior, AH13 and
  * AH14 for senior, AH15 for principal).
+ *
+ * RE-GRADED WITH THE FOUR-BAND SPLIT. The juniors were AH9, AH7 and AH12, chosen
+ * when `junior` meant AH7–AH12. AH7–AH10 is now `nonExempt` — assistants,
+ * associates and technologists — so an AH7 or an AH9 is not a junior AHP and this
+ * fixture's three "juniors" would no longer have been in the band the tests below
+ * gate on. The INTENT is unchanged: three junior AHPs, both ends of their band
+ * represented. `JUNIORS` is the same three names it always was.
  */
 const gradedStaff = () => [
     { name: 'Ada', fte: 1.0, grade: 'AH15' }, // principal
     { name: 'Ben', fte: 1.0, grade: 'AH13' }, // senior, bottom of band
     { name: 'Cleo', fte: 1.0, grade: 'AH14' }, // senior, top of band
-    { name: 'Dara', fte: 1.0, grade: 'AH9' }, // junior
-    { name: 'Emil', fte: 1.0, grade: 'AH7' }, // junior, bottom of scale
+    { name: 'Dara', fte: 1.0, grade: 'AH11' }, // junior, bottom of band
+    { name: 'Emil', fte: 1.0, grade: 'AH11' }, // junior
     { name: 'Fen', fte: 1.0, grade: 'AH12' }, // junior, top of band
 ];
 
 const SENIORS = new Set(['Ada', 'Ben', 'Cleo']);
 const JUNIORS = new Set(['Dara', 'Emil', 'Fen']);
 
-const CUSTOM_BANDS = { junior: [7, 11], senior: [12, 14], principal: [15, 17] };
+/**
+ * A moved boundary: senior starts at AH12 instead of AH13, so the same AH12 reads
+ * junior under the shipped cut and senior under this one — which is what the tests
+ * using it are about.
+ *
+ * REWRITTEN WITH THE FOUR-BAND SPLIT. It named three regions because the scale had
+ * three; a custom cut must now name all four or `validateGradeBands` refuses it as
+ * a non-partition. `junior` narrows to [11, 11] so AH12 can move up into senior;
+ * `nonExempt` and `principal` keep the shipped spans.
+ */
+const CUSTOM_BANDS = { nonExempt: [7, 10], junior: [11, 11], senior: [12, 14], principal: [15, 17] };
 
 // ═════════════════════════════════════════════════════════════════════════════
 // 1. THE PURE EXPORTS — the vocabulary the coming UI will read
@@ -115,15 +132,24 @@ describe('GRADE_SCALE and DEFAULT_GRADE_BANDS', () => {
     });
 
     it('ships the documented default cut', () => {
+        // CHANGED BY THE FOUR-BAND SPLIT. This pinned junior: [7, 12], which
+        // conflated non-exempt support staff with junior AHPs and let an AH8
+        // assistant lead a task gated to "junior may lead". The department's cut is
+        // now nonExempt AH7–AH10 / junior AH11–AH12; senior and principal are
+        // untouched.
         expect(DEFAULT_GRADE_BANDS).toEqual({
-            junior: [7, 12],
+            nonExempt: [7, 10],
+            junior: [11, 12],
             senior: [13, 14],
             principal: [15, 17],
         });
     });
 
     it('names its bands lowest first, so Object.keys is the band order', () => {
-        expect(Object.keys(DEFAULT_GRADE_BANDS)).toEqual(['junior', 'senior', 'principal']);
+        // CHANGED BY THE FOUR-BAND SPLIT: four names, and `nonExempt` is now the
+        // lowest — which is what makes it, and not `junior`, the band that has to
+        // start at the bottom of the scale.
+        expect(Object.keys(DEFAULT_GRADE_BANDS)).toEqual(['nonExempt', 'junior', 'senior', 'principal']);
     });
 
     it('puts every grade on the scale in exactly one band — no gap, no overlap', () => {
@@ -131,13 +157,21 @@ describe('GRADE_SCALE and DEFAULT_GRADE_BANDS', () => {
         // shipped default rather than trusted.
         const counted = GRADE_SCALE.map((grade) => bandOfGrade(grade));
         expect(counted.filter((band) => band === null)).toEqual([]);
-        expect(new Set(counted)).toEqual(new Set(['junior', 'senior', 'principal']));
+        // CHANGED BY THE FOUR-BAND SPLIT: every grade still lands in exactly one
+        // band, but there are four of them to land in.
+        expect(new Set(counted)).toEqual(new Set(['nonExempt', 'junior', 'senior', 'principal']));
     });
 });
 
 describe('bandOfGrade', () => {
+    // CHANGED BY THE FOUR-BAND SPLIT: `AH7` was pinned as junior and is now
+    // nonExempt, and the AH10/AH11 pair either side of the new boundary is added so
+    // this table names every band edge the department actually has. (Every grade
+    // AH7–AH17 is asserted exhaustively in `rosterEngineV2.bands4.test.js`.)
     it.each([
-        ['AH7', 'junior'],
+        ['AH7', 'nonExempt'],
+        ['AH10', 'nonExempt'],
+        ['AH11', 'junior'],
         ['AH12', 'junior'],
         ['AH13', 'senior'],
         ['AH14', 'senior'],
@@ -150,8 +184,10 @@ describe('bandOfGrade', () => {
     it.each([
         ['lower case', 'ah16', 'principal'],
         ['mixed case', 'Ah13', 'senior'],
-        ['surrounding whitespace', '  AH9  ', 'junior'],
-        ['a padded number', 'AH07', 'junior'],
+        // CHANGED BY THE FOUR-BAND SPLIT: AH9 and AH07 are nonExempt now, not
+        // junior. The claim under test is the input SPELLING, which is unchanged.
+        ['surrounding whitespace', '  AH9  ', 'nonExempt'],
+        ['a padded number', 'AH07', 'nonExempt'],
     ])('accepts %s on input', (_label, grade, band) => {
         expect(bandOfGrade(grade)).toBe(band);
     });
@@ -179,13 +215,18 @@ describe('bandOfGrade', () => {
     it('returns null rather than guessing when the bands do not partition the scale', () => {
         // The loud half of the pair is `validateGradeBands`. This half must not
         // invent an answer that would look like a real band membership.
-        expect(bandOfGrade('AH13', { junior: [7, 11], senior: [13, 14], principal: [15, 17] })).toBeNull();
+        // Fixture rewritten for four regions so the non-partition under test is
+        // still a GAP (AH12 in no band) rather than a missing band name.
+        expect(bandOfGrade('AH13', { nonExempt: [7, 10], junior: [11, 11], senior: [13, 14], principal: [15, 17] })).toBeNull();
         expect(bandOfGrade('AH13', {})).toBeNull();
         expect(bandOfGrade('AH13', 'wide')).toBeNull();
     });
 
     it('is pure — it mutates neither the grade nor the bands it was given', () => {
-        const bands = { junior: [7, 11], senior: [12, 14], principal: [15, 17] };
+        // Fixture rewritten for four regions, so the call being measured for purity
+        // is one that actually reaches the lookup rather than bouncing off an
+        // invalid-bands guard.
+        const bands = { nonExempt: [7, 10], junior: [11, 11], senior: [12, 14], principal: [15, 17] };
         const snapshot = JSON.stringify(bands);
         bandOfGrade('AH12', bands);
         expect(JSON.stringify(bands)).toBe(snapshot);
@@ -199,83 +240,97 @@ describe('validateGradeBands', () => {
 
     it('accepts a moved boundary that still partitions the scale', () => {
         expect(validateGradeBands(CUSTOM_BANDS).valid).toBe(true);
-        expect(validateGradeBands({ junior: [7, 7], senior: [8, 8], principal: [9, 17] }).valid).toBe(true);
+        // Fixture rewritten for four regions. The claim is unchanged: bands squeezed
+        // down to a single grade each still partition the scale and are accepted.
+        expect(validateGradeBands({ nonExempt: [7, 7], junior: [8, 8], senior: [9, 9], principal: [10, 17] }).valid).toBe(true);
     });
 
     it('names the unbanded grades when a gap is left — the silent-ineligibility trap', () => {
-        const oneGrade = validateGradeBands({ junior: [7, 11], senior: [13, 14], principal: [15, 17] });
+        // Every fixture here rewritten for four regions, so that the FIRST fault the
+        // validator meets is still the gap under test and not a missing `nonExempt`.
+        // Each gap still falls between the same two grades it always did, so the four
+        // expectations below are unchanged.
+        const oneGrade = validateGradeBands({ nonExempt: [7, 10], junior: [11, 11], senior: [13, 14], principal: [15, 17] });
         expect(oneGrade.valid).toBe(false);
         expect(oneGrade.reason).toMatch(/leave AH12 in no band at all/);
         expect(oneGrade.reason).toMatch(/junior ends at AH11 and senior starts at AH13/);
         expect(oneGrade.reason).toMatch(/silently unable to lead/);
 
         expect(
-            validateGradeBands({ junior: [7, 10], senior: [13, 14], principal: [15, 17] }).reason,
+            validateGradeBands({ nonExempt: [7, 10], junior: [13, 13], senior: [14, 14], principal: [15, 17] }).reason,
         ).toMatch(/leave AH11 and AH12 in no band at all/);
 
         expect(
-            validateGradeBands({ junior: [7, 9], senior: [13, 14], principal: [15, 17] }).reason,
+            validateGradeBands({ nonExempt: [7, 9], junior: [13, 13], senior: [14, 14], principal: [15, 17] }).reason,
         ).toMatch(/leave AH10–AH12 in no band at all/);
 
         expect(
-            validateGradeBands({ junior: [7, 12], senior: [13, 13], principal: [15, 17] }).reason,
+            validateGradeBands({ nonExempt: [7, 10], junior: [11, 12], senior: [13, 13], principal: [15, 17] }).reason,
         ).toMatch(/leave AH14 in no band at all/);
     });
 
+    // Every fixture in this table gained `nonExempt` and had `junior` narrowed to
+    // [11, 12], so that the fault each row is about is still the first one the
+    // validator reaches. Only two EXPECTATIONS moved with the split, and both are
+    // marked below.
     it.each([
         [
             'an overlap',
-            { junior: [7, 12], senior: [12, 14], principal: [15, 17] },
-            /junior \(AH7–AH12\) and senior \(AH12–AH14\) overlap/,
+            { nonExempt: [7, 10], junior: [11, 12], senior: [12, 14], principal: [15, 17] },
+            // CHANGED BY THE FOUR-BAND SPLIT: junior's span in the reason is AH11–AH12.
+            /junior \(AH11–AH12\) and senior \(AH12–AH14\) overlap/,
         ],
         [
             'a top that is not AH17',
-            { junior: [7, 12], senior: [13, 14], principal: [15, 16] },
+            { nonExempt: [7, 10], junior: [11, 12], senior: [13, 14], principal: [15, 16] },
             /principal must end at 17/,
         ],
         [
             'a bottom that is not AH7',
-            { junior: [8, 12], senior: [13, 14], principal: [15, 17] },
-            /junior must start at 7/,
+            // CHANGED BY THE FOUR-BAND SPLIT: the band that must start at the bottom
+            // of the scale is `nonExempt` now, so the hole is opened there and the
+            // refusal names it instead of `junior`.
+            { nonExempt: [8, 10], junior: [11, 12], senior: [13, 14], principal: [15, 17] },
+            /nonExempt must start at 7/,
         ],
         [
             'a band running backwards',
-            { junior: [7, 12], senior: [14, 13], principal: [15, 17] },
+            { nonExempt: [7, 10], junior: [11, 12], senior: [14, 13], principal: [15, 17] },
             /senior runs from 14 down to 13/,
         ],
         [
             'a missing band',
-            { junior: [7, 12], senior: [13, 17] },
+            { nonExempt: [7, 10], junior: [11, 12], senior: [13, 17] },
             /missing the principal band/,
         ],
         [
             'an invented band',
-            { junior: [7, 12], senior: [13, 14], principal: [15, 17], middle: [1, 2] },
+            { nonExempt: [7, 10], junior: [11, 12], senior: [13, 14], principal: [15, 17], middle: [1, 2] },
             /unknown band "middle"/,
         ],
         [
             'a fractional bound',
-            { junior: [7, 12], senior: [13, 14.5], principal: [15, 17] },
+            { nonExempt: [7, 10], junior: [11, 12], senior: [13, 14.5], principal: [15, 17] },
             /bound 14.5 — band bounds are whole grade numbers/,
         ],
         [
             'a bound off the scale',
-            { junior: [7, 12], senior: [13, 20], principal: [15, 17] },
+            { nonExempt: [7, 10], junior: [11, 12], senior: [13, 20], principal: [15, 17] },
             /bound 20, which is outside the AH7–AH17 scale/,
         ],
         [
             'a bound that is not a range',
-            { junior: [7, 12], senior: 13, principal: [15, 17] },
+            { nonExempt: [7, 10], junior: [11, 12], senior: 13, principal: [15, 17] },
             /senior must be a two-number range/,
         ],
         [
             'a three-element range',
-            { junior: [7, 12], senior: [13, 14, 15], principal: [15, 17] },
+            { nonExempt: [7, 10], junior: [11, 12], senior: [13, 14, 15], principal: [15, 17] },
             /senior must be a two-number range/,
         ],
         ['a string', 'wide', /must be an object of the form/],
         ['null', null, /must be an object of the form/],
-        ['an array', [[7, 12], [13, 14], [15, 17]], /must be an object of the form/],
+        ['an array', [[7, 10], [11, 12], [13, 14], [15, 17]], /must be an object of the form/],
     ])('rejects %s with a readable reason', (_label, bands, pattern) => {
         const result = validateGradeBands(bands);
         expect(result.valid).toBe(false);
@@ -404,7 +459,10 @@ describe('validateRosterV2Config — leadBands', () => {
     ])('refuses %s inside leadBands', (_label, band) => {
         const result = validateRosterV2Config(withLeadBands([band]));
         expect(result.valid).toBe(false);
-        expect(result.reason).toMatch(/which is not a band — use junior, senior, principal \(lower case\)/);
+        // CHANGED BY THE FOUR-BAND SPLIT: the refusal lists the bands that exist, and
+        // there are four of them now. The list is built from the scale's own
+        // `regionOrder`, so this is the new truth rather than a loosened match.
+        expect(result.reason).toMatch(/which is not a band — use nonExempt, junior, senior, principal \(lower case\)/);
     });
 
     it('tolerates a repeated band name — a set, not a multiset', () => {
@@ -445,7 +503,12 @@ describe('validateRosterV2Config — leadBands', () => {
             staff: [{ name: 'Ben', grade: 'AH13' }],
             tasks: [{ name: 'Odd', leadBands: ['junior', 'principal'] }],
         });
-        expect(result.reason).toMatch(/led by Junior\/Principal-band staff \(AH7–AH12, AH15–AH17\)/);
+        // CHANGED BY THE FOUR-BAND SPLIT: the junior band is AH11–AH12, so the two
+        // spans it reports are AH11–AH12 and AH15–AH17. The point of the test — that a
+        // deliberately non-contiguous selection is reported as TWO spans rather than
+        // flattened into one fake range — is untouched, and the gap is now three
+        // grades wide instead of two.
+        expect(result.reason).toMatch(/led by Junior\/Principal-band staff \(AH11–AH12, AH15–AH17\)/);
     });
 
     it('accepts the same task once somebody in the band exists', () => {
@@ -493,14 +556,18 @@ describe('validateRosterV2Config — rules.bands', () => {
     });
 
     it('surfaces the band reason verbatim through the config validator', () => {
-        const bands = { junior: [7, 11], senior: [13, 14], principal: [15, 17] };
+        // Fixture rewritten for four regions so the reason being passed through is
+        // still the GAP one (AH12 in no band) rather than a missing-band one.
+        const bands = { nonExempt: [7, 10], junior: [11, 11], senior: [13, 14], principal: [15, 17] };
         const result = validateRosterV2Config(withBands(bands));
         expect(result.valid).toBe(false);
         expect(result.reason).toBe(validateGradeBands(bands).reason);
     });
 
     it('refuses through generateRosterV2 as well', () => {
-        const result = generateRosterV2(withBands({ junior: [7, 12], senior: [12, 14], principal: [15, 17] }));
+        // Fixture rewritten for four regions so the fault reaching the engine is
+        // still the overlap this test is named for.
+        const result = generateRosterV2(withBands({ nonExempt: [7, 10], junior: [11, 12], senior: [12, 14], principal: [15, 17] }));
         expect(result.ok).toBe(false);
         expect(result.reason).toMatch(/overlap/);
     });
@@ -610,13 +677,17 @@ describe('generateRosterV2 — the band gate applies to the lead', () => {
 // ═════════════════════════════════════════════════════════════════════════════
 
 describe('generateRosterV2 — a band gate is never overridden to fill a slot', () => {
+    // Dara and Emil were AH9 and AH7 — non-exempt grades since the four-band split,
+    // so neither would be in the junior band this task gates on. RE-GRADED to the
+    // two junior-AHP grades; every assertion below, the "(2 in band, 2 on leave)"
+    // reason included, is unchanged.
     const juniorOnly = () => ({
         startDate: MONDAY_START,
         weeks: 1,
         staff: [
             { name: 'Ada', grade: 'AH15' },
-            { name: 'Dara', grade: 'AH9', unavailable: [WEDNESDAY] },
-            { name: 'Emil', grade: 'AH7', unavailable: [WEDNESDAY] },
+            { name: 'Dara', grade: 'AH11', unavailable: [WEDNESDAY] },
+            { name: 'Emil', grade: 'AH12', unavailable: [WEDNESDAY] },
         ],
         tasks: [{ name: 'Junior Clinic', leadBands: ['junior'], leads: 1, coLeads: 0 }],
     });
@@ -655,11 +726,15 @@ describe('generateRosterV2 — a band gate is never overridden to fill a slot', 
 });
 
 describe('generateRosterV2 — spillover is a choice, spelled out in leadBands', () => {
+    // Dara was AH9 — non-exempt since the four-band split, which made her ineligible
+    // to lead anything gated to `['junior']` and left every test in this block
+    // passing for the wrong reason (Ben covered the whole week). RE-GRADED to AH11,
+    // a junior AHP, which is what "the junior" in these tests always meant.
     const shared = (leadBands) => ({
         startDate: MONDAY_START,
         weeks: 1,
         staff: [
-            { name: 'Dara', grade: 'AH9', unavailable: [WEDNESDAY] },
+            { name: 'Dara', grade: 'AH11', unavailable: [WEDNESDAY] },
             { name: 'Ben', grade: 'AH13' },
         ],
         tasks: [{ name: 'Shared', leadBands, leads: 1, coLeads: 0 }],

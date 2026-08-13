@@ -632,7 +632,7 @@ describe('a per-person quota, configured from the wizard', () => {
                 { name: 'Ben', fte: 1, skills: [], unavailable: [] },
             ],
             tasks: [{ name: 'Saturday Bench', days: [6], leads: 1, coLeads: 0, quota: { per: 'month', max: 1 } }],
-            rules: { bands: { junior: [7, 12], senior: [13, 14], principal: [15, 17] } },
+            rules: { bands: { nonExempt: [7, 10], junior: [11, 12], senior: [13, 14], principal: [15, 17] } },
         });
         expect(roster.unfilled).toHaveLength(1);
         expect(screen.getByText(/could not be staffed \(1\)/i)).toBeTruthy();
@@ -668,7 +668,7 @@ describe('a per-person quota, configured from the wizard', () => {
                 { name: 'Cara', fte: 1, skills: [], unavailable: ['2026-09-07', '2026-09-08', '2026-09-09', '2026-09-10', '2026-09-11'] },
             ],
             tasks: [{ name: 'Saturday Bench', days: [1, 2, 3, 4, 5], leads: 1, coLeads: 1, quota: { per: 'week', min: 2 } }],
-            rules: { bands: { junior: [7, 12], senior: [13, 14], principal: [15, 17] } },
+            rules: { bands: { nonExempt: [7, 10], junior: [11, 12], senior: [13, 14], principal: [15, 17] } },
         });
         const floor = expected.warnings.find((line) => line.startsWith('Quota floor not met:'));
         expect(floor).toBeTruthy();
@@ -1059,7 +1059,7 @@ describe('a task category, configured from the wizard', () => {
             weeks: 1,
             staff: [{ name: 'Ada', fte: 1, skills: [], unavailable: [] }],
             tasks: [{ name: 'EFT Clinic', days: [1], leads: 1, coLeads: 0, category: 'VC' }],
-            rules: { bands: { junior: [7, 12], senior: [13, 14], principal: [15, 17] } },
+            rules: { bands: { nonExempt: [7, 10], junior: [11, 12], senior: [13, 14], principal: [15, 17] } },
         });
         expect(expected.roster['2026-09-07'][0].category).toBe('VC');
         expect(renderedLeadsFor('EFT Clinic')).toHaveLength(1);
@@ -1096,7 +1096,7 @@ describe('the nine controls are inert until they are used', () => {
                 { name: 'Ben', fte: 1, skills: [], unavailable: [] },
             ],
             tasks: [{ name: 'Ward Round', days: [1, 2, 3, 4, 5], leads: 1, coLeads: 1 }],
-            rules: { bands: { junior: [7, 12], senior: [13, 14], principal: [15, 17] } },
+            rules: { bands: { nonExempt: [7, 10], junior: [11, 12], senior: [13, 14], principal: [15, 17] } },
         });
         expect(expected.ok).toBe(true);
         expect(expected.warnings).toEqual([]);

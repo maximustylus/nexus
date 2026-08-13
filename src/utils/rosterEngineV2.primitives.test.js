@@ -1021,7 +1021,10 @@ describe('STRUCTURE: the composition step', () => {
             staff: [
                 { name: 'Priya', grade: 'AH16' },
                 { name: 'Sanjay', grade: 'AH14' },
-                { name: 'Jun', grade: 'AH9' },
+                // Jun was AH9, chosen when `junior` meant AH7–AH12. AH7–AH10 is
+                // `nonExempt` since the four-band split, so a junior SLOT needs a
+                // junior AHP — which is what Jun has always been meant to be here.
+                { name: 'Jun', grade: 'AH12' },
             ],
             tasks: [{
                 name: 'Trio', days: [1],

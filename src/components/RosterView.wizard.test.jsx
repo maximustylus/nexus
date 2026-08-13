@@ -109,8 +109,13 @@ const rosterListenerCalls = () =>
  * checks in demo mode and the absence checks in live mode, so the two cannot drift
  * apart the way a `/boundary/i` regex on one side and a literal on the other would.
  */
-const LOWER_DIVIDER = 'Boundary between the Junior and Senior bands';
-const UPPER_DIVIDER = 'Boundary between the Senior and Principal bands';
+// CHANGED BY THE FOUR-BAND SPLIT. These were JUNIOR_SENIOR_DIVIDER and SENIOR_PRINCIPAL_DIVIDER,
+// which named two dividers on a three-band scale. There are THREE dividers now,
+// so "lower" would name the middle one — hence names that say which bands each
+// sits between and cannot go stale the same way.
+const NONEXEMPT_JUNIOR_DIVIDER = 'Boundary between the Non-exempt and Junior bands';
+const JUNIOR_SENIOR_DIVIDER = 'Boundary between the Junior and Senior bands';
+const SENIOR_PRINCIPAL_DIVIDER = 'Boundary between the Senior and Principal bands';
 
 /** Every control the sandbox wizard added, as one absence check. */
 const expectNoSandboxTables = () => {
@@ -120,9 +125,12 @@ const expectNoSandboxTables = () => {
     // assertion that could no longer fail. The band editor's controls are now two
     // sliders, and live mode has no slider of any kind, so the role is the check.
     expect(screen.queryAllByRole('slider')).toHaveLength(0);
-    expect(screen.queryByLabelText(LOWER_DIVIDER)).toBeNull();
-    expect(screen.queryByLabelText(UPPER_DIVIDER)).toBeNull();
-    expect(screen.queryByText('Junior AH7–AH12')).toBeNull();
+    expect(screen.queryByLabelText(NONEXEMPT_JUNIOR_DIVIDER)).toBeNull();
+    expect(screen.queryByLabelText(JUNIOR_SENIOR_DIVIDER)).toBeNull();
+    expect(screen.queryByLabelText(SENIOR_PRINCIPAL_DIVIDER)).toBeNull();
+    // CHANGED: junior is AH11–AH12 now; AH7–AH10 is the non-exempt band.
+    expect(screen.queryByText('Junior AH11–AH12')).toBeNull();
+    expect(screen.queryByText('Non-exempt AH7–AH10')).toBeNull();
     expect(screen.queryByLabelText('Staff row 1 name')).toBeNull();
     expect(screen.queryByLabelText('Staff row 1 job grade')).toBeNull();
     expect(screen.queryByLabelText('Task row 1 name')).toBeNull();
@@ -364,10 +372,14 @@ describe('demo mode: the wizard is the tables, and only the tables', () => {
         // CHANGED at the ruler: was `getByLabelText('Junior band lowest grade')`,
         // one of the six number boxes. The band editor is now one ruler with two
         // dividers, plus the same numbers as text beside it.
-        expect(screen.getAllByRole('slider')).toHaveLength(2);
-        expect(screen.getByLabelText(LOWER_DIVIDER)).toBeTruthy();
-        expect(screen.getByLabelText(UPPER_DIVIDER)).toBeTruthy();
-        expect(screen.getByText('Junior AH7–AH12')).toBeTruthy();
+        // CHANGED BY THE FOUR-BAND SPLIT: three dividers, not two — the count is
+        // bands minus one, and it is derived rather than written down.
+        expect(screen.getAllByRole('slider')).toHaveLength(3);
+        expect(screen.getByLabelText(NONEXEMPT_JUNIOR_DIVIDER)).toBeTruthy();
+        expect(screen.getByLabelText(JUNIOR_SENIOR_DIVIDER)).toBeTruthy();
+        expect(screen.getByLabelText(SENIOR_PRINCIPAL_DIVIDER)).toBeTruthy();
+        expect(screen.getByText('Non-exempt AH7–AH10')).toBeTruthy();
+        expect(screen.getByText('Junior AH11–AH12')).toBeTruthy();
         expect(screen.getByLabelText('Staff row 1 name')).toBeTruthy();
         expect(screen.getByLabelText('Staff row 1 job grade')).toBeTruthy();
         expect(screen.getByLabelText('Task row 1 name')).toBeTruthy();
@@ -525,20 +537,24 @@ describe('demo mode: the band boundary ruler', () => {
         const [lower, upper] = dividers();
 
         // Shipped cut: junior AH7–12, senior AH13–14, principal AH15–17.
-        expect(lower.getAttribute('aria-label')).toBe(LOWER_DIVIDER);
+        expect(lower.getAttribute('aria-label')).toBe(JUNIOR_SENIOR_DIVIDER);
         expect(lower.getAttribute('aria-valuenow')).toBe('12');
-        expect(lower.getAttribute('aria-valuemin')).toBe('7');
+        // CHANGED BY THE FOUR-BAND SPLIT. This divider could reach AH7 when junior
+        // was the bottom band. Non-exempt is the bottom band now, so the floor is
+        // one grade above the divider below it — the same rule that gives the
+        // ceiling, applied at the other end.
+        expect(lower.getAttribute('aria-valuemin')).toBe('11');
         // NOT 17: one grade below the upper divider, because senior may not be
         // squeezed to nothing.
         expect(lower.getAttribute('aria-valuemax')).toBe('13');
         expect(lower.getAttribute('aria-orientation')).toBe('horizontal');
         expect(lower.getAttribute('tabindex')).toBe('0');
         // The announced value is the two spans either side, not a bare number.
-        expect(lower.getAttribute('aria-valuetext')).toBe('Junior AH7–AH12, Senior AH13–AH14');
+        expect(lower.getAttribute('aria-valuetext')).toBe('Junior AH11–AH12, Senior AH13–AH14');
         // A focus ring exists and is visible rather than being outline: none alone.
         expect(lower.className).toContain('focus:ring-2');
 
-        expect(upper.getAttribute('aria-label')).toBe(UPPER_DIVIDER);
+        expect(upper.getAttribute('aria-label')).toBe(SENIOR_PRINCIPAL_DIVIDER);
         expect(upper.getAttribute('aria-valuenow')).toBe('14');
         // NOT 7: one grade above the lower divider.
         expect(upper.getAttribute('aria-valuemin')).toBe('13');

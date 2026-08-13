@@ -269,7 +269,10 @@ describe('over a real generateRosterV2 result', () => {
         staff: [
             { name: 'Prin', fte: 1.0, skills: [], unavailable: [], grade: 'AH16' },
             { name: 'Sen', fte: 1.0, skills: [], unavailable: [], grade: 'AH13' },
-            { name: 'Jun', fte: 1.0, skills: [], unavailable: [], grade: 'AH8' },
+            // Jun was AH8, chosen when `junior` meant AH7–AH12. AH7–AH10 is
+            // `nonExempt` since the four-band split, so the trio's `{ band: 'junior' }`
+            // slot needs a junior AHP.
+            { name: 'Jun', fte: 1.0, skills: [], unavailable: [], grade: 'AH12' },
         ],
         tasks: [
             { name: 'Ward Round', days: [1, 2, 3, 4, 5], leads: 1, coLeads: 1, hours: 4 },
@@ -280,7 +283,13 @@ describe('over a real generateRosterV2 result', () => {
                 hours: 8,
             },
         ],
-        rules: { bands: { junior: [7, 12], senior: [13, 14], principal: [15, 17] }, weeklyHours: 42 },
+        // The shipped cut, spelled out. Rewritten for the four-band split — it was an
+        // explicit copy of the old three-region default, which is no longer a
+        // partition of AH7–AH17 and would be refused.
+        rules: {
+            bands: { nonExempt: [7, 10], junior: [11, 12], senior: [13, 14], principal: [15, 17] },
+            weeklyHours: 42,
+        },
     };
 
     const run = generateRosterV2(CONFIG);

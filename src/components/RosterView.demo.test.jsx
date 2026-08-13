@@ -698,7 +698,7 @@ describe('demo mode: a visitor types their own team', () => {
                 { name: 'Ward Round', days: [1, 2, 3, 4, 5], leads: 1, coLeads: 1 },
                 { name: 'Outpatient Clinic', days: [1, 2, 3, 4, 5], leads: 1, coLeads: 1 },
             ],
-            rules: { bands: { junior: [7, 12], senior: [13, 14], principal: [15, 17] } },
+            rules: { bands: { nonExempt: [7, 10], junior: [11, 12], senior: [13, 14], principal: [15, 17] } },
         });
 
         expect(expected.ok).toBe(true);
@@ -759,7 +759,7 @@ describe('demo mode: a visitor types their own team', () => {
                 { name: 'Weekend Cover', days: [6], leads: 1, coLeads: 1 },
                 { name: 'Outpatient Clinic', days: [1, 2, 3, 4, 5], leads: 1, coLeads: 1, leadBands: ['senior', 'principal'] },
             ],
-            rules: { bands: { junior: [7, 12], senior: [13, 14], principal: [15, 17] } },
+            rules: { bands: { nonExempt: [7, 10], junior: [11, 12], senior: [13, 14], principal: [15, 17] } },
         });
         expect(expected.ok).toBe(true);
 
@@ -851,7 +851,7 @@ describe('demo mode: an unfillable configuration', () => {
                 { name: 'Home Visits', days: [1, 2, 3, 4, 5], leads: 1, coLeads: 1 },
                 { name: 'Group Therapy', days: [1, 2, 3, 4, 5], leads: 1, coLeads: 1 },
             ],
-            rules: { bands: { junior: [7, 12], senior: [13, 14], principal: [15, 17] } },
+            rules: { bands: { nonExempt: [7, 10], junior: [11, 12], senior: [13, 14], principal: [15, 17] } },
         });
 
         expect(expected.ok).toBe(true);
@@ -1137,7 +1137,7 @@ describe('demo mode: the 42-hour week', () => {
                 { name: 'Long Bench', days: [1, 2, 3, 4, 5], leads: 1, coLeads: 0, hours: 8 },
                 { name: 'Late Review', days: [1, 2, 3, 4, 5], leads: 1, coLeads: 0, hours: 4 },
             ],
-            rules: { bands: { junior: [7, 12], senior: [13, 14], principal: [15, 17] }, weeklyHours: 42 },
+            rules: { bands: { nonExempt: [7, 10], junior: [11, 12], senior: [13, 14], principal: [15, 17] }, weeklyHours: 42 },
         });
         expect(expected.ok).toBe(true);
         expect(expected.load['Solo Scientist'].hours).toBe(40);
@@ -1274,7 +1274,7 @@ describe('demo mode: the 42-hour week', () => {
                 ],
             }],
             tasks: [{ name: 'Bench A', days: [0, 1, 2, 3, 4, 5, 6], leads: 1, coLeads: 0, hours: 8 }],
-            rules: { bands: { junior: [7, 12], senior: [13, 14], principal: [15, 17] }, weeklyHours: 42 },
+            rules: { bands: { nonExempt: [7, 10], junior: [11, 12], senior: [13, 14], principal: [15, 17] }, weeklyHours: 42 },
         });
         expect(expected.ok).toBe(true);
 
@@ -1349,7 +1349,7 @@ describe('demo mode: a shift that needs a whole team', () => {
             days: [1, 2, 3, 4, 5],
             slots: [{ band: 'principal' }, { band: 'senior' }, { band: 'junior' }],
         }],
-        rules: { bands: { junior: [7, 12], senior: [13, 14], principal: [15, 17] } },
+        rules: { bands: { nonExempt: [7, 10], junior: [11, 12], senior: [13, 14], principal: [15, 17] } },
     };
 
     it('renders all THREE assignees in the calendar, not the two that fit the label', () => {
@@ -1573,7 +1573,7 @@ describe('demo mode: an unstaffable duty is shown in the day it is missing from'
             weeks: 1,
             staff: [{ name: 'Solo Practitioner', fte: 1.0, skills: [], unavailable: ['2026-09-08'] }],
             tasks: [{ name: 'Ward Round', days: [1, 2, 3, 4, 5], leads: 1, coLeads: 0 }],
-            rules: { bands: { junior: [7, 12], senior: [13, 14], principal: [15, 17] } },
+            rules: { bands: { nonExempt: [7, 10], junior: [11, 12], senior: [13, 14], principal: [15, 17] } },
         });
         expect(run.ok).toBe(true);
 
@@ -1775,7 +1775,7 @@ describe('demo mode: my week', () => {
                 { name: 'Chloe Ng', fte: 1.0, skills: [], unavailable: [] },
             ],
             tasks: [{ name: 'Ward Round', days: [1], leads: 1, coLeads: 0 }],
-            rules: { bands: { junior: [7, 12], senior: [13, 14], principal: [15, 17] } },
+            rules: { bands: { nonExempt: [7, 10], junior: [11, 12], senior: [13, 14], principal: [15, 17] } },
         });
         expect(run.ok).toBe(true);
         const idle = ['Aisha Rahman', 'Ben Carter', 'Chloe Ng']

@@ -23,7 +23,7 @@
  *      the multi-slot editor, continuity, a per-person quota and a category.
  *
  * WHY BOTH TABLES NOW HAVE A DISCLOSURE, AND WHAT KEEPS IT HONEST. The task row
- * already carries a name, three band chips, seven day chips, a co-lead toggle and
+ * already carries a name, four band chips, seven day chips, a co-lead toggle and
  * a remove button — eleven controls. The nine capabilities this phase reaches would
  * have made it twenty-five, on a row that has to fit a modal, and every one of them
  * is needed by a MINORITY of rows (the psychologists' monthly clinic, the
@@ -96,7 +96,7 @@ import {
 // --- 0. THE RESPONSIVE CONTRACT ------------------------------------------------
 //
 // MOST PEOPLE WHO OPEN THIS WILL OPEN IT ON A PHONE. A task row carries a name,
-// three band chips, seven day chips, a co-lead toggle, a disclosure and a remove
+// four band chips, seven day chips, a co-lead toggle, a disclosure and a remove
 // button; a staff row carries five fields and a disclosure. Neither fits in 375px,
 // and the two `overflow-x-auto` wrappers that used to hold them meant the answer on
 // a phone was "scroll sideways until you find the column you wanted" — a table
@@ -554,7 +554,7 @@ export const BandBoundaryEditor = ({ inputs, onChange, reason }) => {
                 ))}
             </div>
 
-            {/* …and the same three bands as plain text, because a ruler is not
+            {/* …and the same bands as plain text, because a ruler is not
                 readable to everyone and "AH7–AH12" is the thing a roster master
                 checks against a payslip. Same wording and same en dash as the band
                 chips below, via `describeBandRange`, so the two cannot disagree. */}

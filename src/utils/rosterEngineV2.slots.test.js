@@ -76,6 +76,20 @@ const shiftOn = (roster, dateKey, task) => (roster[dateKey] || []).find((shift) 
 /** Every `unfilled` entry for one date, in the order the engine emitted them. */
 const unfilledOn = (unfilled, dateKey) => unfilled.filter((entry) => entry.date === dateKey);
 
+/**
+ * A NOTE ON THE GRADES IN THIS FILE, after the four-band split.
+ *
+ * `junior` shipped as AH7–AH12 and is now AH11–AH12; AH7–AH10 became `nonExempt`
+ * (assistants, associates, technologists). Every fixture here whose most junior
+ * person exists to fill a `{ band: 'junior' }` slot named them AH8 or AH9, so they
+ * were re-graded into the junior band: `Cal` AH8 -> AH12 and `Dot` AH9 -> AH11
+ * throughout, and the embryology trio's `Jun`/`Kiri` as noted on that fixture. What
+ * each test is testing is unchanged — a junior slot needs a junior AHP in it, and
+ * that is what these people now are. `Ann` at AH8 in "the lead of a multi-slot
+ * shift" is deliberately left alone: that test gates on nothing and is about grade
+ * RANKING, where AH8 still means exactly what it did.
+ */
+
 /** A run that must have succeeded — with the reason in the failure message. */
 const generated = (config) => {
     const result = generateRosterV2(config);
@@ -104,6 +118,13 @@ const refusal = (config) => {
  *
  * A function rather than a constant so that no test can mutate the fixture out
  * from under another one.
+ *
+ * RE-GRADED WITH THE FOUR-BAND SPLIT. Jun and Kiri were AH9 and AH8, picked when
+ * `junior` meant AH7–AH12. AH7–AH10 is `nonExempt` now — assistants and
+ * technologists — so neither would qualify for this task's `{ band: 'junior' }`
+ * slot, and the trio's third seat is a junior EMBRYOLOGIST. They are graded AH12
+ * and AH11, keeping Jun above Kiri as before so the assignee ordering assertions
+ * still measure what they always did.
  */
 const embryology = (overrides = {}) => ({
     startDate: MONDAY,
@@ -111,8 +132,8 @@ const embryology = (overrides = {}) => ({
     staff: [
         { name: 'Priya', grade: 'AH16', skills: ['Witnessing'] },
         { name: 'Sanjay', grade: 'AH14', skills: ['Witnessing'] },
-        { name: 'Jun', grade: 'AH9' },
-        { name: 'Kiri', grade: 'AH8' },
+        { name: 'Jun', grade: 'AH12' },
+        { name: 'Kiri', grade: 'AH11' },
     ],
     tasks: [
         {
@@ -333,7 +354,7 @@ describe('the lead of a multi-slot shift', () => {
             staff: [
                 { name: 'Priya', grade: 'AH16', skills: ['Witnessing'], unavailable: [SATURDAY] },
                 { name: 'Sanjay', grade: 'AH14', skills: ['Witnessing'] },
-                { name: 'Jun', grade: 'AH9' },
+                { name: 'Jun', grade: 'AH12' }, // junior AHP; see the fixture note
             ],
         });
         const { roster } = generated(config);
@@ -350,7 +371,7 @@ describe('the lead of a multi-slot shift', () => {
             staff: [
                 { name: 'Priya', grade: 'AH16', skills: ['Witnessing'] },
                 { name: 'Sanjay', grade: 'AH14', skills: ['Witnessing'], unavailable: [SATURDAY, SUNDAY] },
-                { name: 'Jun', grade: 'AH9', unavailable: [SATURDAY, SUNDAY] },
+                { name: 'Jun', grade: 'AH12', unavailable: [SATURDAY, SUNDAY] },
             ],
         });
         const shift = shiftOn(generated(config).roster, SATURDAY, 'Weekend Witnessing');
@@ -366,7 +387,7 @@ describe('the lead of a multi-slot shift', () => {
             staff: [
                 { name: 'Priya', grade: 'AH16', skills: ['Witnessing'], unavailable: [SATURDAY] },
                 { name: 'Sanjay', grade: 'AH14', skills: ['Witnessing'], unavailable: [SATURDAY] },
-                { name: 'Jun', grade: 'AH9', unavailable: [SATURDAY] },
+                { name: 'Jun', grade: 'AH12', unavailable: [SATURDAY] },
             ],
         });
         const { roster, unfilled } = generated(config);
@@ -385,7 +406,7 @@ describe('one person, one slot', () => {
         const config = {
             startDate: MONDAY,
             weeks: 1,
-            staff: [{ name: 'Ada', grade: 'AH16' }, { name: 'Cal', grade: 'AH8' }],
+            staff: [{ name: 'Ada', grade: 'AH16' }, { name: 'Cal', grade: 'AH12' }],
             tasks: [{
                 name: 'WW',
                 days: [6],
@@ -461,7 +482,7 @@ describe('an unfilled slot entry names the slot', () => {
             staff: [
                 { name: 'Priya', grade: 'AH16', skills: ['Witnessing'] },
                 { name: 'Sanjay', grade: 'AH14', skills: ['Witnessing'] },
-                { name: 'Jun', grade: 'AH9', unavailable: [SATURDAY] },
+                { name: 'Jun', grade: 'AH12', unavailable: [SATURDAY] },
             ],
         });
         const { roster, unfilled } = generated(config);
@@ -484,7 +505,7 @@ describe('an unfilled slot entry names the slot', () => {
             staff: [
                 { name: 'Priya', grade: 'AH16', skills: ['Witnessing'] },
                 { name: 'Sanjay', grade: 'AH14', skills: ['Witnessing'] },
-                { name: 'Jun', grade: 'AH9', unavailable: [SATURDAY, SUNDAY] },
+                { name: 'Jun', grade: 'AH12', unavailable: [SATURDAY, SUNDAY] },
             ],
         });
         const { unfilled } = generated(config);
@@ -594,7 +615,7 @@ describe('an unfilled slot entry names the slot', () => {
             startDate: MONDAY, weeks: 1,
             staff: [
                 { name: 'Ada', grade: 'AH16', unavailable: [SATURDAY] },
-                { name: 'Cal', grade: 'AH8', unavailable: [SATURDAY] },
+                { name: 'Cal', grade: 'AH12', unavailable: [SATURDAY] },
             ],
             tasks: [{
                 name: 'WW', days: [6],
@@ -615,7 +636,7 @@ describe('slots compose with the rest of the engine', () => {
             staff: [
                 { name: 'Priya', grade: 'AH16', skills: ['Witnessing'], unavailable: [SATURDAY, SUNDAY] },
                 { name: 'Sanjay', grade: 'AH14', skills: ['Witnessing'] },
-                { name: 'Jun', grade: 'AH9' },
+                { name: 'Jun', grade: 'AH12' }, // junior AHP; see the fixture note
             ],
         });
         const { roster, unfilled } = generated(config);
@@ -630,7 +651,7 @@ describe('slots compose with the rest of the engine', () => {
             staff: [
                 { name: 'Ada', grade: 'AH16', maxHoursPerDay: 4 },
                 { name: 'Ben', grade: 'AH13' },
-                { name: 'Cal', grade: 'AH8' },
+                { name: 'Cal', grade: 'AH12' },
             ],
             tasks: [{
                 name: 'Trio', days: [1], hours: 6,
@@ -689,7 +710,7 @@ describe('slots compose with the rest of the engine', () => {
                 { name: 'Ada', grade: 'AH16' },
                 { name: 'Ben', grade: 'AH13' },
                 { name: 'Bea', grade: 'AH14' },
-                { name: 'Cal', grade: 'AH8' },
+                { name: 'Cal', grade: 'AH12' },
             ],
             tasks: [{ name: 'WW', days: [6], slots: [{ band: 'principal' }, { band: 'senior' }, { band: 'junior' }] }],
             rules: { forbidPairs: [['Ada', 'Ben'], ['Ada', 'Bea']] },
@@ -739,7 +760,7 @@ describe('slots compose with the rest of the engine', () => {
     it('works on a MONTHLY recurrence', () => {
         const config = {
             startDate: MONDAY, weeks: 8,
-            staff: [{ name: 'Ada', grade: 'AH16' }, { name: 'Cal', grade: 'AH8' }],
+            staff: [{ name: 'Ada', grade: 'AH16' }, { name: 'Cal', grade: 'AH12' }],
             tasks: [{
                 name: 'Third Wed Trio',
                 recurrence: { ordinal: 3, weekday: 3 },
@@ -767,7 +788,7 @@ describe('slots compose with the rest of the engine', () => {
     it('leaves a sibling lead/co-lead task completely untouched', () => {
         const withSlots = {
             startDate: MONDAY, weeks: 1,
-            staff: [{ name: 'Ada', grade: 'AH16' }, { name: 'Ben', grade: 'AH13' }, { name: 'Cal', grade: 'AH8' }],
+            staff: [{ name: 'Ada', grade: 'AH16' }, { name: 'Ben', grade: 'AH13' }, { name: 'Cal', grade: 'AH12' }],
             tasks: [
                 { name: 'Ordinary', days: [1] },
                 { name: 'Trio', days: [6], slots: [{ band: 'principal' }, { band: 'senior' }, { band: 'junior' }] },
@@ -804,7 +825,7 @@ describe('slot entries are ordered by scarcity', () => {
         // slot as unstaffable — a shortage the engine would have manufactured.
         const config = {
             startDate: MONDAY, weeks: 1,
-            staff: [{ name: 'Ada', grade: 'AH16' }, { name: 'Cal', grade: 'AH8' }],
+            staff: [{ name: 'Ada', grade: 'AH16' }, { name: 'Cal', grade: 'AH12' }],
             tasks: [{
                 name: 'Trio', days: [1],
                 slots: [{ role: 'Anyone' }, { band: 'principal', role: 'Principal' }],
@@ -825,7 +846,7 @@ describe('slot entries are ordered by scarcity', () => {
         // and everything fills.
         const config = {
             startDate: MONDAY, weeks: 1,
-            staff: [{ name: 'Ada', grade: 'AH16' }, { name: 'Cal', grade: 'AH8' }],
+            staff: [{ name: 'Ada', grade: 'AH16' }, { name: 'Cal', grade: 'AH12' }],
             tasks: [
                 { name: 'Ordinary', days: [1], coLeads: 0 },
                 { name: 'Trio', days: [1], slots: [{ band: 'principal', role: 'Principal' }] },
@@ -847,7 +868,7 @@ describe('slot entries are ordered by scarcity', () => {
         // reading it would otherwise think the trio was silently deprioritised.
         const config = {
             startDate: MONDAY, weeks: 1,
-            staff: [{ name: 'Ada', grade: 'AH16' }, { name: 'Cal', grade: 'AH8' }],
+            staff: [{ name: 'Ada', grade: 'AH16' }, { name: 'Cal', grade: 'AH12' }],
             tasks: [
                 { name: 'Ordinary', days: [1], coLeads: 0 },
                 { name: 'Trio', days: [1], slots: [{ band: 'principal' }, { band: 'junior' }] },
@@ -910,7 +931,7 @@ describe('slot entries are ordered by scarcity', () => {
 describe('validation of slots', () => {
     const task = (extra) => ({
         startDate: MONDAY, weeks: 1,
-        staff: [{ name: 'Ada', grade: 'AH16', skills: ['Witnessing'] }, { name: 'Cal', grade: 'AH8' }],
+        staff: [{ name: 'Ada', grade: 'AH16', skills: ['Witnessing'] }, { name: 'Cal', grade: 'AH12' }],
         tasks: [{ name: 'T', ...extra }],
     });
 
@@ -965,9 +986,12 @@ describe('validation of slots', () => {
         expect(refusal(task({ slots: [[]] }))).toContain("Task T's slot 1 is not a slot object");
     });
 
-    it('refuses a band that is not one of the three', () => {
+    it('refuses a band that is not one of the four', () => {
+        // CHANGED BY THE FOUR-BAND SPLIT: the refusal enumerates the bands that
+        // exist, and `nonExempt` now leads that list. Title moved from "three" to
+        // "four" for the same reason.
         expect(refusal(task({ slots: [{ band: 'boss' }] }))).toBe(
-            'Task T\'s slot 1 names the band "boss", which is not a band — use junior, senior, principal (lower case), or leave band out so that any grade may fill the slot.',
+            'Task T\'s slot 1 names the band "boss", which is not a band — use nonExempt, junior, senior, principal (lower case), or leave band out so that any grade may fill the slot.',
         );
         expect(refusal(task({ slots: [{ band: 'Principal' }] }))).toContain('which is not a band');
         expect(refusal(task({ slots: [{ band: 15 }] }))).toContain('which is not a band');
@@ -1000,14 +1024,16 @@ describe('validation of slots', () => {
     });
 
     it('refuses a slot whose band and skill do not INTERSECT', () => {
+        // CHANGED BY THE FOUR-BAND SPLIT: the Junior band's span reads AH11–AH12.
         expect(refusal(task({ slots: [{ band: 'junior', requiresSkill: 'Witnessing', role: 'Junior witness' }] }))).toBe(
-            "Task T's slot 1 (Junior witness) needs a grade in the Junior band (AH7–AH12) and skill Witnessing, and nobody in the staff pool qualifies, so that slot would be unfilled on every date. Check the grades and the skills, widen the slot, or move the band boundaries.",
+            "Task T's slot 1 (Junior witness) needs a grade in the Junior band (AH11–AH12) and skill Witnessing, and nobody in the staff pool qualifies, so that slot would be unfilled on every date. Check the grades and the skills, widen the slot, or move the band boundaries.",
         );
     });
 
     it('refuses a slot that cannot intersect the TASK\'s own skill', () => {
+        // CHANGED BY THE FOUR-BAND SPLIT: same span, same reason.
         expect(refusal(task({ requiresSkill: 'Witnessing', slots: [{ band: 'junior' }] }))).toContain(
-            'needs a grade in the Junior band (AH7–AH12) and skill Witnessing, and nobody in the staff pool qualifies',
+            'needs a grade in the Junior band (AH11–AH12) and skill Witnessing, and nobody in the staff pool qualifies',
         );
     });
 
@@ -1016,7 +1042,11 @@ describe('validation of slots', () => {
             startDate: MONDAY, weeks: 1,
             staff: [{ name: 'Ada', grade: 'AH13' }],
             tasks: [{ name: 'T', slots: [{ band: 'principal' }] }],
-            rules: { bands: { junior: [7, 11], senior: [12, 12], principal: [13, 17] } },
+            // Fixture rewritten for four regions — a custom cut must name all four or
+            // it is not a partition. The claim is unchanged: principal starts at AH13
+            // here, so this AH13 fills a principal slot that the shipped cut would
+            // have refused her.
+            rules: { bands: { nonExempt: [7, 10], junior: [11, 11], senior: [12, 12], principal: [13, 17] } },
         };
         expect(validateRosterV2Config(config)).toEqual({ valid: true, reason: null });
         expect(shiftOn(generated(config).roster, MONDAY, 'T').lead).toBe('Ada');
@@ -1048,18 +1078,19 @@ describe('structural warnings for slots', () => {
     it('warns when a band is asked for more times a day than it has people', () => {
         const config = {
             startDate: MONDAY, weeks: 1,
-            staff: [{ name: 'Ada', grade: 'AH16' }, { name: 'Cal', grade: 'AH8' }],
+            staff: [{ name: 'Ada', grade: 'AH16' }, { name: 'Cal', grade: 'AH12' }],
             tasks: [{ name: 'WW', days: [6], slots: [{ band: 'junior' }, { band: 'junior' }, { band: 'principal' }] }],
         };
+        // CHANGED BY THE FOUR-BAND SPLIT: the Junior band's span reads AH11–AH12.
         expect(generated(config).warnings).toEqual([
-            'Task WW needs 2 people from the Junior band (AH7–AH12) per day (junior slot 1, junior slot 2), but only 1 person qualifies, so some of those slots cannot be filled on any day.',
+            'Task WW needs 2 people from the Junior band (AH11–AH12) per day (junior slot 1, junior slot 2), but only 1 person qualifies, so some of those slots cannot be filled on any day.',
         ]);
     });
 
     it('groups the warning by GATE, so three identical slots are one sentence', () => {
         const config = {
             startDate: MONDAY, weeks: 1,
-            staff: [{ name: 'Ada', grade: 'AH16' }, { name: 'Ben', grade: 'AH13' }, { name: 'Cal', grade: 'AH8' }],
+            staff: [{ name: 'Ada', grade: 'AH16' }, { name: 'Ben', grade: 'AH13' }, { name: 'Cal', grade: 'AH12' }],
             tasks: [{ name: 'WW', days: [6], slots: [{ band: 'principal' }, { band: 'principal' }, { band: 'principal' }] }],
         };
         expect(generated(config).warnings).toEqual([
@@ -1095,7 +1126,7 @@ describe('structural warnings for slots', () => {
     it('names ungraded staff who cannot fill any banded slot', () => {
         const config = {
             startDate: MONDAY, weeks: 1,
-            staff: [{ name: 'Ada', grade: 'AH16' }, { name: 'Cal', grade: 'AH8' }, { name: 'Fay' }, { name: 'Gil' }],
+            staff: [{ name: 'Ada', grade: 'AH16' }, { name: 'Cal', grade: 'AH12' }, { name: 'Fay' }, { name: 'Gil' }],
             tasks: [{ name: 'WW', days: [6], slots: [{ band: 'principal' }, { band: 'junior' }] }],
         };
         expect(generated(config).warnings).toEqual([
@@ -1136,7 +1167,7 @@ describe('auditHardConstraints on a multi-slot roster', () => {
             { name: 'Ada', grade: 'AH16' },
             { name: 'Ben', grade: 'AH13' },
             { name: 'Eve', grade: 'AH14' },
-            { name: 'Cal', grade: 'AH8' },
+            { name: 'Cal', grade: 'AH12' },
             { name: 'Fay' },
         ],
         tasks: [{ name: 'WW', days: [6], slots: [{ band: 'principal' }, { band: 'senior' }, { band: 'junior' }] }],
@@ -1163,7 +1194,10 @@ describe('auditHardConstraints on a multi-slot roster', () => {
             rule: 'leadGrade',
             date: SATURDAY,
             task: 'WW',
-            detail: 'Cal (AH8) leads WW, but Ben (AH13) is on the same shift — the lead of a multi-slot shift is its highest grade',
+            // Cal reads AH12 rather than AH8 because he was re-graded into the junior
+            // band (see the note at the top of the file). He is still the lowest grade
+            // on the shift, which is the whole point of this violation.
+            detail: 'Cal (AH12) leads WW, but Ben (AH13) is on the same shift — the lead of a multi-slot shift is its highest grade',
         }]);
     });
 
@@ -1258,8 +1292,8 @@ describe('auditHardConstraints on a multi-slot roster', () => {
                     { name: 'Ada', grade: 'AH16', skills: ['Witnessing'] },
                     { name: 'Ben', grade: 'AH13', skills: ['Witnessing'] },
                     { name: 'Eve', grade: 'AH14' },
-                    { name: 'Cal', grade: 'AH8', fte: 0.6 },
-                    { name: 'Dot', grade: 'AH9', unavailable: ['2026-09-12'] },
+                    { name: 'Cal', grade: 'AH12', fte: 0.6 },
+                    { name: 'Dot', grade: 'AH11', unavailable: ['2026-09-12'] },
                     { name: 'Fay' },
                 ],
                 tasks: [
@@ -1294,7 +1328,7 @@ describe('determinism', () => {
         // fairness, not by which entry was typed first.
         const build = (slots) => generated({
             startDate: MONDAY, weeks: 2,
-            staff: [{ name: 'Ada', grade: 'AH16' }, { name: 'Ben', grade: 'AH13' }, { name: 'Cal', grade: 'AH8' }],
+            staff: [{ name: 'Ada', grade: 'AH16' }, { name: 'Ben', grade: 'AH13' }, { name: 'Cal', grade: 'AH12' }],
             tasks: [{ name: 'Trio', days: [6], slots }],
         }).roster;
 
@@ -1308,7 +1342,7 @@ describe('determinism', () => {
             startDate: MONDAY, weeks: 12,
             staff: [
                 { name: 'Ada', grade: 'AH16' }, { name: 'Ben', grade: 'AH13' },
-                { name: 'Cal', grade: 'AH8', fte: 0.6 }, { name: 'Dot', grade: 'AH9' },
+                { name: 'Cal', grade: 'AH12', fte: 0.6 }, { name: 'Dot', grade: 'AH11' },
                 { name: 'Eve', grade: 'AH14' }, { name: 'Fay' },
             ],
             tasks: [

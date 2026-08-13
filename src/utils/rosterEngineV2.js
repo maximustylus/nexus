@@ -675,13 +675,29 @@ export const validateScaleRegions = (regions, scale) => {
 };
 
 /**
+ * A region's key as a human would write it in a sentence.
+ *
+ * Capitalising the first letter is right for a one-word key (`senior` ->
+ * `Senior`), and wrong the moment a key is camelCase: `nonExempt` became
+ * `"NonExempt-band staff"` in a refusal a roster master reads. So a camel hump
+ * becomes a hyphenated word — `nonExempt` -> `Non-exempt` — which is how the
+ * department writes it. Derived rather than a lookup table, so a fifth region
+ * added tomorrow reads correctly without anyone remembering this function
+ * exists.
+ */
+const regionWordLabel = (name) => {
+    const spaced = String(name).replace(/([a-z0-9])([A-Z])/g, '$1-$2').toLowerCase();
+    return spaced.charAt(0).toUpperCase() + spaced.slice(1);
+};
+
+/**
  * A set of region names as prose, always in scale order:
  * `Set{'principal','senior'}` -> `'Senior/Principal'`.
  */
 const regionSetLabel = (names, scale) =>
     scale.regionOrder
         .filter((name) => names.has(name))
-        .map((name) => name.charAt(0).toUpperCase() + name.slice(1))
+        .map(regionWordLabel)
         .join('/');
 
 /**
@@ -743,7 +759,33 @@ export const ALLIED_HEALTH_SCALE = defineGradeScale({
      * overrides them per configuration, subject to `validateGradeBands`.
      */
     regions: {
-        junior: [7, 12],
+        /**
+         * 🛡️ FOUR REGIONS, NOT THREE — a correctness fix, not a relabelling.
+         *
+         * `junior` shipped as [7, 12], which conflated two different categories of
+         * staff. The department's own roster owner corrected it:
+         *
+         *   "AH7 to AH10 are non-exempt staff like associates, assistants,
+         *    technologists. AH11, AH12 are junior AHP."
+         *
+         * Under the old cut, a task gated to "junior may lead" let an AH8 assistant
+         * lead it. Measured against the fixtures at the time: the physiotherapy
+         * shape had four assistants and technologists eligible to LEAD ward rounds
+         * and both weekend days, and the embryology trio's "junior" slot was being
+         * filled by support-grade staff. The band boundary was quietly widening who
+         * could take clinical responsibility, and no test could have caught it —
+         * it took someone who knows what AH8 means.
+         *
+         * Note the engine gates the LEAD only; a co-lead may be any grade. So a
+         * non-exempt colleague can still assist on a duty they may not lead, which
+         * is the distinction the old boundary erased.
+         *
+         * `senior` and `principal` are unchanged and were confirmed separately.
+         * `rules.bands` still overrides all of this per configuration, subject to
+         * `validateGradeBands` — these are the department's current cut, not a law.
+         */
+        nonExempt: [7, 10],
+        junior: [11, 12],
         senior: [13, 14],
         principal: [15, 17],
     },
@@ -773,7 +815,8 @@ export const GRADE_SCALE = ALLIED_HEALTH_SCALE.labels;
 export const DEFAULT_GRADE_BANDS = ALLIED_HEALTH_SCALE.defaultRegions;
 
 /**
- * The three band names, lowest first. Not exported: `Object.keys` of
+ * The band names, lowest first — four today, and however many the scale
+ * declares. Not exported: `Object.keys` of
  * `DEFAULT_GRADE_BANDS` is the same list in the same order, so there is one
  * definition of "the bands, in order" for a caller to read.
  */
@@ -803,7 +846,7 @@ const bandOfGradeNumber = (n, bands) => regionOfRank(n, bands, ALLIED_HEALTH_SCA
  * Are these band boundaries usable? `{ valid, reason }`, same contract as
  * `validateRosterV2Config`, so a UI can show `reason` verbatim.
  *
- * Requires all three bands, each an inclusive `[min, max]` of whole grades on
+ * Requires every band the scale declares, each an inclusive `[min, max]` of whole grades on
  * the scale, together partitioning AH7–AH17: junior starts at 7, principal ends
  * at 17, every min <= max, and each band starts exactly one grade above where
  * the one below it ended.

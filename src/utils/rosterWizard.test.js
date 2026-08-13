@@ -160,7 +160,12 @@ describe('the row and band models', () => {
         // The engine refuses `leadBands: ['Senior']`. The chips are built from
         // this list, so this is the assertion that keeps them speaking its
         // language rather than English.
-        expect(BAND_NAMES).toEqual(['junior', 'senior', 'principal']);
+        // CHANGED BY THE FOUR-BAND SPLIT: `nonExempt` (AH7–AH10) joined the list and
+        // sorts lowest, so the chips offer four bands rather than three. The second
+        // assertion is the one that keeps them in step with the engine automatically;
+        // the literal is here so a change to the engine's band list cannot slip
+        // through both.
+        expect(BAND_NAMES).toEqual(['nonExempt', 'junior', 'senior', 'principal']);
         expect(BAND_NAMES).toEqual(Object.keys(DEFAULT_GRADE_BANDS));
     });
 
@@ -210,14 +215,19 @@ describe('the row and band models', () => {
 // ─── 2. THE BAND BOUNDARY EDITOR ──────────────────────────────────────────────
 
 describe('band boundaries', () => {
-    it('round-trips the shipped cut through the six inputs', () => {
+    it('round-trips the shipped cut through the eight inputs', () => {
+        // CHANGED BY THE FOUR-BAND SPLIT: four bands means four min/max pairs, so the
+        // editor holds eight boxes rather than six, and the shipped cut is
+        // nonExempt AH7–AH10 / junior AH11–AH12. The round trip itself is unchanged.
         expect(DEFAULT_INPUTS).toEqual({
-            junior: { min: '7', max: '12' },
+            nonExempt: { min: '7', max: '10' },
+            junior: { min: '11', max: '12' },
             senior: { min: '13', max: '14' },
             principal: { min: '15', max: '17' },
         });
         expect(inputsToBands(DEFAULT_INPUTS)).toEqual({
-            junior: [7, 12],
+            nonExempt: [7, 10],
+            junior: [11, 12],
             senior: [13, 14],
             principal: [15, 17],
         });
@@ -232,22 +242,34 @@ describe('band boundaries', () => {
 
     it('renders the grade range a set of chips implies, merging adjacent bands', () => {
         expect(describeBandRange(['senior', 'principal'], DEFAULT_GRADE_BANDS)).toBe('AH13–AH17');
-        expect(describeBandRange(['junior'], DEFAULT_GRADE_BANDS)).toBe('AH7–AH12');
+        // CHANGED BY THE FOUR-BAND SPLIT: the junior band is AH11–AH12 now, and
+        // AH7–AH12 is what `nonExempt` PLUS `junior` merges to — which is added here
+        // because it is exactly the old label, and a reader has to be able to see that
+        // it now takes two chips to mean it.
+        expect(describeBandRange(['junior'], DEFAULT_GRADE_BANDS)).toBe('AH11–AH12');
+        expect(describeBandRange(['nonExempt', 'junior'], DEFAULT_GRADE_BANDS)).toBe('AH7–AH12');
         // A gap in the SELECTION is honest rather than flattened into one span.
-        expect(describeBandRange(['junior', 'principal'], DEFAULT_GRADE_BANDS)).toBe('AH7–AH12, AH15–AH17');
+        expect(describeBandRange(['junior', 'principal'], DEFAULT_GRADE_BANDS)).toBe('AH11–AH12, AH15–AH17');
         expect(describeBandRange([], DEFAULT_GRADE_BANDS)).toBe('');
     });
 
     it('follows the boundaries it is given, not the shipped ones', () => {
         // Requirement 1: moving a boundary must move the range shown beside every
         // task's chips in the same keystroke.
-        const moved = { junior: [7, 10], senior: [11, 14], principal: [15, 17] };
+        // Fixture rewritten for four regions — three no longer partition the scale, so
+        // `describeBandRange` would have said nothing at all. Senior still starts at
+        // AH11, which is the moved boundary the first assertion is about.
+        const moved = { nonExempt: [7, 8], junior: [9, 10], senior: [11, 14], principal: [15, 17] };
         expect(describeBandRange(['senior'], moved)).toBe('AH11–AH14');
-        expect(describeBandRange(['junior'], moved)).toBe('AH7–AH10');
+        // CHANGED BY THE FOUR-BAND SPLIT: junior's lower edge is `nonExempt`'s upper
+        // one, not the bottom of the scale, so this reads AH9–AH10 rather than AH7–AH10.
+        expect(describeBandRange(['junior'], moved)).toBe('AH9–AH10');
     });
 
     it('names no range at all while the boundaries do not partition the scale', () => {
-        const gap = { junior: [7, 11], senior: [13, 14], principal: [15, 17] };
+        // Fixture rewritten for four regions so the non-partition is still a GAP
+        // (AH12 in no band) rather than a missing band name.
+        const gap = { nonExempt: [7, 10], junior: [11, 11], senior: [13, 14], principal: [15, 17] };
         expect(describeBandRange(['senior'], gap)).toBe('');
     });
 });
@@ -328,7 +350,12 @@ describe('buildDemoRosterV2ConfigFromTables', () => {
                 { name: 'Outpatient Clinic', days: [1, 2, 3, 4, 5], leads: 1, coLeads: 1, leadBands: ['senior', 'principal'] },
                 { name: 'Ward Round', days: [1, 3], leads: 1, coLeads: 0 },
             ],
-            rules: { bands: { junior: [7, 12], senior: [13, 14], principal: [15, 17] } },
+            // CHANGED BY THE FOUR-BAND SPLIT: the boundary editor always emits the cut
+            // it is showing, and the shipped cut it was handed (`DEFAULT_INPUTS`) is
+            // four bands now.
+            rules: {
+                bands: { nonExempt: [7, 10], junior: [11, 12], senior: [13, 14], principal: [15, 17] },
+            },
         });
 
         // …and the engine agrees it is well formed, which is the claim that
@@ -482,8 +509,12 @@ describe('buildDemoRosterV2ConfigFromTables', () => {
     });
 
     it('blocks everything, with validateGradeBands\' own reason, on a broken partition', () => {
+        // Fixture rewritten for four regions. Overriding junior's max used to leave
+        // AH12 unbanded; with `nonExempt` below it, `{ min: '7', max: '11' }` would
+        // OVERLAP nonExempt instead, so junior is squeezed to AH11 alone to leave the
+        // same AH12 hole this test is named for.
         const result = build({
-            bandInputs: { ...DEFAULT_INPUTS, junior: { min: '7', max: '11' } },
+            bandInputs: { ...DEFAULT_INPUTS, junior: { min: '11', max: '11' } },
             staffRows: [staff({ name: 'Aisha', grade: 'AH16' })],
             taskRows: [task({ name: 'Clinic' })],
         });
@@ -496,12 +527,25 @@ describe('buildDemoRosterV2ConfigFromTables', () => {
     });
 
     it('passes the edited boundaries through as rules.bands', () => {
+        // Fixture rewritten for four regions — the three-band edit is not a partition
+        // of AH7–AH17 any more, so the mapper blocked and `config` was null. Senior
+        // still starts at AH11, which is the edit this test is about.
         const result = build({
-            bandInputs: { junior: { min: '7', max: '10' }, senior: { min: '11', max: '14' }, principal: { min: '15', max: '17' } },
+            bandInputs: {
+                nonExempt: { min: '7', max: '9' },
+                junior: { min: '10', max: '10' },
+                senior: { min: '11', max: '14' },
+                principal: { min: '15', max: '17' },
+            },
             staffRows: [staff({ name: 'Aisha', grade: 'AH11' })],
             taskRows: [task({ name: 'Clinic', leadBands: ['senior'] })],
         });
-        expect(result.config.rules.bands).toEqual({ junior: [7, 10], senior: [11, 14], principal: [15, 17] });
+        // CHANGED BY THE FOUR-BAND SPLIT: this echoes the fixture above, so it names
+        // four bands. Senior's [11, 14] — the thing the assertion below turns on — is
+        // untouched.
+        expect(result.config.rules.bands).toEqual({
+            nonExempt: [7, 9], junior: [10, 10], senior: [11, 14], principal: [15, 17],
+        });
         // AH11 is a senior under THESE boundaries, so the gated task is fillable —
         // under the shipped ones it would not be, and the engine would refuse.
         expect(validateRosterV2Config(result.config).valid).toBe(true);
@@ -510,7 +554,14 @@ describe('buildDemoRosterV2ConfigFromTables', () => {
     it('lets the boundary editor win over any rules handed in beside it', () => {
         const result = build({
             extraRules: { maxConcurrentPerDay: 3, bands: DEFAULT_GRADE_BANDS },
-            bandInputs: { junior: { min: '7', max: '10' }, senior: { min: '11', max: '14' }, principal: { min: '15', max: '17' } },
+            // Fixture rewritten for four regions, as above. Senior's [11, 14] is what
+            // the assertion below checks won over the `bands` handed in beside it.
+            bandInputs: {
+                nonExempt: { min: '7', max: '9' },
+                junior: { min: '10', max: '10' },
+                senior: { min: '11', max: '14' },
+                principal: { min: '15', max: '17' },
+            },
             staffRows: [staff({ name: 'Aisha', grade: 'AH11' })],
             taskRows: [task({ name: 'Clinic' })],
         });
@@ -546,8 +597,12 @@ describe('a band-gated task, mapped and generated', () => {
             staffRows: [
                 staff({ name: 'Principal Pat', grade: 'AH16' }),
                 staff({ name: 'Senior Sam', grade: 'AH13' }),
-                staff({ name: 'Junior Jo', grade: 'AH8' }),
-                staff({ name: 'Junior Kit', grade: 'AH7' }),
+                // Jo and Kit were AH8 and AH7, chosen when `junior` meant AH7–AH12.
+                // AH7–AH10 is `nonExempt` since the four-band split, so on those grades
+                // nobody could lead the junior-gated task and the mapper refused the
+                // whole configuration. RE-GRADED to the two junior-AHP grades.
+                staff({ name: 'Junior Jo', grade: 'AH11' }),
+                staff({ name: 'Junior Kit', grade: 'AH12' }),
             ],
             taskRows: [
                 task({ name: 'Outpatient Clinic', leadBands: ['senior', 'principal'] }),
@@ -560,7 +615,10 @@ describe('a band-gated task, mapped and generated', () => {
         expect(run.ok).toBe(true);
         expect(run.score.hardViolations).toBe(0);
 
-        const gradeOf = { 'Principal Pat': 16, 'Senior Sam': 13, 'Junior Jo': 8, 'Junior Kit': 7 };
+        // Follows the re-graded fixture above. The two thresholds this test measures —
+        // >= 13 for the senior gate, <= 12 for the junior one — are unchanged, because
+        // the senior/junior boundary is exactly where it always was.
+        const gradeOf = { 'Principal Pat': 16, 'Senior Sam': 13, 'Junior Jo': 11, 'Junior Kit': 12 };
         let clinics = 0;
         let rounds = 0;
         for (const shifts of Object.values(run.roster)) {
@@ -891,7 +949,11 @@ describe('slots through the mapping', () => {
     const TRIO_STAFF = [
         staff({ name: 'Prin', grade: 'AH16', skills: ['Witnessing'] }),
         staff({ name: 'Sen', grade: 'AH13', skills: ['Witnessing'] }),
-        staff({ name: 'Jun', grade: 'AH8' }),
+        // Jun was AH8, chosen when `junior` meant AH7–AH12. AH7–AH10 is `nonExempt`
+        // since the four-band split, so the trio's `{ band: 'junior' }` slot needs a
+        // junior AHP. Still the lowest of the three, so `['Prin', 'Sen', 'Jun']` is
+        // still the order the engine ranks them in.
+        staff({ name: 'Jun', grade: 'AH12' }),
     ];
 
     const trioRow = () => slotTask(
@@ -995,7 +1057,7 @@ describe('slots through the mapping', () => {
             staffRows: [
                 staff({ name: 'Prin', grade: 'AH16', skills: ['Witnessing'], away: '2026-09-07' }),
                 staff({ name: 'Sen', grade: 'AH13', skills: ['Witnessing'] }),
-                staff({ name: 'Jun', grade: 'AH8' }),
+                staff({ name: 'Jun', grade: 'AH12' }), // junior AHP; see TRIO_STAFF
             ],
             taskRows: [row],
         });
@@ -1411,7 +1473,12 @@ describe('blank means blank, for every one of the nine new controls', () => {
             weeks: 1,
             staff: [{ name: 'Ada', fte: 1, skills: [], unavailable: [] }],
             tasks: [{ name: 'Clinic', days: [1, 2, 3, 4, 5], leads: 1, coLeads: 1 }],
-            rules: { bands: { junior: [7, 12], senior: [13, 14], principal: [15, 17] } },
+            // CHANGED BY THE FOUR-BAND SPLIT: the boundary editor always emits the cut
+            // it is showing, and the shipped cut it was handed (`DEFAULT_INPUTS`) is
+            // four bands now.
+            rules: {
+                bands: { nonExempt: [7, 10], junior: [11, 12], senior: [13, 14], principal: [15, 17] },
+            },
         });
         expect(result.rulesErrors).toEqual({});
     });
