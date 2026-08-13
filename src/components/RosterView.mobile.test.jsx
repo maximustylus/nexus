@@ -331,11 +331,15 @@ describe('the sandbox wizard: every control is thumb-sized on a phone', () => {
         render(<RosterView user={VISITOR} />);
         openConfigure();
 
-        const [lower, upper] = screen.getAllByRole('slider');
+        // EVERY handle, however many bands the scale declares — three dividers since
+        // the four-band split, and a destructured pair would have stopped checking
+        // the topmost one the moment a band was added below it.
+        const handles = screen.getAllByRole('slider');
+        expect(handles).toHaveLength(3);
 
         // The HIT AREA is what a finger lands on, so it is the box that grows — the
         // visible grip stays a hairline so the ruler still reads as a ruler.
-        for (const handle of [lower, upper]) {
+        for (const handle of handles) {
             expect(handle.className).toContain('h-11');
             expect(handle.className).toContain('w-11');
             // …and relaxes on a desktop, where a mouse wants precision and two 44px
@@ -348,16 +352,27 @@ describe('the sandbox wizard: every control is thumb-sized on a phone', () => {
 
         // THE KEYBOARD SUPPORT IS UNTOUCHED. The whole point of the ruler is that it
         // is operable without a pointer, and a touch-target change must not cost it.
-        expect(lower.getAttribute('role')).toBe('slider');
-        expect(lower.getAttribute('tabindex')).toBe('0');
-        expect(lower.getAttribute('aria-valuenow')).toBe('12');
-        fireEvent.keyDown(lower, { key: 'ArrowLeft' });
-        expect(lower.getAttribute('aria-valuenow')).toBe('11');
-        fireEvent.keyDown(lower, { key: 'Home' });
-        expect(lower.getAttribute('aria-valuenow')).toBe('7');
-        fireEvent.keyDown(lower, { key: 'End' });
-        expect(lower.getAttribute('aria-valuenow')).toBe('13');
-        expect(upper.getAttribute('aria-valuenow')).toBe('14');
+        //
+        // Driven on the junior|senior divider, asked for by the bands it sits between:
+        // `getAllByRole('slider')[0]` was that divider before the four-band split and
+        // is the non-exempt|junior one now, so an index would have kept passing while
+        // measuring a different handle.
+        const juniorSenior = screen.getByLabelText('Boundary between the Junior and Senior bands');
+        const seniorPrincipal = screen.getByLabelText('Boundary between the Senior and Principal bands');
+
+        expect(juniorSenior.getAttribute('role')).toBe('slider');
+        expect(juniorSenior.getAttribute('tabindex')).toBe('0');
+        expect(juniorSenior.getAttribute('aria-valuenow')).toBe('12');
+        fireEvent.keyDown(juniorSenior, { key: 'ArrowLeft' });
+        expect(juniorSenior.getAttribute('aria-valuenow')).toBe('11');
+        fireEvent.keyDown(juniorSenior, { key: 'End' });
+        expect(juniorSenior.getAttribute('aria-valuenow')).toBe('13');
+        fireEvent.keyDown(juniorSenior, { key: 'Home' });
+        // CHANGED BY THE FOUR-BAND SPLIT: Home lands on AH11, not AH7. Non-exempt is
+        // the bottom band now, so this divider's floor is one grade above the divider
+        // below it — the same published `aria-valuemin` Home has always jumped to.
+        expect(juniorSenior.getAttribute('aria-valuenow')).toBe('11');
+        expect(seniorPrincipal.getAttribute('aria-valuenow')).toBe('14');
     });
 
     it('makes the roster card\'s own controls thumb-sized as well', () => {

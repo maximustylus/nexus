@@ -109,8 +109,63 @@ their profession."*
 - **"Start blank" is a real first option**, not the dead placeholder it replaces: it empties
   the tables so a team can type their own, and **keeps the chosen profession**, because
   emptying a form is no reason to make somebody say who they are again.
+- **`rosterWizard.ruler.test.js` — the band ruler's safety property, proved by exhaustion.**
+  The ruler is the one control in the wizard that silently corrects its input: it *clamps* a
+  drag rather than refusing it, because a pointer position is not a number somebody typed
+  and can re-read. That clamp is the only thing between a drag and a `rules.bands` object
+  that is not a partition of the grade scale.
+
+  The four-band repair leaned on *reasoning* about that clamp — "a divider cannot cross its
+  neighbour, because its floor is one grade above the divider below it". The reasoning was
+  correct, but it was reasoning. This walks every legal partition of AH7–AH17 into the
+  scale's bands (**120** today) × every divider × every requested grade from well below the
+  scale to well above it — **10,800 moves** — and asserts after each that the result is
+  still contiguous, gapless, non-empty and reaching AH17.
+
+  It also covers the path the sweep alone cannot see. From a *legal* partition every divider
+  already sits inside its travel, so the clamp never binds and a loosened ceiling is
+  invisible — verified, by mutation: removing the ceiling's reservation for the bands stacked
+  above it **survived** the sweep. So the test also feeds `bandRulerModel` input that is not
+  a partition at all (blank cells, `AH nine`, inverted ranges, every band demanding AH17 at
+  once) and asserts it still draws a legal partition *and* reports `representsInputs: false`
+  rather than quietly rewriting what the user chose.
+
+  Mutation table — seven mutations of `rosterWizard.js`, each caught: divider may touch its
+  neighbour **3 failed** · top band loses its reserved grade **3** · clamp removed **2** ·
+  ceiling forgets the bands above it **1** · ceiling off by one the other way **1** · floor
+  ignores the divider below **1** · honesty flag hard-wired true **1**. Every bound is
+  derived from `BAND_NAMES`, so it re-measures itself for free when a fifth band arrives.
 
 ### Changed
+
+- **AH7–AH10 is its own band, `nonExempt`. The grade scale has FOUR bands, not three.**
+  A correctness fix from the department's roster owner, in their words: *"AH7 to AH10 are
+  non-exempt staff like associates, assistants, technologists. AH11, AH12 are junior AHP."*
+
+  `junior` shipped as `[7, 12]`, which put an AH8 assistant and an AH12 junior clinician in
+  the same band. Any task gated `leadBands: ['junior']` therefore let a non-exempt
+  assistant **lead** it — the exact substitution the gate exists to prevent. The bands are
+  now `nonExempt [7,10] · junior [11,12] · senior [13,14] · principal [15,17]`.
+
+  Nothing was hard-coded to three, so the surfaces followed on their own: the ruler grew a
+  third divider (`bands - 1`), task rows grew a fourth chip, and every prose label came
+  from the same list. Cost of the split, measured rather than estimated: **121 tests
+  failed**, of which **120 were assertions that had the old cut written into them** — the
+  boundary as fact, a two-slider count, `Junior AH7–AH12` as text. **One was a real
+  fixture defect**: the embryology trio graded its two junior embryologists AH8 and AH9,
+  which is now non-exempt, so a `{band: 'junior'}` slot had nobody eligible. Re-graded to
+  AH11/AH12 — the grades the interview actually described.
+
+  One demo assertion was found to be **measuring nothing**: it moved divider `0` to AH10 to
+  watch a task's grade caption follow, and divider 0 now *starts* at AH10, so the move was
+  a silent no-op that would have passed forever. It now drives the junior|senior divider
+  and watches two gated captions move in opposite directions on one keystroke.
+
+  Every divider query in the component tests is now addressed **by `aria-label`**
+  (`Boundary between the Junior and Senior bands`) rather than by index. Index-based
+  queries were the single largest cause of breakage here — 13 of the 21 component failures
+  were a `const [lower, upper] = dividers()` silently grabbing a different pair — and a
+  label cannot go stale that way when a fifth band arrives.
 
 - **`inferred` and `correction` are gone — the constant and every block.** They existed to
   disclaim a claim; nothing in the picker now makes that claim, so a disclaimer would be

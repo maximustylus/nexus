@@ -366,29 +366,39 @@ const addRow = (which) => {
  * helper — and the two tests that fed it an invalid value to watch the validator
  * catch it — described a control that no longer exists.
  *
- * `dividers()[0]` is the junior|senior boundary, `[1]` is senior|principal, in DOM
- * order. `aria-valuenow` is the grade the divider sits on, which is the junior max
- * and the senior max respectively; the other four numbers follow from those two.
+ * 🛡️ A DIVIDER IS NAMED BY THE TWO BANDS IT SITS BETWEEN, never by its index.
+ * These helpers took `0` and `1` for junior|senior and senior|principal until the
+ * four-band split added a third handle BELOW both of them — at which point every
+ * `0` silently meant the new non-exempt|junior boundary and the tests went on
+ * asserting junior|senior numbers against it. `aria-valuenow` is the grade the
+ * divider sits on, which is the max of the band below it; the rest follow.
  */
+const NONEXEMPT_JUNIOR_DIVIDER = 'Boundary between the Non-exempt and Junior bands';
+const JUNIOR_SENIOR_DIVIDER = 'Boundary between the Junior and Senior bands';
+const SENIOR_PRINCIPAL_DIVIDER = 'Boundary between the Senior and Principal bands';
+
+/** Every divider, in DOM order — for counting and for sweeps, not for picking one. */
 const dividers = () => screen.getAllByRole('slider');
 
-const dividerValue = (index) => Number(dividers()[index].getAttribute('aria-valuenow'));
+const divider = (label) => screen.getByLabelText(label);
+
+const dividerValue = (label) => Number(divider(label).getAttribute('aria-valuenow'));
 
 /** Nudge a divider with the keyboard, the way a keyboard user would. */
-const nudgeDivider = (index, key, times = 1) => {
+const nudgeDivider = (label, key, times = 1) => {
     for (let i = 0; i < times; i += 1) {
-        fireEvent.keyDown(dividers()[index], { key });
+        fireEvent.keyDown(divider(label), { key });
     }
 };
 
 /** Drive a divider to an exact grade, whichever direction that is. */
-const setDivider = (index, target) => {
+const setDivider = (label, target) => {
     let guard = 0;
-    while (dividerValue(index) !== target && guard < 40) {
-        nudgeDivider(index, dividerValue(index) < target ? 'ArrowRight' : 'ArrowLeft');
+    while (dividerValue(label) !== target && guard < 40) {
+        nudgeDivider(label, dividerValue(label) < target ? 'ArrowRight' : 'ArrowLeft');
         guard += 1;
     }
-    expect(dividerValue(index)).toBe(target);
+    expect(dividerValue(label)).toBe(target);
 };
 
 /**
@@ -477,11 +487,21 @@ describe('demo mode: Configure → load the worked example → Generate', () => 
         for (const person of DEMO_EXAMPLE_DEPARTMENT.staff) {
             expect(bandOfGrade(person.grade, DEMO_EXAMPLE_DEPARTMENT.rules.bands)).toBeTruthy();
         }
-        // At least one of each band, mostly juniors.
+        // At least one of each band, and a pool weighted below the senior line.
         const bands = DEMO_EXAMPLE_DEPARTMENT.staff.map((person) => bandOf(person.name));
         expect(bands.filter((band) => band === 'principal').length).toBeGreaterThanOrEqual(1);
         expect(bands.filter((band) => band === 'senior').length).toBeGreaterThanOrEqual(2);
-        expect(bands.filter((band) => band === 'junior').length).toBeGreaterThan(bands.length / 2);
+        // CHANGED BY THE FOUR-BAND SPLIT. This read "juniors are more than half the
+        // pool", which was true when junior meant AH7–AH12: seven of the twelve sat
+        // in it. AH7–AH10 is the non-exempt band now, so the same twelve grades are
+        // five non-exempt, two junior, four senior and one principal. The claim the
+        // assertion was making — every band is represented, and the bulk of the pool
+        // is below the senior line — is unchanged; only which band holds the bulk is.
+        expect(bands.filter((band) => band === 'junior').length).toBeGreaterThanOrEqual(1);
+        expect(bands.filter((band) => band === 'nonExempt').length).toBeGreaterThanOrEqual(1);
+        expect(
+            bands.filter((band) => band === 'nonExempt' || band === 'junior').length,
+        ).toBeGreaterThan(bands.length / 2);
 
         // Two tasks are band-gated, in both directions.
         const gated = DEMO_EXAMPLE_DEPARTMENT.tasks.filter((task) => task.leadBands);
@@ -592,7 +612,10 @@ describe('demo mode: Configure → load the worked example → Generate', () => 
         expect(within(row).getByText(String(expected.load[partTimer.name].duties))).toBeTruthy();
         // …and now his grade and the band it resolves to, on the same row.
         expect(within(row).getByText(partTimer.grade)).toBeTruthy();
-        expect(within(row).getByText(/junior/i)).toBeTruthy();
+        // CHANGED BY THE FOUR-BAND SPLIT: the 0.6 FTE contract is Scott Lang at AH9,
+        // which was junior and is non-exempt now. The claim is the same one — the
+        // table resolves the grade to a BAND rather than echoing the grade string.
+        expect(within(row).getByText(/non-exempt/i)).toBeTruthy();
 
         // The principal is reported as one, so the table is not just echoing the
         // grade string back with a fixed label beside it.
@@ -636,12 +659,18 @@ describe('demo mode: Configure → load the worked example → Generate', () => 
 
         // The band editor holds the boundaries the fixture's grades were tuned
         // against — this is what makes "exactly one unfilled slot" reproducible.
-        // Read off the ruler's two dividers: junior ends at AH12, senior ends at
-        // AH14, so the fixture's boundaries are junior 7–12 / senior 13–14 /
-        // principal 15–17. (Was four number-box assertions before the ruler.)
-        expect(dividerValue(0)).toBe(12);
-        expect(dividerValue(1)).toBe(14);
-        expectOnScreen(/Junior\s*AH7[–-]AH12/i);
+        // Read off the ruler's dividers: non-exempt ends at AH10, junior at AH12 and
+        // senior at AH14, so the fixture's boundaries are non-exempt 7–10 / junior
+        // 11–12 / senior 13–14 / principal 15–17. (Was four number-box assertions
+        // before the ruler.)
+        // CHANGED BY THE FOUR-BAND SPLIT: three dividers, asked for by name — the
+        // `dividerValue(0)` this used to read is the non-exempt|junior one now.
+        expect(dividers()).toHaveLength(3);
+        expect(dividerValue(NONEXEMPT_JUNIOR_DIVIDER)).toBe(10);
+        expect(dividerValue(JUNIOR_SENIOR_DIVIDER)).toBe(12);
+        expect(dividerValue(SENIOR_PRINCIPAL_DIVIDER)).toBe(14);
+        expectOnScreen(/Non-exempt\s*AH7[–-]AH10/i);
+        expectOnScreen(/Junior\s*AH11[–-]AH12/i);
         expectOnScreen(/Principal\s*AH15[–-]AH17/i);
 
         // The gated task's chips are ticked, and the grade range beside them is
@@ -923,17 +952,29 @@ describe('demo mode: the band boundary editor', () => {
 
         expect(generateIsDisabled()).toBe(false);
 
-        // Drive the lower divider hard down and the upper hard up, past each other
-        // and past both ends of the scale. After every attempt the bands must still
-        // partition AH7–AH17 and the configuration must still be generatable.
-        nudgeDivider(0, 'ArrowLeft', 25);
-        nudgeDivider(1, 'ArrowRight', 25);
-        expect(dividerValue(0)).toBeLessThan(dividerValue(1));
+        // Drive every divider hard down and hard up, past its neighbours and past
+        // both ends of the scale. After every attempt the bands must still partition
+        // AH7–AH17 and the configuration must still be generatable.
+        // CHANGED BY THE FOUR-BAND SPLIT: the ordering assertion was a single
+        // `dividerValue(0) < dividerValue(1)` pair, which said nothing about the
+        // third handle. It reads the whole list as strictly ascending now, which is
+        // the no-overlap property for however many dividers there are.
+        const strictlyAscending = () => {
+            const values = dividers().map((handle) => Number(handle.getAttribute('aria-valuenow')));
+            expect(values).toEqual([...values].sort((a, b) => a - b));
+            expect(new Set(values).size).toBe(values.length);
+        };
+
+        nudgeDivider(NONEXEMPT_JUNIOR_DIVIDER, 'ArrowLeft', 25);
+        nudgeDivider(JUNIOR_SENIOR_DIVIDER, 'ArrowLeft', 25);
+        nudgeDivider(SENIOR_PRINCIPAL_DIVIDER, 'ArrowRight', 25);
+        strictlyAscending();
         expect(generateIsDisabled()).toBe(false);
 
-        // And the other way: lower divider up past the upper one.
-        nudgeDivider(0, 'ArrowRight', 25);
-        expect(dividerValue(0)).toBeLessThan(dividerValue(1));
+        // And the other way: every divider up past the one above it.
+        nudgeDivider(NONEXEMPT_JUNIOR_DIVIDER, 'ArrowRight', 25);
+        nudgeDivider(JUNIOR_SENIOR_DIVIDER, 'ArrowRight', 25);
+        strictlyAscending();
         expect(generateIsDisabled()).toBe(false);
 
         // No band-partition reason can be on screen, because none is reachable.
@@ -949,14 +990,26 @@ describe('demo mode: the band boundary editor', () => {
 
         expect(screen.getAllByText('AH13–AH17').length).toBeGreaterThan(0);
 
-        // Widen senior downwards by moving the junior|senior divider to AH10:
-        // junior AH7–10, senior AH11–14, principal AH15–17. Still a valid
-        // partition by construction, so the Senior/Principal chip range follows.
-        setDivider(0, 10);
+        // Narrow senior upwards by moving the junior|senior divider to AH13:
+        // non-exempt AH7–10, junior AH11–13, senior AH14, principal AH15–17. Still a
+        // valid partition by construction, so BOTH gated tasks' ranges follow it — in
+        // opposite directions, in the same keystroke.
+        //
+        // CHANGED BY THE FOUR-BAND SPLIT, twice over. It drove `setDivider(0, 10)`,
+        // and index 0 is the non-exempt|junior divider now — which already SITS on
+        // AH10, so the move became a no-op and nothing on screen changed at all. And
+        // the direction turned round: junior starts at AH11 now, so this divider has
+        // one grade of travel downwards and a one-grade junior band renders as the
+        // bare 'AH11' the ruler's own scale strip also prints. Moving UP keeps both
+        // captions unambiguous ranges, which is what makes them a measurement of the
+        // chips rather than of the ruler behind them.
+        setDivider(JUNIOR_SENIOR_DIVIDER, 13);
 
         expect(screen.queryByText('AH13–AH17')).toBeNull();
-        expect(screen.getAllByText('AH11–AH17').length).toBeGreaterThan(0);
-        expect(screen.getAllByText('AH7–AH10').length).toBeGreaterThan(0);
+        // The Senior/Principal-gated clinic…
+        expect(screen.getAllByText('AH14–AH17').length).toBeGreaterThan(0);
+        // …and the junior-gated ward round, which widened as the clinic narrowed.
+        expect(screen.getAllByText('AH11–AH13').length).toBeGreaterThan(0);
         expect(generateIsDisabled()).toBe(false);
         expectNoFirestoreTraffic();
     });
@@ -1317,11 +1370,19 @@ describe('demo mode: the 42-hour week', () => {
 // ─── 7. MULTI-SLOT SHIFTS, DRIVEN FROM THE WIZARD ─────────────────────────────
 
 describe('demo mode: a shift that needs a whole team', () => {
-    /** Prin/Sen/Jun, one in each band, both of the seniors holding the skill. */
+    /**
+     * Prin/Sen/Jun, one in each of the three bands the trio task's slots name.
+     *
+     * 🛡️ RE-GRADED BY THE FOUR-BAND SPLIT: 'Jun' was AH8, which is a non-exempt
+     * assistant on the corrected scale, not a junior AHP — so the junior slot below
+     * had nobody eligible to fill it and every test in this section failed. The
+     * FIXTURE was wrong about what AH8 means; the assertions were right, and are
+     * untouched. AH11 is the bottom of the junior band.
+     */
     const fillTrioStaff = () => {
         setStaffRow(1, { name: 'Prin', grade: 'AH16' });
         setStaffRow(2, { name: 'Sen', grade: 'AH13' });
-        setStaffRow(3, { name: 'Jun', grade: 'AH8' });
+        setStaffRow(3, { name: 'Jun', grade: 'AH11' });
     };
 
     /** Task row 1 as a principal + senior + junior trio. */
@@ -1342,7 +1403,8 @@ describe('demo mode: a shift that needs a whole team', () => {
         staff: [
             { name: 'Prin', fte: 1.0, skills: [], unavailable: [], grade: 'AH16' },
             { name: 'Sen', fte: 1.0, skills: [], unavailable: [], grade: 'AH13' },
-            { name: 'Jun', fte: 1.0, skills: [], unavailable: [], grade: 'AH8' },
+            // RE-GRADED with `fillTrioStaff` above: AH8 is non-exempt, not junior.
+            { name: 'Jun', fte: 1.0, skills: [], unavailable: [], grade: 'AH11' },
         ],
         tasks: [{
             name: 'Weekend Witnessing',
