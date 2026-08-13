@@ -32,8 +32,18 @@ cannot be dragged into an illegal state. **1627 tests green, lint clean, CI gree
 
 ## 1. What is LIVE right now
 
-`smartdashboard.web.app` is running the **four-band engine**, HEAD `bed9abd`, bundle
-`index-BdgcDfHp.js`. CI green end to end including the Deploy stages, and verified *in the
+`smartdashboard.web.app` is running **v1.13.0** (tag `v1.13.0`) with the **four-band engine**.
+
+*Deliberately no commit SHA or bundle hash here: both change on every deploy, so pinning them
+guarantees this line is stale again tomorrow. The version is the durable answer, and it is now
+readable from the app itself — the sandbox banner and the landing footer both render it from
+`package.json`, so what you see on screen IS what is deployed. To confirm the running build:*
+
+```bash
+curl -s https://smartdashboard.web.app/ | grep -oE '/assets/index-[A-Za-z0-9_-]+\.js'
+```
+
+CI green end to end including the Deploy stages, and verified *in the
 shipped bundle* rather than assumed: it carries
 `regions:{nonExempt:[7,10],junior:[11,12],senior:[13,14],principal:[15,17]}`.
 
