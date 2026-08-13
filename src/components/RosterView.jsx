@@ -941,7 +941,16 @@ const RosterView = ({ user }) => {
             // because every other sandbox value is cleared on both paths and a reset
             // that holds on only one is a guarantee waiting to be edited away. The
             // twin below has the same status.
-            setDemoArrangement(null);
+            setDemoShape(null);
+            // 🛡️ Renamed with the profession+shape rework: this was
+            // `setDemoArrangement(null)`. It survived the rename in BOTH reset
+            // branches and threw `ReferenceError: setDemoArrangement is not
+            // defined` on every demo render — caught by CI, not locally, because
+            // it lives in an effect and the comment above explains why no test
+            // drives this path. The profession clears too: a shape and the
+            // profession it was labelled for are one choice, and half a choice
+            // surviving a universe toggle is worse than neither.
+            setDemoProfession(null);
             // 🧬 MUTATION-CHECK NOTE, so a later reader does not delete one of these as
             // dead code: this reset and its twin in the `else` branch below are
             // REDUNDANT WITH EACH OTHER for `demoRulesInputs`. Removing either alone
@@ -983,7 +992,16 @@ const RosterView = ({ user }) => {
             setDemoExtraRules(null);
             // 🧬 The twin of the reset above, and unmeasured for the same reason — see
             // the note there. Kept for the same reason too.
-            setDemoArrangement(null);
+            setDemoShape(null);
+            // 🛡️ Renamed with the profession+shape rework: this was
+            // `setDemoArrangement(null)`. It survived the rename in BOTH reset
+            // branches and threw `ReferenceError: setDemoArrangement is not
+            // defined` on every demo render — caught by CI, not locally, because
+            // it lives in an effect and the comment above explains why no test
+            // drives this path. The profession clears too: a shape and the
+            // profession it was labelled for are one choice, and half a choice
+            // surviving a universe toggle is worse than neither.
+            setDemoProfession(null);
 
             // 🛡️ M1 FIX: the demo branch above rewrites config.staff/config.tasks
             // (it used to overwrite them with the Marvel dataset; it now clears
