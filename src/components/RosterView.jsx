@@ -50,16 +50,38 @@ import {
 
 // --- SANDBOX IMPORTS ---
 import { useNexus } from '../context/NexusContext';
-// 🧪 The picker's four arrangements. `DEMO_ARRANGEMENTS[0].config` IS
-// `DEMO_EXAMPLE_DEPARTMENT` — an alias, not a copy — so the respiratory option loads
-// exactly the fixture this view has always loaded.
-// `provenance` is deliberately NOT imported here. The panel keys off `correction`
-// being present, which is ONE source for "does this need a health warning"; reading
-// both fields in this file would be two, and the two would eventually disagree in
-// front of a roster master. That the two fields agree is pinned in
-// `RosterView.demo.test.jsx` instead, where a mismatch is a failing test rather than a
-// missing panel.
-import { DEMO_ARRANGEMENTS } from '../data/mockData';
+// 🧪 THE PICKER IS A PROFESSION AND A SHAPE, and the two lists have different jobs.
+//
+// `DEMO_SHAPES` is FIVE STRUCTURES plus two openly fictional demos. It was twelve
+// arrangements, one per department, and seven of those twelve were invented services
+// offered under a real profession's name. A shape says "this is how the physiotherapists
+// do it — adapt it", which is true; a per-department fixture said "this is how art
+// therapists do it", which was not. `mockData.js` owns the list and its order; this file
+// does not sort, filter or re-order it, and nothing here may assume a position in it.
+//
+// `MOH_PROFESSION_OPTIONS` is MOH's own list of 28 professions (37 selectable leaves,
+// two of them nesting), sorted in `mockData.js` and rendered here with `<optgroup>`
+// wherever MOH nests. It is VOCABULARY: choosing a profession picks the LABEL on the
+// configuration and nothing else — no duties, no grades, no rules. That is what lets an
+// art therapist ride the physiotherapy shape and see their own designation on the
+// result.
+//
+// `suggestedShapeFor` is the roster owner's own non-binding pairing of profession to
+// likely starting point. It is rendered as a SUGGESTION and is never applied
+// automatically: a suggestion that loads itself is a claim about that profession's
+// service.
+//
+// `provenance` is deliberately NOT imported here. The attribution panel keys off
+// `attribution` and `sourceProfession` being present, which is ONE source for "what does
+// this say about where it came from"; reading `provenance` here as well would be two,
+// and the two would eventually disagree in front of a roster master. That they agree is
+// pinned in `RosterView.demo.test.jsx` instead, where a mismatch is a failing test
+// rather than a wrong caption.
+import { DEMO_SHAPES, MOH_PROFESSION_OPTIONS, suggestedShapeFor } from '../data/mockData';
+// The taxonomy itself, for ONE read: turning the chosen profession's id back into the
+// leaf whose `name`/`qualifiedName` labels the configuration. Read-only; this file never
+// edits the published list.
+import { professionById } from '../data/mohAlliedHealth';
 // 🧪 SANDBOX ENGINE — the constraint-aware engine, used ONLY on the demo path.
 // Live generation still goes through prepareRosterWrite → generateRoster, which
 // has characterization tests pinning its byte-exact output and a live document
@@ -103,6 +125,22 @@ import ConfirmationModal from './ConfirmationModal';
 
 /** How many unfilled slots the sandbox panel lists before it summarises. */
 const DEMO_UNFILLED_PREVIEW = 20;
+
+/**
+ * 📱 THE TWO PICKER DROPDOWNS' CLASSES, in ONE place because there are now two of them.
+ *
+ * `min-h-11` is a deliberate ~44px touch target — the size both Apple's and Google's
+ * guidance put as the floor, and the reason this is not the 32px the desktop rows use.
+ * `text-base` stops iOS Safari zooming the whole page on focus, which it does to any
+ * input under 16px and which strands the visitor at 1.4× with the modal off-screen;
+ * `sm:text-sm` gives the density back where there is a mouse. Shared rather than typed
+ * twice, so the profession select and the shape select cannot drift into two different
+ * touch targets.
+ */
+const DEMO_PICKER_SELECT_CLASS = 'mt-2 w-full min-h-11 rounded-lg border border-emerald-300 dark:border-emerald-700 bg-white dark:bg-slate-900 px-3 py-2 text-base sm:text-sm font-bold text-slate-800 dark:text-white focus:ring-2 focus:ring-emerald-500 outline-none';
+
+/** Both picker labels, so the two controls cannot drift apart typographically either. */
+const DEMO_PICKER_LABEL_CLASS = 'text-[10px] font-black text-emerald-800 dark:text-emerald-300 uppercase tracking-widest';
 
 /**
  * 🛡️ M12 — the identity of a swap request, as a comparable value.
@@ -649,23 +687,33 @@ const RosterView = ({ user }) => {
     // calendar can report what the engine actually knew, rather than a summary.
     const [demoResult, setDemoResult] = useState(null);
 
-    // 🧪 WHICH OF THE FOUR ARRANGEMENTS WAS LOADED, or `null` for a team typed in by
-    // hand. The whole descriptor rather than its id, because what this is read for is
-    // its `correction` field.
+    // 🧪 WHICH SHAPE WAS LOADED, or `null` for a team typed in by hand. The whole
+    // descriptor rather than its id, because what this is read for is its `attribution`.
     //
-    // IT EXISTS FOR ONE REASON AND IT IS AN HONESTY REASON. The picker says, on the
-    // button, that the respiratory arrangement is inferred rather than reported — but
-    // the picker is inside a modal that closes the moment the roster is drafted, and
-    // what the therapists in the room then look at is a finished roster of their own
-    // service with no caveat anywhere near it. So the caveat travels with the loaded
-    // arrangement and is restated beside the report. `null` for a typed-in team is
-    // correct and not a gap: a team that typed their own roster in needs no warning
-    // about somebody else's inference.
+    // IT EXISTS FOR ONE REASON AND IT IS AN HONESTY REASON. The picker says, beside the
+    // dropdown, whose week a shape came from and that it is a starting point — but the
+    // picker is inside a modal that closes the moment the roster is drafted, and what the
+    // room then looks at is a finished roster with no attribution anywhere near it. A
+    // structure borrowed from the physiotherapists would silently become "our roster".
+    // So the attribution travels with the loaded shape and is restated beside the report.
+    // `null` for a typed-in team is correct and not a gap: a team who typed their own
+    // roster in borrowed nothing from anybody.
     //
     // NOT A SOURCE OF TRUTH FOR ANYTHING GENERATED. The rows are, exactly as before —
-    // this is a label, and a visitor who loads an arrangement and then edits every row
-    // still sees the caveat, which is the safe direction to be wrong in.
-    const [demoArrangement, setDemoArrangement] = useState(null);
+    // this is a label, and a visitor who loads a shape and then edits every row still
+    // sees where the structure came from, which is the safe direction to be wrong in.
+    const [demoShape, setDemoShape] = useState(null);
+
+    // 🧪 WHOSE ROSTER THIS IS, as one of MOH's 37 profession leaves, or `null`.
+    //
+    // A LABEL AND NOTHING MORE, and that is the entire point of the two-control picker.
+    // It reaches no engine field, no row and no rule: an art therapist who loads the
+    // graded duty split gets byte-identically the roster a physiotherapist would get from
+    // it, and sees "Art Therapist" on the result instead of somebody else's profession.
+    // Optional on purpose — a visitor who never touches this control still gets a working
+    // roster, because a tool that demands a designation before it will help is a tool that
+    // has to be argued with first.
+    const [demoProfession, setDemoProfession] = useState(null);
 
     // 🧪 THE GRADE-AWARE WIZARD'S TABLES. These replaced the two comma-separated
     // textareas in demo mode; live mode still renders the textareas, unchanged.
@@ -1030,14 +1078,21 @@ const RosterView = ({ user }) => {
     // --- ACTIONS ---
     
     /**
-     * 🧪 SANDBOX: fill ONE OF THE FOUR ARRANGEMENTS into the wizard's tables.
+     * 🧪 SANDBOX: fill ONE OF THE SEVEN SHAPES into the wizard's tables.
      *
      * WAS `loadExampleDepartment`, which took no argument and closed over the single
-     * example fixture. It now takes the arrangement, and the body below is otherwise
-     * the same code with `DEMO_EXAMPLE_DEPARTMENT` replaced by `fixture` — deliberately
-     * a parameterisation and not a rewrite, because the respiratory option passes
-     * exactly the object this function used to read and its four existing tests
-     * therefore still describe the same behaviour.
+     * example fixture; then `loadArrangement`, which took one of twelve per-department
+     * fixtures. It now takes a SHAPE, and the body below is unchanged from that
+     * parameterisation — deliberately, because the full worked example passes exactly the
+     * object this function has always read and its existing tests therefore still
+     * describe the same behaviour.
+     *
+     * THE CHOSEN PROFESSION IS NOT AN ARGUMENT TO THIS FUNCTION, and that is the claim
+     * the whole change rests on. A shape's rows, rules, start date and run length come
+     * from the shape; the profession is a label held in its own piece of state. So the
+     * same shape loaded by an art therapist and by a physiotherapist produces the same
+     * rows and therefore the same roster, which is asserted rather than asserted-by-
+     * comment in `RosterView.demo.test.jsx`.
      *
      * EVERYTHING the fixture holds lands somewhere the visitor can see and change:
      * names, grades, FTE, leave dates, per-person daily caps and cohort windows into
@@ -1049,29 +1104,29 @@ const RosterView = ({ user }) => {
      * uneditable — a demo of a capability nobody in the room could then adjust.
      *
      * Two things travel on the rows without a column of their own — staff `skills` and
-     * a task's `requiresSkill` — because the respiratory arrangement's single
-     * unfillable slot exists precisely because only two people hold CPET. They are
-     * rendered read-only in the tables rather than hidden.
+     * a task's `requiresSkill` — because the full worked example's single unfillable slot
+     * exists precisely because only two people hold CPET. They are rendered read-only in
+     * the tables rather than hidden.
      *
      * Fresh copies throughout, so a later edit cannot mutate the frozen export
      * through a shared array reference.
      */
-    const loadArrangement = (arrangement) => {
-        const fixture = arrangement.config;
-        // The label, and specifically its `correction`, travels with the rows. See the
-        // note on `demoArrangement`: the picker closes, the caveat must not.
-        setDemoArrangement(arrangement);
+    const loadShape = (shape) => {
+        const fixture = shape.config;
+        // The shape, and specifically its `attribution`, travels with the rows. See the
+        // note on `demoShape`: the picker closes, the attribution must not.
+        setDemoShape(shape);
         setDemoStaffRows(fixture.staff.map(person => createStaffRow(person)));
         setDemoTaskRows(fixture.tasks.map(task => createTaskRow(task)));
         setDemoBandInputs(bandsToInputs(fixture.rules?.bands || DEFAULT_GRADE_BANDS));
         // The fixture's hours policy goes into the two boxes — not into `extraRules` —
         // for exactly the reason `bands` does: one value, one source, and the source is
-        // the control the visitor can see. The respiratory arrangement states neither
-        // field, so both boxes stay blank and its run is the duties-only run it has
-        // always been; psychology and the laboratory state `weeklyHours: 42`, and 42
-        // therefore appears in the box as a TYPED value, which is what makes the hours
-        // columns in their load tables something a visitor can change rather than a
-        // property of the fixture.
+        // the control the visitor can see. The graded duty split and the two Marvel demos
+        // state neither field, so both boxes stay blank and their runs are the duties-only
+        // runs they have always been; the periodic clinic and the weekend quota state
+        // `weeklyHours: 42`, and 42 therefore appears in the box as a TYPED value, which is
+        // what makes the hours columns in their load tables something a visitor can change
+        // rather than a property of the fixture.
         const exampleHours = {
             weeklyHours: fixture.rules?.weeklyHours === undefined
                 ? '' : String(fixture.rules.weeklyHours),
@@ -1082,12 +1137,17 @@ const RosterView = ({ user }) => {
         // …and the same discipline for the three department limits, which used to be
         // the ONLY way `maxConcurrentPerDay` and `maxConsecutiveDays` reached a config
         // at all (`ROSTER_QC_AUDIT_SURFACES.md` §3: "example fixture only"). They now
-        // land in the panel that owns them, so the example's policy is visible and
-        // editable rather than carried invisibly in `extraRules`. The fixture states 2
-        // and 6, which happen to be the engine's defaults — the boxes therefore show
-        // "2" and "6" as TYPED values, because the example department really does
-        // declare them, and that is a different fact from leaving them blank. All four
-        // arrangements state the same two, so all four show them.
+        // land in the panel that owns them, so the shape's policy is visible and editable
+        // rather than carried invisibly in `extraRules`. Most shapes state 2 and 6, which
+        // happen to be the engine's defaults — the boxes therefore show "2" and "6" as
+        // TYPED values, because the team that described the shape really does declare them,
+        // and that is a different fact from leaving them blank. NOT every shape states
+        // them: the Marvel quick demo states neither and its boxes are therefore blank, and
+        // the fixed-weekday-sessions shape states a concurrency of THREE because its
+        // mid-week consult genuinely needs a third duty from somebody. Which is the point
+        // of reading them off `fixture.rules` per shape rather than assuming a shared
+        // policy — an assumption this comment used to make, and which was already wrong for
+        // the Marvel team.
         setDemoRulesInputs({
             maxConcurrentPerDay: fixture.rules?.maxConcurrentPerDay === undefined
                 ? '' : String(fixture.rules.maxConcurrentPerDay),
@@ -1109,18 +1169,42 @@ const RosterView = ({ user }) => {
         delete exampleRules.maxConsecutiveDays;
         delete exampleRules.forbidPairs;
         setDemoExtraRules(exampleRules);
-        // The start date and the length of the run are PART OF THE ARRANGEMENT, and for
-        // three of the four they are load-bearing rather than cosmetic: a psychology run
-        // shorter than two months holds one occurrence of a monthly clinic and cannot
-        // show continuity at all; an embryology run shorter than a four-month block
-        // shows a rota instead of a handover; and the laboratory run starts on the 1st
-        // of a month so its first quota period is a WHOLE month the engine will judge.
-        // Each fixture's own comment states why its two numbers are what they are.
+        // The start date and the length of the run are PART OF THE SHAPE, and for several
+        // of them they are load-bearing rather than cosmetic: a periodic-clinic run shorter
+        // than two months holds one occurrence of a monthly clinic and cannot show
+        // continuity at all; a team-rotation run shorter than a four-month block shows a
+        // rota instead of a handover; and the weekend-quota run starts on the 1st of a
+        // month so its first quota period is a WHOLE month the engine will judge. Each
+        // fixture's own comment states why its two numbers are what they are.
         setConfig(prev => ({
             ...prev,
             startDate: fixture.startDate,
             weeks: fixture.weeks,
         }));
+    };
+
+    /**
+     * 🧪 SANDBOX: START BLANK — the first option in the shape dropdown, and a real one.
+     *
+     * It was a dead placeholder ("Choose a team to load…") that could only be read, never
+     * chosen: once a shape had been loaded there was no way back to empty rows except
+     * reloading the page and losing the start date and the run length too. "Type your own
+     * team" is the case the tables exist for, so it gets a control.
+     *
+     * The PROFESSION is deliberately left alone. It is the visitor's own designation, not
+     * part of any shape, and clearing the rows is no reason to make them say who they are
+     * again. `demoResult` is left alone too: a roster already on screen was really
+     * generated, and silently deleting it because somebody emptied the form would be the
+     * calendar lying about what happened.
+     */
+    const startBlank = () => {
+        setDemoShape(null);
+        setDemoStaffRows(createEmptyStaffRows());
+        setDemoTaskRows(createEmptyTaskRows());
+        setDemoBandInputs(bandsToInputs(DEFAULT_GRADE_BANDS));
+        setDemoHoursInputs(EMPTY_HOURS_INPUTS);
+        setDemoRulesInputs(EMPTY_RULES_INPUTS);
+        setDemoExtraRules(null);
     };
 
     // --- SANDBOX TABLE EDITS ---
@@ -2158,28 +2242,38 @@ const RosterView = ({ user }) => {
                         </p>
                     </div>
 
-                    {/* 🧪 THE PROVENANCE NOTICE, and it is here rather than only in the
-                        wizard for one reason: the wizard is a modal and it closes the
-                        moment the roster is drafted. What the room then looks at is a
-                        finished roster of their own service, and if the only place that
-                        said "this was inferred, not reported" was the panel that just
-                        disappeared, the tool would have quietly presented a guess as a
-                        service. Rendered from the loaded arrangement's `correction` field,
-                        so it appears for whichever arrangement declares one and for no
-                        other — and never for a team who typed their own roster in, where
-                        it would be a false statement about their own data.
+                    {/* 🧪 WHOSE ROSTER THIS IS, AND WHOSE STRUCTURE IT BORROWED — and it
+                        is here rather than only in the wizard for one reason: the wizard is
+                        a modal and it closes the moment the roster is drafted. What the room
+                        then looks at is a finished roster, and if the only place that said
+                        "this structure came from the physiotherapists, adapt it" was the
+                        panel that just disappeared, a borrowed shape would quietly become
+                        "our roster".
+
+                        WAS AN AMBER WARNING PANEL, rendered from a `correction` block, and
+                        it went with the six invented arrangements it existed to apologise
+                        for. Nothing in the picker now claims to be a service it is not, so
+                        there is nothing to disclaim — this states two facts instead: the
+                        profession the visitor chose (or nothing, if they did not) and the
+                        team whose structure the shape came from. Rendered from the loaded
+                        shape's own `attribution`, so it appears for whichever shape declares
+                        one and for no other, and never for a team who typed their own roster
+                        in, where naming somebody else's profession would be a false
+                        statement about their own data.
 
                         It sits ABOVE the run summary on purpose. Reading order is the
                         claim: what this roster IS comes before how many shifts it holds. */}
-                    {demoArrangement?.correction && (
-                        <div className="flex items-start gap-2 p-3 rounded-xl bg-amber-50 dark:bg-amber-900/20 border border-amber-300 dark:border-amber-800">
-                            <ShieldAlert size={16} className="text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
+                    {demoShape?.attribution && (
+                        <div className="flex items-start gap-2 p-3 rounded-xl bg-slate-50 dark:bg-slate-900/40 border border-slate-200 dark:border-slate-700">
+                            <ShieldAlert size={16} className="text-slate-500 dark:text-slate-400 shrink-0 mt-0.5" />
                             <div>
-                                <p className="text-xs font-black text-amber-800 dark:text-amber-300 uppercase tracking-wide">
-                                    {demoArrangement.name} — {demoArrangement.correction.headline}
+                                <p className="text-xs font-black text-slate-700 dark:text-slate-200 uppercase tracking-wide">
+                                    {demoProfession
+                                        ? `${demoProfession.qualifiedName} — ${demoShape.name}`
+                                        : `${demoShape.name} — a starting point, not a finished service`}
                                 </p>
-                                <p className="text-xs text-amber-800 dark:text-amber-300 leading-relaxed mt-1">
-                                    {demoArrangement.correction.body}
+                                <p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed mt-1">
+                                    {demoShape.attribution}
                                 </p>
                             </div>
                         </div>
@@ -2188,7 +2282,7 @@ const RosterView = ({ user }) => {
                     {!demoResult && (
                         <p className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed">
                             No sandbox roster yet. Open <span className="font-bold">Configure</span>, fill in the
-                            staff and task tables (or load one of the four example arrangements) and press{' '}
+                            staff and task tables (or load one of the example arrangements) and press{' '}
                             <span className="font-bold">Draft roster</span>. The calendar above is
                             empty because nothing has been generated — not because a roster failed.
                         </p>
@@ -2724,118 +2818,193 @@ const RosterView = ({ user }) => {
                             </h3>
                         </div>
                         
-                        {/* 🧪 SANDBOX: THE ARRANGEMENT PICKER.
-                            WAS ONE BUTTON, "Load example department", which filled the
-                            tables with a single twelve-person fixture. One fixture
-                            demonstrated one team's problem, so three of the four
-                            professions who were interviewed sat through a roster that was
-                            not about them: the psychologists' question is a monthly clinic
-                            with the same clinician on it, the embryologists' is a shift
-                            that needs three people at once and a team rotation, the
-                            laboratory's is a Saturday FLOOR. None of the three is visible
-                            in a run of the respiratory example, however good that example
-                            is at what it does show.
-                            FOUR OPTIONS, and each carries the ONE LINE that says what it
-                            demonstrates — because the choice being made here is between
-                            four capabilities, not four casts of fictional names.
-                            THE HEALTH WARNING IS RENDERED FROM DATA, not written into this
-                            markup: an arrangement carries `correction`, and any arrangement
-                            that carries one gets the amber panel. That way an arrangement
-                            added later cannot be labelled as a team's real service just
-                            because whoever added it forgot the caption — the field is the
-                            thing that has to be filled in, and a `null` is a claim.
-                            A typed-in team still works and is still the point of the
-                            tables: a name alone is enough, and every column beside it is
-                            optional. */}
-                        {/* 🧪 THE ARRANGEMENT PICKER — one dropdown, not five cards.
-                            This was five stacked panels, each with its own Load button, its
-                            own one-line description and (for the inferred one) its own
-                            warning block. On a desktop that is a menu; on a phone — which is
-                            where visiting colleagues will actually open this — it is a wall
-                            of text above the form they came to use, and the form itself was
-                            pushed off the first screen.
-
-                            A native <select> is the right control here precisely because it
-                            is native: iOS and Android render it as a full-height wheel, so
-                            five options cost one tap and zero vertical space, and it is
+                        {/* 🧪 SANDBOX: THE PICKER — ONE PROFESSION, ONE SHAPE.
+                            ITS HISTORY, BECAUSE THE LAST STEP WAS A CORRECTION AND NOT AN
+                            IMPROVEMENT. It was one button ("Load example department"), then
+                            five cards, then one dropdown of TWELVE ARRANGEMENTS — one per
+                            department — and 23 more were about to be written so that every
+                            MOH profession had one. Seven of the twelve were invented
+                            services offered under a real profession's name with an amber
+                            "please correct this" panel attached. The panel was the tell.
+                            The roster owner stopped it: "other professions can also ride on
+                            the configurations of the 5. That's the purpose of this roster's
+                            new version — so roster masters can configure for their team
+                            regardless of their profession."
+                            SO THE TWO CONTROLS ARE A PROFESSION AND A SHAPE, and they are
+                            different kinds of thing. The profession is the visitor's own
+                            designation, from MOH's published list, and it LABELS the result
+                            — it selects no duty, grade or rule, which is what lets an art
+                            therapist ride the physiotherapists' structure and still see
+                            "Art Therapist" on their roster. The shape is a STRUCTURE, and
+                            every one of the five is attributed on screen to the profession
+                            that described it, because "this is how the physiotherapists do
+                            it — adapt it" is true and "this is how art therapists do it"
+                            would have been invented.
+                            THE ATTRIBUTION IS RENDERED FROM DATA, not written into this
+                            markup: a shape carries `attribution`, and every shape that
+                            carries one shows it. A shape added later therefore cannot be
+                            presented as anonymous structure just because whoever added it
+                            forgot the caption — the field is the thing that has to be
+                            filled in.
+                            STILL TWO CONTROLS ON A PHONE, which is the constraint v1.12.0
+                            collapsed five cards into one dropdown for. Native <select>s:
+                            iOS and Android render them as full-height wheels, so 37
+                            professions cost one tap and no vertical space, and both are
                             keyboard- and screen-reader-operable without any work from us.
-                            Only the CHOSEN arrangement's description and warning render, so
-                            the panel is a fixed three lines tall instead of growing with the
-                            number of professions we support. */}
+                            Only the CHOSEN shape's description renders, so the panel's
+                            height does not grow with the list.
+                            A typed-in team still works and is still the point of the tables
+                            below: "Start blank" is the first option in the shape list, a
+                            name alone is enough, and every column beside it is optional. */}
                         {isDemo && (
                             <div className="mb-4 p-3 rounded-xl bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800">
-                                <label
-                                    htmlFor="roster-arrangement"
-                                    className="text-[10px] font-black text-emerald-800 dark:text-emerald-300 uppercase tracking-widest"
-                                >
-                                    Load an example arrangement
+                                {/* ── CONTROL 1: WHO YOU ARE ─────────────────────────────
+                                    MOH's own 28, with `<optgroup>` for the two that nest
+                                    (12, Medical Technologist / Physiologist, and 24,
+                                    Psychologist). The parent of a nesting profession is a
+                                    GROUP HEADING and not a choice — a roster belongs to a
+                                    cardiac lab or a sleep lab, never to "medical technology"
+                                    in general — and a browser will not let a heading be
+                                    selected, which is the behaviour we want rather than one
+                                    we would have to police. Alphabetical by the name a
+                                    visitor READS, sorted in `mockData.js`; this file does
+                                    not re-order it. */}
+                                <label htmlFor="roster-profession" className={DEMO_PICKER_LABEL_CLASS}>
+                                    Your profession
                                 </label>
-
                                 <select
-                                    id="roster-arrangement"
-                                    value={demoArrangement?.id || ''}
-                                    onChange={(event) => {
-                                        const chosen = DEMO_ARRANGEMENTS.find((entry) => entry.id === event.target.value);
-                                        if (chosen) loadArrangement(chosen);
-                                    }}
-                                    /* min-h-11 is a deliberate ~44px touch target — the size
-                                       both Apple's and Google's guidance put as the floor,
-                                       and the reason this is not the 32px the desktop rows
-                                       use. text-base stops iOS Safari zooming the whole page
-                                       on focus, which it does to any input under 16px. */
-                                    className="mt-2 w-full min-h-11 rounded-lg border border-emerald-300 dark:border-emerald-700 bg-white dark:bg-slate-900 px-3 py-2 text-base sm:text-sm font-bold text-slate-800 dark:text-white focus:ring-2 focus:ring-emerald-500 outline-none"
+                                    id="roster-profession"
+                                    value={demoProfession?.id || ''}
+                                    onChange={(event) => setDemoProfession(professionById(event.target.value))}
+                                    className={DEMO_PICKER_SELECT_CLASS}
                                 >
-                                    <option value="">Choose a team to load…</option>
-                                    {DEMO_ARRANGEMENTS.map((entry) => (
+                                    {/* OPTIONAL, and it stays optional. A tool that demands
+                                        a designation before it will help is a tool that has
+                                        to be argued with first. */}
+                                    <option value="">Prefer not to say</option>
+                                    {MOH_PROFESSION_OPTIONS.map((entry) => (entry.kind === 'group' ? (
+                                        <optgroup key={entry.groupId} label={entry.label}>
+                                            {entry.options.map((leaf) => (
+                                                <option key={leaf.id} value={leaf.id}>{leaf.name}</option>
+                                            ))}
+                                        </optgroup>
+                                    ) : (
                                         <option key={entry.id} value={entry.id}>{entry.name}</option>
-                                    ))}
+                                    )))}
                                 </select>
 
-                                {/* The chosen option's one line. Before the dropdown this
-                                    sentence was on screen for all five at once; now it
-                                    follows the choice, which is when it is actually read. */}
-                                {demoArrangement ? (
+                                {/* THE SUGGESTION, AND IT IS A SUGGESTION. The roster owner's
+                                    own pairing of profession to likely starting point. It is
+                                    never applied automatically — a suggestion that loads
+                                    itself is a claim about that profession's service — and
+                                    the sentence says out loud that it describes nothing. For
+                                    the five professions who told us their shape it says so
+                                    instead, because that is a different and stronger fact.
+                                    A profession with no pairing gets no suggestion and is
+                                    told why, rather than being handed the nearest guess. */}
+                                {demoProfession && (
                                     <p
-                                        data-arrangement={demoArrangement.id}
+                                        data-profession={demoProfession.id}
                                         className="text-[10px] text-emerald-700 dark:text-emerald-300 mt-2 leading-relaxed"
                                     >
-                                        {demoArrangement.demonstrates}
-                                    </p>
-                                ) : (
-                                    <p className="text-[10px] text-emerald-700 dark:text-emerald-300 mt-2 leading-relaxed">
-                                        Five teams, five different rostering problems. Pick one and it fills the
-                                        tables below — everything it loads stays editable, including the parts that
-                                        make it interesting. Or just start typing your own team: a name alone is
-                                        enough.
+                                        {/* NO PROFESSION NAME IS INTERPOLATED INTO THESE
+                                            SENTENCES, deliberately. "No cardiac has
+                                            described their week" is what naming a
+                                            sub-discipline produces, and a sentence that
+                                            reads as a mistake gets read as a mistake about
+                                            the reader. "Your profession" is the same fact
+                                            and survives all 37 leaves. */}
+                                        {suggestedShapeFor(demoProfession.id)
+                                            ? (suggestedShapeFor(demoProfession.id).sourceProfessionId === demoProfession.id
+                                                || suggestedShapeFor(demoProfession.id).sourceProfessionId === demoProfession.groupId
+                                                ? `“${suggestedShapeFor(demoProfession.id).name}” below is the shape your own profession described to us. Start there if you like — it is still only a starting point, and your team may work nothing like the colleagues who described it.`
+                                                : `A suggested starting point: “${suggestedShapeFor(demoProfession.id).name}”. It is a suggestion and nothing more: nobody in your profession has described their week to us, so this says nothing about your service. Any shape below will do, and all of them are editable.`)
+                                            : 'Nobody in your profession has described their week to us, so there is no suggested starting point — rather than hand you a guess. Pick whichever shape below looks closest to how your team works and change it.'}
                                     </p>
                                 )}
 
-                                {/* THE PROVENANCE WARNING, for the chosen arrangement only.
-                                    It must be readable the moment the choice is made — a
-                                    visitor from the department this is a GUESS about should
-                                    never take it for a description of their service. */}
-                                {demoArrangement?.correction && (
-                                    <div className="mt-2 flex items-start gap-2 p-2 rounded-lg bg-amber-50 dark:bg-amber-900/20 border border-amber-300 dark:border-amber-800">
-                                        <ShieldAlert size={14} className="text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
-                                        <div className="min-w-0">
-                                            <p className="text-[10px] font-black text-amber-800 dark:text-amber-300 uppercase tracking-wide">
-                                                {demoArrangement.correction.headline}
+                                {/* ── CONTROL 2: WHAT SHAPE TO START FROM ────────────────
+                                    Two `<optgroup>`s, so the difference between a structure
+                                    a team described and an openly fictional demo is
+                                    structural in the control rather than a word in a
+                                    caption. Order comes from `DEMO_SHAPES` and this file
+                                    does not re-order it; the grouping is a filter over that
+                                    order, not a re-sort of it. */}
+                                <label htmlFor="roster-shape" className={`${DEMO_PICKER_LABEL_CLASS} block mt-3`}>
+                                    Shape to start from
+                                </label>
+                                <select
+                                    id="roster-shape"
+                                    value={demoShape?.id || ''}
+                                    onChange={(event) => {
+                                        const chosen = DEMO_SHAPES.find((entry) => entry.id === event.target.value);
+                                        if (chosen) loadShape(chosen);
+                                        else startBlank();
+                                    }}
+                                    className={DEMO_PICKER_SELECT_CLASS}
+                                >
+                                    {/* A REAL OPTION, not a dead placeholder: choosing it
+                                        empties the tables so a team can type their own. */}
+                                    <option value="">Start blank — type your own team</option>
+                                    <optgroup label="Shapes — from teams who described their week">
+                                        {DEMO_SHAPES.filter((entry) => entry.group === 'shape').map((entry) => (
+                                            <option key={entry.id} value={entry.id}>{entry.name}</option>
+                                        ))}
+                                    </optgroup>
+                                    <optgroup label="Demonstrations — nobody's service">
+                                        {DEMO_SHAPES.filter((entry) => entry.group === 'demo').map((entry) => (
+                                            <option key={entry.id} value={entry.id}>{entry.name}</option>
+                                        ))}
+                                    </optgroup>
+                                </select>
+
+                                {/* The chosen shape's one line, and then WHOSE STRUCTURE IT
+                                    IS. Both follow the choice rather than being on screen
+                                    for every option at once, which is when they are actually
+                                    read. The placeholder below names no COUNT, deliberately:
+                                    a sentence saying "five shapes" goes out of date the next
+                                    time somebody adds one, and it already did once. */}
+                                {demoShape ? (
+                                    <>
+                                        <p
+                                            data-shape={demoShape.id}
+                                            className="text-[10px] text-emerald-700 dark:text-emerald-300 mt-2 leading-relaxed"
+                                        >
+                                            {demoShape.demonstrates}
+                                        </p>
+                                        {/* THE ATTRIBUTION. Not amber, and not a warning:
+                                            nothing here is being disclaimed, because nothing
+                                            here claims to be the visitor's service. It
+                                            states whose structure this is and that it is a
+                                            starting point — the two facts a roster master
+                                            needs in order to know what they are looking at.
+                                            The old amber `correction` panel apologised for a
+                                            guess; there are no guesses left to apologise
+                                            for. */}
+                                        <p
+                                            data-shape-attribution={demoShape.id}
+                                            className="text-[10px] text-slate-600 dark:text-slate-300 mt-2 leading-relaxed border-t border-emerald-200 dark:border-emerald-800 pt-2"
+                                        >
+                                            {demoShape.attribution}
+                                        </p>
+                                        {/* AND WHOSE ROSTER IT WILL BE. The one place the two
+                                            controls meet: the profession labels the result,
+                                            the shape keeps its attribution, and neither
+                                            pretends to be the other. */}
+                                        {demoProfession && (
+                                            <p className="text-[10px] font-bold text-emerald-800 dark:text-emerald-200 mt-2 leading-relaxed">
+                                                {`This will be your ${demoProfession.qualifiedName} roster, built on a structure ${demoShape.sourceProfession ? `${demoShape.sourceProfession.toLowerCase()} colleagues described` : 'that is openly fictional'}.`}
                                             </p>
-                                            <p className="text-[10px] text-amber-800 dark:text-amber-300 leading-relaxed mt-1">
-                                                {demoArrangement.correction.body}
-                                            </p>
-                                            <p className="text-[10px] font-bold text-amber-800 dark:text-amber-300 mt-1">
-                                                Please check every one of these:
-                                            </p>
-                                            <ul className="mt-0.5 list-disc list-outside pl-4 space-y-0.5">
-                                                {demoArrangement.correction.items.map((item) => (
-                                                    <li key={item} className="text-[10px] text-amber-700 dark:text-amber-400 leading-relaxed">
-                                                        {item}
-                                                    </li>
-                                                ))}
-                                            </ul>
-                                        </div>
-                                    </div>
+                                        )}
+                                    </>
+                                ) : (
+                                    <p className="text-[10px] text-emerald-700 dark:text-emerald-300 mt-2 leading-relaxed">
+                                        Every shape here is a STRUCTURE a team described — how their duties, grades
+                                        and weekends fit together — not a description of anybody else&apos;s service.
+                                        Pick the one closest to how your team works and it fills the tables below;
+                                        everything it loads stays editable, including the parts that make it
+                                        interesting. Or start blank and type your own team: a name alone is enough.
+                                    </p>
                                 )}
                             </div>
                         )}

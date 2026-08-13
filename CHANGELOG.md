@@ -36,8 +36,137 @@ not changed by this release.
 
 ## [Unreleased]
 
-Nothing is scheduled here yet. The section below is deliberately **not** a list of
-completed work.
+The arrangement picker becomes **profession + shape**: MOH's own 28 allied health
+professions as vocabulary, and **five structures** — not one fabricated department per
+profession. Not released and not tagged; the version bump is a separate decision.
+
+⚠️ **THIS SECTION REPLACES AN EARLIER UNRELEASED ENTRY, AND THE REPLACEMENT IS THE POINT.**
+That entry announced *twelve* arrangements, one per department, with 23 more to come so
+that every MOH profession had one. Seven of the twelve were guesses: plausible services
+nobody had described, offered under a real profession's name with a `correction` checklist
+attached. The checklist was the tell — a fixture that has to apologise for itself is
+making a claim it cannot support. Nothing of that entry shipped, and the retraction is
+recorded here rather than deleted, because "we nearly wrote 28 fictional services" is the
+useful half of the story.
+
+The roster owner stopped it with the observation that made the whole thing unnecessary:
+*"other professions can also ride on the configurations of the 5. That's the purpose of
+this roster's new version — so roster masters can configure for their team regardless of
+their profession."*
+
+### Added
+
+- **Five shapes, each named by its STRUCTURE and attributed on screen to the profession
+  that described it.** A shape says *"this is how the physiotherapists do it — adapt it"*,
+  which is true. A per-department fixture said *"this is how art therapists do it"*, which
+  was invented. Every shape is one of the five configurations that already existed and had
+  an interview behind it, re-presented by what it demonstrates rather than by the
+  department it came from. Every one re-verified by **running the engine**, with an
+  independent `auditHardConstraints` read-back of each finished roster:
+
+  | Shape | From | `ok` | Hard violations | Audit read-back | Days | Shifts | Unfilled | Warnings |
+  |---|---|---|---|---|---|---|---|---|
+  | Graded duty split | Physiotherapist | true | **0** | **0** | 28 | 56 | **0** | 0 |
+  | Periodic specialist clinic, same practitioner each time | Psychologist | true | **0** | **0** | 60 | 159 | **0** | 0 |
+  | Team-based rotation | Embryologist | true | **0** | **0** | 252 | 360 | **0** | 0 |
+  | Weekend quota inside an hours ceiling | Medical Laboratory Technologist / Scientist | true | **0** | **0** | 54 | 171 | **0** | 1 † |
+  | Fixed weekday sessions plus out-of-hours slots | Clinical Exercise Physiologist | true | **0** | **0** | 24 | 88 | **0** | 0 |
+  | The Marvel Team *(fictional)* | — | true | **0** | **0** | 10 | 24 | **0** | 0 |
+  | The Marvel Team — full worked example *(fictional)* | — | true | **0** | **0** | 12 | 32 | **1** ‡ | 0 |
+
+  † The one warning is the engine being honest about its own horizon: the run covers only
+  2027-04-01 to 2027-04-04 of April, so the Saturday floor is *not judged* there. It is
+  deliberately not trimmed away.
+  ‡ The one unfilled slot is the deliberate one, and its reason is the argument for
+  trusting the tool: *"no available staff hold skill CPET for Paediatric CPET coLead on
+  2026-09-16 (2 qualified, 1 on leave, 1 already on this task)"*.
+
+- **The five feature signatures are asserted DISTINCT**, which is why five is the right
+  number: `leadBands` both directions; `recurrence` + `leadBands` + `continuity` +
+  `weeklyHours`; `slots` + cohort `windows`; a `quota` floor + `slots` + `weeklyHours`;
+  plain days-based sessions. No two shapes reach the same set of engine fields, so choosing
+  between them is choosing between structures rather than between casts of fictional names.
+- **All 28 MOH professions as the picker's first control** — 37 selectable leaves, with
+  `<optgroup>` for the two professions MOH nests (12, Medical Technologist / Physiologist,
+  five sub-disciplines; 24, Psychologist, six). Sorted **in code** by the name a visitor
+  reads, `localeCompare(…, 'en')`, never hand-ordered — asserted as a *property* (the list
+  equals its own sort) so it cannot be satisfied by re-ordering the array. A group heading
+  is not selectable, which is correct: a roster belongs to a cardiac lab or a sleep lab,
+  never to "medical technology" in general.
+- **The chosen profession labels the configuration and nothing else.** An Art Therapist who
+  loads the physiotherapy shape sees *"Art Therapist — Graded duty split"* on their roster,
+  with the shape's attribution beside it. Verified by generating the same shape under three
+  different professions and comparing the **rendered calendar cell by cell**: identical,
+  and identical to `generateRosterV2`'s own answer for the fixture. The profession reaches
+  no engine field by construction — it is not an argument to the loader.
+- **A non-binding suggestion of which shape tends to suit which profession** — the roster
+  owner's own pairings, covering 32 of the 37 leaves. It is rendered as a suggestion, says
+  out loud that nobody in that profession has described their week, and **never applies
+  itself**: a suggestion that loads without being chosen is a claim. The five professions
+  who *did* describe a shape are told that instead. Five leaves have no suggestion and are
+  told why — three of those five had a hand-built fixture before this change, which is the
+  clearest measure of what was wrong with it.
+- **"Start blank" is a real first option**, not the dead placeholder it replaces: it empties
+  the tables so a team can type their own, and **keeps the chosen profession**, because
+  emptying a form is no reason to make somebody say who they are again.
+
+### Changed
+
+- **`inferred` and `correction` are gone — the constant and every block.** They existed to
+  disclaim a claim; nothing in the picker now makes that claim, so a disclaimer would be
+  theatre. Two provenance kinds remain: `interviewed` for the five shapes and `fictional`
+  for the two Marvel demos. If a future entry seems to need `inferred` again, that is the
+  signal somebody is about to describe a service nobody has described.
+- **The amber warning panel is now a neutral attribution panel**, in the wizard *and* beside
+  the finished roster. Same reason it existed in the first place — the wizard is a modal and
+  it closes the moment the roster is drafted — but it now states two facts instead of
+  apologising: whose profession this roster is, and whose structure it borrowed.
+- **Six invented arrangements deleted**: `respiratory`, `audiology`, `cardiology`,
+  `clinical-counselling`, `medical-social-work` and `pulmonary`, with their fixtures and
+  their `correction` blocks.
+- **`DEMO_EXAMPLE_DEPARTMENT` was KEPT, and stripped of its profession claim.** It was the
+  `respiratory` arrangement's config. It is now the openly fictional *"The Marvel Team —
+  full worked example"*: same twelve people, six duties, two band gates, CPET skill gate,
+  0.6 FTE contract, one day of leave and one honestly unstaffed slot, **byte-identical
+  except its `label`**, and attributed to nobody. It was kept because it is the only fixture
+  here that exercises all of that at once — and because ~40 assertions in
+  `RosterView.demo.test.jsx` describe it, held by reference (`toBe`) and not by copy, so
+  they still describe the fixture the app actually loads. Its cast was already Marvel, so it
+  reads as the quick demo's bigger sibling rather than as a stray profession.
+- **`DEMO_ARRANGEMENTS` is `DEMO_SHAPES`.** The word "arrangement" is what carried the error
+  — one arrangement per department — so the correction is encoded in the name.
+- **The shape list is in a deliberate order, and that is a decision.** The owner's "make the
+  dropdown alphabetical" applied to a list of *professions*, where a reader arrives knowing
+  the word they are looking for; that list still exists and is still sorted in code. Nobody
+  arrives looking for the letter G in a list of five structures, so the shapes are ordered
+  by kind — the five with an interview behind them first, the two fictional demos last —
+  with an `<optgroup>` on each group so the ordering reads as structure rather than as
+  somebody having forgotten to sort.
+- **Both controls get the mobile treatment already established in that file**: native
+  `<select>`, `text-base sm:text-sm` (iOS Safari zooms the page on any input under 16px) and
+  `min-h-11` touch targets, from **one shared pair of class constants** so two controls
+  cannot drift into two different touch targets.
+
+### Notes
+
+- **`mockData.js` stayed append-only where it had to.** `MOCK_STAFF`, `MOCK_STAFF_NAMES`,
+  `MOCK_ROSTER`, `MOCK_PULSE_TRENDS` and `MOCK_TEAM_DATA` are byte-identical.
+- **`mohAlliedHealth.js` was not edited.** The picker imports it read-only, and the tests
+  check the dropdown against MOH's published list rather than against a count typed into a
+  test file.
+- **The engines were not touched.** `rosterEngineV2.js` and `auraEngine.js` are
+  byte-identical, as is the pure mapper `rosterWizard.js`; live mode's wizard is unchanged
+  and still pinned byte-for-byte by `RosterView.wizard.test.jsx`.
+- **What the five deleted arrangements took with them, stated rather than discovered later:**
+  they were the only *fixtures* reaching `requiresSkill` on a monthly recurrence,
+  `forbidPairs`, task-scoped `windows` and a stated `maxHoursPerDay`. Every one of those
+  engine fields still has its own unit tests in `src/utils/rosterEngineV2.*.test.js` and its
+  own control in the wizard tables; the skill gate is still exercised through the worked
+  example's CPET duty. What is gone is five inventions, not five capabilities.
+- **What no test here can tell you:** whether five structures are enough for 28 professions.
+  They are honestly attributed and adaptable, which is a different and much weaker claim
+  than "they fit" — and it is the strongest claim available until somebody from a sixth
+  profession describes their week.
 
 ### Known issues — documented, NOT fixed
 

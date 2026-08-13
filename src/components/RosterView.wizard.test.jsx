@@ -177,17 +177,20 @@ describe('live mode: the Configure wizard is exactly what it was', () => {
         expectNoSandboxTables();
         // Sandbox-only chrome, absent as before.
         expect(screen.queryByText(/sandbox mode/i)).toBeNull();
-        // CHANGED: was `/load example department/i`. The sandbox's one example button is
-        // now a picker of four arrangements, so that name matches nothing in EITHER
-        // universe and this assertion would have passed vacuously — the exact failure
-        // mode a "this control is absent" test has. Both names below DO exist in demo
-        // mode (asserted in the demo-mode test at the foot of this file), so their
-        // absence here is a claim about live mode rather than about a dead string.
-        // The picker is a <select> in demo mode; live mode has neither it nor any
-        // Load control. Asserting the dropdown's absence is the same claim as before.
+        // CHANGED TWICE, and both times for the same reason: a "this control is absent"
+        // test must name a string that EXISTS somewhere, or it passes vacuously. It was
+        // `/load example department/i` (a button that became a dropdown), then
+        // `/load an example arrangement/i` (a dropdown of twelve per-department
+        // arrangements). The sandbox picker is now TWO dropdowns — a profession and a
+        // shape — and both labels below DO exist in demo mode, asserted in the demo-mode
+        // test at the foot of this file, so their absence here is a claim about live mode
+        // rather than about a dead string.
+        expect(screen.queryByLabelText(/shape to start from/i)).toBeNull();
+        expect(screen.queryByLabelText(/your profession/i)).toBeNull();
+        expect(screen.queryByText(/shape to start from/i)).toBeNull();
+        expect(screen.queryByText(/your profession/i)).toBeNull();
+        // …and no trace of the twelve-arrangement picker that came before it.
         expect(screen.queryByLabelText(/load an example arrangement/i)).toBeNull();
-        expect(screen.queryByRole('button', { name: /^load psychology$/i })).toBeNull();
-        expect(screen.queryByText(/load an example arrangement/i)).toBeNull();
         expect(screen.getByRole('button', { name: /^generate roster$/i })).toBeTruthy();
     });
 
@@ -371,23 +374,29 @@ describe('demo mode: the wizard is the tables, and only the tables', () => {
         expect(screen.getByLabelText('Task row 1: Senior may lead')).toBeTruthy();
         expect(screen.getAllByRole('button', { name: /add row/i })).toHaveLength(2);
         expect(screen.getAllByText(/sandbox mode/i).length).toBeGreaterThan(0);
-        // CHANGED: was one `/load example department/i` button. The sandbox now offers a
-        // picker of FOUR arrangements — this asserts the picker is the sandbox-only
-        // control the single button used to be, which is what the live-mode absence test
-        // above is the mirror of.
-        expect(screen.getByText(/load an example arrangement/i)).toBeTruthy();
-        // Demo mode offers the arrangement dropdown (was five Load buttons).
-        expect(screen.getByLabelText(/load an example arrangement/i)).toBeTruthy();
-        // The picker is one <select> now; Psychology is an option in it, not a button.
-        expect(screen.getByLabelText(/load an example arrangement/i)).toBeTruthy();
-        // Embryology is an option inside the one dropdown now, not its own button.
+        // CHANGED: was one `/load example department/i` button, then one dropdown of
+        // twelve per-department arrangements. The sandbox picker is now TWO dropdowns —
+        // WHO YOU ARE and WHAT SHAPE TO START FROM — and this asserts both are the
+        // sandbox-only controls the single button used to be, which is what the live-mode
+        // absence test above is the mirror of.
+        expect(screen.getByText(/shape to start from/i)).toBeTruthy();
+        expect(screen.getByLabelText(/shape to start from/i)).toBeTruthy();
+        expect(screen.getByText(/your profession/i)).toBeTruthy();
+        expect(screen.getByLabelText(/your profession/i)).toBeTruthy();
+        // The shapes are options in the shape dropdown, named by their STRUCTURE rather
+        // than by a department — which is the whole point of the profession+shape picker.
         expect(
-            within(screen.getByLabelText(/load an example arrangement/i))
-                .getByRole('option', { name: 'Embryology' }),
+            within(screen.getByLabelText(/shape to start from/i))
+                .getByRole('option', { name: 'Team-based rotation' }),
         ).toBeTruthy();
         expect(
-            within(screen.getByLabelText(/load an example arrangement/i))
-                .getByRole('option', { name: 'Medical Laboratory' }),
+            within(screen.getByLabelText(/shape to start from/i))
+                .getByRole('option', { name: 'Weekend quota inside an hours ceiling' }),
+        ).toBeTruthy();
+        // …and the professions are options in the other one, by MOH's own names.
+        expect(
+            within(screen.getByLabelText(/your profession/i))
+                .getByRole('option', { name: 'Art Therapist' }),
         ).toBeTruthy();
 
         // Start date and Weeks are SHARED between the two universes and stay put.

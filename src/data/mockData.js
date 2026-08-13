@@ -1,10 +1,18 @@
 // JG11-JG16 Sandbox Data: Marvel Universe Edition
 
-// The sandbox example department's grades are tuned against the engine's shipped
+// The sandbox worked example's grades are tuned against the engine's shipped
 // band boundaries (see DEMO_EXAMPLE_DEPARTMENT below). Imported rather than
 // retyped so the two cannot drift apart. READ-ONLY: nothing in this file edits
 // the engine.
 import { DEFAULT_GRADE_BANDS } from '../utils/rosterEngineV2.js';
+// The MOH NAHS taxonomy — 28 professions, 37 selectable leaves, two of them nesting.
+// READ-ONLY and never edited from here: it is the published list, and the picker's
+// first control is a view of it (see section 12). Imported rather than re-typed so a
+// profession cannot exist in the dropdown without existing in the taxonomy.
+import {
+  MOH_ALLIED_HEALTH_PROFESSIONS,
+  MOH_PROFESSION_LEAVES,
+} from './mohAlliedHealth.js';
 
 // 1. The Names List (CRITICAL for Universe Switching)
 export const MOCK_STAFF_NAMES = ['Steve', 'Peter', 'Charles', 'Jean', 'Tony'];
@@ -124,7 +132,8 @@ export const MOCK_TEAM_DATA = MOCK_STAFF_NAMES.map((name) => {
   return { id: name.toLowerCase(), staff_name: name, projects: staffProjects };
 });
 
-// 8. THE SANDBOX EXAMPLE DEPARTMENT (RosterView demo mode → "Load example department")
+// 8. THE SANDBOX WORKED EXAMPLE (RosterView demo mode → the shape picker's
+//    "The Marvel Team — full worked example")
 //
 // A NEW export, deliberately separate from MOCK_STAFF, MOCK_STAFF_NAMES,
 // MOCK_ROSTER, MOCK_PULSE_TRENDS and MOCK_TEAM_DATA. Those five are read by the
@@ -148,15 +157,15 @@ export const MOCK_TEAM_DATA = MOCK_STAFF_NAMES.map((name) => {
 //      BACKWARDS to the preceding Monday, so a Wednesday here would quietly
 //      start the demo roster in the past.
 //   3. `requiresSkill` gates the co-lead as well as the lead, so the skills are
-//      deliberately NOT over-applied: REHAB has four holders and SLEEP three, so
-//      those tasks always fill both duties and the only unfilled slot in the run
-//      is the intended one.
+//      deliberately NOT over-applied: SLEEP has three holders, so that task
+//      always fills both duties and the only unfilled slot in the run is the
+//      intended one.
 //   4. Exactly ONE unfillable slot, and it is legible: CPET is held by only
 //      Bruce Banner and Shuri. Shuri is on leave on Wednesday 2026-09-16, and
 //      Paediatric CPET runs on Wednesdays only — so on that one date the engine
 //      fills the lead (Bruce) and reports the co-lead as unfilled, saying why:
 //      "2 qualified, 1 on leave, 1 already on this task". Verified against the
-//      engine: 1 unfilled slot, 0 hard-constraint violations, 40 shifts.
+//      engine: 1 unfilled slot, 0 hard-constraint violations, 32 shifts.
 //   5. THE BAND GATES DO NOT COST A SINGLE EXTRA SLOT. Every one of the twelve
 //      has a grade, spread across the shipped boundaries — one principal (Carol
 //      Danvers, AH16), four seniors (Bruce Banner and T'Challa AH14, Shuri and
@@ -168,7 +177,31 @@ export const MOCK_TEAM_DATA = MOCK_STAFF_NAMES.map((name) => {
 //      neither gate can starve even with the skill-gated tasks competing for the
 //      same people. Re-verified against the engine with the grades in place:
 //      still 1 unfilled slot (the same CPET one), still 0 hard-constraint
-//      violations, still 40 shifts over 12 days, and 0 warnings.
+//      violations, 32 shifts over 12 days, and 0 warnings.
+//
+// ⚠️ THIS FIXTURE NO LONGER CLAIMS A PROFESSION, AND THAT IS THE POINT OF ITS LAST
+// TWO EDITS. It was "Respiratory & Rehab", then "Respiratory (example)" carrying an
+// `inferred` provenance and a `correction` checklist — a service nobody from
+// respiratory had described, offered under their name with an apology attached. The
+// apology was the tell. It is now what it always actually was: THE MARVEL TEAM'S
+// FULL WORKED EXAMPLE — openly fictional, attributed to nobody, and kept because it
+// is the only fixture in this file that exercises a skill gate, a part-time
+// contract, a day of leave and ONE HONESTLY UNSTAFFED SLOT at the same time. Its
+// cast is the same Marvel cast as the quick demo below, so a reader cannot mistake
+// it for a real department's roster. See the shapes section for the whole argument.
+//
+// NOTHING INSIDE IT CHANGED WITH THAT RENAME except `label`: the twelve staff, the
+// six duties, the two band gates, the CPET skill gate, the part-timer, the one day
+// of leave and the one deliberately unfillable slot are byte-identical, which is why
+// every assertion already written against this fixture still means what it meant.
+// (The two rehab duties and the `REHAB` skill left earlier, when the roster owner
+// split them out; the arrangements that received them were themselves inferred and
+// have since been deleted, so `REHAB` exists nowhere in this file.)
+//
+// THE DUTY NAMES ARE ILLUSTRATIVE, not a claim. `Paediatric CPET` and
+// `Sleep Study Review` are real kinds of clinical work — that is what makes them
+// legible as an example — but no team has told us they run them on these days with
+// these people, and this fixture no longer says otherwise about anybody.
 //
 // Scott Lang is the part-timer (0.6 FTE) — the load table shows him accruing
 // duties at roughly 60% of a full-timer's rate, which is the FTE weighting
@@ -179,18 +212,19 @@ export const MOCK_TEAM_DATA = MOCK_STAFF_NAMES.map((name) => {
 // hold. Imported from the engine rather than retyped, so moving the department's
 // shipped cut moves this fixture with it instead of silently invalidating it.
 export const DEMO_EXAMPLE_DEPARTMENT = Object.freeze({
-  label: 'Allied Health — Respiratory & Rehab (example)',
+  // Names the fiction, not a service. Was 'Allied Health — Respiratory (example)'.
+  label: 'The Marvel Team — full worked example',
   startDate: '2026-09-07', // Monday
   weeks: 2,
   staff: Object.freeze([
-    { name: 'Carol Danvers', fte: 1.0, grade: 'AH16', skills: ['SLEEP', 'REHAB'], unavailable: [] },
+    { name: 'Carol Danvers', fte: 1.0, grade: 'AH16', skills: ['SLEEP'], unavailable: [] },
     { name: 'Bruce Banner', fte: 1.0, grade: 'AH14', skills: ['CPET', 'SLEEP'], unavailable: [] },
     { name: 'Shuri', fte: 1.0, grade: 'AH13', skills: ['CPET'], unavailable: ['2026-09-16'] },
-    { name: 'Sam Wilson', fte: 1.0, grade: 'AH12', skills: ['REHAB'], unavailable: [] },
-    { name: 'Wanda Maximoff', fte: 1.0, grade: 'AH11', skills: ['REHAB'], unavailable: [] },
+    { name: 'Sam Wilson', fte: 1.0, grade: 'AH12', skills: [], unavailable: [] },
+    { name: 'Wanda Maximoff', fte: 1.0, grade: 'AH11', skills: [], unavailable: [] },
     { name: 'Stephen Strange', fte: 1.0, grade: 'AH13', skills: ['SLEEP'], unavailable: [] },
     { name: 'Natasha Romanoff', fte: 1.0, grade: 'AH10', skills: [], unavailable: [] },
-    { name: "T'Challa", fte: 1.0, grade: 'AH14', skills: ['REHAB'], unavailable: [] },
+    { name: "T'Challa", fte: 1.0, grade: 'AH14', skills: [], unavailable: [] },
     { name: 'Kamala Khan', fte: 1.0, grade: 'AH8', skills: [], unavailable: [] },
     { name: 'Scott Lang', fte: 0.6, grade: 'AH9', skills: [], unavailable: [] },
     { name: 'Riri Williams', fte: 1.0, grade: 'AH7', skills: [], unavailable: [] },
@@ -200,8 +234,6 @@ export const DEMO_EXAMPLE_DEPARTMENT = Object.freeze({
     { name: 'Inpatient Rounds', days: [1, 2, 3, 4, 5], leads: 1, coLeads: 1, category: 'Clinical', leadBands: ['junior'] },
     { name: 'Outpatient Clinic', days: [1, 2, 3, 4, 5], leads: 1, coLeads: 1, category: 'Clinical', leadBands: ['senior', 'principal'] },
     { name: 'Paediatric CPET', days: [3], leads: 1, coLeads: 1, category: 'Clinical', requiresSkill: 'CPET' },
-    { name: 'Pulmonary Rehab Group', days: [2, 4], leads: 1, coLeads: 1, category: 'Rehab', requiresSkill: 'REHAB' },
-    { name: 'Cardiac Rehab Clinic', days: [1, 5], leads: 1, coLeads: 1, category: 'Rehab', requiresSkill: 'REHAB' },
     { name: 'Sleep Study Review', days: [1, 4], leads: 1, coLeads: 1, category: 'Diagnostics', requiresSkill: 'SLEEP' },
     { name: 'Student Supervision', days: [2, 4], leads: 1, coLeads: 1, category: 'Education' },
     { name: 'Weekend Acute Cover', days: [6], leads: 1, coLeads: 1, category: 'On Call' },
@@ -213,92 +245,142 @@ export const DEMO_EXAMPLE_DEPARTMENT = Object.freeze({
   }),
 });
 
-// 9. THE FOUR SELECTABLE ARRANGEMENTS (RosterView demo mode → the example picker)
+// 9. THE PICKER: A PROFESSION, AND A SHAPE (RosterView demo mode → two dropdowns)
 //
-// APPEND-ONLY SECTION. Everything above this line — including
-// `DEMO_EXAMPLE_DEPARTMENT` — is byte-identical to what it was before this section
-// existed, so every assertion already written against it still means what it meant.
-// `DEMO_EXAMPLE_DEPARTMENT` IS the respiratory arrangement (entry 1 below holds it by
-// reference, not by copy), and `DEMO_ARRANGEMENT_RESPIRATORY` is an alias for it.
+// APPEND-ONLY SECTION for everything above it. `MOCK_STAFF`, `MOCK_STAFF_NAMES`,
+// `MOCK_ROSTER`, `MOCK_PULSE_TRENDS` and `MOCK_TEAM_DATA` are byte-identical to what
+// they were before this section existed, so every assertion already written against
+// them still means what it meant.
 //
-// WHY FOUR. The roster owner presents to the respiratory therapists first, follows up
-// with the psychologists, and wants the embryologists and the medical laboratory
-// scientists trying it. A single fixture demonstrated one team's problem and left the
-// other three reading somebody else's roster. Each arrangement below is chosen so
-// that the ONE capability that team asked about is the thing on screen:
+// ── THE DESIGN ERROR THIS SECTION EXISTS TO CORRECT ──────────────────────────
 //
-//   respiratory  grade bands + a skill gate + a part-timer + leave, and the ONE slot
-//                the engine refuses to invent cover for.
-//   psychology   a monthly clinic on the 3rd Wednesday of every month, principals
-//                only, with the SAME principal every time (continuity of care).
-//   embryology   a weekend shift that needs THREE people at once (principal, senior,
-//                junior), and three teams whose eligibility is bounded in time so
-//                team A appears in its four-month block and nowhere else.
-//   labs         a floor rather than a ceiling: at least two Saturdays per person per
-//                calendar month, measured and reported where it is not met.
+// This was TWELVE ARRANGEMENTS, one per department, and 23 more were about to be
+// written so that every MOH allied health profession had one. Five of the twelve came
+// from teams who had described their week; the other seven were pattern-matched
+// guesses offered under a real profession's name with a `correction` checklist
+// attached. The checklist was the tell: a fixture that has to apologise for itself is
+// a fixture making a claim it cannot support.
 //
-// ⚠️ THE RESPIRATORY ARRANGEMENT IS INFERRED, NOT REPORTED. This is the honesty
-// constraint on the whole section and it is the reason `provenance` is a FIELD the UI
-// reads rather than a sentence in a caption somebody can forget to render. The
-// respiratory therapists HAVE NOT BEEN INTERVIEWED. Their arrangement was written by
-// pattern-matching the three teams that were — weekday sessions, a grade-gated duty,
-// a skill-gated one, one part-timer, one absence — and it is therefore an EXAMPLE TO
-// BE CORRECTED and must never be presented as their service. Specifically, and
-// deliberately, it does NOT invent: a night or on-call rota; any named competency,
-// accreditation or certification; a session length; a caseload; or a staff count. The
-// one weekend duty it carries ('Weekend Acute Cover') predates this section and is
-// part of the older fixture; it is an assumption too, and it is on the correction
-// list below rather than being quietly removed from a frozen export other tests read.
+// The roster owner stopped it with the observation that made the whole thing
+// unnecessary: "other professions can also ride on the configurations of the 5. That's
+// the purpose of this roster's new version — so roster masters can configure for their
+// team regardless of their profession."
 //
-// The other three carry `provenance: 'interviewed'` because their SHAPE came from a
-// field interview. The DATA in them did not: every name is fictional and every task
-// name, grade, date and figure was invented to make the shape reproducible. Nothing
-// here is anybody's real roster, real grade or real leave — see the PDPA note below.
+// That is what the primitive constraint layer in `rosterEngineV2` was built for. One
+// fixture per department is the museum of special cases the primitive refactor
+// removed, growing back in the data layer.
 //
-// 🔒 PDPA — FICTIONAL NAMES, ONE RECOGNISABLE CAST PER ARRANGEMENT. No colleague's
-// name appears anywhere in this file. The names are drawn from published fiction, one
-// source per arrangement (respiratory: Marvel, as the older fixture already was;
-// psychology: Star Trek; embryology: Jane Austen; laboratory: Sherlock Holmes),
-// because a name a reader RECOGNISES as fictional cannot be mistaken for a real
-// person's roster, whereas a plausible invented name can — and eventually will be, by
-// somebody who happens to share it.
+// ── SO: FIVE SHAPES, AND TWENTY-EIGHT PROFESSIONS AS VOCABULARY ──────────────
 //
-// EVERY FIGURE BELOW IS MEASURED, NOT CLAIMED. Each arrangement's comment states what
+// A SHAPE is a STRUCTURE, named by what it does and attributed to the profession that
+// described it. "Graded duty split — juniors take wards and weekends, seniors take
+// specialist weekday clinics. This is how the physiotherapists do it; adapt it" is
+// TRUE. "This is how art therapists do it" would have been invented. The difference
+// between those two sentences is the entire content of this change, and the copy in
+// `RosterView.jsx` must never blur it.
+//
+// The PROFESSION list (`MOH_PROFESSION_OPTIONS`, derived from `mohAlliedHealth.js`) is
+// vocabulary and nothing more. Choosing "Art Therapist" does not select a roster: it
+// LABELS the configuration the visitor is about to build, so an art therapist sees
+// their own designation on their own roster instead of somebody else's profession.
+// Every one of the 28 is reachable and NONE of them is described, which is precisely
+// the property the twelve arrangements did not have.
+//
+//   Shape                          Source config          Feature signature
+//   ─────────────────────────────  ─────────────────────  ─────────────────────────────
+//   Graded duty split              physiotherapy          `leadBands` both directions
+//   Periodic specialist clinic     psychology             `recurrence` + `leadBands`
+//                                                        + `continuity` + `weeklyHours`
+//   Team-based rotation            embryology             `slots` + cohort `windows`
+//   Weekend quota within an        labs                   `quota` floor + `slots`
+//     hours ceiling                                       + `weeklyHours`
+//   Fixed weekday sessions plus    exercise-physiology    plain days-based sessions
+//     out-of-hours slots                                  (the owner's own duty names)
+//
+// The five signatures do not overlap, which is what makes five the right number: each
+// shape is the only one in the list that reaches its engine field, so a roster master
+// choosing between them is choosing between five structures rather than five casts of
+// fictional names.
+//
+// TWO FICTIONAL DEMOS SIT BESIDE THE FIVE, and both say so:
+//
+//   marvel                 the one-tap quick demo. Five people, four ordinary weekday
+//                          duties, nothing gated at all.
+//   marvel-worked-example  `DEMO_EXAMPLE_DEPARTMENT` — twelve people, two band gates,
+//                          a skill gate, a 0.6 FTE contract, a day of leave and ONE
+//                          slot the engine refuses to invent cover for. The only
+//                          fixture here that exercises all of that at once, which is
+//                          why it was kept when the profession it used to be named
+//                          after (Respiratory) was retired.
+//
+// ⚠️ `inferred` AND `correction` ARE GONE, both the constants and every block. They
+// existed to disclaim a claim; nothing in this file now makes that claim, so a
+// disclaimer would be theatre. Two provenance kinds remain — `interviewed` for the
+// five shapes and `fictional` for the two Marvel demos — and there is no third. IF A
+// FUTURE ENTRY SEEMS TO NEED `inferred` AGAIN, that is the signal that somebody is
+// about to describe a service nobody has described: add a SHAPE (a structure, sourced
+// from a team who told us) or add nothing.
+//
+// DELETED WITH IT: the `respiratory`, `audiology`, `cardiology`,
+// `clinical-counselling`, `medical-social-work` and `pulmonary` fixtures. Their
+// capabilities are not lost — every engine field they reached (`requiresSkill`,
+// `recurrence`, `continuity`, `forbidPairs`, task-level `windows`, `hours`) still has a
+// control in `RosterDemoWizardTables.jsx` and its own unit tests in
+// `src/utils/rosterEngineV2.*.test.js`. What is lost is six inventions, which is the
+// point.
+//
+// FIVE carry `provenance: 'interviewed'` because their SHAPE came from a field
+// interview: psychology, embryology, medical laboratory, physiotherapy and clinical
+// exercise physiology. The DATA in them did not — every name is fictional, and every
+// grade, date and figure was invented to make the shape reproducible. THE ONE
+// EXCEPTION IS DELIBERATE AND IS STATED IN ITS OWN HEADER: clinical exercise
+// physiology is the roster owner's own service, so its DUTY NAMES and the shape of its
+// week are the real ones, read out of `LIVE_ROSTER_DEFAULTS` and `generateRoster` in
+// `auraEngine.js`. Its four colleagues' names are NOT, and must never be — see PDPA.
+//
+// 🔒 PDPA — FICTIONAL NAMES, ONE RECOGNISABLE CAST PER FIXTURE. No colleague's name
+// appears anywhere in this file. The names are drawn from published fiction, one source
+// per fixture (psychology: Star Trek; embryology: Jane Austen; laboratory: Sherlock
+// Holmes; physiotherapy: Tolkien; exercise physiology: Greek myth; both Marvel demos:
+// Marvel), because a name a reader RECOGNISES as fictional cannot be mistaken for a
+// real person's roster, whereas a plausible invented name can — and eventually will be,
+// by somebody who happens to share it. The four real colleagues on the live roster
+// (`LIVE_ROSTER_DEFAULTS.staff`) appear in NO fixture, including the one modelled on
+// their own department.
+//
+// EVERY FIGURE BELOW IS MEASURED, NOT CLAIMED. Each fixture's comment states what
 // `generateRosterV2` actually returned for it, and `RosterView.demo.test.jsx` re-runs
 // the engine rather than trusting these numbers, so a fixture that drifts fails a test
 // instead of shipping a caption that is no longer true.
 //
-// ALL FOUR ROUND-TRIP THROUGH THE WIZARD UNCHANGED. Every field used here has a
-// control in `RosterDemoWizardTables.jsx`, so the roster a visitor gets after pressing
-// a picker button is byte-identical to the one the engine gives this fixture directly.
-// That is asserted, not assumed — see `RosterView.demo.test.jsx`. It is also the
-// constraint that shaped these fixtures: no `temporal` patterns (no wizard field), no
-// window `label`s (no wizard field), no `coLeads` above 1, and no `rules.quotas`
-// (the wizard writes `task.quota`).
+// ALL SEVEN ROUND-TRIP THROUGH THE WIZARD UNCHANGED. Every field used here has a
+// control in `RosterDemoWizardTables.jsx`, so the roster a visitor gets after choosing
+// a shape is byte-identical to the one the engine gives that fixture directly. That is
+// asserted, not assumed — see `RosterView.demo.test.jsx`. It is also the constraint
+// that shaped these fixtures: no `temporal` patterns (no wizard field), no window
+// `label`s (no wizard field), no `coLeads` above 1, no `leads` above 1, no `slots` list
+// outside 2–4 entries, and no `rules.quotas` (the wizard writes `task.quota`).
 
-/** Provenance: written by inference from other teams' patterns. Correct before use. */
-export const DEMO_PROVENANCE_INFERRED = 'inferred';
-/** Provenance: the SHAPE came from a field interview with that profession. */
+/**
+ * Provenance: the SHAPE came from a field interview with that profession.
+ *
+ * It says nothing about the DATA, which is fictional throughout — see the PDPA note
+ * above. `sourceProfession` on the entry names whose week the structure came from, and
+ * the UI must show it: a shape with an interview behind it and no attribution on screen
+ * is indistinguishable from one somebody made up.
+ */
 export const DEMO_PROVENANCE_INTERVIEWED = 'interviewed';
 
 /**
  * Openly fictional — not a real service, and not inferred from one either.
  *
- * The other two provenance kinds answer "how much should you trust that this
- * matches a real department?". This one answers "you should not: it is a toy, and
- * it exists so a visitor on a phone can press one thing and watch the engine
- * work." Kept distinct rather than folded into `INFERRED`, because inferred means
- * "our best guess at YOUR service, please correct it" and this means no such
- * thing.
+ * `interviewed` answers "whose week is this structure?". This one answers "nobody's:
+ * it is a demonstration, and it exists so a visitor on a phone can press one thing and
+ * watch the engine work." There is deliberately no third kind. The `inferred` value
+ * that used to sit between them meant "our best guess at YOUR service, please correct
+ * it" — a sentence no fixture in this file is entitled to say any more.
  */
 export const DEMO_PROVENANCE_FICTIONAL = 'fictional';
-
-/**
- * The respiratory arrangement, by ALIAS. Not a copy: `DEMO_EXAMPLE_DEPARTMENT` is the
- * frozen object every existing test already reads, and two objects that were meant to
- * be equal is how a fixture and its assertions drift apart.
- */
-export const DEMO_ARRANGEMENT_RESPIRATORY = DEMO_EXAMPLE_DEPARTMENT;
 
 // --- PSYCHOLOGY ---------------------------------------------------------------
 //
@@ -555,32 +637,172 @@ export const DEMO_ARRANGEMENT_LABS = Object.freeze({
   }),
 });
 
-/**
- * THE PICKER'S LIST, in presentation order — respiratory first because that is the
- * meeting that happens first.
- *
- * One entry per arrangement:
- *
- *   id            stable key for React and for a test to name one arrangement.
- *   name          what the button says.
- *   demonstrates  ONE LINE, and it names the CAPABILITY rather than the fiction:
- *                 somebody choosing between four buttons is choosing between four
- *                 things the tool can do.
- *   provenance    `DEMO_PROVENANCE_INFERRED` or `DEMO_PROVENANCE_INTERVIEWED`. A FIELD
- *                 so the UI cannot render the arrangement without deciding what to say
- *                 about where it came from.
- *   correction    only on an inferred arrangement: the sentence the UI shows, and the
- *                 list of what specifically needs correcting. `null` otherwise, so
- *                 "does this need a health warning" is one truthy check.
- *   config        `rosterEngineV2`'s input contract verbatim — handed straight to the
- *                 wizard's tables, and from there to `generateRosterV2`.
- */
+// ==============================================================================
+// 10. THE LAST TWO INTERVIEWED CONFIGS
+// ==============================================================================
+//
+// These two arrived with a batch of seven at the roster owner's request. The other
+// five of that batch were inferred — plausible services nobody had described — and
+// have been DELETED; see the honesty note in section 9. Both of these came from an
+// interview, so both survived the correction and both are shapes.
+//
+// Physiotherapy is the source of the GRADED DUTY SPLIT shape and clinical exercise
+// physiology of FIXED WEEKDAY SESSIONS PLUS OUT-OF-HOURS SLOTS. Neither is offered to
+// a visitor as "your service": the picker names the structure, attributes it to the
+// team who described it, and labels the result with whatever profession the visitor
+// chose.
+
+// --- PHYSIOTHERAPY ------------------------------------------------------------
+//
+// INTERVIEWED. The roster owner spoke to this team and reported their rule in one
+// sentence: "juniors cover inpatients and weekends; the senior ones then do less
+// intense work — outpatient weekdays."
+//
+// That is TWO BAND GATES POINTING IN OPPOSITE DIRECTIONS, and it is the whole
+// arrangement. The respiratory fixture has the same pair, but it is one thing among
+// five there and it is INFERRED; here it is the point, and it is reported.
+//
+//   `leadBands: ['junior']`               on Inpatient Ward Round (Mon–Fri) and on
+//        Weekend Inpatient Cover (Sat and Sun). Bands gate the LEAD ONLY, so a senior
+//        may still co-lead a junior-led round — which is the supervision shape, and
+//        is why the gate does not read as "seniors never go near a ward".
+//   `leadBands: ['senior', 'principal']`  on both outpatient clinics. Four people are
+//        senior or above against at most two gated leads on any weekday, and six
+//        juniors against the ward round plus one weekend day, so neither gate can
+//        starve the other.
+//
+// THE WEEKEND DUTY IS A SINGLE PERSON (`coLeads: 0`), because that is what "juniors
+// cover weekends" describes and inventing a second body would be inventing staffing.
+// It runs BOTH Saturday and Sunday, and both days are covered on all four weekends.
+//
+// `maxConsecutiveDays: 6` IS STATED AND DOES NOT BIND, said out loud rather than
+// implied: the longest run of consecutive days anybody works in this roster is THREE
+// (measured), because six juniors sharing one ward lead and one weekend day a piece
+// leaves plenty of room. It is here because six days is this department's policy and a
+// policy is worth stating where a visitor can see and change it — not because the
+// fixture needs it. The arrangement whose weekend constraint genuinely bites is the
+// medical laboratory's Saturday floor.
+//
+// WHY 4 WEEKS: long enough to hold four weekends, which is what makes "the weekend is
+// a junior's" a pattern on screen rather than a single Saturday.
+//
+// MEASURED (generateRosterV2, 2026-09-07, 4 weeks): ok = true, hardViolations = 0, an
+// independent `auditHardConstraints` read-back of 0, unfilled = 0, warnings = 0, 28
+// days, 56 shifts. All 28 junior-gated shifts are led by a junior and all 28
+// outpatient shifts by a senior or a principal — and removing the two `leadBands` keys
+// changes both lists, which is the check that says the gates are doing the work rather
+// than agreeing with what fairness would have done anyway.
+export const DEMO_ARRANGEMENT_PHYSIOTHERAPY = Object.freeze({
+  label: 'Allied Health — Physiotherapy',
+  startDate: '2026-09-07', // Monday
+  weeks: 4,
+  staff: Object.freeze([
+    { name: 'Aragorn', fte: 1.0, grade: 'AH15', skills: [], unavailable: [] },
+    { name: 'Eowyn', fte: 1.0, grade: 'AH14', skills: [], unavailable: [] },
+    { name: 'Faramir', fte: 1.0, grade: 'AH13', skills: [], unavailable: [] },
+    { name: 'Boromir', fte: 1.0, grade: 'AH13', skills: [], unavailable: [] },
+    { name: 'Samwise Gamgee', fte: 1.0, grade: 'AH12', skills: [], unavailable: [] },
+    { name: 'Frodo Baggins', fte: 1.0, grade: 'AH11', skills: [], unavailable: [] },
+    { name: 'Merry Brandybuck', fte: 1.0, grade: 'AH10', skills: [], unavailable: [] },
+    { name: 'Pippin Took', fte: 1.0, grade: 'AH9', skills: [], unavailable: [] },
+    { name: 'Bilbo Baggins', fte: 1.0, grade: 'AH8', skills: [], unavailable: [] },
+    { name: 'Gimli', fte: 1.0, grade: 'AH7', skills: [], unavailable: [] },
+  ]),
+  tasks: Object.freeze([
+    { name: 'Inpatient Ward Round', days: [1, 2, 3, 4, 5], leads: 1, coLeads: 1, category: 'Inpatient', leadBands: ['junior'] },
+    // 0 = Sunday, 6 = Saturday, matching `Date.prototype.getDay`.
+    { name: 'Weekend Inpatient Cover', days: [0, 6], leads: 1, coLeads: 0, category: 'Weekend', leadBands: ['junior'] },
+    { name: 'Outpatient Musculoskeletal Clinic', days: [1, 2, 3, 4, 5], leads: 1, coLeads: 1, category: 'Outpatient', leadBands: ['senior', 'principal'] },
+    { name: 'Outpatient Neuro Rehab Clinic', days: [2, 4], leads: 1, coLeads: 1, category: 'Outpatient', leadBands: ['senior', 'principal'] },
+  ]),
+  rules: Object.freeze({
+    maxConcurrentPerDay: 2,
+    maxConsecutiveDays: 6,
+    bands: DEFAULT_GRADE_BANDS,
+  }),
+});
+
+// --- CLINICAL EXERCISE PHYSIOLOGY ---------------------------------------------
+//
+// INTERVIEWED, AND THE ONE ARRANGEMENT IN THIS FILE THAT IS ACCURATE RATHER THAN
+// PLAUSIBLE. This is the department NEXUS was built for, and its real configuration
+// is in this repository: `LIVE_ROSTER_DEFAULTS` in `src/utils/auraEngine.js` carries
+// the live roster's four staff and its four core tasks — `EFT`, `IPT+SKG`, `NC`,
+// `FSG+WI` — and `generateRoster` in the same file adds a video consult on Tuesday
+// afternoon (`VC (PM)`) and Saturday morning (`VC (AM)`). All six duty names below,
+// their days, and the six-day shape of the week are READ OFF THAT CODE, not invented.
+//
+// 🔒 THE FOUR STAFF NAMES ARE NOT. `LIVE_ROSTER_DEFAULTS.staff` names four real
+// colleagues, and a demo any visitor can screenshot is exactly where their names must
+// not be, so the cast here is Greek myth and none of the four appears. The GRADES are
+// invented too — a job grade is personal data of the same kind — and are spread across
+// the three bands so the band ruler has something to show. NO TASK IS BAND-GATED,
+// which is also true of the real service: four people covering four duties gate on
+// availability, not on hierarchy.
+//
+// THE ONE ENGINE FIELD THIS ARRANGEMENT NEEDS THAT NOTHING ELSE HERE USES is
+// `maxConcurrentPerDay: 3`. Four people against four duties, each with a lead and a
+// co-lead, is eight duties a day — exactly two each. Tuesday adds the video consult's
+// two, so two people hold THREE duties that day, and with the 2-a-day cap every other
+// arrangement uses the Tuesday consult would be reported unfillable. Three is
+// therefore the real department's own policy rather than a number chosen to make a
+// demo work, and it is stated where a visitor can see and change it.
+//
+// WHY 2026-02-02 AND 4 WEEKS: `LIVE_ROSTER_DEFAULTS` says `2026-02-01`, 4 weeks — and
+// 2026-02-01 is a SUNDAY, which the live engine snaps forward to the Monday
+// (`snapToMonday`). The Monday it snaps to is 2026-02-02, so this fixture states the
+// date the live roster actually starts from rather than the one it is configured with.
+// V2 snaps a mid-week date BACKWARDS, so stating the Sunday here would have started
+// the demo a week early — the two engines disagree about which way to snap, and this
+// is the one fixture where that matters.
+//
+// MEASURED (generateRosterV2, 2026-02-02, 4 weeks): ok = true, hardViolations = 0, an
+// independent `auditHardConstraints` read-back of 0, unfilled = 0, warnings = 0, 24
+// days, 88 shifts — 4 weeks × (4 core duties × 5 days + one Tuesday consult + one
+// Saturday consult). On a Tuesday two people hold three duties and two hold two; on no
+// day does anybody hold four. Dropping the cap to the 2 every other arrangement uses
+// leaves EIGHT slots unfilled — two on each Tuesday — which is the measurement that
+// says three is a requirement of this service and not a convenience.
+export const DEMO_ARRANGEMENT_EXERCISE_PHYSIOLOGY = Object.freeze({
+  label: 'Allied Health — Clinical Exercise Physiology',
+  startDate: '2026-02-02', // Monday — the day the live roster's 2026-02-01 snaps to
+  weeks: 4,
+  staff: Object.freeze([
+    { name: 'Atalanta', fte: 1.0, grade: 'AH15', skills: [], unavailable: [] },
+    { name: 'Hector', fte: 1.0, grade: 'AH13', skills: [], unavailable: [] },
+    { name: 'Penelope', fte: 1.0, grade: 'AH11', skills: [], unavailable: [] },
+    { name: 'Theseus', fte: 1.0, grade: 'AH8', skills: [], unavailable: [] },
+  ]),
+  tasks: Object.freeze([
+    // The four core duties, by their real names, Mon–Fri.
+    { name: 'EFT', days: [1, 2, 3, 4, 5], leads: 1, coLeads: 1, category: 'CORE' },
+    { name: 'IPT+SKG', days: [1, 2, 3, 4, 5], leads: 1, coLeads: 1, category: 'CORE' },
+    { name: 'NC', days: [1, 2, 3, 4, 5], leads: 1, coLeads: 1, category: 'CORE' },
+    { name: 'FSG+WI', days: [1, 2, 3, 4, 5], leads: 1, coLeads: 1, category: 'CORE' },
+    // The two video consults: Tuesday afternoon and Saturday morning.
+    { name: 'VC (PM)', days: [2], leads: 1, coLeads: 1, category: 'VC' },
+    { name: 'VC (AM)', days: [6], leads: 1, coLeads: 1, category: 'VC' },
+  ]),
+  rules: Object.freeze({
+    // Three, not two — see the note above. This is the department's own policy.
+    maxConcurrentPerDay: 3,
+    maxConsecutiveDays: 6,
+    bands: DEFAULT_GRADE_BANDS,
+  }),
+});
+
+// ==============================================================================
+// 11. THE FICTIONAL QUICK DEMO, AND THE PICKER'S SHAPE LIST
+// ==============================================================================
+
 /**
  * THE MARVEL TEAM — the quick demo, and deliberately the smallest thing here.
  *
- * Every other arrangement demonstrates a specific constraint a real profession
- * described: a monthly principal-only clinic, a weekend trio on block rotation, a
- * Saturday floor. This one demonstrates nothing except that the thing runs. It is
+ * Every shape demonstrates a specific structure a real profession described: a monthly
+ * principal-only clinic, a weekend trio on block rotation, a Saturday floor. This one
+ * demonstrates nothing except that the thing runs, and its bigger sibling
+ * (`DEMO_EXAMPLE_DEPARTMENT`, the full worked example) demonstrates the honest refusal
+ * to staff a slot nobody can hold. Neither claims a profession. This one is
  * five people, four ordinary weekday duties, no skills, no quotas, no windows, no
  * hours overrides — so a visitor who opened the app on a phone in a corridor can
  * pick it, press Draft, and see a filled calendar in one screen.
@@ -615,57 +837,270 @@ const DEMO_ARRANGEMENT_MARVEL = Object.freeze({
   }),
 });
 
-export const DEMO_ARRANGEMENTS = Object.freeze([
+/**
+ * THE FIVE SHAPES AND THE TWO DEMOS, IN THE ORDER THE PICKER SHOWS THEM.
+ *
+ * ORDER IS DELIBERATE AND IS NOT ALPHABETICAL, and that is a change from the twelve
+ * arrangements this replaced. The owner's "make the dropdown read alphabetically"
+ * applied to a list of PROFESSIONS, where alphabetical is the only findable order and a
+ * reader arrives knowing the word they are looking for. That list still exists and is
+ * still sorted in code — it is `MOH_PROFESSION_OPTIONS` below, and the sort is there
+ * rather than here. Nobody arrives looking for the letter G in a list of five
+ * structures, so these are ordered by what they are: the five shapes with an interview
+ * behind them first, the two openly fictional demos after, each group labelled on
+ * screen with an `<optgroup>` so the ordering reads as structure rather than as
+ * somebody having forgotten to sort.
+ *
+ * One entry per shape:
+ *
+ *   id                  stable key for React, for a test, and for a saved selection.
+ *                       NEVER derived from `name` and never renumbered.
+ *   name                what the option says. Names the STRUCTURE, not a department.
+ *   demonstrates        ONE SENTENCE describing that structure, so choosing between
+ *                       these options is choosing between structures.
+ *   group               `'shape'` or `'demo'` — which `<optgroup>` it renders under.
+ *   provenance          `DEMO_PROVENANCE_INTERVIEWED` or `DEMO_PROVENANCE_FICTIONAL`.
+ *                       There is no third kind; see section 9.
+ *   sourceProfession    THE PROFESSION WHOSE WEEK THIS STRUCTURE CAME FROM, as a
+ *                       reader sees it, or `null` for the fictional demos. A FIELD
+ *                       rather than a sentence in the copy, so the UI cannot render a
+ *                       shape without attributing it.
+ *   sourceProfessionId  the same profession as a `mohAlliedHealth.js` id, so "this shape
+ *                       came from your own profession" is computable rather than
+ *                       hand-listed. Usually a LEAF id; for the periodic clinic it is a
+ *                       GROUP id, because the interview named the profession and not one
+ *                       of its six sub-disciplines. `null` for the demos.
+ *   attribution         the sentence shown beside the shape and again beside the
+ *                       finished roster. It says whose structure this is AND that it is
+ *                       a starting point — never what the visitor's own service does.
+ *   config              `rosterEngineV2`'s input contract verbatim — handed straight to
+ *                       the wizard's tables, and from there to `generateRosterV2`.
+ *
+ * THERE IS NO `correction` FIELD ANY MORE. Nothing here claims to be a service it is
+ * not, so there is nothing to disclaim. `attribution` is the field that replaced it,
+ * and the difference is the direction it points: a correction block apologised for a
+ * guess about the reader's service, an attribution states whose structure this is.
+ */
+export const DEMO_SHAPES = Object.freeze([
   Object.freeze({
-    id: 'marvel',
-    name: 'The Marvel Team',
-    demonstrates: 'The quickest look: five people, four ordinary duties, nothing gated. Press Draft and a filled calendar appears — start here, then try a real profession below.',
-    provenance: DEMO_PROVENANCE_FICTIONAL,
-    correction: null,
-    config: DEMO_ARRANGEMENT_MARVEL,
-  }),
-  Object.freeze({
-    id: 'respiratory',
-    name: 'Respiratory & Rehab',
-    demonstrates: 'Duties only certain grades may lead, a skill-gated paediatric CPET, a part-timer, one person on leave — and the one duty it will not pretend to have staffed.',
-    provenance: DEMO_PROVENANCE_INFERRED,
-    correction: Object.freeze({
-      headline: 'Not your service — an example to correct.',
-      body: 'Nobody from Respiratory & Rehab has been interviewed yet. This arrangement was inferred from the patterns the other three teams described, so treat every line of it as a question. Please correct it.',
-      // Named individually so a correction session has a checklist rather than a
-      // feeling. Each of these is an ASSUMPTION this fixture makes.
-      items: Object.freeze([
-        'the eight duties, their names and which days they run',
-        'the weekend cover duty — an assumption, and the only out-of-hours work assumed anywhere here',
-        'which duties a junior may lead and which need a senior or principal',
-        'the three skills (CPET, REHAB, SLEEP) and who holds them',
-        'twelve staff, their grades, the one 0.6 FTE contract and the one day of leave',
-      ]),
-    }),
-    config: DEMO_ARRANGEMENT_RESPIRATORY,
-  }),
-  Object.freeze({
-    id: 'psychology',
-    name: 'Psychology',
-    demonstrates: 'A clinic on the 3rd Wednesday of every month, principals only, held by the same principal every time — and a 42-hour week.',
+    id: 'shape-graded-duty',
+    name: 'Graded duty split',
+    demonstrates: 'Juniors take the wards and the weekends; seniors and principals take the specialist weekday clinics. Two band gates pointing opposite ways inside one team.',
+    group: 'shape',
     provenance: DEMO_PROVENANCE_INTERVIEWED,
-    correction: null,
+    sourceProfession: 'Physiotherapist',
+    sourceProfessionId: 'physiotherapist',
+    attribution: 'This is how the physiotherapists described their week. It is a starting point to adapt — every row of it is editable, and it says nothing about your own service.',
+    config: DEMO_ARRANGEMENT_PHYSIOTHERAPY,
+  }),
+  Object.freeze({
+    id: 'shape-periodic-clinic',
+    name: 'Periodic specialist clinic, same practitioner each time',
+    demonstrates: 'A clinic on the third Wednesday of every month, principals only, held by the same principal every time — inside a stated 42-hour week.',
+    group: 'shape',
+    provenance: DEMO_PROVENANCE_INTERVIEWED,
+    // MOH's own name for profession 24, verbatim. The interview did not distinguish a
+    // sub-discipline, so this names the PROFESSION (a group label in the taxonomy) and
+    // not one of its six leaves — inventing "clinical" here would be inventing the one
+    // fact the interview did not supply. `DEMO_SHAPE_SUGGESTIONS` expands a group id to
+    // all of its leaves for exactly this case.
+    sourceProfession: 'Psychologist (excluding associate psychologist)',
+    sourceProfessionId: 'psychologist',
+    attribution: 'This is how the psychologists described their week. It is a starting point to adapt — every row of it is editable, and it says nothing about your own service.',
     config: DEMO_ARRANGEMENT_PSYCHOLOGY,
   }),
   Object.freeze({
-    id: 'embryology',
-    name: 'Embryology',
-    demonstrates: 'A weekend shift needing a principal, a senior and a junior at once, with three teams taking four-month blocks so each appears only in its own.',
+    id: 'shape-team-rotation',
+    name: 'Team-based rotation',
+    demonstrates: 'A shift that needs a principal, a senior and a junior at once, and three teams taking four-month blocks so each team appears only in its own block.',
+    group: 'shape',
     provenance: DEMO_PROVENANCE_INTERVIEWED,
-    correction: null,
+    sourceProfession: 'Embryologist',
+    sourceProfessionId: 'embryologist',
+    attribution: 'This is how the embryologists described their week. It is a starting point to adapt — every row of it is editable, and it says nothing about your own service.',
     config: DEMO_ARRANGEMENT_EMBRYOLOGY,
   }),
   Object.freeze({
-    id: 'labs',
-    name: 'Medical Laboratory',
-    demonstrates: 'At least two Saturdays per person per calendar month — a floor rather than a limit, measured and reported wherever it is not met.',
+    id: 'shape-weekend-quota',
+    name: 'Weekend quota inside an hours ceiling',
+    demonstrates: 'At least two Saturdays per person per calendar month — a floor rather than a limit, measured and reported wherever it is not met — under a stated 42-hour week.',
+    group: 'shape',
     provenance: DEMO_PROVENANCE_INTERVIEWED,
-    correction: null,
+    sourceProfession: 'Medical Laboratory Technologist / Scientist',
+    sourceProfessionId: 'medical-laboratory-technologist',
+    attribution: 'This is how the medical laboratory scientists described their week. It is a starting point to adapt — every row of it is editable, and it says nothing about your own service.',
     config: DEMO_ARRANGEMENT_LABS,
   }),
+  Object.freeze({
+    id: 'shape-weekday-sessions',
+    name: 'Fixed weekday sessions plus out-of-hours slots',
+    demonstrates: 'Four fixed weekday sessions and two consult slots outside them — one mid-week afternoon, one Saturday morning — and the three-duty day the mid-week one needs.',
+    group: 'shape',
+    provenance: DEMO_PROVENANCE_INTERVIEWED,
+    sourceProfession: 'Clinical Exercise Physiologist',
+    sourceProfessionId: 'clinical-exercise-physiologist',
+    attribution: 'This is the roster owner’s own service, by its real duty names — the one shape here that is reported rather than modelled. It is a starting point to adapt, and it says nothing about your own service.',
+    config: DEMO_ARRANGEMENT_EXERCISE_PHYSIOLOGY,
+  }),
+  Object.freeze({
+    id: 'marvel',
+    name: 'The Marvel Team',
+    demonstrates: 'The quickest look: five people, four ordinary duties, nothing gated. Press Draft and a filled calendar appears — start here, then try one of the five shapes.',
+    group: 'demo',
+    provenance: DEMO_PROVENANCE_FICTIONAL,
+    sourceProfession: null,
+    sourceProfessionId: null,
+    attribution: 'Openly fictional — nobody’s service, and not modelled on one. It exists so the engine can be watched working in one screen.',
+    config: DEMO_ARRANGEMENT_MARVEL,
+  }),
+  Object.freeze({
+    id: 'marvel-worked-example',
+    name: 'The Marvel Team — full worked example',
+    demonstrates: 'The same fictional team, twelve people deep: duties only certain grades may lead, a skill-gated session, a part-timer, one person on leave — and the one duty it will not pretend to have staffed.',
+    group: 'demo',
+    provenance: DEMO_PROVENANCE_FICTIONAL,
+    sourceProfession: null,
+    sourceProfessionId: null,
+    attribution: 'Openly fictional — nobody’s service, and not modelled on one. It was the "Respiratory example" until that name was retired for claiming a service nobody had described; the structure is unchanged and now belongs to no profession at all.',
+    config: DEMO_EXAMPLE_DEPARTMENT,
+  }),
 ]);
+
+/** One shape by id, or `null`. A stale id in a saved selection is not a crash. */
+export const demoShapeById = (id) => DEMO_SHAPES.find((shape) => shape.id === id) || null;
+
+// ==============================================================================
+// 12. THE PROFESSION LIST — MOH'S OWN VOCABULARY, AS THE PICKER'S FIRST CONTROL
+// ==============================================================================
+//
+// All 28 professions, nested exactly as MOH nests them, and NOTHING IS SAID ABOUT ANY
+// OF THEM. That is the whole design: choosing a profession picks a LABEL for the
+// configuration the visitor is about to build, so an art therapist's roster is headed
+// "Art Therapist" instead of "Physiotherapy". It selects no duties, no grades and no
+// rules; those come from the shape, which is attributed to whoever described it.
+//
+// TWO PROFESSIONS NEST — 12 (Medical Technologist / Physiologist, five sub-disciplines)
+// and 24 (Psychologist, six) — so the 28 are 37 selectable leaves. Their parents are
+// GROUP LABELS and not choices: a roster belongs to a cardiac lab or a sleep lab, never
+// to "medical technology" in general. `<optgroup>` is the native control for exactly
+// that distinction, and a browser will not let a visitor select a group heading, which
+// is the behaviour we want rather than one we would have to enforce.
+//
+// SORTED IN CODE, alphabetically by the name a visitor READS, with an explicit 'en'
+// locale — a list whose order depends on the reader's machine is not an order. A
+// nesting profession sorts by its GROUP name and its children sort within it, so the
+// walk down the list is the walk down MOH's list. Hand-ordering is what this avoids:
+// the 29th profession will be added by somebody who has not read this file.
+const byReaderVisibleName = (a, b) => a.sortName.localeCompare(b.sortName, 'en');
+
+export const MOH_PROFESSION_OPTIONS = Object.freeze(
+  MOH_ALLIED_HEALTH_PROFESSIONS
+    .map((profession) => (profession.children
+      ? Object.freeze({
+        kind: 'group',
+        label: profession.name,
+        groupId: profession.id,
+        sortName: profession.name,
+        options: Object.freeze(
+          MOH_PROFESSION_LEAVES
+            .filter((leaf) => leaf.groupId === profession.id)
+            .map((leaf) => Object.freeze({ ...leaf, sortName: leaf.name }))
+            .sort(byReaderVisibleName),
+        ),
+      })
+      : Object.freeze({
+        kind: 'option',
+        ...MOH_PROFESSION_LEAVES.find((leaf) => leaf.id === profession.id),
+        sortName: profession.name,
+      })))
+    .sort(byReaderVisibleName),
+);
+
+/**
+ * THE OWNER'S OWN SUGGESTED STARTING POINTS — shape id → profession leaf ids.
+ *
+ * ⚠️ A SUGGESTION IS NOT A DESCRIPTION, and this map is the one place in this file
+ * where that could most easily be misread. It does NOT say that sonographers run a
+ * graded duty split; it says that if a sonographer has to start somewhere, the graded
+ * duty split is the likelier fit. The UI must render it as a suggestion, non-binding,
+ * with every other shape one tap away — and it must never turn into a default that
+ * loads itself, because a suggestion that loads without being chosen is a claim.
+ *
+ * These pairings are the roster owner's, given as part of this change. They are not
+ * derived from anything and are not evidence about any of these professions.
+ */
+const OWNER_SUGGESTED_SHAPES = Object.freeze({
+  'shape-graded-duty': Object.freeze([
+    'sonographer',
+    'diagnostic-radiographer',
+    'occupational-therapist',
+    'podiatrist',
+  ]),
+  'shape-periodic-clinic': Object.freeze([
+    'genetic-counsellor',
+    'orthoptist',
+    'clinical-counsellor',
+  ]),
+  'shape-team-rotation': Object.freeze([
+    'perfusionist',
+    'nuclear-medicine-technologist',
+    'radiation-therapist',
+  ]),
+  // All five sub-disciplines of MOH profession 12, named individually: the parent is a
+  // group label, so "Medical Technologist / Physiologist" is not a selectable answer.
+  'shape-weekend-quota': Object.freeze([
+    'medtech-cardiac',
+    'medtech-neuro',
+    'medtech-pulmonary',
+    'medtech-sleep',
+    'medtech-vascular',
+  ]),
+  'shape-weekday-sessions': Object.freeze([
+    'art-therapist',
+    'music-therapist',
+    'play-therapist',
+    'child-life-therapist',
+    'speech-therapist',
+    'dietitian',
+    'optometrist',
+  ]),
+});
+
+/**
+ * Profession leaf id → suggested shape id, inverted from the map above.
+ *
+ * TWO SOURCES, AND THE SECOND ONE IS DERIVED RATHER THAN TYPED: the owner's pairings,
+ * plus each shape's OWN source profession pointing at itself. A physiotherapist opening
+ * the picker should be told that the graded duty split came from their profession, and
+ * that fact is already in `sourceProfessionId` — hand-adding it to the owner's list
+ * would be two places to keep in step. Where the two disagree the owner's pairing wins,
+ * because it is a judgement and the derived one is only an identity.
+ *
+ * A profession with no entry gets NO suggestion, and that is correct rather than a gap.
+ * Thirty-two of the 37 leaves are covered; the five that are not —
+ * `auditory-verbal-therapist`, `audiologist`, `medical-social-worker`,
+ * `prosthetist-orthotist`, `respiratory-therapist` — are neither in the owner's map nor
+ * the source of a shape, and inventing a suggestion for them would be inventing exactly
+ * what this change removed. Three of those five HAD a hand-built fixture before this
+ * change, which is the clearest measure of what was wrong with it: a guess reads as
+ * more helpful than a blank, and it is not.
+ */
+export const DEMO_SHAPE_SUGGESTIONS = Object.freeze(
+  Object.fromEntries([
+    // A shape's own source profession, expanded to LEAVES: 'psychologist' is a group
+    // label in the taxonomy, so it becomes all six of its sub-disciplines and the
+    // remaining four expand to themselves.
+    ...DEMO_SHAPES
+      .filter((shape) => shape.sourceProfessionId)
+      .flatMap((shape) => MOH_PROFESSION_LEAVES
+        .filter((leaf) => leaf.id === shape.sourceProfessionId
+          || leaf.groupId === shape.sourceProfessionId)
+        .map((leaf) => [leaf.id, shape.id])),
+    ...Object.entries(OWNER_SUGGESTED_SHAPES)
+      .flatMap(([shapeId, professionIds]) => professionIds.map((id) => [id, shapeId])),
+  ]),
+);
+
+/** The suggested shape for a profession, as a whole shape, or `null`. Never throws. */
+export const suggestedShapeFor = (professionId) =>
+  demoShapeById(DEMO_SHAPE_SUGGESTIONS[professionId] || '') || null;

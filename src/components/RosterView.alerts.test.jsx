@@ -231,14 +231,16 @@ describe('demo mode raises no native dialog (P8.3)', () => {
     it('generates a sandbox roster without alert(), confirm() or prompt()', () => {
         render(<RosterView user={VISITOR} />);
         openConfigure();
-        // CHANGED: was `/load example department/i`. That single button is now a picker
-        // of four arrangements and no button carries that name any more. The RESPIRATORY
-        // option loads `DEMO_EXAMPLE_DEPARTMENT` — the same fixture, by alias — so this
-        // test still generates the same sandbox roster it always did, and the P8.3 claim
-        // it exists for (branded UI, never a native dialog) is untouched.
-        // CHANGED: the picker is a <select> now (one tap on a phone, no vertical
-        // space), so there is no Load button to click. Chosen by stable id.
-        fireEvent.change(screen.getByLabelText(/load an example arrangement/i), { target: { value: 'respiratory' } });
+        // CHANGED THREE TIMES, and the fixture never moved. It was a "Load example
+        // department" button; then a picker of twelve per-department arrangements, whose
+        // RESPIRATORY option held this same fixture by alias; and now a picker of a
+        // PROFESSION and a SHAPE, where the same fixture is the openly fictional
+        // 'marvel-worked-example' — the six invented per-profession arrangements were
+        // deleted, and the one that was invented under the Respiratory name went back to
+        // claiming nobody's service. Same twelve people, same six duties, same one
+        // unstaffable slot, so the P8.3 claim this test exists for (branded UI, never a
+        // native dialog) is untouched. Chosen by stable id, never by position or name.
+        fireEvent.change(screen.getByLabelText(/shape to start from/i), { target: { value: 'marvel-worked-example' } });
         // RENAMED (language pass): the sandbox Generate button said "Generate Sandbox
         // Roster" and now says "Draft roster". Live mode's label is unchanged.
         fireEvent.click(screen.getByRole('button', { name: /^draft roster$/i }));
@@ -285,14 +287,16 @@ describe('demo mode raises no native dialog (P8.3)', () => {
     it('submits a sandbox swap into an on-screen notice, and says nothing was sent', async () => {
         render(<RosterView user={VISITOR} />);
         openConfigure();
-        // CHANGED: was `/load example department/i`. That single button is now a picker
-        // of four arrangements and no button carries that name any more. The RESPIRATORY
-        // option loads `DEMO_EXAMPLE_DEPARTMENT` — the same fixture, by alias — so this
-        // test still generates the same sandbox roster it always did, and the P8.3 claim
-        // it exists for (branded UI, never a native dialog) is untouched.
-        // CHANGED: the picker is a <select> now (one tap on a phone, no vertical
-        // space), so there is no Load button to click. Chosen by stable id.
-        fireEvent.change(screen.getByLabelText(/load an example arrangement/i), { target: { value: 'respiratory' } });
+        // CHANGED THREE TIMES, and the fixture never moved. It was a "Load example
+        // department" button; then a picker of twelve per-department arrangements, whose
+        // RESPIRATORY option held this same fixture by alias; and now a picker of a
+        // PROFESSION and a SHAPE, where the same fixture is the openly fictional
+        // 'marvel-worked-example' — the six invented per-profession arrangements were
+        // deleted, and the one that was invented under the Respiratory name went back to
+        // claiming nobody's service. Same twelve people, same six duties, same one
+        // unstaffable slot, so the P8.3 claim this test exists for (branded UI, never a
+        // native dialog) is untouched. Chosen by stable id, never by position or name.
+        fireEvent.change(screen.getByLabelText(/shape to start from/i), { target: { value: 'marvel-worked-example' } });
         fireEvent.click(screen.getByRole('button', { name: /^draft roster$/i }));
 
         openSwapModalFor('Inpatient Rounds');

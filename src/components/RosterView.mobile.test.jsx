@@ -632,14 +632,19 @@ describe('the sandbox wizard modal: full-screen on a phone, dialog on a desktop'
         }
     });
 
-    it('is still the sandbox\'s own arrangement dropdown that sets the idiom', () => {
+    it('is still the sandbox\'s own picker dropdowns that set the idiom', () => {
         render(<RosterView user={VISITOR} />);
         openConfigure();
 
-        const picker = screen.getByLabelText(/load an example arrangement/i);
-        expect(picker.className).toContain('min-h-11');
-        expect(picker.className).toContain('text-base');
-        expect(picker.className).toContain('sm:text-sm');
+        // TWO dropdowns now — a profession and a shape — and BOTH are asserted, because
+        // they share one pair of class constants precisely so they cannot drift into two
+        // different touch targets. Checking only one would let the other regress.
+        for (const label of [/your profession/i, /shape to start from/i]) {
+            const picker = screen.getByLabelText(label);
+            expect(picker.className).toContain('min-h-11');
+            expect(picker.className).toContain('text-base');
+            expect(picker.className).toContain('sm:text-sm');
+        }
     });
 });
 

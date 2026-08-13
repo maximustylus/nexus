@@ -84,21 +84,35 @@ vi.mock('../context/NexusContext', () => ({
 import { doc, collection, onSnapshot, setDoc, addDoc, query, where, getDoc, updateDoc } from 'firebase/firestore';
 import RosterView from './RosterView';
 import { DEMO_EXAMPLE_DEPARTMENT } from '../data/mockData';
-// 🧪 ADDED for section 12 (the four arrangements). `DEMO_EXAMPLE_DEPARTMENT` above is
-// re-exported by the picker as its respiratory option — asserted to be the SAME object,
-// not a copy — so the ~30 assertions in sections 1–11 keep describing the fixture the
-// app actually loads.
+// 🧪 THE PICKER'S DATA. `DEMO_EXAMPLE_DEPARTMENT` above is the config of the picker's
+// 'marvel-worked-example' shape — asserted to be the SAME object, not a copy — so the
+// ~40 assertions in sections 1–11 keep describing the fixture the app actually loads.
+// It used to be the 'respiratory' arrangement; that name claimed a service nobody had
+// described and was retired, while the fixture itself did not move.
 import {
-    DEMO_ARRANGEMENTS,
-    DEMO_PROVENANCE_INFERRED,
+    DEMO_SHAPES,
     DEMO_PROVENANCE_FICTIONAL,
     DEMO_PROVENANCE_INTERVIEWED,
+    MOH_PROFESSION_OPTIONS,
+    DEMO_SHAPE_SUGGESTIONS,
+    suggestedShapeFor,
 } from '../data/mockData';
+// The published taxonomy the profession dropdown is a view of. Imported so the test
+// checks the dropdown against MOH's own list rather than against a list this file keeps.
+import {
+    MOH_ALLIED_HEALTH_PROFESSIONS,
+    MOH_PROFESSION_LEAVES,
+    MOH_PROFESSION_LEAF_COUNT,
+} from '../data/mohAlliedHealth';
 // `auditHardConstraints` is a SECOND, independent read-back of a finished roster. The
-// arrangements are checked with it as well as with `score.hardViolations`, because the
+// shapes are checked with it as well as with `score.hardViolations`, because the
 // latter is the engine measuring its own output and this repo's rule is that a
 // zero-violation claim is measured rather than asserted.
 import { generateRosterV2, bandOfGrade, auditHardConstraints } from '../utils/rosterEngineV2';
+// 🔒 PDPA. The LIVE roster's staff pool names four real colleagues. Imported here for
+// exactly one purpose: to assert that not one of those names appears in ANY shape,
+// including the one deliberately modelled on their own department's duty list.
+import { LIVE_ROSTER_DEFAULTS } from '../utils/auraEngine';
 
 // --- HELPERS -----------------------------------------------------------------
 
@@ -109,44 +123,67 @@ const openConfigure = () => {
 };
 
 /**
- * CHANGED: was `getByRole('button', { name: /load example department/i })`.
+ * THE FIXTURE SECTIONS 1–11 ARE WRITTEN AGAINST, reached the way a visitor reaches it.
  *
- * The single "Load example department" button is now a PICKER of four arrangements,
- * one per interviewed profession, so there is no longer a button by that name — there
- * are four, and each says which team it loads. This helper clicks the RESPIRATORY one,
- * which loads `DEMO_EXAMPLE_DEPARTMENT` (the picker holds it by alias, not by copy).
+ * It has been a "Load example department" BUTTON, then the RESPIRATORY option of a
+ * twelve-arrangement dropdown, and it is now the openly fictional
+ * 'marvel-worked-example' shape in the shape dropdown. THE OBJECT NEVER MOVED — it is
+ * `DEMO_EXAMPLE_DEPARTMENT` throughout, held by reference and not by copy, asserted with
+ * `toBe` in section 12 — which is why every assertion in this file written against "the
+ * example department" still means what it meant.
  *
- * That is why every assertion in this file that was written against "the example
- * department" still means exactly what it meant: the fixture is byte-identical and this
- * helper reaches it. The name is anchored (`^…$`) so it cannot start matching a fifth
- * arrangement added later whose name happens to contain "Respiratory".
+ * WHAT DID CHANGE IS WHAT IT CLAIMS. It used to be offered as an Allied Health
+ * Respiratory service, inferred rather than reported, with a "please correct this"
+ * checklist attached. Six such per-profession fixtures were deleted in the
+ * profession-plus-shape correction; this one survived because it is the only fixture
+ * here that exercises band gates, a skill gate, a part-time contract, a day of leave and
+ * ONE honestly unstaffed slot at the same time — and it now claims nobody's service. Its
+ * twelve people, six duties, two band gates, CPET gate, 0.6 FTE contract, one leave day
+ * and one unfillable slot are byte-identical to before the rename.
+ *
+ * Chosen by the stable `id`, never by name or by position.
  */
 const loadExample = () => {
-    loadArrangementById('respiratory');
+    loadShapeById('marvel-worked-example');
 };
 
 /**
- * CHANGED AGAIN: the picker is a <select>, not five buttons.
+ * The SHAPE dropdown — the second of the picker's two controls.
  *
- * It was five stacked cards each with a "Load <team>" button — a menu on a desktop
- * and a wall of text on a phone, which is where visiting colleagues actually open
- * this. One native dropdown costs one tap and no vertical space, so there is no
- * button to click any more; the arrangement is chosen by its option value (the
- * stable `id`, not the display name, so renaming a team does not break 60 tests).
+ * It was five cards with Load buttons, then one dropdown of twelve professions, and it
+ * is now one dropdown of five STRUCTURES plus two fictional demos, beside a separate
+ * dropdown of MOH's 28 professions. Two labels, two queries: this helper must never
+ * match the profession control, which is why both labels are asserted distinct in
+ * section 12. A shape is chosen by its option value (the stable `id`, not the display
+ * name, so renaming a shape does not break 60 tests).
  */
-const arrangementSelect = () => screen.getByLabelText(/load an example arrangement/i);
+const shapeSelect = () => screen.getByLabelText(/shape to start from/i);
 
-const loadArrangementById = (id) => {
-    fireEvent.change(arrangementSelect(), { target: { value: id } });
+const loadShapeById = (id) => {
+    fireEvent.change(shapeSelect(), { target: { value: id } });
 };
 
-/** Load one arrangement by the name a visitor reads in the dropdown. */
-const loadArrangement = (name) => {
-    const entry = DEMO_ARRANGEMENTS.find(
+/** Load one shape by the name a visitor reads in the dropdown. */
+const loadShapeNamed = (name) => {
+    const entry = DEMO_SHAPES.find(
         (candidate) => candidate.name.toLowerCase() === String(name).toLowerCase(),
     );
-    if (!entry) throw new Error(`No arrangement named "${name}"`);
-    loadArrangementById(entry.id);
+    if (!entry) throw new Error(`No shape named "${name}"`);
+    loadShapeById(entry.id);
+};
+
+/**
+ * THE PROFESSION dropdown — the picker's FIRST control, and a different kind of thing.
+ *
+ * It selects no duty, grade or rule: it labels the configuration, so an art therapist
+ * riding the physiotherapists' structure sees their own designation on the result. Every
+ * test that drives only the shape control is therefore still a complete test of
+ * generation, which is why sections 1–11 needed no profession at all.
+ */
+const professionSelect = () => screen.getByLabelText(/your profession/i);
+
+const chooseProfession = (id) => {
+    fireEvent.change(professionSelect(), { target: { value: id } });
 };
 
 /**
@@ -415,7 +452,7 @@ afterEach(() => {
 
 // ─── 1. THE EXAMPLE DEPARTMENT GENERATES A REAL ROSTER ────────────────────────
 
-describe('demo mode: Configure → Load example department → Generate', () => {
+describe('demo mode: Configure → load the worked example → Generate', () => {
     /**
      * The expected roster is the engine's own answer for the example
      * department. DEMO_EXAMPLE_DEPARTMENT is already in `generateRosterV2`'s
@@ -1845,11 +1882,11 @@ describe('demo mode: the roster speaks clinical English', () => {
     });
 });
 
-// ─── 12. FOUR SELECTABLE ARRANGEMENTS, ONE PER PROFESSION ─────────────────────
+// ─── 12. TWELVE SELECTABLE ARRANGEMENTS, ONE PER PROFESSION ───────────────────
 //
-// The single example department became a PICKER of four, because one fixture could
-// only ever demonstrate one team's problem. Every test in this section is a claim
-// about a DIFFERENT capability, and each one is checked twice over:
+// The single example department became a PICKER — of four, then five, and now TWELVE —
+// because one fixture could only ever demonstrate one team's problem. Every test in this
+// section is a claim about a DIFFERENT capability, and each one is checked twice over:
 //
 //   1. AGAINST THE ENGINE, by running `generateRosterV2` on the fixture here and
 //      re-auditing the finished roster with `auditHardConstraints` — a second,
@@ -1866,10 +1903,10 @@ describe('demo mode: the roster speaks clinical English', () => {
 // once per month, so "the same principal every time" cannot be seen in one month's
 // square; a four-month cohort block cannot be seen in one month at all.
 
-/** One arrangement by id, so a test names the team rather than an array index. */
-const arrangement = (id) => {
-    const found = DEMO_ARRANGEMENTS.find((entry) => entry.id === id);
-    if (!found) throw new Error(`No arrangement with id "${id}"`);
+/** One shape by id, so a test names the structure rather than an array index. */
+const shapeOf = (id) => {
+    const found = DEMO_SHAPES.find((entry) => entry.id === id);
+    if (!found) throw new Error(`No shape with id "${id}"`);
     return found;
 };
 
@@ -1920,62 +1957,255 @@ const engineDatesFor = (result, task) => Object.keys(result.roster)
     .sort()
     .filter((dateKey) => result.roster[dateKey].some((shift) => shift.task === task));
 
-describe('demo mode: the arrangement picker is one dropdown', () => {
-    it('offers every arrangement as an option, and describes the chosen one', () => {
+describe('demo mode: the picker is a profession and a shape', () => {
+    it('offers five shapes and two demos, and describes the chosen one', () => {
         render(<RosterView user={VISITOR} />);
         openConfigure();
 
-        expect(DEMO_ARRANGEMENTS).toHaveLength(5);
+        // WAS TWELVE — one arrangement per department, with 23 more about to be written.
+        // Seven of the twelve were invented services offered under a real profession's
+        // name. Five structures plus two openly fictional demos is what replaced them.
+        expect(DEMO_SHAPES).toHaveLength(7);
+        expect(DEMO_SHAPES.filter((entry) => entry.group === 'shape')).toHaveLength(5);
+        expect(DEMO_SHAPES.filter((entry) => entry.group === 'demo')).toHaveLength(2);
 
-        // ONE control, not one card per team. It was five stacked panels, each with a
-        // Load button and its own paragraph — a menu on a desktop, a wall of text on
-        // the phone a visiting colleague actually opens. A native <select> is one tap
-        // and no vertical space, and the OS renders it as a full-height wheel.
-        const picker = arrangementSelect();
+        // TWO controls, and only two: a phone-first surface that v1.12.0 collapsed five
+        // cards into one dropdown for does not get five cards back.
+        const picker = shapeSelect();
         expect(picker.tagName).toBe('SELECT');
+        expect(professionSelect().tagName).toBe('SELECT');
+        expect(professionSelect()).not.toBe(picker);
         expect(screen.queryByRole('button', { name: /^load /i })).toBeNull();
 
-        // Every arrangement is reachable, by the name a visitor reads.
-        for (const entry of DEMO_ARRANGEMENTS) {
+        // Every shape is reachable, by the name a visitor reads.
+        for (const entry of DEMO_SHAPES) {
             expect(
                 within(picker).getByRole('option', { name: entry.name }),
             ).toBeTruthy();
         }
 
-        // The capability sentence follows the CHOICE now, rather than all five being on
-        // screen at once. Nothing is claimed before a team is picked…
-        for (const entry of DEMO_ARRANGEMENTS) {
+        // START BLANK IS A REAL FIRST OPTION, not a dead placeholder: before this it read
+        // "Choose a team to load…" and could only be read, never chosen.
+        expect(within(picker).getByRole('option', { name: /start blank/i }).value).toBe('');
+
+        // The one-line description follows the CHOICE. Nothing is claimed beforehand…
+        for (const entry of DEMO_SHAPES) {
             expect(screen.queryByText(entry.demonstrates)).toBeNull();
         }
 
         // …and exactly the chosen one's sentence appears after.
-        loadArrangementById('psychology');
-        const psychology = DEMO_ARRANGEMENTS.find((entry) => entry.id === 'psychology');
-        expect(screen.getByText(psychology.demonstrates)).toBeTruthy();
-        for (const entry of DEMO_ARRANGEMENTS) {
-            if (entry.id === 'psychology') continue;
+        loadShapeById('shape-periodic-clinic');
+        const clinic = shapeOf('shape-periodic-clinic');
+        expect(screen.getByText(clinic.demonstrates)).toBeTruthy();
+        for (const entry of DEMO_SHAPES) {
+            if (entry.id === 'shape-periodic-clinic') continue;
             expect(screen.queryByText(entry.demonstrates)).toBeNull();
         }
 
-        // The order a visitor meets them in: the fictional quick demo FIRST, because a
-        // first look should be one tap to a filled calendar, then the four real
-        // professions in the order the meetings happen. Asserted as a list so a sixth
-        // arrangement, or a reordering, has to come past this line.
-        expect(DEMO_ARRANGEMENTS.map((entry) => entry.id))
-            .toEqual(['marvel', 'respiratory', 'psychology', 'embryology', 'labs']);
+        // THE ORDER IS DELIBERATE AND IS NO LONGER ALPHABETICAL, and that is a decision
+        // rather than a regression. The owner's "make the dropdown read alphabetically"
+        // applied to a list of PROFESSIONS, where a reader arrives knowing the word they
+        // are looking for; that list still exists, is still sorted in code, and is
+        // asserted to be so two tests below. Nobody arrives looking for the letter G in a
+        // list of five structures, so the shapes are ordered by kind — the five with an
+        // interview behind them first, the two fictional demos last — and both groups are
+        // labelled on screen with an <optgroup> so the ordering reads as structure.
+        expect(DEMO_SHAPES.map((entry) => entry.id)).toEqual([
+            'shape-graded-duty',
+            'shape-periodic-clinic',
+            'shape-team-rotation',
+            'shape-weekend-quota',
+            'shape-weekday-sessions',
+            'marvel',
+            'marvel-worked-example',
+        ]);
+
+        // The two <optgroup>s exist, so "a team described this" and "this is fiction" is a
+        // structural distinction in the control rather than a word in a caption.
+        const groups = Array.from(picker.querySelectorAll('optgroup')).map((g) => g.label);
+        expect(groups).toHaveLength(2);
+        expect(groups[0]).toMatch(/described their week/i);
+        expect(groups[1]).toMatch(/nobody's service/i);
 
         expectNoFirestoreTraffic();
     });
 
-    it('is the same fixture the old single button loaded, by alias and not by copy', () => {
-        // THE REASON EVERY ASSERTION ABOVE IN THIS FILE STILL MEANS SOMETHING. If the
-        // respiratory option held a COPY, this file's ~30 other tests would be checking
-        // a fixture nothing in the app loads.
-        expect(arrangement('respiratory').config).toBe(DEMO_EXAMPLE_DEPARTMENT);
+    it('offers all 28 MOH professions, 37 leaves, nesting where MOH nests', () => {
+        render(<RosterView user={VISITOR} />);
+        openConfigure();
+
+        const picker = professionSelect();
+
+        // 28 TOP-LEVEL ENTRIES and 37 SELECTABLE LEAVES, checked against the published
+        // taxonomy rather than against a count typed into this file.
+        expect(MOH_ALLIED_HEALTH_PROFESSIONS).toHaveLength(28);
+        expect(MOH_PROFESSION_LEAF_COUNT).toBe(37);
+        expect(MOH_PROFESSION_OPTIONS).toHaveLength(28);
+
+        // The two professions MOH nests — 12 (Medical Technologist / Physiologist, five
+        // sub-disciplines) and 24 (Psychologist, six) — render as <optgroup>s, because
+        // their parents are GROUP LABELS and not choices: a roster belongs to a cardiac
+        // lab or a sleep lab, never to "medical technology" in general. A browser refuses
+        // to select a group heading, which is the behaviour we want rather than one this
+        // component would have to police.
+        const groups = Array.from(picker.querySelectorAll('optgroup'));
+        expect(groups.map((group) => group.label).sort()).toEqual([
+            'Medical Technologist / Physiologist',
+            'Psychologist (excluding associate psychologist)',
+        ]);
+        expect(groups.map((group) => group.querySelectorAll('option').length).sort())
+            .toEqual([5, 6]);
+
+        // Every leaf in the taxonomy is reachable as an option, and no group label is.
+        const values = Array.from(picker.querySelectorAll('option')).map((option) => option.value);
+        for (const leaf of MOH_PROFESSION_LEAVES) {
+            expect(values).toContain(leaf.id);
+        }
+        // 37 leaves + the "prefer not to say" empty option, and nothing else.
+        expect(values).toHaveLength(MOH_PROFESSION_LEAF_COUNT + 1);
+        expect(values.filter((value) => value === '')).toHaveLength(1);
+        expect(values).not.toContain('medical-technologist-physiologist');
+        expect(values).not.toContain('psychologist');
+
+        // CHOOSING A PROFESSION IS OPTIONAL and stays optional. A tool that demands a
+        // designation before it will help is a tool that has to be argued with first —
+        // and every test in sections 1–11 relies on it, generating without ever touching
+        // this control.
+        expect(picker.value).toBe('');
+        expect(within(picker).getByRole('option', { name: /prefer not to say/i }).value).toBe('');
+
+        expectNoFirestoreTraffic();
     });
 
-    it('accepts every arrangement, and re-audits every finished roster to zero', () => {
-        for (const entry of DEMO_ARRANGEMENTS) {
+    it('sorts the profession list in code, alphabetically by the name a visitor reads', () => {
+        // THE PROPERTY, not the list: the assertion is that the rendered order equals its
+        // own sort, so it cannot be satisfied by hand-ordering the array. That is exactly
+        // the failure mode the comparator exists to prevent, and the 29th profession will
+        // be added by somebody who has not read `mockData.js`.
+        const names = MOH_PROFESSION_OPTIONS.map((entry) => entry.sortName);
+        expect(names).toEqual([...names].sort((a, b) => a.localeCompare(b, 'en')));
+        expect(names[0]).toBe('Art Therapist');
+        expect(names[names.length - 1]).toBe('Speech Therapist');
+
+        // …and within each nesting profession, the same discipline.
+        for (const group of MOH_PROFESSION_OPTIONS.filter((entry) => entry.kind === 'group')) {
+            const children = group.options.map((leaf) => leaf.name);
+            expect(children).toEqual([...children].sort((a, b) => a.localeCompare(b, 'en')));
+        }
+
+        // MOH's own names, verbatim, including the qualifier on profession 24. Dropping
+        // "excluding associate psychologist" would widen a professional boundary this
+        // repository has no standing to widen.
+        expect(names).toContain('Psychologist (excluding associate psychologist)');
+        expect(names).toContain('Medical Laboratory Technologist / Scientist');
+    });
+
+    it('is the same fixture the old single button loaded, by reference and not by copy', () => {
+        // THE REASON EVERY ASSERTION ABOVE IN THIS FILE STILL MEANS SOMETHING. If the
+        // worked-example shape held a COPY, this file's ~40 other tests would be checking
+        // a fixture nothing in the app loads. It was the 'respiratory' arrangement's
+        // config; the arrangement was deleted for claiming a service nobody had
+        // described, and the object did not move.
+        expect(shapeOf('marvel-worked-example').config).toBe(DEMO_EXAMPLE_DEPARTMENT);
+    });
+
+    it('claims no profession for the two fictional demos, and attributes all five shapes', () => {
+        // THE WHOLE CORRECTION, AS ONE ASSERTION. A shape may carry a profession only if
+        // that profession described it; a demo must carry none. Getting this wrong in the
+        // "attributed" direction is inventing a service, which is the error this change
+        // exists to undo.
+        for (const entry of DEMO_SHAPES) {
+            if (entry.provenance === DEMO_PROVENANCE_INTERVIEWED) {
+                expect(entry.group).toBe('shape');
+                expect(typeof entry.sourceProfession).toBe('string');
+                expect(entry.sourceProfession.length).toBeGreaterThan(0);
+                expect(typeof entry.sourceProfessionId).toBe('string');
+                // The attribution says whose structure it is AND that it is a starting
+                // point. Both halves, because either alone misleads.
+                expect(entry.attribution).toMatch(/starting point/i);
+            } else {
+                expect(entry.provenance).toBe(DEMO_PROVENANCE_FICTIONAL);
+                expect(entry.group).toBe('demo');
+                expect(entry.sourceProfession).toBeNull();
+                expect(entry.sourceProfessionId).toBeNull();
+                expect(entry.attribution).toMatch(/fictional/i);
+            }
+            // NO `correction` FIELD ANYWHERE, and no `inferred`. They existed to
+            // disclaim a claim; nothing here makes that claim any more, so a disclaimer
+            // would be theatre. If a future entry seems to need one, that is the signal
+            // that somebody is about to describe a service nobody has described.
+            expect(entry.correction).toBeUndefined();
+            expect(entry.provenance).not.toBe('inferred');
+        }
+
+        // Named individually, because "how many are attributed" is not the question —
+        // "is THIS structure really that profession's" is.
+        expect(DEMO_SHAPES.filter((entry) => entry.provenance === DEMO_PROVENANCE_INTERVIEWED)
+            .map((entry) => [entry.id, entry.sourceProfessionId])).toEqual([
+            ['shape-graded-duty', 'physiotherapist'],
+            ['shape-periodic-clinic', 'psychologist'],
+            ['shape-team-rotation', 'embryologist'],
+            ['shape-weekend-quota', 'medical-laboratory-technologist'],
+            ['shape-weekday-sessions', 'clinical-exercise-physiologist'],
+        ]);
+        expect(DEMO_SHAPES.filter((entry) => entry.provenance === DEMO_PROVENANCE_FICTIONAL)
+            .map((entry) => entry.id)).toEqual(['marvel', 'marvel-worked-example']);
+
+        // EVERY ATTRIBUTED PROFESSION EXISTS IN THE PUBLISHED TAXONOMY, by id and by the
+        // name MOH gives it. A shape attributed to a profession this repository invented
+        // would be the same error in a new place.
+        const taxonomyName = (id) => MOH_ALLIED_HEALTH_PROFESSIONS.find((p) => p.id === id)?.name
+            || MOH_PROFESSION_LEAVES.find((leaf) => leaf.id === id)?.name;
+        for (const entry of DEMO_SHAPES.filter((shapeEntry) => shapeEntry.sourceProfessionId)) {
+            expect(taxonomyName(entry.sourceProfessionId)).toBe(entry.sourceProfession);
+        }
+
+        // The names describe STRUCTURES, not departments. A shape called "Physiotherapy"
+        // is the old design in new clothes.
+        for (const entry of DEMO_SHAPES.filter((shapeEntry) => shapeEntry.group === 'shape')) {
+            expect(entry.name).not.toMatch(
+                /physiotherap|psycholog|embryolog|laborator|exercise physiolog/i,
+            );
+        }
+
+        // KEPT FROM THE TEST THAT CHECKED THE REHAB SPLIT, which went with the
+        // arrangements it described: `REHAB` was a skill invented for a fixture, moved
+        // out of the respiratory example at the owner's request and deliberately never
+        // re-homed. It must not reappear as a gate on any surviving shape.
+        const skillsAnywhere = DEMO_SHAPES.flatMap((entry) => [
+            ...entry.config.staff.flatMap((person) => person.skills || []),
+            ...entry.config.tasks.map((task) => task.requiresSkill).filter(Boolean),
+        ]);
+        expect(skillsAnywhere).not.toContain('REHAB');
+        // The only skill left anywhere in the picker is the worked example's CPET gate.
+        expect([...new Set(skillsAnywhere)].sort()).toEqual(['CPET', 'SLEEP']);
+    });
+
+    it('names not one real colleague, in any shape', () => {
+        // 🔒 PDPA, and the reason it is a test rather than a convention: the fixed
+        // weekday sessions shape is deliberately modelled on the roster owner's OWN
+        // department, by its real duty names, so it is the one place where somebody
+        // editing in good faith might reach for the real staff list two files away.
+        const everyName = DEMO_SHAPES.flatMap((entry) => entry.config.staff.map((person) => person.name));
+        expect(everyName.length).toBeGreaterThan(0);
+        for (const colleague of LIVE_ROSTER_DEFAULTS.staff) {
+            for (const invented of everyName) {
+                expect(invented.toLowerCase()).not.toContain(colleague.toLowerCase());
+            }
+        }
+
+        // …while the real DUTY names are exactly what that shape is built from, which is
+        // the half of it that may be accurate.
+        const cepTasks = shapeOf('shape-weekday-sessions').config.tasks.map((task) => task.name);
+        for (const task of LIVE_ROSTER_DEFAULTS.tasks) {
+            expect(cepTasks).toContain(task);
+        }
+        expect(cepTasks).toContain('VC (PM)');
+        expect(cepTasks).toContain('VC (AM)');
+    });
+
+    it('accepts every shape, and re-audits every finished roster to zero', () => {
+        for (const entry of DEMO_SHAPES) {
             const result = generateRosterV2(entry.config);
             expect(result.ok).toBe(true);
             expect(result.score.hardViolations).toBe(0);
@@ -1991,88 +2221,173 @@ describe('demo mode: the arrangement picker is one dropdown', () => {
         }
     });
 
-    it('marks the inferred arrangement as one, and only that one', () => {
-        // `provenance` and `correction` are two fields answering one question, and
-        // RosterView reads only `correction`. This is where they are held together: a
-        // future arrangement that says "interviewed" while carrying a health warning
-        // (or the reverse) fails here rather than shipping a caption that is wrong.
-        for (const entry of DEMO_ARRANGEMENTS) {
-            // THREE kinds now. `FICTIONAL` was added with the Marvel quick demo, which
-            // is neither a real service nor a guess at one — "inferred" means "our best
-            // guess at YOUR department, please correct it", and a toy means no such
-            // thing. Folding it into `INFERRED` would have attached a correction
-            // checklist to a team that does not exist.
-            expect([
-                DEMO_PROVENANCE_INFERRED,
-                DEMO_PROVENANCE_INTERVIEWED,
-                DEMO_PROVENANCE_FICTIONAL,
-            ]).toContain(entry.provenance);
-            if (entry.provenance === DEMO_PROVENANCE_INFERRED) {
-                expect(entry.correction).toBeTruthy();
-                expect(entry.correction.items.length).toBeGreaterThan(0);
-            } else {
-                expect(entry.correction).toBeNull();
-            }
-        }
+    it('leaves the five feature signatures distinct, so five is the right number', () => {
+        // WHY FIVE SHAPES REPLACED TWELVE ARRANGEMENTS AND NOT TWENTY-EIGHT: each shape
+        // is the ONLY one in the list that reaches its engine field, so choosing between
+        // them is choosing between five structures. Two shapes with the same signature
+        // would be two casts of fictional names wearing one structure — which is what a
+        // per-department fixture was.
+        const signature = (entry) => ({
+            leadBands: entry.config.tasks.some((task) => task.leadBands),
+            recurrence: entry.config.tasks.some((task) => task.recurrence),
+            continuity: entry.config.tasks.some((task) => task.continuity),
+            slots: entry.config.tasks.some((task) => task.slots),
+            quota: entry.config.tasks.some((task) => task.quota),
+            windows: entry.config.staff.some((person) => person.windows),
+            weeklyHours: entry.config.rules?.weeklyHours !== undefined,
+        });
+        const shapes = DEMO_SHAPES.filter((entry) => entry.group === 'shape');
+        const signatures = shapes.map((entry) => JSON.stringify(signature(entry)));
+        expect(new Set(signatures).size).toBe(shapes.length);
 
-        // Exactly one is inferred, and it is the team nobody has interviewed.
-        const inferred = DEMO_ARRANGEMENTS.filter((entry) => entry.provenance === DEMO_PROVENANCE_INFERRED);
-        expect(inferred.map((entry) => entry.id)).toEqual(['respiratory']);
+        // …and each is the signature the shape's own name and description promise.
+        expect(signature(shapeOf('shape-graded-duty')).leadBands).toBe(true);
+        expect(signature(shapeOf('shape-periodic-clinic'))).toMatchObject({
+            recurrence: true, continuity: true, leadBands: true, weeklyHours: true,
+        });
+        expect(signature(shapeOf('shape-team-rotation'))).toMatchObject({
+            slots: true, windows: true,
+        });
+        expect(signature(shapeOf('shape-weekend-quota'))).toMatchObject({
+            quota: true, slots: true, weeklyHours: true,
+        });
+        expect(signature(shapeOf('shape-weekday-sessions'))).toMatchObject({
+            leadBands: false, recurrence: false, slots: false, quota: false, windows: false,
+        });
     });
 
-    it('says the respiratory arrangement is not their service — on choosing it, and after', () => {
+    it('suggests a starting point without describing anybody\'s service', () => {
         render(<RosterView user={VISITOR} />);
         openConfigure();
 
-        const correction = arrangement('respiratory').correction;
+        // THE OWNER'S OWN PAIRINGS, and they are suggestions. An art therapist is pointed
+        // at the fixed weekday sessions shape — which came from clinical exercise
+        // physiology — and the sentence says so, says nobody from their profession has
+        // described their week, and says every other shape is one tap away.
+        chooseProfession('art-therapist');
+        expect(suggestedShapeFor('art-therapist').id).toBe('shape-weekday-sessions');
+        expectOnScreen(/suggested starting point/i);
+        expectOnScreen(/nobody in your profession has described their week/i);
+        expectOnScreen(/says nothing about your service/i);
 
-        // TIMING CHANGED WITH THE DROPDOWN, deliberately, and this is the one
-        // behavioural consequence worth stating. Before, all five options were
-        // expanded at once, so the caveat was readable BEFORE pressing anything —
-        // along with four other teams' descriptions and a wall of text on a phone.
-        // Now only the chosen arrangement renders, so the caveat arrives WITH the
-        // choice.
-        //
-        // The property that matters is unchanged: it is on screen from the moment the
-        // fixture is loaded, which is before anyone can read, draft or act on the
-        // roster it produced. Nothing is hidden, and nothing about this team's service
-        // is claimed while no team is chosen — asserted here.
-        expect(screen.queryByText(correction.headline)).toBeNull();
-        expect(screen.queryByText(correction.items[0])).toBeNull();
+        // NOTHING LOADED ITSELF. A suggestion that applies itself is a claim about that
+        // profession's service, which is the error being corrected.
+        expect(shapeSelect().value).toBe('');
+        expect(screen.getByLabelText('Staff row 1 name').value).toBe('');
 
-        loadExample();
+        // A PROFESSION THAT DESCRIBED ITS OWN SHAPE IS TOLD SO INSTEAD — a different and
+        // stronger fact than a suggestion.
+        chooseProfession('physiotherapist');
+        expectOnScreen(/is the shape your own profession described to us/i);
 
-        // ON CHOOSING: the headline is there immediately, not after a draft.
-        expectOnScreen(correction.headline);
+        // A SUB-DISCIPLINE OF A NESTING PROFESSION inherits its parent's shape: the
+        // psychology interview did not distinguish which of the six, so all six get it
+        // rather than one of them being invented as "the" source.
+        chooseProfession('psychologist-forensic');
+        expect(suggestedShapeFor('psychologist-forensic').id).toBe('shape-periodic-clinic');
 
-        // ON LOADING: the body and every item on the correction checklist.
-        //
-        // `expectOnScreen` rather than `getByText`, and the reason is the behaviour
-        // itself: the body is now in TWO places at once — the picker's expanded option
-        // and the provenance notice beside the report, which appears the moment an
-        // arrangement is loaded rather than waiting for a draft. Two copies of a health
-        // warning is the safe number; a `getByText` here would fail on the second one.
-        expectOnScreen(correction.body);
-        // The checklist is the picker's, and only the picker's.
-        for (const item of correction.items) {
-            expect(screen.getByText(item)).toBeTruthy();
+        // AND A PROFESSION WITH NO PAIRING GETS NO SUGGESTION, and is told why. Three of
+        // these five had a hand-built fixture before this change, which is the clearest
+        // measure of what was wrong with it: a guess reads as more helpful than a blank,
+        // and it is not.
+        for (const orphan of ['audiologist', 'medical-social-worker', 'respiratory-therapist']) {
+            expect(DEMO_SHAPE_SUGGESTIONS[orphan]).toBeUndefined();
+            expect(suggestedShapeFor(orphan)).toBeNull();
         }
-        // Named individually so the checklist cannot quietly shrink to a headline.
-        expect(screen.getByText(/weekend cover duty/i)).toBeTruthy();
-
-        clickGenerate();
-
-        // AFTER drafting — and this is the assertion that matters, because the wizard
-        // is a modal and it has now closed. What the room looks at is a finished roster
-        // of their own service, so the caveat has to be beside the report too.
-        expect(screen.queryByRole('button', { name: /^load respiratory & rehab$/i })).toBeNull();
-        expectOnScreen(correction.body);
-        expectOnScreen(new RegExp(correction.headline.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i'));
+        chooseProfession('respiratory-therapist');
+        expectOnScreen(/no suggested starting point/i);
+        expectOnScreen(/rather than hand you a guess/i);
 
         expectNoFirestoreTraffic();
     });
 
-    it('does not warn about somebody else\'s inference over a team typed in by hand', () => {
+    it('says whose structure a shape is — on choosing it, and again beside the report', () => {
+        render(<RosterView user={VISITOR} />);
+        openConfigure();
+
+        const graded = shapeOf('shape-graded-duty');
+
+        // Nothing is claimed while no shape is chosen.
+        expect(screen.queryByText(graded.attribution)).toBeNull();
+
+        loadShapeById('shape-graded-duty');
+
+        // ON CHOOSING: the attribution is there immediately, not after a draft. It names
+        // the physiotherapists AND says it is a starting point — the amber "please
+        // correct this" panel it replaced apologised for a guess, and there are no
+        // guesses left to apologise for.
+        expectOnScreen(graded.attribution);
+        expectOnScreen(/physiotherapists described their week/i);
+
+        clickGenerate();
+
+        // AFTER DRAFTING — and this is the assertion that matters, because the wizard is
+        // a modal and it has now closed. What the room looks at is a finished roster, and
+        // a borrowed structure with no attribution near it quietly becomes "our roster".
+        expectOnScreen(graded.attribution);
+        expectOnScreen(new RegExp(graded.name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i'));
+
+        expectNoFirestoreTraffic();
+    });
+
+    it('labels the roster with the visitor\'s own profession, not the shape\'s', () => {
+        render(<RosterView user={VISITOR} />);
+        openConfigure();
+
+        // THE CLAIM THE WHOLE CHANGE RESTS ON, on screen: an art therapist who rides the
+        // physiotherapists' structure sees ART THERAPIST on their roster, and the
+        // structure keeps its own attribution beside it. Two facts, neither pretending to
+        // be the other.
+        chooseProfession('art-therapist');
+        loadShapeById('shape-graded-duty');
+        clickGenerate();
+
+        expectOnScreen(/Art Therapist — Graded duty split/i);
+        expectOnScreen(/physiotherapists described their week/i);
+        // The shape's source profession is NOT offered as the visitor's own.
+        expect(screen.queryByText(/^Physiotherapist — /)).toBeNull();
+
+        expectNoFirestoreTraffic();
+    });
+
+    it('generates the same roster whichever profession loaded the shape', () => {
+        // THE OTHER HALF OF THE SAME CLAIM, measured rather than asserted: the profession
+        // is a LABEL and reaches no engine field, so the roster an art therapist gets
+        // from a shape is the roster a physiotherapist gets from it. If the profession
+        // ever started editing rows, this is the test that would fail.
+        const expected = generateRosterV2(shapeOf('shape-graded-duty').config);
+
+        const rosterUnder = (professionId) => {
+            render(<RosterView user={VISITOR} />);
+            openConfigure();
+            if (professionId) chooseProfession(professionId);
+            loadShapeById('shape-graded-duty');
+            clickGenerate();
+            const month = expected.effectiveStart.slice(0, 7);
+            const dates = Object.keys(expected.roster).filter((key) => key.startsWith(month)).sort();
+            const read = dates.map((dateKey) => [dateKey, shiftsInDay(dateKey)]);
+            cleanup();
+            return read;
+        };
+
+        const asArtTherapist = rosterUnder('art-therapist');
+        const asPhysiotherapist = rosterUnder('physiotherapist');
+        const asNobody = rosterUnder(null);
+
+        expect(asArtTherapist.length).toBeGreaterThan(0);
+        expect(asArtTherapist).toEqual(asPhysiotherapist);
+        expect(asArtTherapist).toEqual(asNobody);
+
+        // …and it is the engine's own answer for the fixture, not merely a stable one.
+        for (const [dateKey, rendered] of asArtTherapist) {
+            expect(rendered.map((entry) => entry.task))
+                .toEqual(expected.roster[dateKey].map((entry) => entry.task));
+            expect(rendered.map((entry) => entry.staff))
+                .toEqual(expected.roster[dateKey].map((entry) => entry.staff));
+        }
+    });
+
+    it('says nothing about anybody\'s structure over a team typed in by hand', () => {
         render(<RosterView user={VISITOR} />);
         openConfigure();
 
@@ -2081,37 +2396,68 @@ describe('demo mode: the arrangement picker is one dropdown', () => {
         setTaskName(1, 'Ward Round');
         clickGenerate();
 
-        // The one direction this label must never be wrong in.
-        expect(screen.queryByText(arrangement('respiratory').correction.body)).toBeNull();
+        // The one direction this label must never be wrong in: a team who typed their own
+        // roster in borrowed nothing from anybody, and naming somebody else's profession
+        // beside their roster would be a false statement about their own data.
+        for (const entry of DEMO_SHAPES) {
+            expect(screen.queryByText(entry.attribution)).toBeNull();
+        }
         expectNoFirestoreTraffic();
     });
 
-    it('carries each arrangement\'s own start date and run length', () => {
+    it('empties the tables when Start blank is chosen, and keeps the profession', () => {
         render(<RosterView user={VISITOR} />);
         openConfigure();
 
-        for (const entry of DEMO_ARRANGEMENTS) {
-            loadArrangement(entry.name);
+        chooseProfession('art-therapist');
+        loadShapeById('marvel-worked-example');
+        expect(screen.getByLabelText('Staff row 1 name').value).toBe('Carol Danvers');
+
+        // BACK TO BLANK, which was unreachable before: the placeholder could be read but
+        // never chosen, so a visitor who loaded a shape had no way back to empty rows
+        // except reloading the page.
+        loadShapeById('');
+        expect(screen.getByLabelText('Staff row 1 name').value).toBe('');
+        expect(screen.queryByLabelText('Staff row 6 name')).toBeNull();
+        expect(shapeSelect().value).toBe('');
+        for (const entry of DEMO_SHAPES) {
+            expect(screen.queryByText(entry.attribution)).toBeNull();
+        }
+
+        // The profession is the visitor's own designation and is NOT part of any shape,
+        // so emptying the form is no reason to make them say who they are again.
+        expect(professionSelect().value).toBe('art-therapist');
+
+        expectNoFirestoreTraffic();
+    });
+
+    it('carries each shape\'s own start date and run length', () => {
+        render(<RosterView user={VISITOR} />);
+        openConfigure();
+
+        for (const entry of DEMO_SHAPES) {
+            loadShapeNamed(entry.name);
             expect(screen.getByLabelText(/start date/i).value).toBe(entry.config.startDate);
             expect(screen.getByLabelText(/^weeks$/i).value).toBe(String(entry.config.weeks));
         }
 
-        // Not decoration for three of the four: a psychology run shorter than two
-        // months holds one occurrence of a monthly clinic and cannot show continuity;
-        // an embryology run shorter than a block shows a rota rather than a handover;
-        // the laboratory run starts on the 1st so its first quota period is a WHOLE
-        // month the engine will judge. Pinned so a "tidier" 4-week default cannot
-        // silently take the demonstration away.
-        expect(arrangement('psychology').config.weeks).toBeGreaterThanOrEqual(9);
-        expect(arrangement('embryology').config.weeks).toBeGreaterThan(17);
-        expect(arrangement('labs').config.startDate.endsWith('-01')).toBe(true);
+        // Not decoration for three of the five: a periodic-clinic run shorter than two
+        // months holds one occurrence of a monthly clinic and cannot show continuity; a
+        // team-rotation run shorter than a block shows a rota rather than a handover; the
+        // weekend-quota run starts on the 1st so its first quota period is a WHOLE month
+        // the engine will judge. Pinned so a "tidier" 4-week default cannot silently take
+        // the demonstration away.
+        expect(shapeOf('shape-periodic-clinic').config.weeks).toBeGreaterThanOrEqual(9);
+        expect(shapeOf('shape-team-rotation').config.weeks).toBeGreaterThan(17);
+        expect(shapeOf('shape-weekend-quota').config.startDate.endsWith('-01')).toBe(true);
     });
 });
 
-// --- PSYCHOLOGY: the 3rd Wednesday, principals only, the same principal --------
+// --- THE PERIODIC SPECIALIST CLINIC SHAPE (from the psychologists' own week):
+// --- the 3rd Wednesday, principals only, the same principal every time ---------
 
-describe('demo mode: the psychology arrangement', () => {
-    const fixture = arrangement('psychology').config;
+describe('demo mode: the periodic specialist clinic shape', () => {
+    const fixture = shapeOf('shape-periodic-clinic').config;
     const expected = generateRosterV2(fixture);
     const CLINIC = 'Complex Trauma Clinic';
 
@@ -2135,7 +2481,7 @@ describe('demo mode: the psychology arrangement', () => {
     it('shows the same principal leading every occurrence, read out of the calendar', () => {
         render(<RosterView user={VISITOR} />);
         openConfigure();
-        loadArrangement('Psychology');
+        loadShapeById('shape-periodic-clinic');
         clickGenerate();
 
         const leads = [];
@@ -2181,7 +2527,7 @@ describe('demo mode: the psychology arrangement', () => {
     it('reports a 42-hour week as hours, and staffs everything else on weekdays', () => {
         render(<RosterView user={VISITOR} />);
         openConfigure();
-        loadArrangement('Psychology');
+        loadShapeById('shape-periodic-clinic');
 
         // The week is a TYPED value in the box that owns it, not a hidden fixture
         // field — so the room can change it mid-demonstration.
@@ -2208,10 +2554,11 @@ describe('demo mode: the psychology arrangement', () => {
     });
 });
 
-// --- EMBRYOLOGY: a trio, and three teams in four-month blocks ------------------
+// --- THE TEAM-BASED ROTATION SHAPE (from the embryologists' own week):
+// --- a trio on one shift, and three teams in four-month blocks -----------------
 
-describe('demo mode: the embryology arrangement', () => {
-    const fixture = arrangement('embryology').config;
+describe('demo mode: the team-based rotation shape', () => {
+    const fixture = shapeOf('shape-team-rotation').config;
     const expected = generateRosterV2(fixture);
     const WEEKEND = 'Weekend Laboratory Cover';
     const TEAMS = {
@@ -2232,7 +2579,7 @@ describe('demo mode: the embryology arrangement', () => {
         for (const { assignees } of weekends) {
             // THREE, not two. A `slots` list is one entry per person the shift needs,
             // and the third of them has no place in the two-name display string —
-            // which is exactly the audit finding this arrangement exists to show.
+            // which is exactly the audit finding this shape exists to show.
             expect(assignees).toHaveLength(3);
             expect(new Set(assignees).size).toBe(3);
 
@@ -2286,7 +2633,7 @@ describe('demo mode: the embryology arrangement', () => {
     it('renders the trio in the calendar, and team A nowhere near a team B weekend', () => {
         render(<RosterView user={VISITOR} />);
         openConfigure();
-        loadArrangement('Embryology');
+        loadShapeById('shape-team-rotation');
         clickGenerate();
 
         // A weekend inside BLOCK A. The third assignee is on the "Also:" line — the
@@ -2314,10 +2661,11 @@ describe('demo mode: the embryology arrangement', () => {
     });
 });
 
-// --- MEDICAL LABORATORY: a FLOOR, not a ceiling -------------------------------
+// --- THE WEEKEND QUOTA SHAPE (from the medical laboratory scientists' own week):
+// --- a FLOOR, not a ceiling ----------------------------------------------------
 
-describe('demo mode: the medical laboratory arrangement', () => {
-    const fixture = arrangement('labs').config;
+describe('demo mode: the weekend quota shape', () => {
+    const fixture = shapeOf('shape-weekend-quota').config;
     const expected = generateRosterV2(fixture);
     const SATURDAY = 'Saturday Bench';
     /** The months the run holds in their ENTIRETY — the only ones a floor is judged in. */
@@ -2372,7 +2720,7 @@ describe('demo mode: the medical laboratory arrangement', () => {
                 // DISTINCT DATES, deliberately, and this is the load-bearing detail: a
                 // quota counts DUTIES, so "two Saturdays" and "two Saturday duties" are
                 // only the same sentence while one Saturday cannot hold two duties for
-                // one person. That is why this arrangement has ONE Saturday task rather
+                // one person. That is why this shape has ONE Saturday task rather
                 // than two, and counting dates rather than duties is what proves it.
                 expect(dates.size).toBeGreaterThanOrEqual(2);
             }
@@ -2397,7 +2745,7 @@ describe('demo mode: the medical laboratory arrangement', () => {
     it('renders four names on every Saturday bench, and the weekdays as sessions', () => {
         render(<RosterView user={VISITOR} />);
         openConfigure();
-        loadArrangement('Medical Laboratory');
+        loadShapeById('shape-weekend-quota');
         clickGenerate();
 
         goToMonth('February 2027');
@@ -2431,19 +2779,134 @@ describe('demo mode: the medical laboratory arrangement', () => {
     it('states the 42-hour week in the box that owns it', () => {
         render(<RosterView user={VISITOR} />);
         openConfigure();
-        loadArrangement('Medical Laboratory');
+        loadShapeById('shape-weekend-quota');
         expect(screen.getByLabelText(/standard working week/i).value).toBe('42');
         expectNoFirestoreTraffic();
     });
 });
 
+// --- THE OTHER TWO SHAPES: one signature capability each -----------------------
+//
+// WAS SEVEN TESTS, one per arrangement in the batch the roster owner asked for. FIVE OF
+// THOSE SEVEN ARRANGEMENTS WERE DELETED — audiology, cardiology, clinical counselling,
+// medical social work and pulmonary were inferred services nobody had described — and
+// their tests went with them rather than being left describing fixtures nothing loads.
+// The two that remain came from interviews and are shapes.
+//
+// WHAT WENT WITH THEM, stated rather than discovered later: those five tests were the
+// only place in THIS file that exercised `requiresSkill` on a monthly recurrence,
+// `forbidPairs`, task-scoped `windows` and a stated `maxHoursPerDay` through a fixture.
+// Every one of those engine fields still has its own unit tests in
+// `src/utils/rosterEngineV2.*.test.js` and its own control in the wizard tables; what is
+// gone is five inventions, not five capabilities. The skill gate is still exercised HERE,
+// through the worked example's CPET duty, in sections 1 and 8.
+//
+// ENGINE-LEVEL ONLY, deliberately, and this is where the line was drawn. The three
+// sections above render their shape into the calendar because their capability is
+// invisible in the fixture (a monthly recurrence, a cohort window and a quota floor all
+// look like ordinary fields until the engine runs). These two are checked against the
+// engine and then handed to the ONE render test below, which compares the calendar
+// against `generateRosterV2` shift by shift for all seven — so a field that failed to
+// survive the wizard still fails a test, without seven more jsdom mounts.
+//
+// BOTH ARE MUTATION-CHECKED: the assertion is not "the feature is configured" but
+// "removing it changes the roster". A constraint that agrees with what fairness would
+// have done anyway is a decoy test, and this file has been caught shipping one before
+// (see the medical laboratory fixture's own header).
+
+describe('demo mode: the graded duty split and the fixed weekday sessions', () => {
+    /** The whole run as a flat list of `{ date, …shift }`. */
+    const flatten = (result) => Object.keys(result.roster).sort()
+        .flatMap((dateKey) => result.roster[dateKey].map((shift) => ({ date: dateKey, ...shift })));
+
+    /** A fixture with `mutate` applied to a deep copy — the fixtures are frozen. */
+    const without = (id, mutate) => {
+        const copy = JSON.parse(JSON.stringify(shapeOf(id).config));
+        mutate(copy);
+        return generateRosterV2(copy);
+    };
+
+    const leadsOf = (result, task) =>
+        [...new Set(flatten(result).filter((shift) => shift.task === task).map((shift) => shift.lead))].sort();
+
+    it('graded duty split: juniors on the wards and at weekends, seniors in the clinics', () => {
+        const fixture = shapeOf('shape-graded-duty').config;
+        const result = generateRosterV2(fixture);
+        const bandOfPerson = (name) => bandOfGrade(
+            fixture.staff.find((person) => person.name === name).grade,
+            fixture.rules.bands,
+        );
+
+        const juniorGated = flatten(result)
+            .filter((shift) => ['Inpatient Ward Round', 'Weekend Inpatient Cover'].includes(shift.task));
+        const seniorGated = flatten(result).filter((shift) => shift.task.startsWith('Outpatient'));
+        expect(juniorGated.length).toBeGreaterThan(0);
+        expect(seniorGated.length).toBeGreaterThan(0);
+
+        for (const shift of juniorGated) expect(bandOfPerson(shift.lead)).toBe('junior');
+        for (const shift of seniorGated) expect(['senior', 'principal']).toContain(bandOfPerson(shift.lead));
+
+        // Bands gate the LEAD only, so a senior co-leading a junior's ward round is the
+        // supervision shape rather than a violation — asserted so a future change that
+        // starts gating co-leads has to come past this line.
+        const rounds = flatten(result).filter((shift) => shift.task === 'Inpatient Ward Round');
+        expect(rounds.some((shift) => ['senior', 'principal'].includes(bandOfPerson(shift.coLead)))).toBe(true);
+
+        // Both weekend days are covered, by one person each.
+        const weekend = flatten(result).filter((shift) => shift.task === 'Weekend Inpatient Cover');
+        expect(weekend.length).toBe(8);
+        for (const shift of weekend) expect(shift.assignees).toHaveLength(1);
+
+        // MUTATION: drop the gates and seniors start leading ward rounds.
+        const ungated = without('shape-graded-duty', (copy) => {
+            copy.tasks = copy.tasks.map((task) => { delete task.leadBands; return task; });
+        });
+        expect(leadsOf(ungated, 'Inpatient Ward Round').length)
+            .toBeGreaterThan(leadsOf(result, 'Inpatient Ward Round').length);
+        expect(leadsOf(ungated, 'Outpatient Musculoskeletal Clinic').length)
+            .toBeGreaterThan(leadsOf(result, 'Outpatient Musculoskeletal Clinic').length);
+    });
+
+    it('fixed weekday sessions: the real duty list, and the Tuesday that needs three', () => {
+        const fixture = shapeOf('shape-weekday-sessions').config;
+        const result = generateRosterV2(fixture);
+
+        // The run starts on the Monday the LIVE roster's Sunday start snaps forward to.
+        expect(result.effectiveStart).toBe('2026-02-02');
+        // Tuesday carries the four core duties AND the afternoon video consult…
+        expect(result.roster['2026-02-03'].map((shift) => shift.task))
+            .toEqual(['EFT', 'IPT+SKG', 'NC', 'FSG+WI', 'VC (PM)']);
+        // …Saturday carries the morning one and nothing else, and Sunday nothing at all.
+        expect(result.roster['2026-02-07'].map((shift) => shift.task)).toEqual(['VC (AM)']);
+        expect(result.roster['2026-02-08']).toBeUndefined();
+
+        // Somebody holds three duties on that Tuesday, and nobody holds four anywhere.
+        const dutiesOn = (dateKey) => {
+            const perPerson = {};
+            for (const shift of result.roster[dateKey]) {
+                for (const person of shift.assignees) perPerson[person] = (perPerson[person] || 0) + 1;
+            }
+            return Object.values(perPerson);
+        };
+        expect(Math.max(...dutiesOn('2026-02-03'))).toBe(3);
+        for (const dateKey of Object.keys(result.roster)) {
+            expect(Math.max(...dutiesOn(dateKey))).toBeLessThanOrEqual(3);
+        }
+
+        // MUTATION: the 2-a-day cap every other shape uses cannot staff this week.
+        const capped = without('shape-weekday-sessions', (copy) => { copy.rules.maxConcurrentPerDay = 2; });
+        expect(result.unfilled).toHaveLength(0);
+        expect(capped.unfilled.length).toBe(8);
+    });
+});
+
 // --- THE ROUND TRIP: the tables drop nothing ---------------------------------
 
-describe('demo mode: every arrangement survives the wizard intact', () => {
+describe('demo mode: every shape survives the wizard intact', () => {
     /**
-     * THE TEST THAT MAKES THE OTHER TWELVE MEAN SOMETHING.
+     * THE TEST THAT MAKES THE OTHER SEVEN MEAN SOMETHING.
      *
-     * Each arrangement's interesting field — a monthly `recurrence`, `continuity`, a
+     * Each shape's interesting field — a monthly `recurrence`, `continuity`, a
      * `slots` list, a cohort `window`, a `quota`, a stated `weeklyHours` — has to
      * travel from the frozen fixture, through the picker, into the wizard's rows, back
      * out through `buildDemoRosterV2ConfigFromTables` and into the engine. A field
@@ -2455,15 +2918,15 @@ describe('demo mode: every arrangement survives the wizard intact', () => {
      * by shift, for the whole month the view opens on. Nothing is hardcoded: the
      * expectation is the engine's own answer for the fixture.
      */
-    it.each(DEMO_ARRANGEMENTS.map((entry) => [entry.name, entry.id]))(
+    it.each(DEMO_SHAPES.map((entry) => [entry.name, entry.id]))(
         'renders exactly the engine\'s own roster for %s',
         (name, id) => {
-            const entry = arrangement(id);
+            const entry = shapeOf(id);
             const expected = generateRosterV2(entry.config);
 
             render(<RosterView user={VISITOR} />);
             openConfigure();
-            loadArrangement(name);
+            loadShapeNamed(name);
             clickGenerate();
 
             // The view opens on the month the run starts in.
