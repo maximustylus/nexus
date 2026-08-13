@@ -24,7 +24,7 @@
 import { describe, it, expect } from 'vitest';
 import {
     BAND_NAMES, RULER_GRADES, BAND_DIVIDERS, bandsToInputs,
-    bandRulerModel, bandDividerLimits, moveBandDivider, bandDividerAtFraction,
+    bandRulerModel, moveBandDivider, bandDividerAtFraction,
 } from './rosterWizard.js';
 
 const MIN = RULER_GRADES[0];
