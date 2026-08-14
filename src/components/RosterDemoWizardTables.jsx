@@ -91,7 +91,11 @@ import {
     moveBandDivider,
     parseConcurrentPerDayCell,
     parseFteCell,
+    wizardStepNumber,
+    wizardStepLabel,
+    WIZARD_STEP_COUNT,
 } from '../utils/rosterWizard';
+import WizardStep from './WizardStep';
 
 // --- 0. THE RESPONSIVE CONTRACT ------------------------------------------------
 //
@@ -548,7 +552,14 @@ export const BandBoundaryEditor = ({ inputs, onChange, reason }) => {
             {/* `text-slate-500` rather than the `text-slate-400` this file uses for
                 headings: these numbers are the scale a roster master reads a boundary
                 off, not decoration, and slate-400 on slate-50 is about 2.4:1. */}
-            <div aria-hidden="true" className="mt-1 flex text-[9px] font-bold tabular-nums text-slate-500 dark:text-slate-400">
+            {/* `text-[8px]` below `sm:`, 9px above. The wizard's numbered spine costs 32px
+                of a 375px screen, which left each of the eleven tick cells 25px — one pixel
+                short of the 26px a four-character label like `AH10` needs, so every label
+                from AH10 up rendered as `AH…` under this element's `text-ellipsis`. Shrinking
+                a DECORATIVE strip by one pixel of font is the cheap side of that trade: this
+                element is `aria-hidden`, and the bands are spelled out in full in the legend
+                directly below it, so nothing here is the only copy of anything. */}
+            <div aria-hidden="true" className="mt-1 flex text-[8px] sm:text-[9px] font-bold tabular-nums text-slate-500 dark:text-slate-400">
                 {RULER_GRADES.map((grade) => (
                     <span key={grade} className="flex-1 truncate text-center">{`AH${grade}`}</span>
                 ))}
@@ -2193,9 +2204,23 @@ const RosterDemoWizardTables = ({
     onTaskAdd,
     onTaskRemove,
 }) => (
-    <div className="space-y-4">
-        <BandBoundaryEditor inputs={bandInputs} onChange={onBandChange} reason={bandsReason} />
-        <DepartmentHoursEditor inputs={hoursInputs} onChange={onHoursChange} errors={hoursErrors} />
+    // `space-y-0`, not `space-y-4`: the gap between panels now belongs to the spine,
+    // which has to be CONTINUOUS to read as one sequence. A margin between the rows
+    // would break the line into dashes. Each panel keeps its own breathing room via
+    // the wrapper's padding instead.
+    <div className="space-y-0">
+        <WizardStep number={wizardStepNumber('bands')} label={wizardStepLabel('bands')}>
+            <div className="pb-4">
+                <BandBoundaryEditor inputs={bandInputs} onChange={onBandChange} reason={bandsReason} />
+            </div>
+        </WizardStep>
+        <WizardStep number={wizardStepNumber('hours')} label={wizardStepLabel('hours')}>
+            <div className="pb-4">
+                <DepartmentHoursEditor inputs={hoursInputs} onChange={onHoursChange} errors={hoursErrors} />
+            </div>
+        </WizardStep>
+        <WizardStep number={wizardStepNumber('limits')} label={wizardStepLabel('limits')}>
+        <div className="pb-4">
         <DepartmentLimitsEditor
             inputs={rulesInputs}
             onChange={onRulesChange}
@@ -2209,6 +2234,10 @@ const RosterDemoWizardTables = ({
                     .filter((name) => name !== ''),
             )]}
         />
+        </div>
+        </WizardStep>
+        <WizardStep number={wizardStepNumber('staff')} label={wizardStepLabel('staff')}>
+        <div className="pb-4">
         <StaffTable
             rows={staffRows}
             errors={staffErrors}
@@ -2238,14 +2267,25 @@ const RosterDemoWizardTables = ({
                 ?? ROSTER_V2_DEFAULTS.maxConcurrentPerDay
             }
         />
-        <TaskTable
-            rows={taskRows}
-            errors={taskErrors}
-            bands={bands}
-            onChange={onTaskChange}
-            onAdd={onTaskAdd}
-            onRemove={onTaskRemove}
-        />
+        </div>
+        </WizardStep>
+        {/* `isLast` stops the spine here rather than letting it trail below the final
+            panel into empty space. It is the last step of the whole wizard, not just of
+            this component — hence the derived count rather than a literal. */}
+        <WizardStep
+            number={wizardStepNumber('tasks')}
+            label={wizardStepLabel('tasks')}
+            isLast={wizardStepNumber('tasks') === WIZARD_STEP_COUNT}
+        >
+            <TaskTable
+                rows={taskRows}
+                errors={taskErrors}
+                bands={bands}
+                onChange={onTaskChange}
+                onAdd={onTaskAdd}
+                onRemove={onTaskRemove}
+            />
+        </WizardStep>
     </div>
 );
 

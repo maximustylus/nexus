@@ -26,7 +26,7 @@ them** and **one was a real fixture defect** the split exposed (the embryology t
 two junior embryologists at AH8/AH9 — non-exempt now — so a junior-only slot had nobody
 eligible; re-graded to AH11/AH12). One demo assertion turned out to be **measuring nothing**
 and would have passed forever. All repaired, plus a new exhaustive proof that the band ruler
-cannot be dragged into an illegal state. **1627 tests green, lint clean, CI green, deployed.**
+cannot be dragged into an illegal state. **1630 tests green, lint clean, CI green, deployed.**
 
 ---
 
@@ -80,12 +80,11 @@ old theatre is *gone*: `multiverse timeline` and `Simulation Locked` both return
 
 ### What to click, in Sandbox
 
-*(Corrected 2026-08-14: step 2's control is now a **dropdown**, not a row of buttons — pick
-**"The Marvel Team — full worked example"** under "Shape to start from". The example is no
-longer called "Load example department".)*
-
 1. Toggle **Demo** in the header. The staff and task boxes are now empty and editable.
-2. **Configure → Load example department** → Generate. You should get 40 shifts over 12 days
+2. **Configure**, then under **"Shape to start from"** pick **"The Marvel Team — full worked
+   example"**, then **Draft roster**. *(Corrected 2026-08-14: this used to be a row of buttons
+   labelled "Load example department"; it is a dropdown now, and there is a second dropdown
+   above it for your profession.)* You should get 40 shifts over 12 days
    starting Monday 7 September 2026, and **exactly one unstaffable slot**:
    *"no available staff hold skill CPET for Paediatric CPET coLead on 2026-09-16 (2 qualified,
    1 on leave, 1 already on this task)"*. **Point at that.** It is the argument for trusting the
@@ -202,23 +201,23 @@ Listed in `CHANGELOG.md` under "Known issues" so nobody mistakes the post-mortem
 | **P0.7** | `npm run lint` has never worked — no ESLint config exists in the repo at all. | ⚠️ **HALF FIXED.** A config exists and lint **passes clean** — it runs in CI on every push and gates the deploy. But it could never run *locally*, for the iCloud reason in §3, which is how a lint error reached CI today. It now runs locally too via `verify.sh lint`. |
 | **M10** | CSV formula injection. | ✅ **FIXED in v1.7.1** — quoting, formula-injection guard, CRLF + UTF-8 BOM. |
 | **M12** | No duplicate-request guard. | ✅ **FIXED in v1.7.1** — duplicate swap requests blocked per session. |
-| **C1 / C3 / C4** | Single hardcoded `roster_2026` document; staff pool hardcoded in the component; **no `firestore.rules` in the repo**. | ⚠️ **STILL OPEN.** A `firestore.rules` proposal now exists in the repo but is **inert — not wired, not deployed**. See **D6** below; this is the one to settle before another department's data is involved. |
+| **C1 / C3 / C4** | Single hardcoded `roster_2026` document; staff pool hardcoded in the component; **no `firestore.rules` in the repo**. | ⚠️ **STILL OPEN.** A `firestore.rules` proposal now exists in the repo but is **inert — not wired, not deployed**. See **Q6** below; this is the one to settle before another department's data is involved. |
 | **D2 / D3 / D9** | A mistyped availability window silently deletes a person from the roster; `measureRosterLoad`'s `neverRostered` has no UI caller. | ⚠️ **STILL OPEN**, from the audit. D2 is the one that could embarrass you: a typo makes someone vanish rather than raising an error. |
 
 ---
 
 ## 5. Decisions still yours
 
-Answered today: swap semantics = **mechanical substitution**; **notify the roster owner** (not yet built); deploy live with rollback (**done**).
+Answered earlier: swap semantics = **mechanical substitution**; **notify the roster owner** (not yet built); deploy live with rollback (**done**).
 
-**ANSWERED 2026-08-14** — D10 and D11, both by the roster owner:
+**ANSWERED 2026-08-14** — Q10 and Q11, both by the roster owner:
 
-- **D10 — "Non-exempt" is the right word.** Confirmed; the label stays as it is. No change.
-- **D11 — "there might be a technologist with a junior grade."** So role and grade are
+- **Q10 — "Non-exempt" is the right word.** Confirmed; the label stays as it is. No change.
+- **Q11 — "there might be a technologist with a junior grade."** So role and grade are
   **orthogonal**, and the embryology re-grade to AH11/AH12 stands: a technologist can hold a
-  junior grade. **But this has a consequence for what the tool can promise — see D12.**
+  junior grade. **But this has a consequence for what the tool can promise — see Q12.**
 
-- **D12 — NEW, and it limits the claim you can make on stage.** *Bands are grade ranges, so
+- **Q12 — NEW, and it limits the claim you can make on stage.** *Bands are grade ranges, so
   they cannot express a role.* A technologist at AH11 is in the `junior` band, exactly like a
   junior clinician at AH11, so a task gated `leadBands: ['junior']` **will let that
   technologist lead it.** Measured against the live engine, not reasoned:
@@ -234,28 +233,87 @@ Answered today: swap semantics = **mechanical substitution**; **notify the roste
   staff lost that eligibility. It did **not** — and could not — fix "a technologist who holds
   a junior grade". Those are two different problems and only one of them is a grade problem.
 
-  **You can already express it, today, with no engine change:** give registered staff a skill
-  (`registered`, or `licensed` — the engine treats a skill as an opaque string), and gate the
-  task on `requiresSkill` as well as `leadBands`. The two compose by AND, verified above.
-  That is the honest answer to "can it stop a technologist leading?" — *yes, if you gate on
-  registration rather than on grade.*
+  **The workaround, and its hard limit.** You can gate on a *skill* instead of a band: type
+  `registered` into the person's Skills column and put `registered` in the task's requires-skill
+  field. The engine treats a skill as an opaque string, so this works — and skill composes with
+  the band gate by AND.
 
-  **The decision that is yours:** whether registration should stay expressed as a *skill*, or
-  become a first-class attribute. Skill works and needs nothing built, but it overloads
-  "skill" to mean two different things — a competency (CPET) and an employment status
-  (registered), which will read oddly to another department's roster master filling in the
-  table. A first-class `role` or `registration` field would be cleaner and is a natural v2.0
-  item. **Do not let me build that before you have decided**; it changes the wizard's tables,
-  which is the surface other departments are about to see.
+  **But `requiresSkill` is a single string, not a list, so a task can demand exactly ONE thing.**
+  That means registration and real competency compete for the same slot. Measured:
 
-Still open:
+  | Task gate | Who can lead |
+  |---|---|
+  | `requiresSkill: 'CPET'` | registered+CPET **and technologist-with-CPET** ← technologist gets in |
+  | `requiresSkill: 'registered'` | registered+CPET **and registered-without-CPET** ← wrong competency gets in |
+  | `requiresSkill: ['CPET','registered']` | **refused** — *"must be a skill name"* |
+  | `requiresSkill: 'CPET+registered'` | **refused** — *"nobody holds that skill"* |
 
-- **D3** — should the requester be told when a swap is accepted or declined? Currently nobody tells them. Needs a second listener or a Cloud Function.
-- **D4** — partition the roster per year/team instead of one `roster_2026` document. Needs a migration decision.
-- **D5** — which `TEAM_DIRECTORY` roles are rosterable? (Recommend `role === 'staff'`, matching today.)
-- **D6** — **`firestore.rules`.** There is none in the repo. Roster writes happen client-side and authorization exists only in your Firebase console, unversioned. Fine for one trusted team; **this is the first thing to settle before another department's data is involved.** I need your console's current rules to do this safely.
-- **D7** — the case-volume / skill-mix claim at `README.md:35` and `AppGuide.jsx:28` is still untrue. The research you supplied gives a legitimate route to making it true (NHPPD × Average Daily Census → required hours → FTE → slot counts).
-- **D8** — was the 6 May schema change a major version? `version-steward` chose 1.6.0 (minor) and flagged the argument for 2.0.0.
+  So Paediatric CPET — which needs a registered clinician *who is also CPET-competent* —
+  **cannot be expressed at all today.** You pick one requirement and let the other through. The
+  only escape is typing a fake compound skill like `CPET+registered` into somebody's skills
+  column, which is exactly the "museum of special cases" the v1.11.0 primitives work existed to
+  end. This is the real argument for a proper field: not that "skill" is the wrong word, but
+  that **you only get one, and registration would eat it.**
+
+  **What a first-class field means:** one more column on the person, checked *in addition to*
+  skill and band rather than instead of them —
+
+      Name            Grade   Registration   Skills
+      Bruce Banner    AH14    Registered     CPET, Sleep
+      Kamala Khan     AH11    Technologist   CPET
+
+  — so a task can say band `junior`+, registration `Registered`, skill `CPET`: three independent
+  requirements ANDed, which is how `leadBands` and `requiresSkill` already compose. It is a third
+  eligibility axis, not a new concept, and the engine's primitive design already has the shape
+  for it.
+
+  **Do not call it `role`. That name is taken, and it is load-bearing.** A slot already has a
+  `role`, and it does two jobs — neither of them "constrain who is eligible":
+
+  1. It is the human-readable slot label (`unfilled[].role` carries `'Junior embryologist'`).
+  2. **It is the identity key for affinity and pairing.** Continuity is *scoped to the role*, so
+     "the same practitioner at each clinic" pins the lead without also concentrating the
+     co-lead slots on one person; and `COMPOSE_PAIRING` groups a shift by matching
+     `fill.position.role === anchorRoleOf(task)`.
+
+  So reusing the word would not merely read oddly — it would collide with the field that makes
+  continuity and pairing work, in a way that would be very hard to unpick later.
+  `registration` or `staffCategory` avoids it.
+
+  **DECIDED for now: do not build it before the two presentations.** It changes the staff table,
+  which is the exact screen the respiratory and psychology teams are being shown, and the demo
+  fixture does not need it — it gates on `CPET` and on bands, both of which work. Two things
+  follow: **(a) do not claim registration gating on stage** — with one skill per task it is not
+  really there; and **(b) raise it *with* those two teams rather than before them.** They will
+  tell you whether their real constraint is a boolean (registered / not) or an ordered list
+  (registered / provisionally registered / assistant / student), and that decides the design.
+  Building it before you know is how it becomes the fifth special case.
+
+> ### ⚠️ RENUMBERED 2026-08-14 — these are now **Q**n, not **D**n, and the reason matters
+>
+> `D5`–`D8` meant **two completely different things** depending on which document you opened:
+>
+> | id | here, as a decision | in `CHANGELOG.md` and the audits, as a *defect* |
+> |---|---|---|
+> | 5 | which `TEAM_DIRECTORY` roles are rosterable | the slot "needs skill" input is unusable |
+> | 6 | **`firestore.rules`** | the ESLint config disables `no-unused-vars` for the engine |
+> | 7 | the untrue case-volume claim in the README | `compileQuota`'s comment contradicts the validator |
+> | 8 | was the 6 May change a major version | the impossible-floor refusal ignores the hours model |
+>
+> So *"settle D6 before another department's data is involved"* pointed a reader at a linter
+> setting. **The audit's `D` = Defect series keeps its numbers** — it is cited across several
+> released CHANGELOG entries, and rewriting a shipped release's record to tidy a name would be
+> the worse trade. So the *decisions* are renamed here, keeping their numbers so that anything
+> said in conversation still maps: `D3 → Q3`, and so on up to `Q12`.
+
+Still open — **Q** for a question only you can answer:
+
+- **Q3** — should the requester be told when a swap is accepted or declined? Currently nobody tells them. Needs a second listener or a Cloud Function.
+- **Q4** — partition the roster per year/team instead of one `roster_2026` document. Needs a migration decision.
+- **Q5** — which `TEAM_DIRECTORY` roles are rosterable? (Recommend `role === 'staff'`, matching today.)
+- **Q6** — **`firestore.rules`.** *(Corrected 2026-08-14: an earlier version of this line said "there is none in the repo", which contradicted §4 of this same document.)* The file **now exists and is tracked** — derived call-site by call-site rather than from a template — but it is an **inert proposal**: `firebase.json` declares only `hosting` and `functions`, so nothing deploys it. Roster writes remain client-side and authorization still lives only in your Firebase console, unversioned. Fine for one trusted team; **this is the first thing to settle before another department's data is involved.** I need your console's current rules to wire it safely.
+- **Q7** — the case-volume / skill-mix claim at `README.md:35` and `AppGuide.jsx:28` is still untrue. The research you supplied gives a legitimate route to making it true (NHPPD × Average Daily Census → required hours → FTE → slot counts).
+- **Q8** — was the 6 May schema change a major version? `version-steward` chose 1.6.0 (minor) and flagged the argument for 2.0.0. *(Note: v1.13.0 was classified minor on separate evidence — `rules.bands` is never persisted — which says nothing either way about 6 May.)*
 
 ---
 

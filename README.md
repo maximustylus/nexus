@@ -1,6 +1,6 @@
-# NEXUS: Smart Operations Dashboard v1.13.0 [BETA]
+# NEXUS: Smart Operations Dashboard v1.14.0 [BETA]
 
-![Version](https://img.shields.io/badge/Version-v1.13.0-blue) ![Status](https://img.shields.io/badge/Status-Beta%20Phase-emerald) ![Org](https://img.shields.io/badge/Unit-Sport%20%26%20Exercise%20Medicine-indigo) ![Tech](https://img.shields.io/badge/AI-Gemini%20Powered-purple) ![AURA](https://img.shields.io/badge/AURA-v2.3%20Engine-blue) ![PWA](https://img.shields.io/badge/PWA-Native%20Push%20Enabled-blue) ![CI/CD](https://img.shields.io/badge/CI%2FCD-GitHub%20Actions-2ea44f)
+![Version](https://img.shields.io/badge/Version-v1.14.0-blue) ![Status](https://img.shields.io/badge/Status-Beta%20Phase-emerald) ![Org](https://img.shields.io/badge/Unit-Sport%20%26%20Exercise%20Medicine-indigo) ![Tech](https://img.shields.io/badge/AI-Gemini%20Powered-purple) ![AURA](https://img.shields.io/badge/AURA-v2.3%20Engine-blue) ![PWA](https://img.shields.io/badge/PWA-Native%20Push%20Enabled-blue) ![CI/CD](https://img.shields.io/badge/CI%2FCD-GitHub%20Actions-2ea44f)
 
 **NEXUS** (formerly IDC App) is a clinician-led innovation platform designed to revolutionise workload management, optimise skill-mix routing, and actively protect staff wellbeing at the Sport and Exercise Medicine Centre. 
 
@@ -145,9 +145,9 @@ This application is an operational and workload management tool. It is not a cli
 ### Supported Versions
 | Version | Status |
 | ------- | ------ |
-| 1.13.x  | **Active Beta** (Evaluated by Senior CEPs) |
+| 1.14.x  | **Active Beta** (Evaluated by Senior CEPs) |
 | 1.12.x  | Legacy Stable |
-| < 1.12  | Deprecated / Offline |
+| < 1.13  | Deprecated / Offline |
 
 > This table is downstream of `package.json` `version`, as are the title line and the
 > `Version-` badge above, and `SECURITY.md`'s table of the same name. `package.json` is the only authoritative copy — see
@@ -182,7 +182,7 @@ Beta testers should utilise Demo Mode to verify system integrity:
 > also lists the **known issues that are documented but not yet fixed**. The summaries
 > below are narrative highlights; where the two disagree, `CHANGELOG.md` is correct.
 
-### NEXUS v1.13.0 [Current Beta]
+### NEXUS v1.14.0 [Current Beta]
 * **Profession and Shape Arrangement Picker:** The Sandbox wizard now opens with two controls — MOH's own list of 28 allied health professions, and **five roster structures**, each attributed on screen to the profession that described it in interview. It replaces an earlier attempt at one fabricated department per profession; six invented arrangements were deleted rather than shipped.
 * **Four Grade Bands (correctness fix):** `nonExempt AH7–AH10 · junior AH11–AH12 · senior AH13–AH14 · principal AH15–AH17`. Non-exempt staff (associates, assistants, technologists) shared a band with junior clinicians, so any task gated on the junior band would let a non-exempt assistant lead it. 121 tests were repaired, of which one was a genuine fixture defect rather than a stale assertion.
 * **One Version, One Source:** the app now reads its version from `package.json` via `src/version.js`. Three hand-typed literals had drifted (`v1.41-OFFICIAL`, `System v1.52`, `System Database v1.4`) and all three were live on the deployed site at once. A test now fails the build if a version is typed by hand in rendering code.

@@ -112,6 +112,56 @@ import {
 export const BAND_NAMES = Object.freeze(Object.keys(DEFAULT_GRADE_BANDS));
 
 /**
+ * THE WIZARD'S STEPS, IN THE ORDER A ROSTER MASTER FILLS THEM IN.
+ *
+ * The configuration wizard is one sequence — who you are, when the roster runs,
+ * how the department is shaped, who is in it, what they do — but it RENDERED as a
+ * stack of similar-looking cards with no order to them, so nothing told a
+ * first-time reader that "Staff" comes before "Tasks" for a reason, or how many
+ * more panels were below the fold.
+ *
+ * The numbers and the connecting spine come from THIS LIST, and the step numbers
+ * are its INDICES — not a `step={4}` written at each call site. Two of these
+ * panels live in `RosterView.jsx` and five in `RosterDemoWizardTables.jsx`, so
+ * hand-numbering would mean two files that must be kept in agreement, and
+ * inserting a step in the middle would silently renumber nothing. Reorder or
+ * insert here and both files follow, which is the same reason `BAND_DIVIDERS`
+ * derives from `BAND_NAMES` rather than being written down as two.
+ *
+ * `label` is the accessible name of the step, not the heading — each panel keeps
+ * its own visible heading. It is what a screen reader announces for the badge, so
+ * "Step 4 of 7: Working hours" is speakable without the icon.
+ */
+export const WIZARD_STEPS = Object.freeze([
+    Object.freeze({ id: 'team', label: 'Your team' }),
+    Object.freeze({ id: 'period', label: 'Dates and length' }),
+    Object.freeze({ id: 'bands', label: 'Grade bands' }),
+    Object.freeze({ id: 'hours', label: 'Working hours' }),
+    Object.freeze({ id: 'limits', label: 'Department limits' }),
+    Object.freeze({ id: 'staff', label: 'Staff' }),
+    Object.freeze({ id: 'tasks', label: 'Tasks' }),
+]);
+
+/** How many steps there are. Derived, so a new step counts itself. */
+export const WIZARD_STEP_COUNT = WIZARD_STEPS.length;
+
+/**
+ * A step id -> its 1-based number, or `null` for an id that is not a step.
+ *
+ * `null` rather than a throw or a silent `0`: a mistyped id must not render a
+ * badge reading "step 0 of 7", and it must not take the wizard down either. The
+ * component treats `null` as "draw the panel with no badge", which is visibly
+ * wrong in review and harmless to a roster master mid-configuration.
+ */
+export const wizardStepNumber = (id) => {
+    const index = WIZARD_STEPS.findIndex((step) => step.id === id);
+    return index === -1 ? null : index + 1;
+};
+
+/** A step id -> its accessible label, or `null` for an unknown id. */
+export const wizardStepLabel = (id) => WIZARD_STEPS.find((step) => step.id === id)?.label ?? null;
+
+/**
  * One definition of "the value of this cell, with the whitespace taken off".
  *
  * Declared up here rather than beside the parsers because the calendar and quota

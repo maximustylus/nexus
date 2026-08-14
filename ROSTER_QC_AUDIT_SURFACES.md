@@ -3,6 +3,34 @@
 Audited by `qc-steward`, 12 Aug 2026. Three uncommitted packages against `HEAD = 9c355ff` / tag `v1.9.0`.
 Nothing in `src/` or `functions/` was modified by this audit. Nothing was committed, tagged or pushed.
 
+> ## ⚠️ DATED SNAPSHOT — read the status note before acting on anything here
+>
+> **Status pass 2026-08-14, against v1.13.0.** This audit is a snapshot of the tree named above,
+> written in the present tense. Its findings are **not** edited when they are fixed — an audit
+> whose conclusions get quietly revised is worth nothing as a record, and part of this set's
+> value is that it caught its own author's diagnoses wrong more than once. So read it as
+> history, and take today's truth from these three places instead:
+>
+> - **What is still broken:** the `### Known issues` table under `[1.13.0]` in
+>   [CHANGELOG.md](CHANGELOG.md). That list is authoritative.
+> - **What is live and what to click:** [ROSTER_HANDOFF.md](ROSTER_HANDOFF.md) §1.
+> - **What changed since:** the release entries in [CHANGELOG.md](CHANGELOG.md).
+>
+> **Two things in here have certainly moved on.** *Test counts* — every figure quoted below was
+> correct on its date; the suite is **1630 tests across 27 files** today, so treat any other
+> number as a historical measurement, not a target. *The grade scale* — it had **three** bands
+> (`junior` AH7–AH12) when this was written and has **four** since 2026-08-13
+> (`nonExempt AH7–AH10 · junior AH11–AH12 · senior AH13–AH14 · principal AH15–AH17`), a
+> correctness fix, because AH7–AH10 are non-exempt staff and AH11–AH12 are junior AHPs. Any
+> three-band statement below is stale by that change alone. The ruler consequently has **three**
+> dividers, not two.
+>
+> **Note on ids.** `D`n here means a **defect**. `Q`n in `ROSTER_HANDOFF.md` means an **open
+> decision for the owner**. Both were once `D`n and collided at 5, 6, 7 and 8; the decisions were
+> renamed on 2026-08-14 and these defect numbers kept, because they are cited in already-released
+> CHANGELOG entries.
+
+
 **The tree is GREEN.** `1204 passed / 1204`, 19 files, real exit code `0` under both
 `TZ=Asia/Singapore` and `TZ=America/New_York` (measured with `> /dev/null 2>&1; echo $?`, not a pipe).
 

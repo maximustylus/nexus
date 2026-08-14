@@ -7,6 +7,43 @@ swap mutator inside `src/components/AuraPulseBot.jsx`.
 **Date:** 2026-08-05 · **Author:** post-mortem pass over `main` @ `79e3b99`
 **Status:** analysis complete (rev 2); remediation plans in [ROSTER_TODO.md](ROSTER_TODO.md).
 
+> ## ⚠️ READ THIS BEFORE THE DEFECTS: almost all of them are FIXED
+>
+> **Status pass 2026-08-14, against v1.13.0.** This document is a **dated snapshot of `79e3b99`**,
+> and it is written in the present tense — *"accepting a swap does not change the roster"*,
+> *"generation is a destructive whole-document overwrite"*. Those sentences were true when
+> written and **most are no longer true.** Nothing below has been rewritten: a post-mortem whose
+> findings get quietly edited once they are fixed is worthless as a record, and this one's value
+> is partly that it records where its own author was wrong. Read it as history, and read the
+> status here for what is true today.
+>
+> Each version below was verified against the CHANGELOG's `### Fixed` sections and, where the
+> CHANGELOG does not name the id, against the code itself.
+>
+> | Defect | Status today |
+> |---|---|
+> | **A1, A2, A3, A4, A-RC4** — the swap flow does not work, and claims success it did not achieve | ✅ **FIXED in v1.6.1.** `planSwapApplication` matches on `(dateKey, task, requestedBy)` via `shiftRoleOf`, transfers exactly the role the requester held, tolerates the legacy single-person shape, and reads back before approving. |
+> | **B1** — the default start date is a Sunday, so "Mon–Fri" is wrong | ✅ **FIXED in v1.7.1.** `snapToMonday` (`auraEngine.js:97`) applies to every run; DST-proof across six timezones. The shipped default is still 2026-02-01 and 1 Feb 2026 is still a Sunday — but the engine no longer trusts it. |
+> | **B2** — the date arithmetic | ✅ **RESOLVED in v1.7.1 — and this document's diagnosis of it was WRONG.** The audit proved the original code was already timezone-stable and that the "fix" proposed here would have *introduced* the bug. Marked `[rev2]` below. |
+> | **B3** — the calendar opens on a hardcoded, now-stale month | ✅ **FIXED in v1.7.1.** It initialises from `new Date()` (`RosterView.jsx:648`). |
+> | **B4** | ✅ **FIXED in v1.7.1.** |
+> | **C2** — generation is a destructive whole-document overwrite | ✅ **FIXED in v1.6.0** (commit `f888c3a`). The write is `setDoc(…, { merge: true })` at `RosterView.jsx:1402`, under a comment naming C2. *(An automated status pass proposed v1.7.0 here; `git log -S'merge: true'` disproves it.)* |
+> | **C4** — no `firestore.rules` in the repository | ⚠️ **HALF fixed.** The file now **exists and is tracked**, derived call-site by call-site. But it is **inert**: `firebase.json` declares only `hosting` and `functions`, so nothing deploys it. Authorization still lives only in the owner's console, unversioned. **Tracked as Q6 — the first thing to settle before another department's data is involved.** |
+> | **C1, C3** — one shared `roster_2026` document; staff pool hardcoded in the component | ❌ **STILL OPEN.** |
+> | **M1, M3** — two one-click paths that destroyed the live roster | ✅ **FIXED in v1.6.0.** Both were CRITICAL and armed at the time of writing. |
+> | **M4, M5, M8, M9, M11** | ✅ **FIXED in v1.6.1.** |
+> | **M2, M6, M10, M12** | ✅ **FIXED in v1.7.1.** ICS re-import now *updates* Outlook instead of duplicating; CSV is quoted and formula-injection-guarded. M12's guard is client-side only — the durable one is a Firestore rule, blocked on **Q6**. |
+> | **M7** | ✅ **FIXED in v1.7.0.** |
+> | **P0.7** — `npm run lint` has never worked, no ESLint config exists | ✅ **FIXED in v1.11.0.** A config exists, lint passes, and it gates every deploy. It still could not be run *locally* until 2026-08-14 — the cause was iCloud evicting `node_modules`, not the code. See `ROSTER_HANDOFF.md` §3. |
+>
+> **The authoritative list of what is still broken is the `### Known issues` table under
+> `[1.13.0]` in [CHANGELOG.md](CHANGELOG.md)** — not this document.
+>
+> **Note on ids.** The `D`n ids used in the audits and the CHANGELOG are **defects**. The `Q`n ids
+> in `ROSTER_HANDOFF.md` are **open decisions for the owner**. They were both once `D`n and
+> collided at 5, 6, 7 and 8; the decisions were renamed on 2026-08-14 and the defect numbers kept,
+> because they are cited in already-released CHANGELOG entries.
+
 > **Rev 2 — corrected after independent audit.** This document was audited by `qc-steward`
 > ([ROSTER_QC_AUDIT.md](ROSTER_QC_AUDIT.md)), which found **one central claim overstated (A1),
 > four claims outright wrong (B2 and three near-misses), several unevidenced assertions, and

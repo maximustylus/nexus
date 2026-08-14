@@ -60,6 +60,165 @@ Nothing yet.
 
 ---
 
+## [1.14.0] - 2026-08-15
+
+The configuration wizard becomes a **numbered sequence** rather than a stack of similar cards,
+and a set of documents that had drifted into contradicting each other is reconciled.
+
+### Added
+
+- **The wizard's panels are numbered 1–7 on a connecting spine.** They were seven
+  similarly-styled cards in a column: nothing said they were ordered, nothing said Staff comes
+  before Tasks for a reason, and nothing told a first-time reader how much was still below the
+  fold. The roster owner asked for *"a number and a line … so that it's logical and sequential"*,
+  from a reference showing exactly that.
+
+  **The numbers are derived, not written at the call sites.** `WIZARD_STEPS` in
+  `rosterWizard.js` is the one ordered list, and a step's number is its index. This matters more
+  than it looks: steps 1–2 are rendered by `RosterView.jsx` and steps 3–7 by
+  `RosterDemoWizardTables.jsx`, so hand-numbering would be two files that must be kept in
+  agreement, and inserting a panel in one would silently make the other's numbers wrong. Same
+  reason `BAND_DIVIDERS` derives from `BAND_NAMES` instead of being written down as two.
+
+  `WizardStep` is purely presentational — it takes a number and children, holds no state and
+  reads no roster data, so numbering the wizard cannot change what the wizard produces. All
+  1630 pre-existing tests passed unchanged, which is the evidence for that claim rather than an
+  argument for it.
+
+  Live mode is **not** numbered: its wizard is a different and shorter thing (two textareas), so
+  numbering it would count a sequence that does not exist there. It opts out by being handed no
+  number, not by a second branch of markup.
+
+- **`RosterView.steps.test.jsx`** — 9 tests. The load-bearing one asserts the badges read
+  `1..N` **in DOM order, with no gaps and no repeats, across both files**, compared against a
+  range derived from `WIZARD_STEPS` — so adding an eighth step makes the test demand an eighth
+  badge instead of quietly accepting seven. Mutation-checked five ways, all caught: a panel
+  losing its number (fails with `[1,2,3,5,6,7]` vs `[1,2,3,4,5,6,7]`), a number hard-coded at a
+  call site, the registry reordered, `min-w-0` dropped from the content column, and the spine
+  trailing past the final panel.
+
+### Fixed
+
+- **Two layout regressions the spine introduced, both found by looking at 375px rather than by
+  testing.** The badge gutter costs 32px of a phone's width, and below `sm:` the wizard's rows
+  stack rather than scroll, so that width comes out of the content.
+  - The grade ruler's tick strip had 25px per cell against the 26px `AH10` needs, so every
+    label from AH10 up rendered as `AH…`. The strip is now `text-[8px]` below `sm:`. It is
+    `aria-hidden` and the bands are spelled out in full in the legend directly beneath it, so
+    shrinking it by a pixel of font loses nothing — where narrowing the badges would have
+    compromised the thing being asked for.
+  - Giving step 2 a card to match the others then squeezed `<input type="date">` to 151px, and
+    at the 16px Sandbox uses to stop iOS zooming it needs ~150px **plus** its picker icon — so
+    the year rendered as `202`. Start Date now takes two thirds of the row and Weeks one; Weeks
+    holds a one- or two-digit number and never needed half.
+
+  *(A first attempt to measure the tick clipping used a `+1` pixel tolerance and reported no
+  problem — the shortfall was exactly one pixel. Noted because the tolerance, not the layout,
+  was what hid it.)*
+
+- **The `D`-prefix meant two different things in different documents, and one of them was
+  load-bearing.** `ROSTER_HANDOFF.md` used `D`n for *decisions the owner must make*; this file
+  and the audits use `D`n for *defects*. They collided at 5, 6, 7 and 8 with unrelated meanings
+  — so *"settle D6 before another department's data is involved"* pointed a reader at a linter
+  setting rather than at Firestore rules. The **decisions** are now `Q`n, keeping their numbers;
+  the **defect** numbers are unchanged because they are cited in already-released entries above,
+  and rewriting a shipped release's record to tidy a name is the worse trade.
+
+- **`ROSTER_HANDOFF.md` contradicted itself about `firestore.rules`** — §4 said the file exists
+  but is inert, while the decision entry said there is none in the repo. The file exists, is
+  tracked, and is **not deployed**: `firebase.json` declares only `hosting` and `functions`.
+
+### Notes — a task can require exactly ONE thing of a person
+
+`requiresSkill` is a single string, not a list. Combined with the fact that **bands are grade
+ranges and cannot express a role**, that produces a gap the four-band split did not close and
+could not have closed.
+
+The roster owner's observation that opened it, 2026-08-14: *"there might be a technologist with a
+junior grade."* So role and grade are orthogonal. A technologist at AH11 sits in the `junior` band
+exactly like a junior clinician at AH11, and `leadBands: ['junior']` therefore **admits them as
+lead**. Gating on a skill instead does work — a skill is an opaque string, and skill ANDs with the
+band gate — but only while the task needs nothing else. Measured against the engine:
+
+| Task gate | Who may lead |
+|---|---|
+| `requiresSkill: 'CPET'` | registered+CPET **and technologist-with-CPET** — registration ignored |
+| `requiresSkill: 'registered'` | registered+CPET **and registered-without-CPET** — competency ignored |
+| `requiresSkill: ['CPET', 'registered']` | refused — *"must be a skill name"* |
+| `requiresSkill: 'CPET+registered'` | refused — *"nobody holds that skill"* |
+
+So *"a registered clinician who is also CPET-competent"* — which is what Paediatric CPET actually
+requires — **cannot be expressed today.** One requirement wins and the other is waived. The only
+workaround is a fabricated compound skill (`CPET+registered`) typed into a person's skills column,
+which is the class of special case the v1.11.0 primitives work existed to remove.
+
+**Not fixed, deliberately.** The fix is a third eligibility axis — one more column on the person,
+checked alongside band and skill rather than instead of them — and it changes the staff table,
+which is the screen the respiratory and psychology teams are about to be shown. **Two professions
+have now asked for it independently:** cardiology's roster master described competency sign-off per
+modality *with levels* (supervised vs independent), which also answers the open question of shape
+— it is an **ordered list**, not a boolean. Tracked as **Q12** in `ROSTER_HANDOFF.md`.
+
+Two consequences that are not optional:
+
+- **Registration gating must not be claimed** for this version. Band gating is real and
+  demonstrable; registration gating is not, yet.
+- **Do not name the new field `role` — that name is taken and it is load-bearing.** A slot's
+  `role` is both the human-readable slot label (`unfilled[].role` carries
+  `'Junior embryologist'`) *and* the identity key for two primitives: affinity is **scoped to the
+  role**, so "the same practitioner at each clinic" pins the lead without also concentrating the
+  co-lead slots on one person, and `COMPOSE_PAIRING` groups a shift by matching
+  `fill.position.role === anchorRoleOf(task)`. It constrains nothing about *who* is eligible, but
+  reusing the word would collide with the field that makes continuity and pairing work.
+  `registration` or `staffCategory` avoids it.
+
+### Notes — a task can require exactly ONE thing of a person
+
+`requiresSkill` is a single string, not a list. Combined with the fact that **bands are grade
+ranges and cannot express a role**, that produces a gap the four-band split did not close and
+could not have closed.
+
+The roster owner's observation that opened it, 2026-08-14: *"there might be a technologist with a
+junior grade."* So role and grade are orthogonal. A technologist at AH11 sits in the `junior` band
+exactly like a junior clinician at AH11, and `leadBands: ['junior']` therefore **admits them as
+lead**. Gating on a skill instead does work — a skill is an opaque string, and skill ANDs with the
+band gate — but only while the task needs nothing else. Measured against the engine:
+
+| Task gate | Who may lead |
+|---|---|
+| `requiresSkill: 'CPET'` | registered+CPET **and technologist-with-CPET** — registration ignored |
+| `requiresSkill: 'registered'` | registered+CPET **and registered-without-CPET** — competency ignored |
+| `requiresSkill: ['CPET', 'registered']` | refused — *"must be a skill name"* |
+| `requiresSkill: 'CPET+registered'` | refused — *"nobody holds that skill"* |
+
+So *"a registered clinician who is also CPET-competent"* — which is what Paediatric CPET actually
+requires — **cannot be expressed today.** One requirement wins and the other is waived. The only
+workaround is a fabricated compound skill (`CPET+registered`) typed into a person's skills column,
+which is the class of special case the v1.11.0 primitives work existed to remove.
+
+**Not fixed, deliberately.** The fix is a third eligibility axis — one more column on the person,
+checked alongside band and skill rather than instead of them — and it changes the staff table,
+which is the screen the respiratory and psychology teams are about to be shown. It also needs an
+answer the code cannot supply: whether the real constraint is a boolean (registered / not) or an
+ordered list (registered / provisionally registered / assistant / student). Tracked as **D12** in
+`ROSTER_HANDOFF.md`, to be raised *with* those teams rather than guessed at before them.
+
+Two consequences that are not optional:
+
+- **Registration gating must not be claimed** for this version. Band gating is real and
+  demonstrable; registration gating is not, yet.
+- **Do not name the new field `role` — that name is taken and it is load-bearing.** A slot's
+  `role` is both the human-readable slot label (`unfilled[].role` carries
+  `'Junior embryologist'`) *and* the identity key for two primitives: affinity is **scoped to the
+  role**, so "the same practitioner at each clinic" pins the lead without also concentrating the
+  co-lead slots on one person, and `COMPOSE_PAIRING` groups a shift by matching
+  `fill.position.role === anchorRoleOf(task)`. It constrains nothing about *who* is eligible, but
+  reusing the word would collide with the field that makes continuity and pairing work.
+  `registration` or `staffCategory` avoids it.
+
+
+---
+
 ## [1.13.0] - 2026-08-14
 
 Two changes, and the second is what makes the first repeatable. The arrangement picker

@@ -96,6 +96,7 @@ import {
 // 🧪 SANDBOX WIZARD — the structured tables that replaced the two textareas in
 // demo mode, and the ONE pure function that turns them into an engine config.
 import RosterDemoWizardTables from './RosterDemoWizardTables';
+import WizardStep from './WizardStep';
 import {
     buildDemoRosterV2ConfigFromTables,
     createEmptyStaffRows,
@@ -110,6 +111,8 @@ import {
     EMPTY_RULES_INPUTS,
     partitionDemoWarnings,
     summariseUnfilledCauses,
+    wizardStepNumber,
+    wizardStepLabel,
 } from '../utils/rosterWizard';
 // 👤 ONE PERSON'S DUTIES — pure, unit-tested in rosterPersonView.test.js, and used
 // by BOTH universes: "my week" is a re-reading of the roster already on screen, so
@@ -2874,7 +2877,14 @@ const RosterView = ({ user }) => {
                             A typed-in team still works and is still the point of the tables
                             below: "Start blank" is the first option in the shape list, a
                             name alone is enough, and every column beside it is optional. */}
+                        {/* STEP 1. The numbers and the spine come from `WIZARD_STEPS`, and
+                            only Sandbox is numbered: live mode's wizard is a different, shorter
+                            thing (two textareas), so numbering it would count a sequence that
+                            does not exist there. `WizardStep` renders its children bare when it
+                            is handed no number, which is how live mode opts out without a second
+                            branch of markup. */}
                         {isDemo && (
+                            <WizardStep number={wizardStepNumber('team')} label={wizardStepLabel('team')}>
                             <div className="mb-4 p-3 rounded-xl bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800">
                                 {/* ── CONTROL 1: WHO YOU ARE ─────────────────────────────
                                     MOH's own 28, with `<optgroup>` for the two that nest
@@ -3025,11 +3035,30 @@ const RosterView = ({ user }) => {
                                     </p>
                                 )}
                             </div>
+                            </WizardStep>
                         )}
 
-                        <div className="space-y-4 mb-6">
-                            <div className="grid grid-cols-2 gap-4">
-                                <div>
+                        {/* `space-y-0` in Sandbox: the vertical rhythm between numbered panels
+                            belongs to the spine, and a margin between rows would chop the line
+                            into dashes. Live mode keeps `space-y-4`, unnumbered and unchanged. */}
+                        <div className={isDemo ? 'mb-6' : 'space-y-4 mb-6'}>
+                            <WizardStep number={isDemo ? wizardStepNumber('period') : null} label={wizardStepLabel('period')}>
+                            {/* In Sandbox this gets the same card as every other numbered step.
+                                Left bare it was the one step on the spine with no panel around
+                                it, which read as a gap in the sequence rather than as a step.
+                                Live mode keeps it bare and unnumbered — the classes are
+                                conditional, not a second copy of the markup. */}
+                            <div className={isDemo
+                                ? 'mb-4 p-3 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 grid grid-cols-3 gap-3'
+                                : 'grid grid-cols-2 gap-4'}
+                            >
+                                {/* TWO THIRDS TO THE DATE, one to Weeks — in Sandbox only.
+                                    Equal halves left the date field 151px, and the native
+                                    `<input type="date">` at the 16px Sandbox uses to stop iOS
+                                    zooming needs about 150px for `01/02/2026` PLUS its picker
+                                    icon, so the year rendered as `202`. Weeks holds a
+                                    one- or two-digit number and never needed half the row. */}
+                                <div className={isDemo ? 'col-span-2' : undefined}>
                                     <label className="text-xs font-bold text-slate-400 uppercase" htmlFor="roster-start-date">Start Date</label>
                                     <input
                                         id="roster-start-date"
@@ -3060,6 +3089,7 @@ const RosterView = ({ user }) => {
                                     />
                                 </div>
                             </div>
+                            </WizardStep>
                             {/* 🧪 THE ONE PLACE THE TWO UNIVERSES' WIZARDS DIFFER.
                                 Sandbox gets the grade-aware tables — a name alone still
                                 generates, but a grade, an FTE, leave dates, per-task
