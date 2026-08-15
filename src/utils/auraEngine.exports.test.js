@@ -245,6 +245,49 @@ describe('buildICS — RFC 5545 correctness (audit M6)', () => {
         expect(ics).toContain('DESCRIPTION:');
     });
 
+    it('carries the category as CATEGORIES, so Outlook can colour by it', () => {
+        const ics = buildICS(oneShiftRoster({ category: 'Clinical' }), { now: NOW });
+        expect(ics).toContain('CATEGORIES:Clinical');
+    });
+
+    it('escapes commas in CATEGORIES — a bare comma would mean TWO categories', () => {
+        // RFC 5545 §3.8.1.2: CATEGORIES is comma-separated. "Clinic, Ward" must
+        // import as ONE label, so the comma travels escaped.
+        const ics = buildICS(oneShiftRoster({ category: 'Clinic, Ward' }), { now: NOW });
+        expect(ics).toContain('CATEGORIES:Clinic\\, Ward');
+        expect(ics).not.toContain('CATEGORIES:Clinic, Ward');
+    });
+
+    it("emits the owner's palette as RFC 7986 COLOR, for the four standard categories only", () => {
+        // Management yellow, Clinical brown, Research limegreen, Education orange —
+        // all four are literal CSS3 colour names, which is what COLOR requires.
+        for (const [category, css] of [
+            ['Management', 'yellow'],
+            ['Clinical', 'brown'],
+            ['Research', 'limegreen'],
+            ['Education', 'orange'],
+        ]) {
+            const ics = buildICS(oneShiftRoster({ category }), { now: NOW });
+            expect(ics).toContain(`COLOR:${css}`);
+        }
+        // Case-insensitive, because the wizard box is free text.
+        expect(buildICS(oneShiftRoster({ category: 'clinical' }), { now: NOW })).toContain('COLOR:brown');
+    });
+
+    it("gives a team's own category CATEGORIES but never a colour nobody chose", () => {
+        for (const category of ['CORE', 'VC', 'WEEKEND', 'ON CALL', 'Diagnostics']) {
+            const ics = buildICS(oneShiftRoster({ category }), { now: NOW });
+            expect(ics).toContain(`CATEGORIES:${category}`);
+            expect(ics).not.toContain('COLOR:');
+        }
+    });
+
+    it('emits neither property for a shift with no category at all', () => {
+        const ics = buildICS(oneShiftRoster({ category: undefined }), { now: NOW });
+        expect(ics).not.toContain('CATEGORIES:');
+        expect(ics).not.toContain('COLOR:');
+    });
+
     it('disambiguates a repeated task name within one day', () => {
         const ics = buildICS(
             {

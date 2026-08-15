@@ -53,6 +53,55 @@ Nothing yet.
 
 ---
 
+## [1.15.0] - 2026-08-15
+
+The roster owner's category palette, carried everywhere a shift goes.
+
+### Added
+
+- **Four standard categories with the owner's exact colours** — Clinical **brown**, Education
+  **orange**, Research **lime green**, Management **yellow** — in `src/utils/rosterCategories.js`,
+  the ONE map three surfaces read: the calendar chips, the wizard's per-task category label
+  (now a coloured chip instead of summary text), and the ICS export. One map because three
+  copies is how the app ends up disagreeing with the file a colleague imported into Outlook.
+- **The `.ics` carries `CATEGORIES:` on every event** (RFC 5545 §3.8.1.2) — Outlook colours by
+  category after a one-time assignment, and every later import follows. Escaping is
+  load-bearing here more than anywhere else in the exporter: in CATEGORIES a bare comma means
+  TWO categories, so `Clinic, Ward` travels escaped. Emitted only when a category exists.
+- **…and RFC 7986 `COLOR:` for the standard four.** COLOR's value must be a CSS3 colour *name*,
+  and the owner's palette is four literal CSS names — `brown`, `orange`, `limegreen`, `yellow` —
+  so the palette ships in the file verbatim. A team's own category (`WEEKEND`, `VC`, a word of
+  their choosing) gets `CATEGORIES` alone: no colour nobody chose.
+- **The category box offers the standard four** via a datalist — free text deliberately
+  preserved, because some categories are *quota handles*, not work types: the lab's `WEEKEND`
+  floor pools over whatever word its tasks carry, and a closed dropdown would break a shape
+  that already ships.
+- **A deterministic, explainable suggestion.** A keyword table reads the task name and offers a
+  chip — *looks like Research — "Journal" · tap to apply* — that names the word that earned it,
+  applies only on a tap, and withdraws once anything is typed. Explicitly **not** AI: category
+  changes quota pooling, so an unexplainable inference here is a claim the roster master cannot
+  check — the exact failure class this project's post-mortem exists to prevent. The rule
+  follows `suggestedShapeFor`: *a suggestion that loads without being chosen is a claim.*
+
+### Changed
+
+- The calendar's category colouring stops being one hardcoded special case. It was literally
+  `s.category === 'VC' ? orange : blue` — the live team's video clinic and nothing else. The
+  palette map now runs first; `VC` keeps its exact orange; everything unrecognised keeps the
+  default blue.
+
+### Notes
+
+- Category is still an **opaque string to the engine**, deliberately. The engine gaining an
+  opinion about what "Clinical" means is the day `WEEKEND` quotas stop being expressible.
+  Styling and suggestion live entirely at the edge.
+- Verified in the browser against the worked example: Clinical chips brown, Education orange,
+  `Diagnostics` and `On Call` neutral; the calendar shows Inpatient Rounds brown, Student
+  Supervision orange, Sleep Study Review default. 15 new tests (palette contract, CATEGORIES
+  escaping, COLOR for the four and only the four, suggestion offered-not-applied), 1654 total.
+
+---
+
 ## [1.14.1] - 2026-08-15
 
 A wizard-row tidy asked for from a screenshot, and the documentation audit finished.

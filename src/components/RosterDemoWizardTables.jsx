@@ -96,6 +96,7 @@ import {
     WIZARD_STEP_COUNT,
 } from '../utils/rosterWizard';
 import WizardStep from './WizardStep';
+import { STANDARD_CATEGORIES, categoryChipClass, suggestCategoryFor } from '../utils/rosterCategories';
 
 // --- 0. THE RESPONSIVE CONTRACT ------------------------------------------------
 //
@@ -1885,9 +1886,16 @@ const TaskRowDetail = ({ row, index, bands, onChange }) => {
                     <div className={DRAWER_DIVIDER}>
                         <DrawerGroup label="Category">
                             <div className="flex flex-wrap items-start gap-3">
+                                {/* Free text WITH the four standard categories offered — a
+                                    datalist, not a <select>, because restricting this box
+                                    would break the categories that are quota handles rather
+                                    than work types: the lab's WEEKEND floor pools over
+                                    whatever word the team typed, and a dropdown that forbids
+                                    their word breaks a shape that already ships. */}
                                 <input
                                     id={`task-category-${row.id}`}
                                     type="text"
+                                    list="task-category-standard"
                                     aria-label={label('category')}
                                     value={row.category}
                                     // The engine's own default, shown rather than
@@ -1899,13 +1907,40 @@ const TaskRowDetail = ({ row, index, bands, onChange }) => {
                                     className={`${CELL_INPUT} sm:w-40`}
                                 />
                                 <p className="text-[10px] text-slate-500 dark:text-slate-400 leading-relaxed max-w-md">
-                                    What kind of work this is — <span className="font-bold">Clinical</span>,{' '}
-                                    <span className="font-bold">Rehab</span>,{' '}
-                                    <span className="font-bold">On Call</span>. It travels onto every shift
-                                    and the calendar colours it. Blank means{' '}
+                                    What kind of work this is. Four standard categories are
+                                    colour-coded in the calendar and travel into the
+                                    downloaded .ics — <span className="font-bold">Clinical</span>,{' '}
+                                    <span className="font-bold">Education</span>,{' '}
+                                    <span className="font-bold">Research</span>,{' '}
+                                    <span className="font-bold">Management</span> — and any other
+                                    word still works (a weekend floor pools over whatever
+                                    category its tasks carry). Blank means{' '}
                                     <span className="font-bold">{ROSTER_V2_DEFAULTS.category}</span>.
                                 </p>
                             </div>
+                            {/* THE SUGGESTION — deterministic, explainable, and TAPPED, never
+                                applied. It names the word that earned it, because category
+                                changes quota pooling, so an unexplainable inference here is a
+                                claim the roster master cannot check. Only offered while the
+                                box is blank: once somebody has typed, they have decided. */}
+                            {(() => {
+                                const alreadyTyped = typeof row.category === 'string' && row.category.trim() !== '';
+                                if (alreadyTyped) return null;
+                                const suggestion = suggestCategoryFor(row.name);
+                                if (suggestion === null) return null;
+                                return (
+                                    <button
+                                        type="button"
+                                        onClick={() => onChange(row.id, { category: suggestion.category })}
+                                        className={`mt-1.5 inline-flex items-center gap-1 px-2 py-1 ${TOUCH} rounded text-[10px] font-bold border border-dashed ${
+                                            categoryChipClass(suggestion.category) ?? ''
+                                        }`}
+                                        aria-label={`Task row ${index + 1}: apply suggested category ${suggestion.category}`}
+                                    >
+                                        looks like {suggestion.category} — “{suggestion.because}” · tap to apply
+                                    </button>
+                                );
+                            })()}
                         </DrawerGroup>
                     </div>
 
@@ -1974,6 +2009,13 @@ export const TaskTable = ({ rows, errors, bands, onChange, onAdd, onRemove }) =>
             <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1 flex items-center gap-1.5">
                 <ClipboardList size={13} /> Tasks
             </p>
+            {/* One datalist for every row's category box. The four standard names,
+                derived from the same map that colours the calendar and the .ics. */}
+            <datalist id="task-category-standard">
+                {STANDARD_CATEGORIES.map((entry) => (
+                    <option key={entry.name} value={entry.name} />
+                ))}
+            </datalist>
 
             {/* See the staff table: no horizontal scroller below `sm:`, because below
                 `sm:` there is nothing to scroll — the row is a card. */}
@@ -2058,8 +2100,23 @@ export const TaskTable = ({ rows, errors, bands, onChange, onAdd, onRemove }) =>
                                                 quotaParts.length > 0
                                                     ? `${quotaParts.join(', ')}${quotaPeriod === undefined ? '' : ` ${quotaPeriod.label}`}`
                                                     : null,
-                                                categorySet ? row.category.trim() : null,
                                             ]} />
+                                            {/* The category, OUT of the plain-text summary and into a chip
+                                                wearing the same colour the calendar and the exported .ics
+                                                will use — so the row is a preview of the roster, not a note
+                                                about it. Non-standard categories (WEEKEND, VC, a team's own
+                                                word) keep the neutral summary styling: a colour nobody chose
+                                                is a claim. */}
+                                            {categorySet && (
+                                                <p className="mt-0.5">
+                                                    <span className={`inline-block px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider ${
+                                                        categoryChipClass(row.category)
+                                                        ?? 'text-slate-400 border border-slate-200 dark:border-slate-700'
+                                                    }`}>
+                                                        {row.category.trim()}
+                                                    </span>
+                                                </p>
+                                            )}
                                         </Cell>
                                         <Cell label={TASK_HEADINGS.bands} className="py-1 pr-2 align-top">
                                             {/* In slot mode these chips would be dropped by

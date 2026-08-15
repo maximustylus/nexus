@@ -1,5 +1,13 @@
 // src/utils/auraEngine.js
 
+// THE MODULE'S ONLY IMPORT, and why it is safe where others were refused: this
+// file is deliberately standalone (plain-Node-resolvable, no cycle with the V2
+// engine). `rosterCategories` is a dependency-free leaf holding the owner's
+// category palette — Management yellow, Clinical brown, Research limegreen,
+// Education orange — and the ICS export below must emit the SAME palette the
+// calendar draws, so a second copy here is the drift this import prevents.
+import { categoryCssColor } from './rosterCategories.js';
+
 // --- 0. THE SHIFT DISPLAY STRING — ONE DEFINITION ----------------------------
 //
 // `staff` is a DERIVED DISPLAY STRING, not an identity. It stopped being an
@@ -1070,8 +1078,24 @@ export const buildICS = (rosterData, options = {}) => {
                 `DTSTART;VALUE=DATE:${dtStart}`,
                 `SUMMARY:${escapeICSText(summary)}`,
                 `DESCRIPTION:${escapeICSText(description)}`,
-                'END:VEVENT',
             );
+            // CATEGORIES (RFC 5545 §3.8.1.2) — the shift's category travels into
+            // the file, so Outlook can colour by it: assign each category a colour
+            // once and every future import follows. Escaping is LOAD-BEARING here,
+            // more than anywhere else in this exporter: in CATEGORIES a bare comma
+            // separates TWO categories, so an unescaped "Clinic, Ward" would import
+            // as two labels. Emitted only when a category exists — a legacy shift
+            // without one gets no empty property.
+            if (category !== '') {
+                lines.push(`CATEGORIES:${escapeICSText(category)}`);
+                // COLOR (RFC 7986 §5.9) — value MUST be a CSS3 colour name, which
+                // is exactly what the palette map holds. Only the four standard
+                // categories carry a colour; a team's own category (WEEKEND, VC)
+                // gets CATEGORIES alone rather than a colour nobody chose.
+                const cssColor = categoryCssColor(category);
+                if (cssColor !== null) lines.push(`COLOR:${cssColor}`);
+            }
+            lines.push('END:VEVENT');
         });
     });
 

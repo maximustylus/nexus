@@ -114,6 +114,7 @@ import {
     wizardStepNumber,
     wizardStepLabel,
 } from '../utils/rosterWizard';
+import { categoryChipClass } from '../utils/rosterCategories';
 // 👤 ONE PERSON'S DUTIES — pure, unit-tested in rosterPersonView.test.js, and used
 // by BOTH universes: "my week" is a re-reading of the roster already on screen, so
 // it needs no engine call, no extra read and no write. Live mode's data path is
@@ -2156,8 +2157,15 @@ const RosterView = ({ user }) => {
                                             className={`text-left text-xs sm:text-[9px] font-bold px-2 py-2 sm:px-1.5 sm:py-1 ${TOUCH} rounded flex flex-col leading-tight shadow-sm transition-transform ${
                                                 isMyShift || user?.role === 'admin' ? 'cursor-pointer hover:scale-[1.02] ring-1 ring-inset ring-transparent hover:ring-indigo-400' : 'cursor-default opacity-80'
                                             } ${
-                                                s.category === 'VC' ? 'bg-orange-50 text-orange-800 border border-orange-100 dark:bg-orange-900/30 dark:text-orange-400 dark:border-orange-800/50' :
-                                                'bg-blue-50 text-blue-700 border border-blue-100 dark:bg-blue-900/30 dark:text-blue-400 dark:border-blue-800/50'
+                                                // The owner's palette first — Management yellow, Clinical
+                                                // brown, Research limegreen, Education orange — from the ONE
+                                                // map the ICS export also reads, so the calendar and the file
+                                                // a colleague imports cannot disagree. Then the live team's
+                                                // long-standing VC orange, byte-identical; then the default.
+                                                categoryChipClass(s.category) ?? (
+                                                    s.category === 'VC' ? 'bg-orange-50 text-orange-800 border border-orange-100 dark:bg-orange-900/30 dark:text-orange-400 dark:border-orange-800/50' :
+                                                    'bg-blue-50 text-blue-700 border border-blue-100 dark:bg-blue-900/30 dark:text-blue-400 dark:border-blue-800/50'
+                                                )
                                             }`}
                                         >
                                             <span className="uppercase tracking-tighter opacity-80">{s.task}</span>

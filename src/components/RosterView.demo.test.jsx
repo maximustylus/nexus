@@ -3016,3 +3016,60 @@ describe('demo mode: every shape survives the wizard intact', () => {
         },
     );
 });
+
+// ─── THE CATEGORY: COLOURED, SUGGESTED, NEVER GUESSED ─────────────────────────
+//
+// The owner's palette (Management yellow, Clinical brown, Research limegreen,
+// Education orange) derives from ONE map that the calendar, the wizard labels
+// and the ICS exporter all read. These tests pin the two component-level
+// behaviours the unit tests cannot see: the chip renders the palette, and the
+// suggestion is offered — never applied.
+
+describe('demo mode: the category chip and its suggestion', () => {
+    it('offers a suggestion from the task name, with its reason, and applies it only on a tap', () => {
+        render(<RosterView user={VISITOR} />);
+        openConfigure();
+
+        setTaskName(1, 'Journal Club');
+        toggleTaskMore(1);
+
+        // The suggestion names its evidence — deterministic, not a guess…
+        const chip = screen.getByLabelText('Task row 1: apply suggested category Research');
+        expect(chip.textContent).toContain('Research');
+        expect(chip.textContent).toContain('Journal');
+
+        // …and NOTHING is applied until it is tapped.
+        expect(screen.getByLabelText('Task row 1 category').value).toBe('');
+        fireEvent.click(chip);
+        expect(screen.getByLabelText('Task row 1 category').value).toBe('Research');
+
+        // Once a category exists the suggestion withdraws — typed means decided.
+        expect(screen.queryByLabelText('Task row 1: apply suggested category Research')).toBeNull();
+    });
+
+    it('stays silent for a name it has no opinion about', () => {
+        render(<RosterView user={VISITOR} />);
+        openConfigure();
+
+        setTaskName(1, 'Holter');
+        toggleTaskMore(1);
+        expect(screen.queryByLabelText(/apply suggested category/)).toBeNull();
+    });
+
+    it('renders the worked example\'s categories in the palette, and leaves the rest neutral', () => {
+        render(<RosterView user={VISITOR} />);
+        openConfigure();
+        loadExample();
+
+        // Clinical wears brown (the hex chip — Tailwind has no brown scale)…
+        const clinical = screen.getAllByText('Clinical').find((el) => el.className.includes('#f2e6d8') || el.className.includes('#3f2d1d'));
+        expect(clinical).toBeTruthy();
+        // …Education wears orange…
+        const education = screen.getAllByText('Education').find((el) => el.className.includes('bg-orange'));
+        expect(education).toBeTruthy();
+        // …and a category nobody standardised gets NO colour nobody chose.
+        const diagnostics = screen.getAllByText('Diagnostics').find((el) => el.className.includes('inline-block'));
+        expect(diagnostics).toBeTruthy();
+        expect(diagnostics.className).not.toMatch(/bg-orange|bg-lime|bg-yellow|#f2e6d8/);
+    });
+});

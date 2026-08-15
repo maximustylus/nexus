@@ -1,6 +1,6 @@
-# NEXUS: Smart Operations Dashboard v1.14.1 [BETA]
+# NEXUS: Smart Operations Dashboard v1.15.0 [BETA]
 
-![Version](https://img.shields.io/badge/Version-v1.14.1-blue) ![Status](https://img.shields.io/badge/Status-Beta%20Phase-emerald) ![Org](https://img.shields.io/badge/Unit-Sport%20%26%20Exercise%20Medicine-indigo) ![Tech](https://img.shields.io/badge/AI-Gemini%20Powered-purple) ![AURA](https://img.shields.io/badge/AURA-v2.3%20Engine-blue) ![PWA](https://img.shields.io/badge/PWA-Native%20Push%20Enabled-blue) ![CI/CD](https://img.shields.io/badge/CI%2FCD-GitHub%20Actions-2ea44f)
+![Version](https://img.shields.io/badge/Version-v1.15.0-blue) ![Status](https://img.shields.io/badge/Status-Beta%20Phase-emerald) ![Org](https://img.shields.io/badge/Unit-Sport%20%26%20Exercise%20Medicine-indigo) ![Tech](https://img.shields.io/badge/AI-Gemini%20Powered-purple) ![AURA](https://img.shields.io/badge/AURA-v2.3%20Engine-blue) ![PWA](https://img.shields.io/badge/PWA-Native%20Push%20Enabled-blue) ![CI/CD](https://img.shields.io/badge/CI%2FCD-GitHub%20Actions-2ea44f)
 
 **NEXUS** (formerly IDC App) is a clinician-led innovation platform designed to revolutionise workload management, optimise skill-mix routing, and actively protect staff wellbeing at the Sport and Exercise Medicine Centre. 
 
@@ -145,9 +145,9 @@ This application is an operational and workload management tool. It is not a cli
 ### Supported Versions
 | Version | Status |
 | ------- | ------ |
-| 1.14.x  | **Active Beta** (Evaluated by Senior CEPs) |
-| 1.13.x  | Legacy Stable |
-| < 1.13  | Deprecated / Offline |
+| 1.15.x  | **Active Beta** (Evaluated by Senior CEPs) |
+| 1.14.x  | Legacy Stable |
+| < 1.14  | Deprecated / Offline |
 
 > This table is downstream of `package.json` `version`, as are the title line and the
 > `Version-` badge above, and `SECURITY.md`'s table of the same name. `package.json` is the only authoritative copy — see
@@ -186,7 +186,11 @@ Beta testers should utilise Demo Mode to verify system integrity:
 > also lists the **known issues that are documented but not yet fixed**. The summaries
 > below are narrative highlights; where the two disagree, `CHANGELOG.md` is correct.
 
-### NEXUS v1.14.0 [Current Beta]
+### NEXUS v1.15.0 [Current Beta]
+* **Categories are colour-coded, everywhere the shift goes.** Four standard categories — **Clinical** (brown), **Education** (orange), **Research** (lime green), **Management** (yellow) — colour the calendar, the wizard's per-task label, and the downloaded `.ics`: every event carries `CATEGORIES:` (so Outlook can colour by category after a one-time mapping) and, for the four standard ones, RFC 7986 `COLOR:` — whose value must be a CSS colour name, which the palette's four names literally are. One map (`src/utils/rosterCategories.js`) feeds all three surfaces, so the app and the imported file cannot disagree.
+* **The category box now offers the standard four** (free text still works — a weekend quota pools over whatever word its team typed), and a **deterministic suggestion** reads the task name and offers its category *with the word that earned it* — "looks like Research — 'Journal'" — applied only on a tap, never silently. Not AI, on purpose: category changes quota pooling, so a suggestion the roster master cannot check is a claim.
+
+### NEXUS v1.14.0
 * **The Configuration Wizard is a Numbered Sequence:** its seven panels carry badges 1–7 on a connecting spine, so a colleague being walked through the Sandbox can say which step they are on. The numbers are **derived, not typed** — a step's number is its index in `WIZARD_STEPS` (`src/utils/rosterWizard.js`), the same derive-don't-duplicate rule the band ruler follows. Steps 1–2 render from `RosterView.jsx` and 3–7 from `RosterDemoWizardTables.jsx`, through one new presentational component, `src/components/WizardStep.jsx`; hand-numbering would have been two files to keep in agreement. Live mode's wizard is deliberately **not** numbered — it is a different and shorter thing.
 * **Two phone-layout fixes at 375px**, both introduced by the spine's 32px gutter and both found by looking rather than by testing: the grade ruler's tick labels were clipping from `AH10` up, and the date field had lost its year.
 * **Documentation reconciled.** The `D`-prefix meant *defect* in some documents and *decision* in others, colliding at 5–8 with unrelated meanings; decisions are now `Q`n. The five historical audit documents gained dated status banners rather than edits, so a post-mortem's findings are never quietly revised once fixed.
