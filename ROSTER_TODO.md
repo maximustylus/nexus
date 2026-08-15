@@ -24,9 +24,9 @@ files were byte-identical to `HEAD`. Those `DONE` markers were false and are rem
 >
 > | Question | Answer lives in |
 > |---|---|
-> | What is still broken | the `### Known issues` table under `[1.14.0]`/`[1.13.0]` in [CHANGELOG.md](CHANGELOG.md) — **authoritative** |
+> | What is still broken | the `### Known issues` table under `[1.13.0]` in [CHANGELOG.md](CHANGELOG.md) — **authoritative**, and the only one |
 > | What is live, and what to click | [ROSTER_HANDOFF.md](ROSTER_HANDOFF.md) §1 |
-> | What the owner still has to decide | [ROSTER_HANDOFF.md](ROSTER_HANDOFF.md) §5, ids `Q3`–`Q12` |
+> | What the owner still has to decide | [ROSTER_HANDOFF.md](ROSTER_HANDOFF.md) §5, ids `Q1`–`Q8` and `Q10`–`Q12` — **there is no `Q9`** |
 > | What to build next | **§Current queue** at the foot of this file |
 >
 > ### ⚠️ `D` MEANS THREE DIFFERENT THINGS IN THIS FILE. Read this before following any id.
@@ -39,8 +39,10 @@ files were byte-identical to `HEAD`. Those `DONE` markers were false and are rem
 > | "added to post-mortem **D3**" (P0.7 evidence row) | a **defect** in the post-mortem's series | unchanged — defect ids keep `D`, because they are cited in already-released CHANGELOG entries |
 > | "Block **D1**" (P0 heading) | a post-mortem **work-block** label, not an id at all | unchanged |
 >
-> So `D3` appears in this one file meaning *a decision* (line ~100, ~146) and *a defect* (the
-> P0.7 evidence row) — two unrelated things. Decision references below are corrected to `Q`n and
+> So `D3` appears in this one file meaning *a decision* (in the P6 section and in step 2.4) and
+> *a defect* (the P0.7 evidence row) — two unrelated things. *(Line numbers deliberately not
+> given: this banner added 99 lines above them and any figure here would be stale within a
+> commit.)* Decision references below are corrected to `Q`n and
 > marked; the other two senses are left alone and now say which they are.
 >
 > **Grade bands changed after most of this file was written.** The scale had THREE bands (`junior`

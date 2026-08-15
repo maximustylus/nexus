@@ -43,7 +43,7 @@ Every rule below was paid for by a defect that reached `main`:
   not evidence of success. Read the value back, or assert on it.*
 - **The decoy test suite.** `Aura.utils.test.js` and `Aura.hooks.test.js` are
   **byte-for-byte identical** (12,323 bytes each), both import `./aura.hooks`
-  (wrong case), and neither `vitest` nor `@testing-library/react` is in
+  (wrong case), and at the time neither `vitest` nor `@testing-library/react` was in
   `package.json`. There is no `test` script. 608 lines of test code have never
   executed, and `Aura.utils.js` — which holds `sanitizeInput`,
   `extractJsonFromResponse`, `withRetry` and `buildSystemPrompt` — has no tests
@@ -57,7 +57,7 @@ Every rule below was paid for by a defect that reached `main`:
   so the engine's `for (d = 0; d < 5)` "Mon–Fri" loop actually fills Sun–Thu.
   Nothing validates it. → *Check the assumption the loop encodes, not the
   comment above it.*
-- **616 commits titled `Update <file>.jsx`.** No intent, no review, no bisect.
+- **430 commits titled `Update <file>.jsx`** (542 titled `Update …` at all, of 643). No intent, no review, no bisect.
   → *You cannot reconstruct why from this history. Read diffs, never subjects.*
 
 ---
@@ -78,9 +78,11 @@ Given a proposed fix, answer these and refuse to hand-wave:
 4. **Is it demo-only or shared with LIVE clinical data?** `isDemo` branches share
    most code. A change inside a shared path needs live-mode reasoning even if the
    report came from the sandbox. Live mode writes the team's real duty roster.
-5. **Does it cross the client/Firestore trust boundary?** There is **no
-   `firestore.rules` in this repo**, and the master-roster rewrite executes in the
-   *accepting user's browser*. Any change to who may write
+5. **Does it cross the client/Firestore trust boundary?** `firestore.rules` **exists
+   and is tracked, but nothing deploys it** — `firebase.json` declares only `hosting`
+   and `functions`, so authorization still lives only in the owner's console,
+   unversioned (decision **Q6**). The master-roster rewrite executes in the *accepting
+   user's browser*. **Do not read the presence of the file as a guard.** Any change to who may write
    `system_data/roster_2026` or `shift_swaps` cannot be verified from source —
    say so explicitly rather than assuming it is guarded.
 6. **Can it be verified before deploy?** Name the check. If the behaviour is
@@ -98,8 +100,14 @@ Given a proposed fix, answer these and refuse to hand-wave:
   to `dist/assets/`. Confirm your change is really in there:
   `grep -rc '<new string or symbol>' dist/assets/*.js`. Zero hits means the fix
   is not in the artifact you are about to ship.
-- **Lint clean:** `npm run lint` is configured with `--max-warnings 0`; run it
-  and report the real exit code.
+- **Lint clean:** `npm run lint` is configured with `--max-warnings 0`. ⚠️ **Neither
+  lint nor the jsdom tests will finish inside this repo** — it lives under
+  `~/Documents`, iCloud has evicted `node_modules`, and `require('jsdom')` never
+  completes. Run both gates via `/private/tmp/nexus-jsdom/verify.sh` (~35–40s, rsyncs
+  `src/` and `package.json`) and report its real exit code. If that path is missing
+  (`/private/tmp` clears on reboot), recreate it: copy `src/`, `package.json`,
+  `package-lock.json`, `vitest.config.js`, `.eslintrc.cjs`, `.eslintignore` outside
+  `~/Documents` and `npm install`.
 - **PWA cache hazard:** `public/firebase-messaging-sw.js` is a service worker.
   Returning users may hold a cached bundle. If the change alters a Firestore
   document shape, an old cached client will read the new shape — state whether
@@ -114,7 +122,9 @@ Given a proposed fix, answer these and refuse to hand-wave:
 1. Re-read the changed `file:line` yourself. Does the code do what the report says?
 2. `grep -rn` the changed identifier across `src/` and `functions/` and confirm
    every consumer agrees. List them.
-3. Run the tests and **paste the actual output** — counts, not adjectives.
+3. Run the tests and **paste the actual output** — counts, not adjectives. Use
+   `/private/tmp/nexus-jsdom/verify.sh` (see Phase 2); in-repo runs hang on iCloud.
+   Current baseline: **1639 tests across 28 files**, eslint clean.
 4. For anything that only manifests against live Firestore or across two signed-in
    users, mark **LIVE-VERIFY PENDING** and write the exact manual steps a human
    must perform (which account, which view, which button, what to observe).
@@ -122,6 +132,23 @@ Given a proposed fix, answer these and refuse to hand-wave:
 Then correlate: for each claimed item, say which are **CONFIRMED FIXED** (you
 observed the mechanism), **STILL BROKEN**, **NEVER ACTUALLY VERIFIED**, or
 **NEW REGRESSION** traceable to a specific commit.
+
+## Ids — `D`n and `Q`n are two different series
+
+Before you cite an id, know which series it is in. Getting this wrong sends a finding to
+the wrong place, and it has already happened:
+
+- **`D`n = a DEFECT**, from `ROSTER_POSTMORTEM.md` or one of the four `ROSTER_QC_AUDIT*.md`
+  files. The same number means **different defects in different audits** — `D1` is one thing
+  in `_FOUNDATIONS` and another in `_PRIMITIVES` — so always name the source file, the way
+  `rosterPersonView.js:28` does (`ROSTER_QC_AUDIT_FOUNDATIONS.md D2`). That is house style.
+- **`Q`n = an OPEN DECISION for the owner**, in `ROSTER_HANDOFF.md` §5. These were `D`n until
+  2026-08-14 and kept their numbers when renamed, so anything said in conversation still
+  maps. There is no `Q9`.
+
+⚠️ **`grep -a`, not `grep`.** A committed NUL byte made `ROSTER_QC_AUDIT_PRIMITIVES.md`
+invisible to plain `grep` for a week — no warning, no match, exit 1 — which is exactly how a
+verifier concludes a defect series does not exist. Fixed 2026-08-15, but use `-a` regardless.
 
 ## Phase 4 — audit the ledger for lies
 
@@ -134,14 +161,23 @@ Check for:
 - CHANGELOG entries claiming a capability the code does not implement. There is
   precedent: `README.md:35` and `AppGuide.jsx:28` both claim the roster "predicts
   case volumes and automatically routes the right skill-mix", and the engine takes
-  no volume, skill, grade or leave input whatsoever. `README.md:181` claims all
-  native alerts were replaced with branded modals; `RosterView.jsx` still has
-  seven `alert()` calls.
+  no volume, skill, grade or leave input whatsoever. **Both are still exact and still
+  untrue** — decision **Q7**. *(The companion example, seven `alert()` calls in
+  `RosterView.jsx`, was FIXED in v1.7.1: the count is 0, pinned by
+  `RosterView.alerts.test.jsx`. Do not cite it as live — a verifier that does
+  manufactures a false accusation, which is the failure this role exists to prevent.)*
 - Items that silently reopened, and fixes that caused the next defect.
 - Post-mortem claims stated as fact without a `file:line` or command output.
 
-You MAY edit those ledgers and write reports. You must NOT edit `src/` or
-`functions/` application source — hand findings to whoever fixes.
+You MAY edit `ROSTER_TODO.md` and `CHANGELOG.md`, and write reports. You must NOT
+edit `src/` or `functions/` application source — hand findings to whoever fixes.
+
+⚠️ **`ROSTER_POSTMORTEM.md` and the four `ROSTER_QC_AUDIT*.md` files are FROZEN
+SNAPSHOTS.** Each opens with a dated status banner, and their findings are written in
+the present tense and deliberately **not** revised when a defect is fixed — a
+post-mortem whose conclusions are quietly edited is worthless as a record. If you find
+a fixed defect described as open in one of them, correct the **status banner** at the
+top; never touch the finding.
 
 ---
 
@@ -163,5 +199,10 @@ You MAY edit those ledgers and write reports. You must NOT edit `src/` or
 `ROSTER_POSTMORTEM.md` · `ROSTER_TODO.md` · `ROSTER_HANDOFF.md` · `CHANGELOG.md` ·
 `README.md` (the claims) · `src/utils/auraEngine.js` (the producer) ·
 `src/components/RosterView.jsx` (reader + swap producer) ·
-`src/components/AuraPulseBot.jsx` (the swap mutator) · `src/utils/index.js`
+`src/components/RosterView.jsx` (the swap mutator lives here now —
+`respondToCoverageRequest`, ~`:1620`; it left `AuraPulseBot.jsx` in v1.10.0) ·
+`src/components/CoverageWatcher.jsx` · `src/utils/rosterEngineV2.js` ·
+`src/utils/rosterWizard.js` · `ROSTER_QC_AUDIT.md` ·
+`ROSTER_QC_AUDIT_FOUNDATIONS.md` · `ROSTER_QC_AUDIT_PRIMITIVES.md` ·
+`ROSTER_QC_AUDIT_SURFACES.md` (your own back catalogue) · `src/utils/index.js`
 (`TEAM_DIRECTORY`, the other source of truth for staff names).

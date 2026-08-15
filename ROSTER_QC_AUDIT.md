@@ -18,7 +18,7 @@
 > - **What changed since:** the release entries in [CHANGELOG.md](CHANGELOG.md).
 >
 > **Two things in here have certainly moved on.** *Test counts* — every figure quoted below was
-> correct on its date; the suite is **1630 tests across 27 files** today, so treat any other
+> correct on its date; the suite is **1639 tests across 28 files** today, so treat any other
 > number as a historical measurement, not a target. *The grade scale* — it had **three** bands
 > (`junior` AH7–AH12) when this was written and has **four** since 2026-08-13
 > (`nonExempt AH7–AH10 · junior AH11–AH12 · senior AH13–AH14 · principal AH15–AH17`), a
@@ -90,7 +90,7 @@ and confidently since 6 May 2026"* — is an unproven assertion about production
 
 | Candidate path | Verdict | Evidence |
 |---|---|---|
-| Demo mode data (`staff` = bare name) reaching the mutator | **Rejected** | `AuraPulseBot.jsx:100` — `if (isDemo || !user?.name) return;`. The listener never subscribes in demo mode, so no `ROSTER_ALERT` message is ever created, so the Accept button (`:1013`) never renders and `handleSwapResponse` is unreachable. Independently, the mutator reads Firestore (`:346-347`), never the demo state built in `RosterView.jsx:45-59`. |
+| Demo mode data (`staff` = bare name) reaching the mutator | **Rejected** | `AuraPulseBot.jsx:100` — `if (isDemo \|\| !user?.name) return;`. The listener never subscribes in demo mode, so no `ROSTER_ALERT` message is ever created, so the Accept button (`:1013`) never renders and `handleSwapResponse` is unreachable. Independently, the mutator reads Firestore (`:346-347`), never the demo state built in `RosterView.jsx:45-59`. |
 | A user whose `name` is itself a composite string | **Rejected** | `TEAM_DIRECTORY` (`src/utils/index.js:22-103`) holds ten single-token names. |
 | The demo→live toggle carrying demo data into the mutator | **Rejected for A1** | The demo path never writes Firestore. (It *does* create a separate critical defect — see **M1** below.) |
 
@@ -493,7 +493,7 @@ rule** and contradict the ledger's own Evidence table.
 | `:59` — **P0 `Status: DONE`** (test harness) | **MISLEADING** | Its own Evidence rows say P0.5 `NOT DONE`, P0.6 `NOT DONE`, P0 acceptance `NOT VERIFIED`. Four of six steps done is not `DONE`. |
 | `:139` — **P5.1 `DONE`** ("pin `@google/generative-ai`; strip trailing whitespace") | **FALSE** | `git diff package.json` shows no change to that line. Working tree still reads `"@google/generative-ai": "latest",` + four trailing spaces. |
 | `:140` — **P5.2 `DONE`** ("reconcile 1.0.0 ↔ v1.5 ↔ v2.3; create `CHANGELOG.md`; first git tag") | **FALSE on all three** | `package.json` version still `1.0.0` (no diff). `README.md:1` still `v1.5 [BETA]`, `:3` badge still `AURA-v2.3`. `ls CHANGELOG.md` → No such file. `git tag -l` → empty. The parenthetical "(tag deferred)" covers only the tag. |
-| `:95`, `:116`, `:131`, `:142`, `:171` — P3/P4/P5.4 `BLOCKED — awaiting decision D1–D7 in ROSTER_HANDOFF.md` | **UNVERIFIABLE — the document does not exist** | `ls ROSTER_HANDOFF.md` → No such file. Four blocking dependencies point at a file that has never been written, so no decision D1–D7 can be read, actioned, or audited. `ROSTER_HANDOFF.md` is also named as a source of truth in the `qc-steward` role definition. |
+| `:95`, `:116`, `:131`, `:142`, `:171` — P3/P4/P5.4 `BLOCKED — awaiting decision D1–D7 in ROSTER_HANDOFF.md` | **UNVERIFIABLE — the document does not exist** | `ls ROSTER_HANDOFF.md` → No such file. Four blocking dependencies point at a file that has never been written, so no decision D1–D7 *(these are DECISIONS, renamed `Q1`–`Q7` on 2026-08-14; the quoted `ROSTER_TODO.md` text above is left verbatim as history)* can be read, actioned, or audited. `ROSTER_HANDOFF.md` is also named as a source of truth in the `qc-steward` role definition. |
 | `:161` — P0.6 evidence: "`.github/workflows/deploy.yml` unmodified" | **STALE** | `git status --porcelain` → ` M .github/workflows/deploy.yml`. A `Test Frontend: npm test` step is present in the working tree. Attributed to concurrent work, not to a false claim. **Caution for whoever commits it:** at HEAD there is no `test` script, and `npm test` against a missing script exits 1 (`npm error Missing script: "test"`, `EXIT=1`) — so `deploy.yml` and `package.json` must land in the **same commit** or every deploy breaks. |
 | `:67` — P1.1 rationale ("closing the B-near-miss where two bugs cancelled out") | **BUILT ON A FALSE PREMISE, AND THE FIX REGRESSES** | See the Block B evidence. P1.1 as written moves every key one day earlier outside UTC+8. Must not be accepted without also changing how `startDate` is parsed. |
 

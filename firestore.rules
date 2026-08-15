@@ -86,7 +86,7 @@
 //     `src/utils/index.js` AND this file AND redeploying rules. Miss the second
 //     step and the new joiner is authenticated but cannot read the roster.
 //   • The only durable fix is to stop keying documents by display name. That is
-//     an application change (decision D4 territory), not a rules change.
+//     an application change (decision Q4 territory), not a rules change.
 //   • `firestore.rules.README.md` §8 carries this as a standing maintenance
 //     hazard with the exact edit procedure.
 //
@@ -307,7 +307,7 @@ service cloud.firestore {
     // substitution with the Admin SDK, and this block becomes
     // `allow write: if isAdmin()`. That is an application change and is out of
     // scope for a rules proposal. Recorded in the runbook as the recommended
-    // next step, and it is what would finally close C4/D6 properly.
+    // next step, and it is what would finally close C4/Q6 properly.
     match /system_data/roster_2026 {
       allow get: if isMember();
       allow list: if false;              // nothing lists `system_data`.
@@ -358,7 +358,7 @@ service cloud.firestore {
     // evaluates a list rule against every document the query would return, and
     // every document that query returns satisfies `targetStaff == myName()`.
     // The `requestedBy` / `initiatedBy` clauses widen it to the people the
-    // request is ABOUT — no code reads by those fields yet, but decision D3
+    // request is ABOUT — no code reads by those fields yet, but decision Q3
     // ("should the requester be told the outcome?") is open, and pre-authorising
     // the read costs nothing while forgetting to would make D3 look like a rules
     // bug later.
@@ -821,7 +821,7 @@ service cloud.firestore {
     //          one query, one flag update, no writer. The bell is fed from
     //          documents that must be created by hand in the console, or by
     //          something that does not exist yet. `create` is therefore denied —
-    //          if a Cloud Function is built for it (decision D3, "tell the
+    //          if a Cloud Function is built for it (decision Q3, "tell the
     //          requester the outcome"), it will use the Admin SDK and bypass
     //          this rule anyway.
     //

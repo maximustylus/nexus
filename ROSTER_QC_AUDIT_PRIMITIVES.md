@@ -19,7 +19,7 @@
 > - **What changed since:** the release entries in [CHANGELOG.md](CHANGELOG.md).
 >
 > **Two things in here have certainly moved on.** *Test counts* — every figure quoted below was
-> correct on its date; the suite is **1630 tests across 27 files** today, so treat any other
+> correct on its date; the suite is **1639 tests across 28 files** today, so treat any other
 > number as a historical measurement, not a target. *The grade scale* — it had **three** bands
 > (`junior` AH7–AH12) when this was written and has **four** since 2026-08-13
 > (`nonExempt AH7–AH10 · junior AH11–AH12 · senior AH13–AH14 · principal AH15–AH17`), a
@@ -145,7 +145,14 @@ No behavioural defect found in the lint package's source edits. The disclosure w
 
 `src/utils/rosterWizard.js:1280:41` — `const key = [a, b].sort().join('<NUL>');`
 
-The separator is written as a **literal 0x00 byte in the source**, not as `'\0'` or `' '`.
+The separator is written as a **literal 0x00 byte in the source**, not as `'\0'` or as an escape.
+
+> **The raw byte was in THIS FILE too, until 2026-08-15 — so this document reproduced the exact
+> defect it was reporting.** `file` called it `data`, and plain `grep` skipped the whole file
+> **silently**: no warning, no match, exit 1. It was invisible to every search in the repository
+> for a week, including two later audits that were looking for the ids defined here. The byte is
+> written `<NUL>` as text now. Audit this set with `grep -a` regardless — one binary byte makes a
+> file vanish rather than error, which is what makes this class of defect so quiet.
 
 ```
 $ file src/utils/rosterWizard.js

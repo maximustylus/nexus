@@ -2,9 +2,9 @@
 
 **Status: PROPOSAL. INERT. Nothing deploys it.**
 **Subject: project `idc-app-e0c59`, Cloud Firestore, `(default)` database.**
-**Companion to:** `firestore.rules` · closes the analysis half of `ROSTER_POSTMORTEM.md` C4 and decision **D6** (`ROSTER_HANDOFF.md` §5).
+**Companion to:** `firestore.rules` · closes the analysis half of `ROSTER_POSTMORTEM.md` C4 and decision **Q6** (`ROSTER_HANDOFF.md` §5).
 
-> D6 said: *"I need your console's current rules to do this safely."* That is still
+> Q6 said: *"I need your console's current rules to do this safely."* That is still
 > true. This document is what can be written **without** them: the access
 > requirements derived from the code, a rules file implementing them, a
 > verification record, and the exact procedure for you to compare it against
@@ -17,7 +17,7 @@
 
 | | |
 |---|---|
-| `firestore.rules` exists in the repo | ✅ (new, untracked until you commit it) |
+| `firestore.rules` exists in the repo | ✅ tracked and committed (`9c355ff`) |
 | `firebase.json` has a `firestore` section | ❌ **deliberately not added** |
 | `.github/workflows/deploy.yml` touched | ❌ **not touched** |
 | `firebase deploy` would deploy it | ❌ no — with no `firestore` config the CLI cannot see it |
@@ -37,9 +37,9 @@ of them is a decision for you, not for me.**
 
 | # | Behaviour today | Under these rules | Verdict |
 |---|---|---|---|
-| **B1** | **Any of the 10 directory members can press Configure → Generate Roster** and rewrite the master roster. The button at `RosterView.jsx:813` has no admin gate. | Only **Alif** and **Nisa**. A CEP gets the honest banner already written at `RosterView.jsx:592` — *"The roster was NOT saved (permission-denied). Your configuration is still here."* | **Decide.** If a CEP is expected to generate rosters, add them to `adminEmails()` — or better, settle `ROSTER_TODO.md` **D5** first. |
+| **B1** | **Any of the 10 directory members can press Configure → Generate Roster** and rewrite the master roster. The button at `RosterView.jsx:813` has no admin gate. | Only **Alif** and **Nisa**. A CEP gets the honest banner already written at `RosterView.jsx:592` — *"The roster was NOT saved (permission-denied). Your configuration is still here."* | **Decide.** If a CEP is expected to generate rosters, add them to `adminEmails()` — or better, settle **Q5** in `ROSTER_HANDOFF.md` §5 first. |
 | **B2** | **The public community screening pathway records telemetry.** `/individuals/*` is mounted outside the auth gate (`App.jsx:617-621`) and writes `community_assessments` from strangers' browsers with no account. | Denied. **The public user notices nothing** — `recordTelemetry` swallows its own error (`telemetry.js:16-19`) and never throws, so they still reach their result page. **You simply stop receiving the data, silently.** | **Real loss. Decide.** Do *not* just open the rule (see §9, `community_assessments`). |
-| **B3** | The **unauthenticated Sandbox** reads the live feed. `FeedsView.jsx:114` has no `isDemo` guard, no auth guard, and **no error callback**. | Denied, and **silently** — the visitor sees only mock posts with no indication anything failed. | Correct, but the silence is bad. Add an error callback to that listener (the sibling of QC **M8**, still open). |
+| **B3** | The **unauthenticated Sandbox** reads the live feed. `FeedsView.jsx:114` has no `isDemo` guard, no auth guard, and **no error callback**. | Denied, and **silently** — the visitor sees only mock posts with no indication anything failed. | Correct, but the silence is bad. Add an error callback to that listener (the sibling of QC **M8** (M8 itself closed in v1.6.1; the recommendation below still stands)). |
 | **B4** | The **Sandbox writes to the live pulse heat-map** and the live anonymous log bucket. `AuraPulseBot.jsx:550-553` runs on the `isDemo` branch, and demo mode needs no login. | Denied. A sandbox visitor sees *"Could not sync your pulse log."* | **Bug fix.** `RosterView.jsx:457` already declares "NO FIRESTORE, EVER" for the sandbox roster path; this extends that contract. |
 | **B5** | Anonymous-persona pulse rows land in the live heat-map under keys like `Anon_4718`. | Denied — a member may only write their own name's key. | **Bug fix.** |
 | **B6** | Any signed-in user can log clinical load or team attendance into **any** document via AURA's DATA_ENTRY mode (`AuraPulseBot.jsx:852`). | Own `staff_loads` document only; `monthly_workload` is admin-only. Non-admins get the DATA_ENTRY error bubble. | **Bug fix**, but it changes what AURA can do for a CEP. Decide. |
@@ -217,7 +217,7 @@ diff -u ~/nexus-rules-LIVE.rules firestore.rules
 ## 5. Verification record — measured, not asserted
 
 **No emulator-based test suite is committed, on purpose.** CI has no Firestore
-emulator (`.github/workflows/deploy.yml` runs `npm test` only), and vitest collects
+emulator (`.github/workflows/deploy.yml` runs test, lint and build — no emulator), and vitest collects
 `src/**/*.{test,spec}.{js,jsx}` — a rules test file placed there would fail every
 build and block deploys. So the verification below was run **locally, in a
 scratch directory, against the cached emulator jar**, and is recorded here as
@@ -530,10 +530,15 @@ is needed** — rules are not part of the bundle.
 2. **One CEP** on their own device — log in, open Roster. Calendar renders?
 3. Same CEP — click one of **their own** shifts → request cover from a colleague →
    *"Swap request sent to …"*?
-4. That colleague — AURA panel opens with the coverage request → **Accept** →
-   *"Done, and verified against the master roster…"*. That message is only emitted
-   after a read-back (`AuraPulseBot.jsx:488`), so it is genuine evidence the
-   one-day write worked.
+4. That colleague — **the roster** shows a badge on the shift and an inline coverage
+   card → **Accept** → *"Covered, and verified against the master roster: …"*. That
+   message is emitted only after a read-back (`RosterView.jsx:1712`), so it is genuine
+   evidence the one-day write worked.
+   *(Corrected 2026-08-15: this said the AURA panel carries the request and cited
+   `AuraPulseBot.jsx:488`. The surface moved out of the chat panel in v1.10.0 and that
+   line is now a download filename — so this step could never pass, and §8.3 ends with
+   "if step 4 fails, roll back". It would have triggered a rollback of a correct
+   deploy.)*
 5. Pulse view — heat-map populated, own row editable, a colleague's row locked.
 6. Feeds — posts load, a like registers, a comment posts.
 7. Admin panel — burnout monitor shows rows.
@@ -632,7 +637,7 @@ checklist.
 Ordered by what I would do first. All are **application** changes.
 
 1. **Move the roster write off the client.** An `applySwap({ swapId })` callable
-   Cloud Function makes the roster `allow write: if isAdmin()` and closes C4/D6
+   Cloud Function makes the roster `allow write: if isAdmin()` and closes C4/Q6
    properly. It is the only way to get field-level swap enforcement — see the
    long comment in the rules' Section 2 for why rules alone cannot.
 2. **Stop `users.name`/`users.role` overriding the directory.** Fixes the lockout
@@ -718,7 +723,7 @@ one of these is a live limitation of the proposal, not a hypothetical.**
 ### What is deliberately not in this file
 
 - No rules for collections that do not exist yet (`anonymous_pulse`, any
-  per-year roster partition from **D4**). Speculative rules are how a rules file
+  per-year roster partition from **Q4**). Speculative rules are how a rules file
   starts lying.
 - **No Cloud Storage rules.** `ProfileView.jsx:57` writes `avatars/*` and
   `FeedsView.jsx:143` writes `feed_images/*`. There is no `storage.rules` in this

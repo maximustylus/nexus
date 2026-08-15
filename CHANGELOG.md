@@ -28,15 +28,99 @@ not changed by this release.
 >    and has **not** been verified against the code. Treat it as the historical record
 >    the README asserts, not as an audited one.
 >
-> No git tag existed for any version at the time of writing (616 commits, 0 tags), so
-> no entry below is anchored to a tag. `git checkout vX.Y.Z` does not work for the
-> reconstructed versions and never will.
+> No git tag existed for any version at the time of writing (616 commits, 0 tags), so the
+> entries below were not written against tags. *(Corrected 2026-08-15: the repository is tagged
+> now — every release from `v1.6.0` to `v1.14.0` sits on the commit whose `package.json` already
+> reads that version, so `git checkout v1.13.0` works. The one exception is
+> `v1.5.0-pre-remediation`, which marks the state before this work began and reads `1.0.0`.)*
+> `git checkout vX.Y.Z` still does not work for the reconstructed versions below `v1.6.0`, and
+> never will.
+>
+> ### Ids — `D`n and `Q`n are two different series
+>
+> `D`n in this file is a **defect**, from `ROSTER_QC_AUDIT*.md` or the post-mortem — and the same
+> number can mean *different* defects in different audits, so a cell names its source where it
+> can. `Q`n is an **open decision for the owner**, listed in `ROSTER_HANDOFF.md` §5. Those were
+> `D`n until 2026-08-14 and kept their numbers when renamed, so anything said in conversation
+> still maps; there is no `Q9`. Released entries below were written before the rename and are
+> corrected in place rather than rewritten.
 
 ---
 
 ## [Unreleased]
 
 Nothing yet.
+
+---
+
+## [1.14.1] - 2026-08-15
+
+A wizard-row tidy asked for from a screenshot, and the documentation audit finished.
+
+### Changed
+
+- **The day chips are one letter each — `M T W T F S S` — on a single row.** Seven three-letter
+  chips wrapped onto two lines on a phone and read as a wall of words. `short` is **ambiguous by
+  construction** (Tue/Thu are both `T`, Sat/Sun both `S`), which sighted readers resolve by
+  position; so the chips render the letter and *announce* the full day name, in both the tooltip
+  and the accessible name. The `aria-label` keeps its three-letter form, so nothing addressing
+  these chips by label had to change.
+- **Co-lead is a checkbox** rather than a `Yes`/`No` lozenge. `role="checkbox"` on a button, not
+  `<input type="checkbox">`: the wizard's phone rule is that every control declares a 44px height
+  floor and `RosterView.mobile.test.jsx` enforces it over every `input` on the page, so a native
+  checkbox would have to *be* 44px — an enormous system box. This draws a checkbox-sized mark
+  inside a thumb-sized target and announces itself correctly regardless.
+
+### Fixed
+
+Nineteen documentation defects, from an audit of all twelve markdown files plus three
+cross-document sweeps. **Six were introduced by the previous two commits** — the audit's main
+value was catching those rather than the older drift.
+
+- **`ROSTER_QC_AUDIT_PRIMITIVES.md` contained a committed NUL byte**, so `file` reported it as
+  `data` and plain `grep` skipped the whole file **silently** — no warning, no match, exit 1. It
+  had been invisible to every search in the repository for a week, including two audits looking
+  for the defect ids it defines. The byte sat *inside the finding that documents the NUL-byte
+  defect*, so the document reproduced the defect it was reporting.
+- **The v1.14.0 CHANGELOG entry both answered and reopened Q12**, fifteen lines apart — a
+  duplicated block, the second copy tracking it as `D12`, which resolves to nothing.
+- **`README.md` published v1.13.0's release notes under a `v1.14.0` heading**, with the real
+  v1.14.0 absent and v1.13.0 having no heading at all.
+- **`README.md`'s Supported Versions table refuted itself** — `1.12.x` listed as supported on one
+  row and deprecated on the next — and disagreed with `SECURITY.md`, which both files promise to
+  match.
+- **The post-mortem's status banner claimed M4 fixed.** Only half shipped: the false notification
+  claim is gone, but nobody notifies the requester and there is no mechanism — the code says so
+  at `RosterView.jsx:1614`. This was the only place in the document set where a still-open HIGH
+  defect was called closed.
+- **`ROSTER_HANDOFF.md` told the owner to type into a Skills column that does not exist.** The
+  staff table has none (`RosterDemoWizardTables.jsx:1640`), so Q12's documented workaround is
+  demo-only — defect `D5`. That instruction would have failed in front of an audience.
+- **README overstated three capabilities:** a "Backend Firewall" that is a browser-side check (no
+  Cloud Function checks the caller — `grep -c 'request.auth' functions/index.js` → 0); "strictly
+  isolated Firebase collections" that do not exist, with one demo write that does reach
+  production `feed_posts`; and an Auto-Healer `ROSTER_ALERT` chat surface deleted in v1.10.0,
+  including a beta-tester smoke test that could not pass.
+- **`firestore.rules.README.md`'s deploy smoke test would have triggered a false rollback** — it
+  tested a surface that moved in v1.10.0, and §8.3 ends "if step 4 fails, roll back".
+- **`.claude/agents/qc-steward.md` would have misdirected a verifier**: it said there is no
+  `firestore.rules` (so live writes would be reported as guarded), no test script (so the whole
+  verification phase would be skipped), granted permission to edit the now-frozen audit
+  snapshots, told the agent to run gates that cannot finish in-repo, and cited a fixed precedent
+  that would manufacture a false accusation.
+- **The `D` → `Q` renumbering had 13 leftovers** across five files including six source comments,
+  each colliding with a live defect of the same number. Both `CHANGELOG.md` and `qc-steward.md`
+  now carry an explicit note on the two series, and the `Q` series' missing `Q9` is documented.
+- Test counts aligned to 1639/28 across five files; the zero-tags claim corrected; §4 of the
+  handoff retitled and its five omitted open items added; one table row whose unescaped `||`
+  rendered an extra cell.
+
+### Notes
+
+Four things the audit could **not** settle, recorded rather than dropped: `firestore.rules` itself
+has audited holes that appear in no ledger — and it is the file `Q6` proposes deploying; the
+`_FOUNDATIONS` `D1`–`D10` series has no status anywhere; `C2` is fixed and shipped but named in no
+release entry; and nothing here was verified against the deployed bundle.
 
 > ### Bumping the version is part of shipping, not a separate decision
 >
@@ -53,7 +137,7 @@ Nothing yet.
 >   `package.json` is authoritative. Five copies is four too many, but they are prose for
 >   humans, so the fix is to list them here — not to leave them to be found later.
 > - **Then tag it:** `git tag -a vX.Y.Z` on the commit that carries the bump, never before it.
->   Every existing tag in this repo points at a commit whose `package.json` already reads that
+>   Every **release** tag in this repo points at a commit whose `package.json` already reads that
 >   version, which is what makes `git checkout vX.Y.Z` mean anything.
 > - **The AURA engine version is not the app version.** It tracks the agent's capability tier,
 >   moves on its own, and is not touched by an app bump.
@@ -171,51 +255,6 @@ Two consequences that are not optional:
   `fill.position.role === anchorRoleOf(task)`. It constrains nothing about *who* is eligible, but
   reusing the word would collide with the field that makes continuity and pairing work.
   `registration` or `staffCategory` avoids it.
-
-### Notes — a task can require exactly ONE thing of a person
-
-`requiresSkill` is a single string, not a list. Combined with the fact that **bands are grade
-ranges and cannot express a role**, that produces a gap the four-band split did not close and
-could not have closed.
-
-The roster owner's observation that opened it, 2026-08-14: *"there might be a technologist with a
-junior grade."* So role and grade are orthogonal. A technologist at AH11 sits in the `junior` band
-exactly like a junior clinician at AH11, and `leadBands: ['junior']` therefore **admits them as
-lead**. Gating on a skill instead does work — a skill is an opaque string, and skill ANDs with the
-band gate — but only while the task needs nothing else. Measured against the engine:
-
-| Task gate | Who may lead |
-|---|---|
-| `requiresSkill: 'CPET'` | registered+CPET **and technologist-with-CPET** — registration ignored |
-| `requiresSkill: 'registered'` | registered+CPET **and registered-without-CPET** — competency ignored |
-| `requiresSkill: ['CPET', 'registered']` | refused — *"must be a skill name"* |
-| `requiresSkill: 'CPET+registered'` | refused — *"nobody holds that skill"* |
-
-So *"a registered clinician who is also CPET-competent"* — which is what Paediatric CPET actually
-requires — **cannot be expressed today.** One requirement wins and the other is waived. The only
-workaround is a fabricated compound skill (`CPET+registered`) typed into a person's skills column,
-which is the class of special case the v1.11.0 primitives work existed to remove.
-
-**Not fixed, deliberately.** The fix is a third eligibility axis — one more column on the person,
-checked alongside band and skill rather than instead of them — and it changes the staff table,
-which is the screen the respiratory and psychology teams are about to be shown. It also needs an
-answer the code cannot supply: whether the real constraint is a boolean (registered / not) or an
-ordered list (registered / provisionally registered / assistant / student). Tracked as **D12** in
-`ROSTER_HANDOFF.md`, to be raised *with* those teams rather than guessed at before them.
-
-Two consequences that are not optional:
-
-- **Registration gating must not be claimed** for this version. Band gating is real and
-  demonstrable; registration gating is not, yet.
-- **Do not name the new field `role` — that name is taken and it is load-bearing.** A slot's
-  `role` is both the human-readable slot label (`unfilled[].role` carries
-  `'Junior embryologist'`) *and* the identity key for two primitives: affinity is **scoped to the
-  role**, so "the same practitioner at each clinic" pins the lead without also concentrating the
-  co-lead slots on one person, and `COMPOSE_PAIRING` groups a shift by matching
-  `fill.position.role === anchorRoleOf(task)`. It constrains nothing about *who* is eligible, but
-  reusing the word would collide with the field that makes continuity and pairing work.
-  `registration` or `staffCategory` avoids it.
-
 
 ---
 
@@ -466,7 +505,7 @@ their profession."*
     `rules.bands` is absent or not a plain object.
 
   So no client already sitting in somebody's service-worker cache can be handed a document it
-  cannot read. **This says nothing about D8** (whether the 6 May shift-shape change should
+  cannot read. **This says nothing about Q8** (whether the 6 May shift-shape change should
   itself have been `2.0.0`), which remains open in `ROSTER_HANDOFF.md` and is not reopened here.
 
 - **`mockData.js` stayed append-only where it had to.** `MOCK_STAFF`, `MOCK_STAFF_NAMES`,
@@ -512,7 +551,7 @@ D-series verification gaps, E1/E4 documentation overstatement, the swap modal's
 unlabelled `<select>`s — an accessibility gap noted during P8.3) are recorded in
 `ROSTER_QC_AUDIT.md`, `ROSTER_POSTMORTEM.md` and `ROSTER_TODO.md` and are likewise
 **not** fixed. M12's session-level guard is client-side only; the durable guard is a
-Firestore rule, blocked on decision D6.
+Firestore rule, blocked on decision **Q6** *(a decision; renamed from `D6` on 2026-08-14 — `D6` is now only the ESLint defect)*.
 
 ---
 
@@ -948,7 +987,7 @@ exports are standards-compliant, and no native browser dialog remains in the ros
   (same shift, same task, same target) is now blocked for the session, so a double-click no
   longer creates two independently-acceptable PENDING documents. Client-side only — it does
   not survive a reload or a second device; the real guard is a Firestore rule, blocked on
-  decision D6.
+  decision **Q6** *(renamed from `D6` on 2026-08-14; `D6` now means only the ESLint defect)*.
 
 ### Notes
 

@@ -19,7 +19,7 @@ I re-ran everything myself. I did not edit `src/`, `functions/`, or any other `R
 > - **What changed since:** the release entries in [CHANGELOG.md](CHANGELOG.md).
 >
 > **Two things in here have certainly moved on.** *Test counts* — every figure quoted below was
-> correct on its date; the suite is **1630 tests across 27 files** today, so treat any other
+> correct on its date; the suite is **1639 tests across 28 files** today, so treat any other
 > number as a historical measurement, not a target. *The grade scale* — it had **three** bands
 > (`junior` AH7–AH12) when this was written and has **four** since 2026-08-13
 > (`nonExempt AH7–AH10 · junior AH11–AH12 · senior AH13–AH14 · principal AH15–AH17`), a

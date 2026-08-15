@@ -808,8 +808,11 @@ const RosterView = ({ user }) => {
     // 🛡️ M12: signatures of the swap requests this component has already sent.
     // NOTE: client-side and in-memory only — it does not survive a reload, a
     // second tab, or a second device. A real guard is a uniqueness constraint in
-    // `firestore.rules`, which cannot be written until blocked decision D6
-    // (there is no `firestore.rules` in the repo) is settled.
+    // `firestore.rules`, which cannot be DEPLOYED until blocked decision Q6 is
+    // settled. The file itself exists and is tracked — it is inert, because
+    // `firebase.json` declares only `hosting` and `functions`, so nothing deploys
+    // it. (Q6 was written `D6` before 2026-08-14; `D6` now names only the ESLint
+    // defect, which is a different thing entirely.)
     const [sentSwapSignatures, setSentSwapSignatures] = useState(() => new Set());
 
     // Default Config — the live staff pool and task list now live in
@@ -1508,8 +1511,9 @@ const RosterView = ({ user }) => {
         //
         // Client-side only: this does NOT survive a reload, a second tab or a
         // second device. The real guard is a uniqueness constraint in
-        // `firestore.rules`, which is blocked on decision D6 (no `firestore.rules`
-        // exists in the repo).
+        // `firestore.rules`, which is blocked on decision Q6 — not on the file
+        // existing. It exists and is tracked; `firebase.json` declares only
+        // `hosting` and `functions`, so it is never deployed.
         const swapSignature = buildSwapRequestSignature({
             originalShiftDate: selectedShift.date,
             originalTask: selectedShift.task,
@@ -1612,7 +1616,7 @@ const RosterView = ({ user }) => {
     //     A refusal, a failed verification or a throw leaves the request PENDING,
     //     visibly, with the binding constraint named on the card.
     //   • M4 — nothing here claims the requester was notified. There is still no
-    //     mechanism for that (decision D3), so the copy says to tell them.
+    //     mechanism for that (decision Q3), so the copy says to tell them.
     //
     // 🛡️ DEMO MODE CANNOT REACH THIS. There is no listener in demo mode, so there
     // are no requests and no buttons; the `isDemo` guard below is the second latch,

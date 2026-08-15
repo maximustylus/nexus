@@ -1,6 +1,6 @@
-# NEXUS: Smart Operations Dashboard v1.14.0 [BETA]
+# NEXUS: Smart Operations Dashboard v1.14.1 [BETA]
 
-![Version](https://img.shields.io/badge/Version-v1.14.0-blue) ![Status](https://img.shields.io/badge/Status-Beta%20Phase-emerald) ![Org](https://img.shields.io/badge/Unit-Sport%20%26%20Exercise%20Medicine-indigo) ![Tech](https://img.shields.io/badge/AI-Gemini%20Powered-purple) ![AURA](https://img.shields.io/badge/AURA-v2.3%20Engine-blue) ![PWA](https://img.shields.io/badge/PWA-Native%20Push%20Enabled-blue) ![CI/CD](https://img.shields.io/badge/CI%2FCD-GitHub%20Actions-2ea44f)
+![Version](https://img.shields.io/badge/Version-v1.14.1-blue) ![Status](https://img.shields.io/badge/Status-Beta%20Phase-emerald) ![Org](https://img.shields.io/badge/Unit-Sport%20%26%20Exercise%20Medicine-indigo) ![Tech](https://img.shields.io/badge/AI-Gemini%20Powered-purple) ![AURA](https://img.shields.io/badge/AURA-v2.3%20Engine-blue) ![PWA](https://img.shields.io/badge/PWA-Native%20Push%20Enabled-blue) ![CI/CD](https://img.shields.io/badge/CI%2FCD-GitHub%20Actions-2ea44f)
 
 **NEXUS** (formerly IDC App) is a clinician-led innovation platform designed to revolutionise workload management, optimise skill-mix routing, and actively protect staff wellbeing at the Sport and Exercise Medicine Centre. 
 
@@ -15,7 +15,7 @@ At its core lies **AURA** (Adaptive Understanding and Real-time Analytics), a pr
 
 ### Pillar A: AURA Intelligence Engine (v2.3)
 AURA is an autonomous operational middleware integrated directly into the NEXUS platform. It dynamically shape-shifts its UI and persona based on immediate operational or emotional needs:
-* **The Auto-Healer (Roster Mediation):** AURA actively listens to the database for peer-to-peer shift swap requests using Firebase `onSnapshot` listeners. If a colleague requests coverage, AURA forces open its UI, delivers a high-priority `ROSTER_ALERT`, and upon approval, autonomously rewrites the master calendar matrix.
+* **Roster Mediation:** the app listens for peer-to-peer coverage requests over Firebase `onSnapshot`. A request surfaces **in the roster** — a badge on the affected shift and an inline card — and on approval the master roster document is rewritten in the accepting colleague's browser, then **read back** before the request is marked approved. *(Corrected 2026-08-15: this described AURA forcing open its chat panel with a `ROSTER_ALERT` bubble. That surface was removed in v1.10.0 — `AuraPulseBot.jsx:19-33` records the move — and nothing renders `ROSTER_ALERT` today. The requester is still **not** notified of the outcome; there is no mechanism, tracked as decision `Q3`.)*
 * **The Wellbeing Coach:** Utilising Motivational Interviewing (OARS) and the Mental Health Continuum, AURA provides peer-level psychological first aid and workflow adjustments based on real-time "Social Battery" indexing.
 * **The Clinical and Database Agent:** AURA transitions to an analytical mode to extract operational parameters from natural language (e.g. "I saw 145 patients in June") to generate secure UI blocks for direct Firestore commits. It also generates structured deliverables including Coordination Memos, SOPs, and Incident Reports.
 * **Native File System Integration:** Bypassing mobile browser constraints, AURA compiles parsed Markdown into true Microsoft Word `.docx` Blob objects, triggering native file downloads directly from the chat UI.
@@ -106,7 +106,7 @@ nexus/
 │  AuraPulseBot.jsx (React Presentation & State)      │
 │                                                     │
 │  UI Logic: Frosted Glass Focus Blur (z-[90])        │
-│  Modes: COACH | ASSISTANT | DATA_ENTRY | ALERT      │
+│  Modes: COACH | ASSISTANT | RESEARCH | DATA_ENTRY   │
 │                                                     │
 │  [User Input] ────► sanitize ────► httpsCallable()  │
 │  [UI Render]  ◄──── JSON parse ◄── Firebase Return  │
@@ -146,7 +146,7 @@ This application is an operational and workload management tool. It is not a cli
 | Version | Status |
 | ------- | ------ |
 | 1.14.x  | **Active Beta** (Evaluated by Senior CEPs) |
-| 1.12.x  | Legacy Stable |
+| 1.13.x  | Legacy Stable |
 | < 1.13  | Deprecated / Offline |
 
 > This table is downstream of `package.json` `version`, as are the title line and the
@@ -154,13 +154,17 @@ This application is an operational and workload management tool. It is not a cli
 > [`CHANGELOG.md`](CHANGELOG.md) for the standing rule on bumping it.
 
 ### The "Data Firewall" and Security Policies
-1. **Strict Whitelisting (Backend Firewall):** Access is exclusively limited to pre-approved `@kkh.com.sg` email addresses via a master scalable allowlist array.
+1. **Strict Whitelisting (client-side):** access is limited to pre-approved `@kkh.com.sg` addresses against an allowlist array. ⚠️ **This is enforced in the browser, not on a server** — the domain and directory checks run in `WelcomeScreen.jsx` against `TEAM_DIRECTORY` in `src/utils/index.js`, and **no Cloud Function checks the caller** (`grep -c 'request.auth' functions/index.js` → 0). *(Corrected 2026-08-15: previously called a "Backend Firewall".)*
 2. **PDPA Compliance:** Do not upload sensitive patient data or PHI. NEXUS tracks operational load, not patient records. AURA does not have EMR access. Use placeholders exclusively (e.g. `[Patient]`, `[Clinician]`).
-3. **Data Sharding (Frontend Firewall):** Live production data and Demo simulation data operate on strictly isolated Firebase collections. Demo Mode injects `MOCK_TEAM_DATA` and prevents actual Firebase writes.
+3. **Demo isolation (client-side):** Demo Mode injects `MOCK_TEAM_DATA` and the roster path writes nothing — three separate latches short-circuit before `setDoc`, and the sandbox roster is generated in the browser and lost on reload. ⚠️ **There are no separate demo collections**, so this is a guard in the code rather than a boundary in the database; and it is not total — `FeedsView.jsx:158` calls `processFeedPost` with `isDemo` and no short-circuit, so a demo feed post does reach the production `feed_posts` collection and is hidden from live users by a **client-side** filter (`FeedsView.jsx:136`). *(Corrected 2026-08-15: previously claimed "strictly isolated Firebase collections".)*
 
 ### Known Limitations
 * **Workload Commit Verification:** AURA can format database writes, but requires a human-in-the-loop physical click to execute the final `setDoc` function.
-* **Shift Swap Domino Effect:** When AURA rewrites the master calendar, it does not currently validate if the new staff member exceeds consecutive working day limits. 
+* **Shift Swap Domino Effect:** When AURA rewrites the master calendar, it does not currently validate if the new staff member exceeds consecutive working day limits.
+* **Authorization is unversioned.** `firestore.rules` exists in the repository but **nothing deploys it** — `firebase.json` declares only `hosting` and `functions` — so who may write `system_data/roster_2026` and `shift_swaps` is defined only in the Firebase console, by hand, with no history and no review. The roster rewrite runs in the accepting colleague's browser. This is workable for one trusted team and is the **first thing to settle before a second department's data is involved** (decision `Q6`). It is also why a *time-gated* roster release cannot honestly be built as a UI feature: the roster document is read client-side, so hiding it in the interface would not withhold it.
+* **The requester is never told the outcome** of a coverage request. The copy says so on screen rather than implying otherwise, but there is no notification mechanism (decision `Q3`).
+* **A task can require only one thing of a person.** `requiresSkill` is a single string, so a competency and a registration status compete for the same slot — "a registered clinician who is also CPET-competent" cannot be expressed. Registration gating is **not** available (decision `Q12`).
+* **No on-call or standby.** The engine has no concept of a standby period, call-in, or post-call rest. A category *named* `ON CALL` groups tasks for quotas and colours the calendar; it carries no on-call semantics.
 
 ***
 
@@ -169,7 +173,7 @@ This application is an operational and workload management tool. It is not a cli
 To facilitate safe stakeholder demonstrations without exposing sensitive hospital data, NEXUS features a fully functional Demo Sandbox populated by a "Marvel Superhero" Healthcare Team.
 
 Beta testers should utilise Demo Mode to verify system integrity:
-1. **The Roster Test (Auto-Healer):** Go to the Roster view, click a shift, and send a Swap Request. AURA should slide open automatically with an amber `ROSTER_ALERT` offering an Accept/Decline protocol.
+1. **The Roster Test:** in the Roster view, click one of *your own* shifts and request cover from a colleague. **On that colleague's screen** the shift carries a badge and an inline coverage card with Accept / Decline. *(Corrected 2026-08-15: this said AURA slides open with an amber `ROSTER_ALERT`. It cannot — the chat surface went in v1.10.0, and in Demo Mode `RosterView.jsx:1069` opens no `shift_swaps` channel at all, so this test needs two signed-in live users.)*
 2. **The Data Entry Test:** Tell AURA, "I saw 145 patients in June." She should parse the numbers and display a green `DATA_ENTRY` block with a button to push to Firestore.
 3. **The Export Test:** Ask AURA to "Draft a 1-page SOP for rooming workflow" and click the Export button to verify the native `.docx` download.
 4. **The Sandbox Test:** While in Demo Mode, trigger an AURA Deep Audit. The system must safely bypass the live cloud server and return the simulated Marvel Universe brief flawlessly.
@@ -183,6 +187,12 @@ Beta testers should utilise Demo Mode to verify system integrity:
 > below are narrative highlights; where the two disagree, `CHANGELOG.md` is correct.
 
 ### NEXUS v1.14.0 [Current Beta]
+* **The Configuration Wizard is a Numbered Sequence:** its seven panels carry badges 1–7 on a connecting spine, so a colleague being walked through the Sandbox can say which step they are on. The numbers are **derived, not typed** — a step's number is its index in `WIZARD_STEPS` (`src/utils/rosterWizard.js`), the same derive-don't-duplicate rule the band ruler follows. Steps 1–2 render from `RosterView.jsx` and 3–7 from `RosterDemoWizardTables.jsx`, through one new presentational component, `src/components/WizardStep.jsx`; hand-numbering would have been two files to keep in agreement. Live mode's wizard is deliberately **not** numbered — it is a different and shorter thing.
+* **Two phone-layout fixes at 375px**, both introduced by the spine's 32px gutter and both found by looking rather than by testing: the grade ruler's tick labels were clipping from `AH10` up, and the date field had lost its year.
+* **Documentation reconciled.** The `D`-prefix meant *defect* in some documents and *decision* in others, colliding at 5–8 with unrelated meanings; decisions are now `Q`n. The five historical audit documents gained dated status banners rather than edits, so a post-mortem's findings are never quietly revised once fixed.
+* **Scope:** Sandbox-first. Live mode's generation path is unchanged and `system_data/roster_2026` keeps the same stored shape.
+
+### NEXUS v1.13.0
 * **Profession and Shape Arrangement Picker:** The Sandbox wizard now opens with two controls — MOH's own list of 28 allied health professions, and **five roster structures**, each attributed on screen to the profession that described it in interview. It replaces an earlier attempt at one fabricated department per profession; six invented arrangements were deleted rather than shipped.
 * **Four Grade Bands (correctness fix):** `nonExempt AH7–AH10 · junior AH11–AH12 · senior AH13–AH14 · principal AH15–AH17`. Non-exempt staff (associates, assistants, technologists) shared a band with junior clinicians, so any task gated on the junior band would let a non-exempt assistant lead it. 121 tests were repaired, of which one was a genuine fixture defect rather than a stale assertion.
 * **One Version, One Source:** the app now reads its version from `package.json` via `src/version.js`. Three hand-typed literals had drifted (`v1.41-OFFICIAL`, `System v1.52`, `System Database v1.4`) and all three were live on the deployed site at once. A test now fails the build if a version is typed by hand in rendering code.

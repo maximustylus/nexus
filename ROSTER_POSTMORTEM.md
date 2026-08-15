@@ -9,7 +9,7 @@ swap mutator inside `src/components/AuraPulseBot.jsx`.
 
 > ## ⚠️ READ THIS BEFORE THE DEFECTS: almost all of them are FIXED
 >
-> **Status pass 2026-08-14, against v1.13.0.** This document is a **dated snapshot of `79e3b99`**,
+> **Status pass 2026-08-15, against v1.14.0.** This document is a **dated snapshot of `79e3b99`**,
 > and it is written in the present tense — *"accepting a swap does not change the roster"*,
 > *"generation is a destructive whole-document overwrite"*. Those sentences were true when
 > written and **most are no longer true.** Nothing below has been rewritten: a post-mortem whose
@@ -31,7 +31,8 @@ swap mutator inside `src/components/AuraPulseBot.jsx`.
 > | **C4** — no `firestore.rules` in the repository | ⚠️ **HALF fixed.** The file now **exists and is tracked**, derived call-site by call-site. But it is **inert**: `firebase.json` declares only `hosting` and `functions`, so nothing deploys it. Authorization still lives only in the owner's console, unversioned. **Tracked as Q6 — the first thing to settle before another department's data is involved.** |
 > | **C1, C3** — one shared `roster_2026` document; staff pool hardcoded in the component | ❌ **STILL OPEN.** |
 > | **M1, M3** — two one-click paths that destroyed the live roster | ✅ **FIXED in v1.6.0.** Both were CRITICAL and armed at the time of writing. |
-> | **M4, M5, M8, M9, M11** | ✅ **FIXED in v1.6.1.** |
+> | **M5, M8, M9, M11** | ✅ **FIXED in v1.6.1.** |
+> | **M4** — the requester is never told the outcome, *and* AURA claims a notification that does not exist | ⚠️ **HALF fixed in v1.6.1, and the open half is the bigger one.** The false claim is gone and the shipped copy now says to tell them yourself — *"AURA cannot notify … yet"* (`RosterView.jsx:1685`, `:1750`). But **nobody notifies the requester and there is still no mechanism**; the code says so outright at `RosterView.jsx:1614`. Tracked as decision **Q3**. *(Corrected 2026-08-15: this row previously read FIXED, which was the only place in the document set where a still-open HIGH defect was claimed closed.)* |
 > | **M2, M6, M10, M12** | ✅ **FIXED in v1.7.1.** ICS re-import now *updates* Outlook instead of duplicating; CSV is quoted and formula-injection-guarded. M12's guard is client-side only — the durable one is a Firestore rule, blocked on **Q6**. |
 > | **M7** | ✅ **FIXED in v1.7.0.** |
 > | **P0.7** — `npm run lint` has never worked, no ESLint config exists | ✅ **FIXED in v1.11.0.** A config exists, lint passes, and it gates every deploy. It still could not be run *locally* until 2026-08-14 — the cause was iCloud evicting `node_modules`, not the code. See `ROSTER_HANDOFF.md` §3. |

@@ -59,7 +59,7 @@
  */
 
 import React, { useRef, useState } from 'react';
-import { Plus, Trash2, ShieldAlert, Users, ClipboardList, Layers, ChevronRight, ChevronDown, Clock, SlidersHorizontal } from 'lucide-react';
+import { Plus, Trash2, ShieldAlert, Users, ClipboardList, Layers, ChevronRight, ChevronDown, Clock, SlidersHorizontal, Check } from 'lucide-react';
 import {
     DEFAULT_TASK_HOURS,
     DEFAULT_WEEKLY_HOURS,
@@ -193,20 +193,64 @@ const ICON_BUTTON =
  * each one is a 44px target and the strip wraps onto as many lines as it needs;
  * from `sm:` up the original density returns.
  */
-const Toggle = ({ pressed, onClick, label, title, ariaLabel }) => (
+/**
+ * `square` gives a one-character chip equal width and height instead of the
+ * word-shaped padding, so seven of them read as a row of days rather than seven
+ * differently-sized lozenges. It keeps `TOUCH`, so the thumb target is unchanged.
+ */
+const Toggle = ({ pressed, onClick, label, title, ariaLabel, square = false }) => (
     <button
         type="button"
         onClick={onClick}
         aria-pressed={pressed}
         aria-label={ariaLabel}
         title={title}
-        className={`inline-flex items-center justify-center px-3 py-2 sm:px-1.5 sm:py-0.5 ${TOUCH} rounded text-[11px] sm:text-[10px] font-bold uppercase tracking-wide border transition-colors ${
+        className={`inline-flex items-center justify-center ${
+            square ? 'w-8 sm:w-5' : 'px-3 sm:px-1.5'
+        } py-2 sm:py-0.5 ${TOUCH} rounded text-[11px] sm:text-[10px] font-bold uppercase tracking-wide border transition-colors ${
             pressed
                 ? 'bg-emerald-600 border-emerald-600 text-white'
                 : 'bg-white dark:bg-slate-900 border-slate-300 dark:border-slate-600 text-slate-500 dark:text-slate-400 hover:border-emerald-400'
         }`}
     >
         {label}
+    </button>
+);
+
+/**
+ * A REAL CHECKBOX for co-lead, replacing the Yes/No lozenge.
+ *
+ * `role="checkbox"` on a button rather than `<input type="checkbox">`, deliberately.
+ * The wizard's phone rule is that every interactive control declares a 44px height
+ * floor, and `RosterView.mobile.test.jsx` enforces it over every `input` on the
+ * page — so a native checkbox would have to BE 44px, which renders as an
+ * enormous system box. A button carries the same `TOUCH` class the rest of the
+ * wizard uses, draws a checkbox-sized mark inside a thumb-sized target, and
+ * `aria-checked` announces it as a checkbox regardless.
+ *
+ * The accessible name is unchanged from the toggle it replaces, so anything that
+ * addressed this control by label still finds it.
+ */
+const CheckBox = ({ checked, onChange, ariaLabel, title }) => (
+    <button
+        type="button"
+        role="checkbox"
+        aria-checked={checked}
+        aria-label={ariaLabel}
+        title={title}
+        onClick={() => onChange(!checked)}
+        className={`inline-flex items-center justify-center ${TOUCH} min-w-11 sm:min-w-0 w-11 sm:w-auto`}
+    >
+        <span
+            aria-hidden="true"
+            className={`flex items-center justify-center w-5 h-5 sm:w-4 sm:h-4 rounded border-2 transition-colors ${
+                checked
+                    ? 'bg-emerald-600 border-emerald-600 text-white'
+                    : 'bg-white dark:bg-slate-900 border-slate-300 dark:border-slate-600'
+            }`}
+        >
+            {checked && <Check size={12} strokeWidth={4} />}
+        </span>
     </button>
 );
 
@@ -2064,14 +2108,28 @@ export const TaskTable = ({ rows, errors, bands, onChange, onAdd, onRemove }) =>
                                                         : pattern}
                                                 </p>
                                             ) : (
-                                                <div className="flex flex-wrap gap-1">
-                                                    {WEEKDAY_STRIP.map(({ day, label }) => (
+                                                /* ONE LETTER PER DAY, and `flex-nowrap`.
+                                                    Seven three-letter chips wrapped onto two
+                                                    lines on a phone and read as a wall of
+                                                    words; seven letters fit one row, which is
+                                                    the whole point of the change.
+                                                    `short` is AMBIGUOUS on purpose — T/T and
+                                                    S/S — so `full` carries the real day name
+                                                    into both the tooltip and the accessible
+                                                    name. The aria-label keeps the THREE-letter
+                                                    form it always had (`Task row 1: Mon`),
+                                                    because tests address these chips by it and
+                                                    a screen reader needs a word either way. */
+                                                <div className="flex flex-nowrap gap-0.5 sm:gap-1">
+                                                    {WEEKDAY_STRIP.map(({ day, label, short, full }) => (
                                                         <Toggle
                                                             key={day}
                                                             pressed={row.days.includes(day)}
                                                             onClick={() => toggleDay(row, day)}
-                                                            label={label}
+                                                            label={short}
+                                                            title={full}
                                                             ariaLabel={`Task row ${index + 1}: ${label}`}
+                                                            square
                                                         />
                                                     ))}
                                                 </div>
@@ -2083,10 +2141,9 @@ export const TaskTable = ({ rows, errors, bands, onChange, onAdd, onRemove }) =>
                                                     second on the shift
                                                 </p>
                                             ) : (
-                                                <Toggle
-                                                    pressed={row.coLead}
-                                                    onClick={() => onChange(row.id, { coLead: !row.coLead })}
-                                                    label={row.coLead ? 'Yes' : 'No'}
+                                                <CheckBox
+                                                    checked={row.coLead}
+                                                    onChange={(next) => onChange(row.id, { coLead: next })}
                                                     ariaLabel={`Task row ${index + 1}: co-lead`}
                                                     title="One co-lead alongside the lead"
                                                 />

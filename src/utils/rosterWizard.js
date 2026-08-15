@@ -198,14 +198,33 @@ export const bandLabel = (band) => {
  * Monday-first because the engine snaps every run back to a Monday, so a
  * Sunday-first strip would put the first day of the roster last.
  */
+/**
+ * The week, Monday first, with THREE names for each day and a reason for each.
+ *
+ * `short` — one letter, for the day chips on a task row. Seven three-letter chips
+ * wrapped onto two lines on a phone and read as a wall; seven single letters fit
+ * one row, which is what the roster owner asked for.
+ *
+ * `label` — the three-letter name. Still the ONLY thing used anywhere a day is
+ * named in prose or in a list the user reads as words: the monthly pattern's
+ * `<option>`s, `describeTaskRecurrence`, error messages. A dropdown option reading
+ * "T" would be unusable.
+ *
+ * `full` — the whole word, for the chips' `title` and accessible name. This is not
+ * decoration: **`short` is AMBIGUOUS BY CONSTRUCTION.** Tue and Thu are both `T`,
+ * Sat and Sun are both `S`. Sighted users disambiguate by position, which works
+ * because the order is fixed — but a screen reader announcing "T, pressed" twice
+ * is useless, and so is a hover tooltip saying "T". So the chips render `short` and
+ * announce `full`, and the two must stay in step.
+ */
 export const WEEKDAY_STRIP = Object.freeze([
-    Object.freeze({ day: 1, label: 'Mon' }),
-    Object.freeze({ day: 2, label: 'Tue' }),
-    Object.freeze({ day: 3, label: 'Wed' }),
-    Object.freeze({ day: 4, label: 'Thu' }),
-    Object.freeze({ day: 5, label: 'Fri' }),
-    Object.freeze({ day: 6, label: 'Sat' }),
-    Object.freeze({ day: 0, label: 'Sun' }),
+    Object.freeze({ day: 1, label: 'Mon', short: 'M', full: 'Monday' }),
+    Object.freeze({ day: 2, label: 'Tue', short: 'T', full: 'Tuesday' }),
+    Object.freeze({ day: 3, label: 'Wed', short: 'W', full: 'Wednesday' }),
+    Object.freeze({ day: 4, label: 'Thu', short: 'T', full: 'Thursday' }),
+    Object.freeze({ day: 5, label: 'Fri', short: 'F', full: 'Friday' }),
+    Object.freeze({ day: 6, label: 'Sat', short: 'S', full: 'Saturday' }),
+    Object.freeze({ day: 0, label: 'Sun', short: 'S', full: 'Sunday' }),
 ]);
 
 /** How many blank staff / task rows the sandbox wizard opens with. */
@@ -590,7 +609,9 @@ export const describeBandRange = (selected, bands = DEFAULT_GRADE_BANDS) => {
 
 // --- THE BAND RULER -----------------------------------------------------------
 //
-// The band editor is ONE ruler with TWO draggable dividers, not six number boxes.
+// The band editor is ONE ruler with a draggable divider between each adjacent pair
+// of bands — THREE of them since the four-band split, and `bands - 1` in general —
+// not a number box per bound.
 // That is a correctness change wearing a UI change's clothes.
 //
 // With six independent numbers a user can express a GAP (AH12 in no band at all),

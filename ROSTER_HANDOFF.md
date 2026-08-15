@@ -26,13 +26,14 @@ them** and **one was a real fixture defect** the split exposed (the embryology t
 two junior embryologists at AH8/AH9 — non-exempt now — so a junior-only slot had nobody
 eligible; re-graded to AH11/AH12). One demo assertion turned out to be **measuring nothing**
 and would have passed forever. All repaired, plus a new exhaustive proof that the band ruler
-cannot be dragged into an illegal state. **1630 tests green, lint clean, CI green, deployed.**
+cannot be dragged into an illegal state. **1639 tests green, lint clean, CI green, deployed.**
 
 ---
 
 ## 1. What is LIVE right now
 
-`smartdashboard.web.app` is running **v1.13.0** (tag `v1.13.0`) with the **four-band engine**.
+`smartdashboard.web.app` is running **v1.14.0** (tag `v1.14.0`) with the **four-band engine** and
+the **numbered 1–7 configuration wizard** in the Sandbox.
 
 *Deliberately no commit SHA or bundle hash here: both change on every deploy, so pinning them
 guarantees this line is stale again tomorrow. The version is the durable answer, and it is now
@@ -167,7 +168,7 @@ were not broken; they were starved.
 **The workaround, and it works.** A copy outside iCloud with its own `node_modules`:
 
 ```bash
-/private/tmp/nexus-jsdom/verify.sh          # both CI gates: 1627 tests + eslint, ~35s
+/private/tmp/nexus-jsdom/verify.sh          # both CI gates: 1639 tests + eslint, ~35s
 /private/tmp/nexus-jsdom/verify.sh lint     # lint only
 /private/tmp/nexus-jsdom/verify.sh test src/components   # one directory
 ```
@@ -187,22 +188,31 @@ space is still worth doing (11 GiB free of 460 GiB), but it is the smaller half 
 
 ---
 
-## 4. Still known-broken, documented, NOT fixed
+## 4. What the audits found, and where each one stands
 
-Listed in `CHANGELOG.md` under "Known issues" so nobody mistakes the post-mortem for repairs:
+> **Retitled 2026-08-15.** This was headed *"Still known-broken, documented, NOT fixed"*, which
+> is wrong for five of the eight rows below — they are fixed, and the status column says so. It
+> also claimed to be the same list `CHANGELOG.md` carries under "Known issues", and it was not:
+> that table has five items this one omitted. Both are corrected. **The `### Known issues` table
+> under `[1.13.0]` in [CHANGELOG.md](CHANGELOG.md) is the authoritative list of what is open**;
+> this table is the audit history with today's status beside it.
 
-> **Corrected 2026-08-14 — four of these are FIXED.** The table below is the 2026-08-06 list;
-> read the status column, which is new.
+The five open items this section used to omit, now included at the foot of the table.
 
 | Id | Impact | Status *(2026-08-14)* |
 |---|---|---|
 | **B1** | A roster generated from the shipped default starts on a **Sunday**; the "Tuesday" and "Saturday" video-clinic duties land on Monday and Friday. | ✅ **FIXED in v1.7.1** — snaps to Monday, DST-proof across six timezones. Safe to generate live on stage from any start date. |
 | **M6** | The ICS export has an unescaped comma and no `UID`/`DTSTAMP`. | ✅ **FIXED in v1.7.1** — escaping correct, stable UIDs, so re-import *updates* Outlook instead of duplicating. Outlook import is safe to demo. |
-| **P0.7** | `npm run lint` has never worked — no ESLint config exists in the repo at all. | ⚠️ **HALF FIXED.** A config exists and lint **passes clean** — it runs in CI on every push and gates the deploy. But it could never run *locally*, for the iCloud reason in §3, which is how a lint error reached CI today. It now runs locally too via `verify.sh lint`. |
+| **P0.7** | `npm run lint` has never worked — no ESLint config exists in the repo at all. | ✅ **FIXED in v1.11.0.** A config exists, lint passes clean over 79 files, and `deploy.yml` runs it between the test and build steps. It could not run *locally* until 2026-08-14 either — the iCloud cause in §3 — and now does, via `verify.sh lint`. *(Corrected 2026-08-15: this read HALF FIXED while its own text described both halves as done, and three other documents called it fixed.)* The separate **still-open** item is defect **D6** — `.eslintrc.cjs` disables `no-unused-vars` for `rosterEngineV2.js`. |
 | **M10** | CSV formula injection. | ✅ **FIXED in v1.7.1** — quoting, formula-injection guard, CRLF + UTF-8 BOM. |
 | **M12** | No duplicate-request guard. | ✅ **FIXED in v1.7.1** — duplicate swap requests blocked per session. |
 | **C1 / C3 / C4** | Single hardcoded `roster_2026` document; staff pool hardcoded in the component; **no `firestore.rules` in the repo**. | ⚠️ **STILL OPEN.** A `firestore.rules` proposal now exists in the repo but is **inert — not wired, not deployed**. See **Q6** below; this is the one to settle before another department's data is involved. |
 | **D2 / D3 / D9** | A mistyped availability window silently deletes a person from the roster; `measureRosterLoad`'s `neverRostered` has no UI caller. | ⚠️ **STILL OPEN**, from the audit. D2 is the one that could embarrass you: a typo makes someone vanish rather than raising an error. |
+| **D5** | The slot "needs skill" input is reachable but **unusable for a typed-in team** — the staff table has no skills column, so any skill on a task refuses the whole run. | ⚠️ **STILL OPEN.** This is what makes Q12's skill workaround demo-only. |
+| **D6** | `.eslintrc.cjs` disables `no-unused-vars` for the whole 6,800-line engine — the "passes by disabling things" failure. Two real findings sit behind it. | ⚠️ **STILL OPEN.** Distinct from P0.7, which is fixed. |
+| **D7** | `compileQuota`'s comment contradicts the validator on `max: 0`. | ⚠️ **STILL OPEN**, low. |
+| **D8** | The impossible-floor refusal ignores the hours model. | ⚠️ **STILL OPEN**, low. |
+| **Live iOS zoom** | The live-mode wizard's two textareas are still `text-xs`, so live mode zooms on iOS. Pinned byte-for-byte by a test. | ⚠️ **STILL OPEN.** Four clinicians, desktop — low priority by audience. |
 
 ---
 
@@ -233,10 +243,18 @@ Answered earlier: swap semantics = **mechanical substitution**; **notify the ros
   staff lost that eligibility. It did **not** — and could not — fix "a technologist who holds
   a junior grade". Those are two different problems and only one of them is a grade problem.
 
-  **The workaround, and its hard limit.** You can gate on a *skill* instead of a band: type
-  `registered` into the person's Skills column and put `registered` in the task's requires-skill
-  field. The engine treats a skill as an opaque string, so this works — and skill composes with
-  the band gate by AND.
+  **The workaround, and why you cannot actually run it on stage today.** In principle you gate
+  on a *skill* instead of a band: put `registered` in the task's requires-skill field and give
+  the person that skill. The engine treats a skill as an opaque string and ANDs it with the band
+  gate, so the mechanism is sound.
+
+  ⚠️ **But the staff table has no skills column.** Only the example department's seeded people
+  carry skills; the wizard says so on screen (`RosterDemoWizardTables.jsx:1640`, `:1648`). For a
+  team typed in by hand, putting a skill on a task refuses the whole run. That is open defect
+  **D5** — *"the slot 'needs skill' input is reachable but unusable for a typed-in team"* — and it
+  makes this workaround **demo-only**. *(Corrected 2026-08-15: this paragraph previously told you
+  to type into a Skills column that does not exist. You would have found that out in front of an
+  audience.)*
 
   **But `requiresSkill` is a single string, not a list, so a task can demand exactly ONE thing.**
   That means registration and real competency compete for the same slot. Measured:
@@ -250,7 +268,8 @@ Answered earlier: swap semantics = **mechanical substitution**; **notify the ros
 
   So Paediatric CPET — which needs a registered clinician *who is also CPET-competent* —
   **cannot be expressed at all today.** You pick one requirement and let the other through. The
-  only escape is typing a fake compound skill like `CPET+registered` into somebody's skills
+  only escape is a fake compound skill like `CPET+registered` — for which, for a typed-in team,
+  there is no column to enter it in either
   column, which is exactly the "museum of special cases" the v1.11.0 primitives work existed to
   end. This is the real argument for a proper field: not that "skill" is the wrong word, but
   that **you only get one, and registration would eat it.**
@@ -304,7 +323,8 @@ Answered earlier: swap semantics = **mechanical substitution**; **notify the ros
 > setting. **The audit's `D` = Defect series keeps its numbers** — it is cited across several
 > released CHANGELOG entries, and rewriting a shipped release's record to tidy a name would be
 > the worse trade. So the *decisions* are renamed here, keeping their numbers so that anything
-> said in conversation still maps: `D3 → Q3`, and so on up to `Q12`.
+> said in conversation still maps: `D3 → Q3`, and so on up to `Q12` — **there is no `Q9`**: the decision that would have held that
+> number was answered before the renumbering, so the series runs `Q1`–`Q8` and `Q10`–`Q12`.
 
 Still open — **Q** for a question only you can answer:
 
