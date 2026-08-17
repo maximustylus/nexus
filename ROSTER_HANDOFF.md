@@ -308,6 +308,42 @@ Answered earlier: swap semantics = **mechanical substitution**; **notify the ros
   (registered / provisionally registered / assistant / student), and that decides the design.
   Building it before you know is how it becomes the fifth special case.
 
+  **UPDATE 2026-08-17: the respiratory presentation has now happened** — a Teams sharing session
+  in Sandbox with respiratory therapists and Vincent Chua, AHD Director. Point **(b)** above was
+  to raise the boolean-vs-ordered-list question *with* that room. **Whether it was raised, and
+  what they said, is not recorded here** — so `Q12` is still open on exactly the point that was
+  meant to close it. Worth capturing while the conversation is fresh.
+
+**ANSWERED 2026-08-17** — `Q13`, by the roster owner, after audiology asked for it:
+
+- **Q13 — a task, and an availability, that can say AM or PM.** Audiology's roster master asked
+  for both halves: *which half of the day does this task run in*, and *is this person in for that
+  half* — because things happen last minute **and** because some people work planned half days.
+  The engine today has the **duration** of a half day and not its **position** — see the new
+  entry in `rosterEngineV2.js` §9 — so this is a real gap, not a preference. Four sub-decisions:
+
+  | | Question | Decided |
+  |---|---|---|
+  | **a** | What does a task with no AM/PM mean? | **Either half — opt-in.** The clash rule fires only when *both* tasks are labelled. Nothing existing changes its roster. Same precedent as the hours model, which is *"off until you mention it"*. |
+  | **b** | How is "in for the morning only" said? | **Both.** Dated half-days for the last-minute case, *and* a standing weekly pattern for a contracted half work day. One does not cover the other. |
+  | **c** | Does the `.ics` gain real times? | **No.** Events stay all-day; the half is named in the `SUMMARY`. Real times would mean committing to `Asia/Singapore` and to session hours no department has agreed, and would reverse a documented export decision. |
+  | **d** | When is it built? | **After single-cell shift editing** (queue item 3). A half-day marker you can only change by regenerating the whole week does not help somebody correcting Wednesday at lunchtime. |
+
+  ⚠️ **What `Q13a` costs, stated where the decision is made rather than buried.** Opt-in means a
+  department that labels **some** tasks and not others is protected only among the labelled ones.
+  Label the morning clinic and leave the afternoon review unlabelled, and the engine will still
+  put both on one person — correctly, by the rule chosen here, and *surprisingly*, to the roster
+  master who thinks they have turned AM/PM on. The wizard has to say so at the point of entry;
+  that is a build requirement of item 4, not a documentation footnote.
+
+  **The field will be called `session`, and unlike `Q12` this name is safe** — checked, not
+  assumed. Inside the roster modules every occurrence of "session" is already prose meaning this
+  exact concept, a half-day block of work; `sessionId` / `sessionLabel` exist only in
+  `AuraChat.jsx`, `ConventionalForm.jsx` and `LanguageGate.jsx`, which have no import path to the
+  engine. The engine's own comment on `DEFAULT_TASK_HOURS` already says teams *"configure
+  SESSIONS … and two of them make a working day"*. The concept is named; only its position is
+  missing.
+
 > ### ⚠️ RENUMBERED 2026-08-14 — these are now **Q**n, not **D**n, and the reason matters
 >
 > `D5`–`D8` meant **two completely different things** depending on which document you opened:
@@ -324,7 +360,8 @@ Answered earlier: swap semantics = **mechanical substitution**; **notify the ros
 > released CHANGELOG entries, and rewriting a shipped release's record to tidy a name would be
 > the worse trade. So the *decisions* are renamed here, keeping their numbers so that anything
 > said in conversation still maps: `D3 → Q3`, and so on up to `Q12` — **there is no `Q9`**: the decision that would have held that
-> number was answered before the renumbering, so the series runs `Q1`–`Q8` and `Q10`–`Q12`.
+> number was answered before the renumbering, so the series runs `Q1`–`Q8` and `Q10`–`Q13`.
+> *(`Q13` was added 2026-08-17, after this banner was written; the series simply continues.)*
 
 Still open — **Q** for a question only you can answer:
 
@@ -358,4 +395,21 @@ Still open — **Q** for a question only you can answer:
    Accept. *(In Sandbox the wizard is now the v1.8.0 staff/task tables — add a row
    with your name instead; note the sandbox swap path only simulates.)*
 3. For the other departments: the platform transfers; **multi-team support does not exist yet** (one shared document, hardcoded login list, hardcoded team directory). Offer a pilot, not a handover.
+
+   **Audiology is now a named instance of this *(2026-08-17)*.** Their roster master — an
+   audiologist — said he **might be interested to try it**, which makes audiology the third
+   profession after respiratory and cardiology. Two things about that department before anything
+   is promised:
+
+   - **His second-in-charge does the rostering, weekly, a week ahead, in Excel.** The pilot is
+     therefore not a greenfield: there is a working spreadsheet, a weekly cadence and in-week
+     corrections. The spreadsheet is the incumbent, and *"can it take what we already have"* will
+     be asked before any feature is. Nothing in the queue answers that yet — logged at the foot of
+     `ROSTER_TODO.md`.
+   - **Ask for the numbers first:** how many staff, how many sessions a week. A pilot sized in
+     conversation rather than in numbers is how "it does not scale" gets discovered in front of
+     the person you were trying to convince.
+
+   And per point 3's own rule, this is still a pilot conversation: one shared document and a
+   hardcoded team directory do not become multi-team because a third department said yes.
 4. Your strongest material is `ROSTER_POSTMORTEM.md` + `ROSTER_QC_AUDIT.md` — an audit that found its own author's diagnosis wrong in five places. For colleagues deciding whether to trust their duty roster to your software, that is more persuasive than a clean demo.

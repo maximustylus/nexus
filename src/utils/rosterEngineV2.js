@@ -6461,6 +6461,22 @@ export const measureRosterLoad = (roster, staffNames) => {
 //     on one day are 8 hours of work and NOT a statement that they do not
 //     overlap. Continuous-duty limits, rest between duties and any notion of a
 //     shift clashing with another in the clock sense remain outside this engine.
+//
+//     A DEPARTMENT HAS NOW ASKED FOR THE MISSING PIECE (2026-08-17, audiology).
+//     This entry has always been true; what is new is that it has cost somebody
+//     something. The engine has the DURATION of a half day — `DEFAULT_TASK_HOURS`
+//     is 4 and two make a working day — but not its POSITION, so two tasks that
+//     BOTH really run in the morning are 8h against an 8.4h cap and are taken:
+//     the engine has double-booked a morning, which is the one thing it promises
+//     never to do. It is not a refusal it failed to make; it is a fact it was
+//     never given, and no field on a task can give it. The same hole makes "in
+//     for the morning only" unsayable, because `unavailable` is whole dates.
+//     Specified as queue item 4 in `ROSTER_TODO.md` and decided as `Q13` in
+//     `ROSTER_HANDOFF.md`: an optional `session` of `AM` / `PM` / `FULL`, absent
+//     meaning either half so that no existing roster moves. NOT BUILT — and the
+//     ordering above is the honest reading of it: a clash the engine cannot see
+//     is a worse failure than most of items 1–11, and it is still queued behind
+//     single-cell editing because the department that asked needs both.
 
 // --- 10. MULTI-SLOT SHIFTS' LIMITS LEDGER ------------------------------------
 //

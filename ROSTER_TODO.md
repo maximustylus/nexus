@@ -257,26 +257,39 @@ post-mortem documents.
 
 ---
 
-## Current queue — *2026-08-15, and this is the live part of the file*
+## Current queue — *updated 2026-08-17, and this is the live part of the file*
 
 Everything above is the closed P0–P8 remediation. This is what is actually next, ordered. The
-ordering is not arbitrary: **items 1 and 2 come from what two more roster masters asked for**,
-which is better evidence than an internal judgment about what to build.
+ordering is not arbitrary: **items 1, 2 and 4 come from what three more roster masters asked
+for**, which is better evidence than an internal judgment about what to build.
+
+> ⚠️ **RENUMBERED 2026-08-17.** Half-day sessions entered as a new **item 4** (audiology), so the
+> three items below it each moved up one: the third eligibility axis is now **5** (was 4),
+> supervision pairing **6** (was 5), on-call **7** (was 6). Anything written before this date that
+> cites "item 4" meaning the eligibility axis means **item 5**. Said out loud because this file
+> already carries one banner about an id that quietly came to mean three different things.
 
 | # | Item | Why it is here, and why in this position |
 |---|---|---|
 | **1** | **`Q6` — deploy `firestore.rules`.** *Needs the owner: the current console rules.* | Was "settle before another department's data is involved". It is now **blocking a named requirement from a named person**: cardiology's roster master releases weekly and **time-gates** the release to stop premeditated sick leave. Time-gating is an **authorization** feature, not a visibility one — the roster document is read client-side by every client, so a UI-only gate would be *false assurance* about the exact fairness property she wants. It also still gates C1/C3/C4 and M12's durable duplicate guard. Nothing else here should jump it. |
 | **2** | **Surface `measureRosterLoad`** — per-person load and `neverRostered`. | Defect **D2/D3/D9** *(defect series)*: the engine already computes this and **discards it — there is no UI caller at all.** It is also, unmodified, the answer to cardiology's fairness complaint: "who keeps avoiding the treadmill room" is a report over data already being produced. Cheapest real win on this list. |
 | **3** | **Single-cell shift editing** — change one assignment without regenerating. | Cardiology updates *daily* for sick leave; today the only tool is a full regenerate. Independently the highest-value item from the competitor analysis. Should log the change, so it doubles as the audit trail item 2 wants. |
-| **4** | **A third eligibility axis** — `registration` / `staffCategory`. *See `Q12`.* | `requiresSkill` is a **single string**, so a task can require exactly ONE thing and registration competes with real competency: *"a registered clinician who is also CPET-competent"* cannot be expressed at all. **Two professions have now asked independently**, and cardiology's sign-off levels settle the shape — an **ordered list** (registered / provisionally registered / assistant / student), not a boolean. **Must not be named `role`:** a slot's `role` is both the display label and the identity key scoping affinity and pairing. Do not build before the owner confirms the levels. |
-| **5** | **Supervision pairing** — "a trainee only alongside a signed-off senior". | Engine limit: a task's skill requirement gates the **co-lead** too, so "qualified senior supervising an unqualified trainee" has no representation. Cardiology named it unprompted. Depends on item 4. |
-| **6** | **On-call / standby**, with post-call rest. | **Last, because it is the largest.** There is *no* concept of standby in the engine — zero occurrences. It is not a duty: it is a period with call-in, and it drags a post-call rest rule behind it. `maxConsecutiveDays` cannot see across generation runs, so a naive version would leak at every month boundary. |
+| **4** | **Half-day sessions** — a task, and an availability, that can say **AM or PM**. *See `Q13`.* | **Audiology's roster master asked for both halves of this**, on 2026-08-17: *which half of the day does this task run in*, and *is this person in for that half* — for last-minute changes **and** for contracted half work days. The engine already has the **duration** of a half day (`DEFAULT_TASK_HOURS` is 4 — *"a session, not a day"*, and two make a working day) but not its **position**, so two tasks that both really run in the morning are 8h against an 8.4h cap: the engine takes them, and has silently double-booked a morning — the one thing it promises never to do. It is not a refusal it failed to make, it is a fact it was never given. Opt-in by decision `Q13a`, so an unlabelled task behaves exactly as today. Placed **after item 3** and not before it: his second-in-charge corrects the week *within* the week, and a half-day marker you can only change by regenerating the whole roster solves nothing. |
+| **5** | **A third eligibility axis** — `registration` / `staffCategory`. *See `Q12`.* | `requiresSkill` is a **single string**, so a task can require exactly ONE thing and registration competes with real competency: *"a registered clinician who is also CPET-competent"* cannot be expressed at all. **Two professions have now asked independently**, and cardiology's sign-off levels settle the shape — an **ordered list** (registered / provisionally registered / assistant / student), not a boolean. **Must not be named `role`:** a slot's `role` is both the display label and the identity key scoping affinity and pairing. Do not build before the owner confirms the levels. |
+| **6** | **Supervision pairing** — "a trainee only alongside a signed-off senior". | Engine limit: a task's skill requirement gates the **co-lead** too, so "qualified senior supervising an unqualified trainee" has no representation. Cardiology named it unprompted. Depends on item 5. |
+| **7** | **On-call / standby**, with post-call rest. | **Last, because it is the largest.** There is *no* concept of standby in the engine — zero occurrences. It is not a duty: it is a period with call-in, and it drags a post-call rest rule behind it. `maxConsecutiveDays` cannot see across generation runs, so a naive version would leak at every month boundary. |
 
 **Still open and small:** the swap modal's two `<select>`s lack `id`/`htmlFor` pairing (its tests
 locate them by their options as a workaround). Defects `D5`, `D6`, `D7`, `D8` and the live-mode
 iOS zoom are in the CHANGELOG's known-issues table.
 
-**One question for cardiology, worth asking before item 4:** their roster master's title is
+**The audiology 2IC rosters weekly, in Excel — and that is a separate question from AM/PM.**
+Item 4 is what he *asked* for; the spreadsheet is what he is actually *using*. A weekly grid that
+already works is both the migration path and the incumbent this tool has to beat, and nothing in
+the queue addresses getting one in or out. Recorded here so it is not lost behind the feature
+that was easier to name. **Not scheduled** — it needs the sheet in front of us first.
+
+**One question for cardiology, worth asking before item 5:** their roster master's title is
 *senior principal* cardiac physiologist. If that is a rank **above** principal, the four-band
 scale is one short — and `defineGradeScale({ regions })` is the seam that must absorb it, not a
 rename. Better to find that out now than mid-demo.
