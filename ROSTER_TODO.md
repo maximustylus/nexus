@@ -318,6 +318,14 @@ rule they state out loud**. Every `No` below is a team that cannot.
 `No` is worth more than a fixture — it names a capability gap in the words the person used. A
 `Yes` needs no code at all, only a configuration they type themselves.
 
+**A `Yes` can still be unusable at size, which is a different axis and now has evidence.** The
+stress harness (`npm run stress`, added 2026-08-18) measured generation for the first time: cost is
+roughly linear in headcount and **superlinear in run length**, and it runs synchronously on the
+browser's main thread — 100 staff over a year freezes the tab for ~23 seconds. Recorded as **D11**.
+It changes nothing about *what* can be said, but it bounds *who* can say it: a 20-person department
+is comfortable, a 100-person one rostering a year ahead is not. Worth knowing before the next pilot
+conversation promises a whole-cluster rollout.
+
 **What this list is not:** a promise to build every `No`. Item 1 still outranks all of them.
 
 ---
