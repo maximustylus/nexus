@@ -32,8 +32,14 @@ cannot be dragged into an illegal state. **1639 tests green, lint clean, CI gree
 
 ## 1. What is LIVE right now
 
-`smartdashboard.web.app` is running **v1.14.0** (tag `v1.14.0`) with the **four-band engine** and
-the **numbered 1–7 configuration wizard** in the Sandbox.
+`smartdashboard.web.app` is running **v1.16.0** (tag `v1.16.0`) with the **four-band engine**, the
+**numbered 1–7 configuration wizard**, the **owner's category palette** and the **six-shape
+picker** in the Sandbox.
+
+*(Corrected 2026-08-18: this line read **v1.14.0** and had been stale since v1.15.0 shipped. It is
+the first thing anybody reads before presenting, so it is now updated as part of the release
+rather than after it — the deploy runs on merge to `main`, so the version here and the version the
+app renders are set in the same commit.)*
 
 *Deliberately no commit SHA or bundle hash here: both change on every deploy, so pinning them
 guarantees this line is stale again tomorrow. The version is the durable answer, and it is now
@@ -308,6 +314,67 @@ Answered earlier: swap semantics = **mechanical substitution**; **notify the ros
   (registered / provisionally registered / assistant / student), and that decides the design.
   Building it before you know is how it becomes the fifth special case.
 
+  **UPDATE 2026-08-17: the respiratory presentation has now happened** — a Teams sharing session
+  in Sandbox with respiratory therapists and Vincent Chua, AHD Director. Point **(b)** above was
+  to raise the boolean-vs-ordered-list question *with* that room. **Whether it was raised, and
+  what they said, is not recorded here** — so `Q12` is still open on exactly the point that was
+  meant to close it. Worth capturing while the conversation is fresh.
+
+  **What that room DID produce was better than a demo: respiratory's first real interview.** The
+  therapist lead watched, then walked through the configuration with you and described her
+  service — minimum grade AH12, three areas (NICU, CICU, Ward 65 HiD), rotation across them,
+  Monday to Friday. That is now the **sixth shape**, `shape-graded-floor-rotation`, and
+  respiratory has stopped being one of the professions the picker deliberately offers nothing to.
+  It also produced the finding below.
+
+**ANSWERED-IN-PART 2026-08-17** — `Q12`'s sibling arrived before `Q12` did:
+
+- **A band cannot express a grade threshold, and respiratory's first requirement is one.** She
+  said **minimum AH12**. `leadBands` gates by band; `junior` is **AH11–AH12**; so the closest
+  sayable gate admits AH11 as well. There is no grade-threshold requirement in the engine —
+  eligibility has exactly three kinds (skill, region, cohort window).
+
+  **Decided: the bands do not move.** Setting respiratory's ruler to `[7,11] [12,12] [13,14]
+  [15,17]` would land the gate exactly on AH12 — the validator permits a one-rank region — but it
+  would call an AH11 respiratory therapist **non-exempt**, and `Q11` settled that AH11–AH12 are
+  junior AHPs. The scale stays aligned to the AHP job grades; one department's gate does not get
+  to redefine what a grade means. Queued as item 5(b) instead.
+
+  ⚠️ **What that costs, today, on the deployed site.** The shipped respiratory shape is correct
+  *only because its cast has no AH11*. A real respiratory team typed into the wizard would carry
+  the same one-grade slack, and **nothing on screen says so** — the roster would simply let an
+  AH11 lead NICU. Do not claim grade-floor enforcement to that department until 5(b) ships.
+
+**ANSWERED 2026-08-17** — `Q13`, by the roster owner, after audiology asked for it:
+
+- **Q13 — a task, and an availability, that can say AM or PM.** Audiology's roster master asked
+  for both halves: *which half of the day does this task run in*, and *is this person in for that
+  half* — because things happen last minute **and** because some people work planned half days.
+  The engine today has the **duration** of a half day and not its **position** — see the new
+  entry in `rosterEngineV2.js` §9 — so this is a real gap, not a preference. Four sub-decisions:
+
+  | | Question | Decided |
+  |---|---|---|
+  | **a** | What does a task with no AM/PM mean? | **Either half — opt-in.** The clash rule fires only when *both* tasks are labelled. Nothing existing changes its roster. Same precedent as the hours model, which is *"off until you mention it"*. |
+  | **b** | How is "in for the morning only" said? | **Both.** Dated half-days for the last-minute case, *and* a standing weekly pattern for a contracted half work day. One does not cover the other. |
+  | **c** | Does the `.ics` gain real times? | **No.** Events stay all-day; the half is named in the `SUMMARY`. Real times would mean committing to `Asia/Singapore` and to session hours no department has agreed, and would reverse a documented export decision. |
+  | **d** | When is it built? | **After single-cell shift editing** (queue item 3). A half-day marker you can only change by regenerating the whole week does not help somebody correcting Wednesday at lunchtime. |
+
+  ⚠️ **What `Q13a` costs, stated where the decision is made rather than buried.** Opt-in means a
+  department that labels **some** tasks and not others is protected only among the labelled ones.
+  Label the morning clinic and leave the afternoon review unlabelled, and the engine will still
+  put both on one person — correctly, by the rule chosen here, and *surprisingly*, to the roster
+  master who thinks they have turned AM/PM on. The wizard has to say so at the point of entry;
+  that is a build requirement of item 4, not a documentation footnote.
+
+  **The field will be called `session`, and unlike `Q12` this name is safe** — checked, not
+  assumed. Inside the roster modules every occurrence of "session" is already prose meaning this
+  exact concept, a half-day block of work; `sessionId` / `sessionLabel` exist only in
+  `AuraChat.jsx`, `ConventionalForm.jsx` and `LanguageGate.jsx`, which have no import path to the
+  engine. The engine's own comment on `DEFAULT_TASK_HOURS` already says teams *"configure
+  SESSIONS … and two of them make a working day"*. The concept is named; only its position is
+  missing.
+
 > ### ⚠️ RENUMBERED 2026-08-14 — these are now **Q**n, not **D**n, and the reason matters
 >
 > `D5`–`D8` meant **two completely different things** depending on which document you opened:
@@ -324,12 +391,13 @@ Answered earlier: swap semantics = **mechanical substitution**; **notify the ros
 > released CHANGELOG entries, and rewriting a shipped release's record to tidy a name would be
 > the worse trade. So the *decisions* are renamed here, keeping their numbers so that anything
 > said in conversation still maps: `D3 → Q3`, and so on up to `Q12` — **there is no `Q9`**: the decision that would have held that
-> number was answered before the renumbering, so the series runs `Q1`–`Q8` and `Q10`–`Q12`.
+> number was answered before the renumbering, so the series runs `Q1`–`Q8` and `Q10`–`Q13`.
+> *(`Q13` was added 2026-08-17, after this banner was written; the series simply continues.)*
 
 Still open — **Q** for a question only you can answer:
 
 - **Q3** — should the requester be told when a swap is accepted or declined? Currently nobody tells them. Needs a second listener or a Cloud Function.
-- **Q4** — partition the roster per year/team instead of one `roster_2026` document. Needs a migration decision.
+- **Q4** — partition the roster per year/team instead of one `roster_2026` document. Needs a migration decision. **Widened 2026-08-17: this is the multi-institution question.** 28 allied health professions across several SingHealth institutions cannot share one document, and `WelcomeScreen.jsx:109` admits only `@kkh.com.sg`. The engine is *not* the obstacle — it holds no site concept and already takes per-team bands, rules and tasks — so this is persistence plus authorization, and it is **blocked on `Q6`**: partitioning before rules deploy is false assurance. See the multi-institution note at the foot of `ROSTER_TODO.md`.
 - **Q5** — which `TEAM_DIRECTORY` roles are rosterable? (Recommend `role === 'staff'`, matching today.)
 - **Q6** — **`firestore.rules`.** *(Corrected 2026-08-14: an earlier version of this line said "there is none in the repo", which contradicted §4 of this same document.)* The file **now exists and is tracked** — derived call-site by call-site rather than from a template — but it is an **inert proposal**: `firebase.json` declares only `hosting` and `functions`, so nothing deploys it. Roster writes remain client-side and authorization still lives only in your Firebase console, unversioned. Fine for one trusted team; **this is the first thing to settle before another department's data is involved.** I need your console's current rules to wire it safely.
 - **Q7** — the case-volume / skill-mix claim at `README.md:35` and `AppGuide.jsx:28` is still untrue. The research you supplied gives a legitimate route to making it true (NHPPD × Average Daily Census → required hours → FTE → slot counts).
@@ -358,4 +426,40 @@ Still open — **Q** for a question only you can answer:
    Accept. *(In Sandbox the wizard is now the v1.8.0 staff/task tables — add a row
    with your name instead; note the sandbox swap path only simulates.)*
 3. For the other departments: the platform transfers; **multi-team support does not exist yet** (one shared document, hardcoded login list, hardcoded team directory). Offer a pilot, not a handover.
+
+   **Respiratory and audiology are both named instances of this *(2026-08-17)*.**
+
+   **Respiratory** has a shape in the picker — but it is deliberately **not** offered to
+   respiratory therapists as *theirs*. One KKH team described it; RTs work across every
+   institution in the cluster and rotate differently, so pointing all of them at one team's
+   structure would repeat the exact over-claim the twelve invented arrangements made. The shape is
+   attributed to the team that described it, reachable by what it *does*, and suggested to nobody.
+   **Also read the grade-floor warning in §5 before promising anything about job grades there.**
+
+   ⚠️ **The same correction landed on all six shapes, and it is worth saying on stage.** Every
+   shape here came from ONE team at ONE institution, and until 2026-08-17 the picker told a
+   visitor *"this is the shape your own profession described to us"*. It now says one team, at one
+   institution, and that colleagues elsewhere roster differently. If you are asked *"does this
+   assume everyone works like KKH?"* — the honest answer is that it did, in the copy, and no
+   longer does. `sourceScope` on every shape is the field that keeps it honest as more teams are
+   asked.
+
+   **Audiology.** Their roster master — an audiologist — said he **might be interested to try
+   it**, which makes audiology the third profession after respiratory and cardiology.
+   Deliberately, audiology has **no** shape: he asked for a feature (AM/PM), he did not describe
+   his week. A conversation is not a structure, and the picker still offers his profession
+   nothing — which is correct until somebody says what an audiology roster looks like. Two things about that department before anything
+   is promised:
+
+   - **His second-in-charge does the rostering, weekly, a week ahead, in Excel.** The pilot is
+     therefore not a greenfield: there is a working spreadsheet, a weekly cadence and in-week
+     corrections. The spreadsheet is the incumbent, and *"can it take what we already have"* will
+     be asked before any feature is. Nothing in the queue answers that yet — logged at the foot of
+     `ROSTER_TODO.md`.
+   - **Ask for the numbers first:** how many staff, how many sessions a week. A pilot sized in
+     conversation rather than in numbers is how "it does not scale" gets discovered in front of
+     the person you were trying to convince.
+
+   And per point 3's own rule, this is still a pilot conversation: one shared document and a
+   hardcoded team directory do not become multi-team because a third department said yes.
 4. Your strongest material is `ROSTER_POSTMORTEM.md` + `ROSTER_QC_AUDIT.md` — an audit that found its own author's diagnosis wrong in five places. For colleagues deciding whether to trust their duty roster to your software, that is more persuasive than a clean demo.

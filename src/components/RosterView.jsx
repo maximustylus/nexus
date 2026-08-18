@@ -2953,13 +2953,25 @@ const RosterView = ({ user }) => {
                                             sub-discipline produces, and a sentence that
                                             reads as a mistake gets read as a mistake about
                                             the reader. "Your profession" is the same fact
-                                            and survives all 37 leaves. */}
+                                            and survives all 37 leaves.
+
+                                            ⚠️ AND IT SAYS ONE TEAM, NOT A PROFESSION.
+                                            It used to read "the shape your own profession
+                                            described to us" — which told a respiratory
+                                            therapist at any other SingHealth institution
+                                            that their PROFESSION had described a structure
+                                            ONE team at one hospital described. Every shape
+                                            here is one team at one site (`sourceScope` says
+                                            so), and there are 27 other allied health
+                                            professions carrying the same exposure. A
+                                            profession is not a team, and the copy must
+                                            never again imply it is. */}
                                         {suggestedShapeFor(demoProfession.id)
                                             ? (suggestedShapeFor(demoProfession.id).sourceProfessionId === demoProfession.id
                                                 || suggestedShapeFor(demoProfession.id).sourceProfessionId === demoProfession.groupId
-                                                ? `“${suggestedShapeFor(demoProfession.id).name}” below is the shape your own profession described to us. Start there if you like — it is still only a starting point, and your team may work nothing like the colleagues who described it.`
-                                                : `A suggested starting point: “${suggestedShapeFor(demoProfession.id).name}”. It is a suggestion and nothing more: nobody in your profession has described their week to us, so this says nothing about your service. Any shape below will do, and all of them are editable.`)
-                                            : 'Nobody in your profession has described their week to us, so there is no suggested starting point — rather than hand you a guess. Pick whichever shape below looks closest to how your team works and change it.'}
+                                                ? `“${suggestedShapeFor(demoProfession.id).name}” below came from ONE team in your profession, at one institution. Start there if you like — one team is not a profession, colleagues elsewhere roster differently, and every row of it is editable.`
+                                                : `A suggested starting point: “${suggestedShapeFor(demoProfession.id).name}”. It is a suggestion and nothing more: no team in your profession has described their week to us, so this says nothing about your service. Any shape below will do, and all of them are editable.`)
+                                            : 'There is no suggested starting point for your profession — no team in it has described their week to us, and this is left blank rather than hand you a guess. The shapes below came from teams in other professions; pick whichever looks closest to how your team works and change it.'}
                                     </p>
                                 )}
 
@@ -3003,7 +3015,10 @@ const RosterView = ({ user }) => {
                                     for every option at once, which is when they are actually
                                     read. The placeholder below names no COUNT, deliberately:
                                     a sentence saying "five shapes" goes out of date the next
-                                    time somebody adds one, and it already did once. */}
+                                    time somebody adds one, and it has now done so TWICE —
+                                    twelve to five, then five to six when respiratory
+                                    described their week. This placeholder needed no edit
+                                    either time, which is the whole point of it. */}
                                 {demoShape ? (
                                     <>
                                         <p
