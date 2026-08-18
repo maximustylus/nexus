@@ -292,6 +292,36 @@ against the table instead of taken on trust.
 locate them by their options as a workaround). Defects `D5`, `D6`, `D7`, `D8` and the live-mode
 iOS zoom are in the CHANGELOG's known-issues table.
 
+---
+
+## The expressiveness ledger — *the measure that matters for 27 other professions*
+
+**Fixture count is the wrong metric and always was.** AURA does not serve SingHealth by shipping
+one worked example per department — there are 28 allied health professions across several
+institutions, and a respiratory team at one hospital rotates differently from a respiratory team
+at another. What decides whether any of them can use the tool is whether **the engine can say the
+rule they state out loud**. Every `No` below is a team that cannot.
+
+| A real team said | Sayable today? | Where it goes |
+|---|---|---|
+| *"minimum job grade AH12"* | **No** — `leadBands` gates by band and `junior` is AH11–AH12, so a threshold **inside** a band has no form | item 5(b) |
+| *"is this task AM or PM, and is this person in for that half"* | **No** — a duty has a duration but no position in the day | item 4 |
+| *"a registered clinician who is **also** CPET-competent"* | **No** — `requiresSkill` is a single string, so one requirement evicts the other | item 5(a) |
+| *"time-gate the roster release"* | **No** — it is authorization, and no rules are deployed | item 1 / `Q6` |
+| *"everyone on this duty must meet the grade floor"* | **Partly** — only by `coLeads: 0`, because a band gates the lead alone | 5(b) makes it direct |
+| juniors on wards, seniors in clinics — band gates in both directions | **Yes** | shipped v1.8.0 |
+| a monthly clinic, same practitioner each time | **Yes** | shipped v1.8.0 |
+| at least two Saturdays a month, under an hours ceiling | **Yes** | shipped v1.9.0/v1.10.0 |
+| a shift needing a principal, a senior and a junior at once | **Yes** | shipped v1.10.0 |
+
+**How to use it:** every new conversation with a team adds a row *before* anything is built. A
+`No` is worth more than a fixture — it names a capability gap in the words the person used. A
+`Yes` needs no code at all, only a configuration they type themselves.
+
+**What this list is not:** a promise to build every `No`. Item 1 still outranks all of them.
+
+---
+
 **Respiratory is now an interviewed shape, and their gate ships one grade too wide.** The sixth
 shape (`shape-graded-floor-rotation`, `mockData.js`) is what their therapist lead described:
 three areas, weekdays, a grade floor, rotation. It is safe **only because its cast contains no
@@ -304,6 +334,17 @@ Item 4 is what he *asked* for; the spreadsheet is what he is actually *using*. A
 already works is both the migration path and the incumbent this tool has to beat, and nothing in
 the queue addresses getting one in or out. Recorded here so it is not lost behind the feature
 that was easier to name. **Not scheduled** — it needs the sheet in front of us first.
+
+**Multi-institution: specified, blocked on `Q6`, and NOT an engine problem.** One shared
+`roster_2026` document and a login gate hardcoded to `@kkh.com.sg` (`WelcomeScreen.jsx:109`) are
+what stop a second institution using this — not the engine, which contains no site concept at all
+and already supports per-team band scales (`rules.bands`), per-team rules and per-team task sets.
+So an RT team at another hospital can already express their own rotation *provided their rule is
+sayable*, which is why the ledger above is the real constraint. What multi-institution needs when
+it comes: a roster document per institution/team, per-institution grade scales and rules, and a
+login gate that is not one hardcoded domain. **Deliberately not designed yet** — partitioning data
+per institution before `firestore.rules` is deployed is false assurance, the same argument already
+accepted for item 1. Revisit as part of `Q4`.
 
 **One question for cardiology, worth asking before item 5:** their roster master's title is
 *senior principal* cardiac physiologist. If that is a rank **above** principal, the four-band

@@ -2184,7 +2184,30 @@ describe('demo mode: the picker is a profession and a shape', () => {
                 expect(entry.group).toBe('shape');
                 expect(typeof entry.sourceProfession).toBe('string');
                 expect(entry.sourceProfession.length).toBeGreaterThan(0);
-                expect(typeof entry.sourceProfessionId).toBe('string');
+
+                // ⚠️ `sourceProfessionId` USED TO BE REQUIRED HERE AND IS NOW OPTIONAL,
+                // and the change is deliberate rather than a relaxation. The two fields
+                // were doing two unrelated jobs: ATTRIBUTION ("whose structure is this")
+                // and SUGGESTION ("should everyone with this job title be pointed here").
+                // Attribution is still mandatory — it moved to `sourceProfession` plus
+                // `sourceScope`, both asserted here. Suggestion is now a choice, and
+                // respiratory declines it because one KKH team is not every respiratory
+                // therapist in SingHealth.
+                expect(entry.sourceProfessionId === null || typeof entry.sourceProfessionId === 'string').toBe(true);
+
+                // SCOPE IS MANDATORY, AND IT IS WHAT REPLACED THE PROFESSION-WIDE CLAIM.
+                // Every shape here came from ONE team at ONE institution; the picker used
+                // to say "your own profession described this". A shape that cannot say how
+                // broadly it was described cannot be rendered honestly, so the field is
+                // required rather than optional.
+                expect(entry.sourceScope).toBeTruthy();
+                expect(entry.sourceScope.teams).toBeGreaterThanOrEqual(1);
+                expect(entry.sourceScope.institutions).toBeGreaterThanOrEqual(1);
+                expect(entry.sourceScope).toHaveProperty('describedOn');
+
+                // The attribution must carry the scope in words too, because the sentence
+                // is what a visitor actually reads — "one … team, at one institution".
+                expect(entry.attribution).toMatch(/at one institution/i);
                 // The attribution says whose structure it is AND that it is a starting
                 // point. Both halves, because either alone misleads.
                 expect(entry.attribution).toMatch(/starting point/i);
@@ -2193,6 +2216,7 @@ describe('demo mode: the picker is a profession and a shape', () => {
                 expect(entry.group).toBe('demo');
                 expect(entry.sourceProfession).toBeNull();
                 expect(entry.sourceProfessionId).toBeNull();
+                expect(entry.sourceScope).toBeNull();
                 expect(entry.attribution).toMatch(/fictional/i);
             }
             // NO `correction` FIELD ANYWHERE, and no `inferred`. They existed to
@@ -2212,7 +2236,10 @@ describe('demo mode: the picker is a profession and a shape', () => {
             ['shape-team-rotation', 'embryologist'],
             ['shape-weekend-quota', 'medical-laboratory-technologist'],
             ['shape-weekday-sessions', 'clinical-exercise-physiologist'],
-            ['shape-graded-floor-rotation', 'respiratory-therapist'],
+            // ATTRIBUTED TO RESPIRATORY, PAIRED WITH NOBODY. The `null` is the whole
+            // correction: the team is named, and no RT in the cluster is auto-pointed at
+            // one institution's rotation as though it were their profession's.
+            ['shape-graded-floor-rotation', null],
         ]);
         expect(DEMO_SHAPES.filter((entry) => entry.provenance === DEMO_PROVENANCE_FICTIONAL)
             .map((entry) => entry.id)).toEqual(['marvel', 'marvel-worked-example']);
@@ -2359,7 +2386,7 @@ describe('demo mode: the picker is a profession and a shape', () => {
         chooseProfession('art-therapist');
         expect(suggestedShapeFor('art-therapist').id).toBe('shape-weekday-sessions');
         expectOnScreen(/suggested starting point/i);
-        expectOnScreen(/nobody in your profession has described their week/i);
+        expectOnScreen(/no team in your profession has described their week/i);
         expectOnScreen(/says nothing about your service/i);
 
         // NOTHING LOADED ITSELF. A suggestion that applies itself is a claim about that
@@ -2367,10 +2394,14 @@ describe('demo mode: the picker is a profession and a shape', () => {
         expect(shapeSelect().value).toBe('');
         expect(screen.getByLabelText('Staff row 1 name').value).toBe('');
 
-        // A PROFESSION THAT DESCRIBED ITS OWN SHAPE IS TOLD SO INSTEAD — a different and
-        // stronger fact than a suggestion.
+        // A PROFESSION ONE OF WHOSE TEAMS DESCRIBED A SHAPE IS TOLD EXACTLY THAT — one
+        // team, at one institution. NOT "your profession described this", which is the
+        // sentence this assertion used to pin and which was false for every colleague of
+        // that team working anywhere else.
         chooseProfession('physiotherapist');
-        expectOnScreen(/is the shape your own profession described to us/i);
+        expectOnScreen(/came from ONE team in your profession, at one institution/i);
+        expectOnScreen(/one team is not a profession/i);
+        expect(screen.queryByText(/your own profession described to us/i)).toBeNull();
 
         // A SUB-DISCIPLINE OF A NESTING PROFESSION inherits its parent's shape: the
         // psychology interview did not distinguish which of the six, so all six get it
@@ -2378,22 +2409,22 @@ describe('demo mode: the picker is a profession and a shape', () => {
         chooseProfession('psychologist-forensic');
         expect(suggestedShapeFor('psychologist-forensic').id).toBe('shape-periodic-clinic');
 
-        // RESPIRATORY LEFT THIS LIST ON 2026-08-17, by the only route out of it: their
-        // therapist lead described their week, so they became the source of a shape and
-        // `DEMO_SHAPE_SUGGESTIONS` derived the pairing with no hand edit. They are now
-        // told they described it — the stronger sentence — rather than told there is
-        // nothing for them.
-        expect(suggestedShapeFor('respiratory-therapist').id).toBe('shape-graded-floor-rotation');
-        chooseProfession('respiratory-therapist');
-        expectOnScreen(/is the shape your own profession described to us/i);
+        // ⚠️ RESPIRATORY HAS A SHAPE AND STILL GETS NO SUGGESTION, and that pair of facts
+        // is the correction. Their lead described their week on 2026-08-17, so the sixth
+        // shape is real and attributed — but respiratory therapists work across every
+        // institution in the cluster and rotate differently, so pointing all of them at
+        // one KKH team's structure would be the twelve arrangements' over-claim wearing an
+        // interview as cover. Attributed, reachable, NOT suggested.
+        expect(shapeOf('shape-graded-floor-rotation').sourceProfession).toBe('Respiratory Therapist');
+        expect(suggestedShapeFor('respiratory-therapist')).toBeNull();
 
-        // AND A PROFESSION WITH NO PAIRING GETS NO SUGGESTION, and is told why. Two of
-        // these four had a hand-built fixture before this change, which is the clearest
+        // AND A PROFESSION WITH NO PAIRING GETS NO SUGGESTION, and is told why. Three of
+        // these five had a hand-built fixture before this change, which is the clearest
         // measure of what was wrong with it: a guess reads as more helpful than a blank,
-        // and it is not. AUDIOLOGY IS STILL HERE ON PURPOSE — their roster master has been
-        // spoken to, but he asked for a feature, not described his week. A conversation
-        // is not a structure.
-        for (const orphan of ['audiologist', 'medical-social-worker', 'auditory-verbal-therapist', 'prosthetist-orthotist']) {
+        // and it is not. AUDIOLOGY IS HERE FOR A THIRD REASON AGAIN — their roster master
+        // has been spoken to, but he asked for a feature, not described his week. A
+        // conversation is not a structure.
+        for (const orphan of ['audiologist', 'medical-social-worker', 'auditory-verbal-therapist', 'prosthetist-orthotist', 'respiratory-therapist']) {
             expect(DEMO_SHAPE_SUGGESTIONS[orphan]).toBeUndefined();
             expect(suggestedShapeFor(orphan)).toBeNull();
         }
@@ -2420,7 +2451,8 @@ describe('demo mode: the picker is a profession and a shape', () => {
         // correct this" panel it replaced apologised for a guess, and there are no
         // guesses left to apologise for.
         expectOnScreen(graded.attribution);
-        expectOnScreen(/physiotherapists described their week/i);
+        // SCOPED, NOT PROFESSION-WIDE: "one physiotherapy team, at one institution".
+        expectOnScreen(/One physiotherapy team, at one institution/i);
 
         clickGenerate();
 
@@ -2446,7 +2478,8 @@ describe('demo mode: the picker is a profession and a shape', () => {
         clickGenerate();
 
         expectOnScreen(/Art Therapist — Graded duty split/i);
-        expectOnScreen(/physiotherapists described their week/i);
+        // SCOPED, NOT PROFESSION-WIDE: "one physiotherapy team, at one institution".
+        expectOnScreen(/One physiotherapy team, at one institution/i);
         // The shape's source profession is NOT offered as the visitor's own.
         expect(screen.queryByText(/^Physiotherapist — /)).toBeNull();
 

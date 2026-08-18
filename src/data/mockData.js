@@ -995,11 +995,38 @@ const DEMO_ARRANGEMENT_MARVEL = Object.freeze({
  *                       reader sees it, or `null` for the fictional demos. A FIELD
  *                       rather than a sentence in the copy, so the UI cannot render a
  *                       shape without attributing it.
- *   sourceProfessionId  the same profession as a `mohAlliedHealth.js` id, so "this shape
- *                       came from your own profession" is computable rather than
- *                       hand-listed. Usually a LEAF id; for the periodic clinic it is a
- *                       GROUP id, because the interview named the profession and not one
- *                       of its six sub-disciplines. `null` for the demos.
+ *   sourceProfessionId  THE AUTO-SUGGESTION KEY, AND NOTHING ELSE. A `mohAlliedHealth.js`
+ *                       id, so a pairing is computable rather than hand-listed. Usually a
+ *                       LEAF id; for the periodic clinic it is a GROUP id, because the
+ *                       interview named the profession and not one of its six
+ *                       sub-disciplines. `null` for the demos AND for any shape that
+ *                       should not be offered to a whole profession — see below.
+ *   sourceScope         HOW BROADLY THIS WAS DESCRIBED: `{ teams, institutions,
+ *                       describedOn }`. Required on every interviewed shape. `null` for
+ *                       the demos.
+ *
+ * ⚠️ `sourceProfession` AND `sourceProfessionId` USED TO BE ONE IDEA AND ARE NOW TWO,
+ * because they were doing two unrelated jobs and one of them was making a false claim.
+ * ATTRIBUTION is "whose structure is this" and is carried by `sourceProfession` +
+ * `sourceScope`; SUGGESTION is "should everyone with this job title be pointed here" and
+ * is carried by `sourceProfessionId` alone. An interviewed shape MUST have the first. It
+ * MAY decline the second — respiratory does, and is still fully attributed.
+ *
+ * ⚠️ WHY `sourceScope` EXISTS, AND IT IS THE CORRECTION OF A REAL OVER-CLAIM. Every shape
+ * here came from ONE TEAM AT ONE INSTITUTION. The picker was telling a reader "this is the
+ * shape your own profession described to us" — so a respiratory therapist at any other
+ * SingHealth institution was told their profession had described a structure that one KKH
+ * team described, and there are 27 other allied health professions with the same exposure.
+ * A profession is not a team. Scope is DATA rather than a sentence for one reason: when a
+ * second team from the same profession describes something different, `teams: 2,
+ * institutions: 2` is a field that changes, where a hand-written sentence is a thing
+ * somebody has to remember to rewrite and will not.
+ *
+ * `describedOn` IS `null` FOR FIVE OF THE SIX AND THAT IS NOT AN OVERSIGHT — it is the
+ * measurement. Four of them were interviewed before v1.8.0 and no date was recorded at the
+ * time, and the owner's own service was never "described" on a day at all. Only respiratory
+ * has one, because the field existed by the time they were asked. A null here reads
+ * "nobody wrote it down", which is worth knowing and is not the same as "recently".
  *   attribution         the sentence shown beside the shape and again beside the
  *                       finished roster. It says whose structure this is AND that it is
  *                       a starting point — never what the visitor's own service does.
@@ -1020,7 +1047,8 @@ export const DEMO_SHAPES = Object.freeze([
     provenance: DEMO_PROVENANCE_INTERVIEWED,
     sourceProfession: 'Physiotherapist',
     sourceProfessionId: 'physiotherapist',
-    attribution: 'This is how the physiotherapists described their week. It is a starting point to adapt — every row of it is editable, and it says nothing about your own service.',
+    sourceScope: Object.freeze({ teams: 1, institutions: 1, describedOn: null }),
+    attribution: 'One physiotherapy team, at one institution, described this week. It is a starting point to adapt — every row of it is editable, physiotherapists elsewhere work differently, and it says nothing about your own service.',
     config: DEMO_ARRANGEMENT_PHYSIOTHERAPY,
   }),
   Object.freeze({
@@ -1036,7 +1064,8 @@ export const DEMO_SHAPES = Object.freeze([
     // all of its leaves for exactly this case.
     sourceProfession: 'Psychologist (excluding associate psychologist)',
     sourceProfessionId: 'psychologist',
-    attribution: 'This is how the psychologists described their week. It is a starting point to adapt — every row of it is editable, and it says nothing about your own service.',
+    sourceScope: Object.freeze({ teams: 1, institutions: 1, describedOn: null }),
+    attribution: 'One psychology team, at one institution, described this week. It is a starting point to adapt — every row of it is editable, psychologists elsewhere work differently, and it says nothing about your own service.',
     config: DEMO_ARRANGEMENT_PSYCHOLOGY,
   }),
   Object.freeze({
@@ -1047,7 +1076,8 @@ export const DEMO_SHAPES = Object.freeze([
     provenance: DEMO_PROVENANCE_INTERVIEWED,
     sourceProfession: 'Embryologist',
     sourceProfessionId: 'embryologist',
-    attribution: 'This is how the embryologists described their week. It is a starting point to adapt — every row of it is editable, and it says nothing about your own service.',
+    sourceScope: Object.freeze({ teams: 1, institutions: 1, describedOn: null }),
+    attribution: 'One embryology team, at one institution, described this week. It is a starting point to adapt — every row of it is editable, embryologists elsewhere work differently, and it says nothing about your own service.',
     config: DEMO_ARRANGEMENT_EMBRYOLOGY,
   }),
   Object.freeze({
@@ -1058,7 +1088,8 @@ export const DEMO_SHAPES = Object.freeze([
     provenance: DEMO_PROVENANCE_INTERVIEWED,
     sourceProfession: 'Medical Laboratory Technologist / Scientist',
     sourceProfessionId: 'medical-laboratory-technologist',
-    attribution: 'This is how the medical laboratory scientists described their week. It is a starting point to adapt — every row of it is editable, and it says nothing about your own service.',
+    sourceScope: Object.freeze({ teams: 1, institutions: 1, describedOn: null }),
+    attribution: 'One medical laboratory team, at one institution, described this week. It is a starting point to adapt — every row of it is editable, laboratories elsewhere work differently, and it says nothing about your own service.',
     config: DEMO_ARRANGEMENT_LABS,
   }),
   Object.freeze({
@@ -1069,7 +1100,8 @@ export const DEMO_SHAPES = Object.freeze([
     provenance: DEMO_PROVENANCE_INTERVIEWED,
     sourceProfession: 'Clinical Exercise Physiologist',
     sourceProfessionId: 'clinical-exercise-physiologist',
-    attribution: 'This is the roster owner’s own service, by its real duty names — the one shape here that is reported rather than modelled. It is a starting point to adapt, and it says nothing about your own service.',
+    sourceScope: Object.freeze({ teams: 1, institutions: 1, describedOn: null }),
+    attribution: 'This is the roster owner’s own service — one team, at one institution — by its real duty names, the one shape here that is reported rather than modelled. It is a starting point to adapt, exercise physiologists elsewhere work differently, and it says nothing about your own service.',
     config: DEMO_ARRANGEMENT_EXERCISE_PHYSIOLOGY,
   }),
   Object.freeze({
@@ -1079,8 +1111,15 @@ export const DEMO_SHAPES = Object.freeze([
     group: 'shape',
     provenance: DEMO_PROVENANCE_INTERVIEWED,
     sourceProfession: 'Respiratory Therapist',
-    sourceProfessionId: 'respiratory-therapist',
-    attribution: 'This is how the respiratory therapists described their week. It is a starting point to adapt — every row of it is editable, and it says nothing about your own service.',
+    // DELIBERATELY NULL, AND THE ONLY ONE. See `sourceProfessionId` in the field table
+    // above: this is the AUTO-SUGGESTION key, not the attribution. Respiratory therapists
+    // work across every institution in the cluster and the owner knows their rotations
+    // differ, so no RT is pointed at one team's structure as though it were their
+    // profession's. The shape is still fully attributed — by `sourceProfession` and
+    // `sourceScope`, which is the split that made this possible.
+    sourceProfessionId: null,
+    sourceScope: Object.freeze({ teams: 1, institutions: 1, describedOn: '2026-08-17' }),
+    attribution: 'One respiratory therapy team, at one institution, described this week on 17 August 2026. It is a starting point to adapt — every row of it is editable, respiratory therapists at other institutions rotate differently, and it says nothing about your own service.',
     config: DEMO_ARRANGEMENT_RESPIRATORY,
   }),
   Object.freeze({
@@ -1091,6 +1130,7 @@ export const DEMO_SHAPES = Object.freeze([
     provenance: DEMO_PROVENANCE_FICTIONAL,
     sourceProfession: null,
     sourceProfessionId: null,
+    sourceScope: null,
     attribution: 'Openly fictional — nobody’s service, and not modelled on one. It exists so the engine can be watched working in one screen.',
     config: DEMO_ARRANGEMENT_MARVEL,
   }),
@@ -1102,6 +1142,7 @@ export const DEMO_SHAPES = Object.freeze([
     provenance: DEMO_PROVENANCE_FICTIONAL,
     sourceProfession: null,
     sourceProfessionId: null,
+    sourceScope: null,
     attribution: 'Openly fictional — nobody’s service, and not modelled on one. It was the "Respiratory example" until that name was retired for claiming a service nobody had described; the structure is unchanged and now belongs to no profession at all.',
     config: DEMO_EXAMPLE_DEPARTMENT,
   }),
@@ -1218,24 +1259,33 @@ const OWNER_SUGGESTED_SHAPES = Object.freeze({
  * because it is a judgement and the derived one is only an identity.
  *
  * A profession with no entry gets NO suggestion, and that is correct rather than a gap.
- * Thirty-three of the 37 leaves are covered; the four that are not —
+ * Thirty-two of the 37 leaves are covered; the five that are not —
  * `auditory-verbal-therapist`, `audiologist`, `medical-social-worker`,
- * `prosthetist-orthotist` — are neither in the owner's map nor the source of a shape,
- * and inventing a suggestion for them would be inventing exactly what this change
- * removed. TWO of those four HAD a hand-built fixture before this change, which is the
- * clearest measure of what was wrong with it: a guess reads as more helpful than a
- * blank, and it is not.
+ * `prosthetist-orthotist`, `respiratory-therapist` — are not paired with a shape, and
+ * inventing a suggestion for them would be inventing exactly what this change removed.
+ * Three of those five HAD a hand-built fixture before this change, which is the clearest
+ * measure of what was wrong with it: a guess reads as more helpful than a blank, and it
+ * is not.
  *
- * IT WAS FIVE AND THREE UNTIL 2026-08-17. `respiratory-therapist` left this list by the
- * only route out of it: their therapist lead described their week, so respiratory became
- * the source of a shape and the derived branch below picked the pairing up with no hand
- * edit. That is the round trip this whole section was built for — a profession lost its
- * invented fixture, was asked, and got a reported one back.
+ * ⚠️ `respiratory-therapist` IS ON THIS LIST FOR A DIFFERENT REASON FROM THE OTHER FOUR,
+ * AND THE DIFFERENCE IS THE POINT. The other four have no shape. Respiratory HAS one —
+ * they described their week on 2026-08-17 and it is the sixth shape — and it is
+ * deliberately not paired, because one KKH team is not the profession. RTs work across
+ * every institution in the cluster and their rotations differ, so pointing all of them at
+ * one team's structure would be the same over-claim the twelve arrangements made, wearing
+ * an interview as cover. The shape stays reachable by what it DOES, one tap away in the
+ * list, attributed to the team that described it.
  *
- * ⚠️ AUDIOLOGY IS NOT THE SAME CASE, AND MUST NOT BE TREATED AS ONE. Their roster master
- * has now been spoken to as well, but he asked for a FEATURE (half-day AM/PM sessions);
- * he did not describe his week. A conversation is not a structure, so `audiologist` stays
- * on this list until somebody says what their roster actually looks like.
+ * ⚠️ AND THE FIVE THAT ARE STILL PAIRED ARE PAIRED ON BORROWED TIME. Every one of them is
+ * also one team at one institution — `sourceScope` now says so on all six. They keep their
+ * suggestion only because no second team from those professions has yet described anything
+ * different. THE TRIGGER TO DELETE SUGGESTION-BY-PROFESSION ENTIRELY: the first time two
+ * teams in one profession describe two different structures, this map is making a claim it
+ * cannot support, and picking a shape by what it does is the only honest control left.
+ *
+ * ⚠️ AUDIOLOGY IS NOT THE SAME CASE EITHER. Their roster master has been spoken to, but he
+ * asked for a FEATURE (half-day AM/PM sessions); he did not describe his week. A
+ * conversation is not a structure.
  */
 export const DEMO_SHAPE_SUGGESTIONS = Object.freeze(
   Object.fromEntries([

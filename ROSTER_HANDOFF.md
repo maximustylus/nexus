@@ -391,7 +391,7 @@ Answered earlier: swap semantics = **mechanical substitution**; **notify the ros
 Still open — **Q** for a question only you can answer:
 
 - **Q3** — should the requester be told when a swap is accepted or declined? Currently nobody tells them. Needs a second listener or a Cloud Function.
-- **Q4** — partition the roster per year/team instead of one `roster_2026` document. Needs a migration decision.
+- **Q4** — partition the roster per year/team instead of one `roster_2026` document. Needs a migration decision. **Widened 2026-08-17: this is the multi-institution question.** 28 allied health professions across several SingHealth institutions cannot share one document, and `WelcomeScreen.jsx:109` admits only `@kkh.com.sg`. The engine is *not* the obstacle — it holds no site concept and already takes per-team bands, rules and tasks — so this is persistence plus authorization, and it is **blocked on `Q6`**: partitioning before rules deploy is false assurance. See the multi-institution note at the foot of `ROSTER_TODO.md`.
 - **Q5** — which `TEAM_DIRECTORY` roles are rosterable? (Recommend `role === 'staff'`, matching today.)
 - **Q6** — **`firestore.rules`.** *(Corrected 2026-08-14: an earlier version of this line said "there is none in the repo", which contradicted §4 of this same document.)* The file **now exists and is tracked** — derived call-site by call-site rather than from a template — but it is an **inert proposal**: `firebase.json` declares only `hosting` and `functions`, so nothing deploys it. Roster writes remain client-side and authorization still lives only in your Firebase console, unversioned. Fine for one trusted team; **this is the first thing to settle before another department's data is involved.** I need your console's current rules to wire it safely.
 - **Q7** — the case-volume / skill-mix claim at `README.md:35` and `AppGuide.jsx:28` is still untrue. The research you supplied gives a legitimate route to making it true (NHPPD × Average Daily Census → required hours → FTE → slot counts).
@@ -423,10 +423,20 @@ Still open — **Q** for a question only you can answer:
 
    **Respiratory and audiology are both named instances of this *(2026-08-17)*.**
 
-   **Respiratory** now has a shape of their own in the picker, so an RT choosing their profession
-   is told *"this is the shape your own profession described to us"* rather than being offered
-   somebody else's week. That is the strongest version of point 3 you can show. **But read the
-   grade-floor warning in §5 before promising anything about job grades to that department.**
+   **Respiratory** has a shape in the picker — but it is deliberately **not** offered to
+   respiratory therapists as *theirs*. One KKH team described it; RTs work across every
+   institution in the cluster and rotate differently, so pointing all of them at one team's
+   structure would repeat the exact over-claim the twelve invented arrangements made. The shape is
+   attributed to the team that described it, reachable by what it *does*, and suggested to nobody.
+   **Also read the grade-floor warning in §5 before promising anything about job grades there.**
+
+   ⚠️ **The same correction landed on all six shapes, and it is worth saying on stage.** Every
+   shape here came from ONE team at ONE institution, and until 2026-08-17 the picker told a
+   visitor *"this is the shape your own profession described to us"*. It now says one team, at one
+   institution, and that colleagues elsewhere roster differently. If you are asked *"does this
+   assume everyone works like KKH?"* — the honest answer is that it did, in the copy, and no
+   longer does. `sourceScope` on every shape is the field that keeps it honest as more teams are
+   asked.
 
    **Audiology.** Their roster master — an audiologist — said he **might be interested to try
    it**, which makes audiology the third profession after respiratory and cardiology.
