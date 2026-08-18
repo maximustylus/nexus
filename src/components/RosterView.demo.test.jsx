@@ -2020,15 +2020,17 @@ const engineDatesFor = (result, task) => Object.keys(result.roster)
     .filter((dateKey) => result.roster[dateKey].some((shift) => shift.task === task));
 
 describe('demo mode: the picker is a profession and a shape', () => {
-    it('offers five shapes and two demos, and describes the chosen one', () => {
+    it('offers six shapes and two demos, and describes the chosen one', () => {
         render(<RosterView user={VISITOR} />);
         openConfigure();
 
         // WAS TWELVE — one arrangement per department, with 23 more about to be written.
         // Seven of the twelve were invented services offered under a real profession's
-        // name. Five structures plus two openly fictional demos is what replaced them.
-        expect(DEMO_SHAPES).toHaveLength(7);
-        expect(DEMO_SHAPES.filter((entry) => entry.group === 'shape')).toHaveLength(5);
+        // name. Five structures plus two openly fictional demos is what replaced them,
+        // and respiratory made it SIX on 2026-08-17 — the first shape added since, and
+        // added the only way the rule allows: the team described their own week.
+        expect(DEMO_SHAPES).toHaveLength(8);
+        expect(DEMO_SHAPES.filter((entry) => entry.group === 'shape')).toHaveLength(6);
         expect(DEMO_SHAPES.filter((entry) => entry.group === 'demo')).toHaveLength(2);
 
         // TWO controls, and only two: a phone-first surface that v1.12.0 collapsed five
@@ -2069,7 +2071,7 @@ describe('demo mode: the picker is a profession and a shape', () => {
         // applied to a list of PROFESSIONS, where a reader arrives knowing the word they
         // are looking for; that list still exists, is still sorted in code, and is
         // asserted to be so two tests below. Nobody arrives looking for the letter G in a
-        // list of five structures, so the shapes are ordered by kind — the five with an
+        // list of six structures, so the shapes are ordered by kind — the six with an
         // interview behind them first, the two fictional demos last — and both groups are
         // labelled on screen with an <optgroup> so the ordering reads as structure.
         expect(DEMO_SHAPES.map((entry) => entry.id)).toEqual([
@@ -2078,6 +2080,7 @@ describe('demo mode: the picker is a profession and a shape', () => {
             'shape-team-rotation',
             'shape-weekend-quota',
             'shape-weekday-sessions',
+            'shape-graded-floor-rotation',
             'marvel',
             'marvel-worked-example',
         ]);
@@ -2171,7 +2174,7 @@ describe('demo mode: the picker is a profession and a shape', () => {
         expect(shapeOf('marvel-worked-example').config).toBe(DEMO_EXAMPLE_DEPARTMENT);
     });
 
-    it('claims no profession for the two fictional demos, and attributes all five shapes', () => {
+    it('claims no profession for the two fictional demos, and attributes all six shapes', () => {
         // THE WHOLE CORRECTION, AS ONE ASSERTION. A shape may carry a profession only if
         // that profession described it; a demo must carry none. Getting this wrong in the
         // "attributed" direction is inventing a service, which is the error this change
@@ -2209,6 +2212,7 @@ describe('demo mode: the picker is a profession and a shape', () => {
             ['shape-team-rotation', 'embryologist'],
             ['shape-weekend-quota', 'medical-laboratory-technologist'],
             ['shape-weekday-sessions', 'clinical-exercise-physiologist'],
+            ['shape-graded-floor-rotation', 'respiratory-therapist'],
         ]);
         expect(DEMO_SHAPES.filter((entry) => entry.provenance === DEMO_PROVENANCE_FICTIONAL)
             .map((entry) => entry.id)).toEqual(['marvel', 'marvel-worked-example']);
@@ -2283,14 +2287,31 @@ describe('demo mode: the picker is a profession and a shape', () => {
         }
     });
 
-    it('leaves the five feature signatures distinct, so five is the right number', () => {
-        // WHY FIVE SHAPES REPLACED TWELVE ARRANGEMENTS AND NOT TWENTY-EIGHT: each shape
-        // is the ONLY one in the list that reaches its engine field, so choosing between
-        // them is choosing between five structures. Two shapes with the same signature
-        // would be two casts of fictional names wearing one structure — which is what a
-        // per-department fixture was.
+    it('leaves the six feature signatures distinct, so six is the right number', () => {
+        // WHY SIX SHAPES REPLACED TWELVE ARRANGEMENTS AND NOT TWENTY-EIGHT: choosing
+        // between them is choosing between six STRUCTURES. Two shapes with the same
+        // signature would be two casts of fictional names wearing one structure — which
+        // is what a per-department fixture was.
+        //
+        // ⚠️ `bandFloor` JOINED THIS TUPLE ON 2026-08-17 AND THE REASON IS A REAL
+        // FINDING, not a test being bent to fit. Respiratory is the first shape to reach
+        // an engine field another shape already reached: it and physiotherapy both use
+        // `leadBands`. On the seven fields below their signatures were IDENTICAL and this
+        // assertion failed — correctly. They are nonetheless different structures, and
+        // the difference is the one thing `leadBands` alone cannot show: physiotherapy
+        // gates the LEAD and lets any grade co-lead, which is what makes it a supervision
+        // shape; respiratory uses the same field as a FLOOR ON EVERYBODY, which it can
+        // only do by having no co-lead at all, because the band gate does not reach one.
+        // So the tuple gained the dimension that tells a gate from a floor. It is
+        // STRICTER than what it replaced, not looser — but if a seventh shape ever needs
+        // an eighth dimension invented for it, that is the signal that it is not a new
+        // structure and should not be added.
         const signature = (entry) => ({
             leadBands: entry.config.tasks.some((task) => task.leadBands),
+            // A gate becomes a FLOOR only when no band-gated duty carries a co-lead: an
+            // ungated second body in the slot is a body the floor does not apply to.
+            bandFloor: entry.config.tasks.some((task) => task.leadBands)
+                && entry.config.tasks.every((task) => !task.leadBands || task.coLeads === 0),
             recurrence: entry.config.tasks.some((task) => task.recurrence),
             continuity: entry.config.tasks.some((task) => task.continuity),
             slots: entry.config.tasks.some((task) => task.slots),
@@ -2315,6 +2336,15 @@ describe('demo mode: the picker is a profession and a shape', () => {
         });
         expect(signature(shapeOf('shape-weekday-sessions'))).toMatchObject({
             leadBands: false, recurrence: false, slots: false, quota: false, windows: false,
+        });
+        // The floor, and the gate it must not be confused with. Both true on `leadBands`;
+        // they part on `bandFloor`, which is the whole difference between "AH12 and above
+        // covers this area" and "a junior leads it, anybody may help".
+        expect(signature(shapeOf('shape-graded-floor-rotation'))).toMatchObject({
+            leadBands: true, bandFloor: true, recurrence: false, slots: false, quota: false,
+        });
+        expect(signature(shapeOf('shape-graded-duty'))).toMatchObject({
+            leadBands: true, bandFloor: false,
         });
     });
 
@@ -2348,15 +2378,26 @@ describe('demo mode: the picker is a profession and a shape', () => {
         chooseProfession('psychologist-forensic');
         expect(suggestedShapeFor('psychologist-forensic').id).toBe('shape-periodic-clinic');
 
-        // AND A PROFESSION WITH NO PAIRING GETS NO SUGGESTION, and is told why. Three of
-        // these five had a hand-built fixture before this change, which is the clearest
+        // RESPIRATORY LEFT THIS LIST ON 2026-08-17, by the only route out of it: their
+        // therapist lead described their week, so they became the source of a shape and
+        // `DEMO_SHAPE_SUGGESTIONS` derived the pairing with no hand edit. They are now
+        // told they described it — the stronger sentence — rather than told there is
+        // nothing for them.
+        expect(suggestedShapeFor('respiratory-therapist').id).toBe('shape-graded-floor-rotation');
+        chooseProfession('respiratory-therapist');
+        expectOnScreen(/is the shape your own profession described to us/i);
+
+        // AND A PROFESSION WITH NO PAIRING GETS NO SUGGESTION, and is told why. Two of
+        // these four had a hand-built fixture before this change, which is the clearest
         // measure of what was wrong with it: a guess reads as more helpful than a blank,
-        // and it is not.
-        for (const orphan of ['audiologist', 'medical-social-worker', 'respiratory-therapist']) {
+        // and it is not. AUDIOLOGY IS STILL HERE ON PURPOSE — their roster master has been
+        // spoken to, but he asked for a feature, not described his week. A conversation
+        // is not a structure.
+        for (const orphan of ['audiologist', 'medical-social-worker', 'auditory-verbal-therapist', 'prosthetist-orthotist']) {
             expect(DEMO_SHAPE_SUGGESTIONS[orphan]).toBeUndefined();
             expect(suggestedShapeFor(orphan)).toBeNull();
         }
-        chooseProfession('respiratory-therapist');
+        chooseProfession('audiologist');
         expectOnScreen(/no suggested starting point/i);
         expectOnScreen(/rather than hand you a guess/i);
 

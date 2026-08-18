@@ -3003,7 +3003,10 @@ const RosterView = ({ user }) => {
                                     for every option at once, which is when they are actually
                                     read. The placeholder below names no COUNT, deliberately:
                                     a sentence saying "five shapes" goes out of date the next
-                                    time somebody adds one, and it already did once. */}
+                                    time somebody adds one, and it has now done so TWICE —
+                                    twelve to five, then five to six when respiratory
+                                    described their week. This placeholder needed no edit
+                                    either time, which is the whole point of it. */}
                                 {demoShape ? (
                                     <>
                                         <p

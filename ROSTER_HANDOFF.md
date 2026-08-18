@@ -314,6 +314,31 @@ Answered earlier: swap semantics = **mechanical substitution**; **notify the ros
   what they said, is not recorded here** — so `Q12` is still open on exactly the point that was
   meant to close it. Worth capturing while the conversation is fresh.
 
+  **What that room DID produce was better than a demo: respiratory's first real interview.** The
+  therapist lead watched, then walked through the configuration with you and described her
+  service — minimum grade AH12, three areas (NICU, CICU, Ward 65 HiD), rotation across them,
+  Monday to Friday. That is now the **sixth shape**, `shape-graded-floor-rotation`, and
+  respiratory has stopped being one of the professions the picker deliberately offers nothing to.
+  It also produced the finding below.
+
+**ANSWERED-IN-PART 2026-08-17** — `Q12`'s sibling arrived before `Q12` did:
+
+- **A band cannot express a grade threshold, and respiratory's first requirement is one.** She
+  said **minimum AH12**. `leadBands` gates by band; `junior` is **AH11–AH12**; so the closest
+  sayable gate admits AH11 as well. There is no grade-threshold requirement in the engine —
+  eligibility has exactly three kinds (skill, region, cohort window).
+
+  **Decided: the bands do not move.** Setting respiratory's ruler to `[7,11] [12,12] [13,14]
+  [15,17]` would land the gate exactly on AH12 — the validator permits a one-rank region — but it
+  would call an AH11 respiratory therapist **non-exempt**, and `Q11` settled that AH11–AH12 are
+  junior AHPs. The scale stays aligned to the AHP job grades; one department's gate does not get
+  to redefine what a grade means. Queued as item 5(b) instead.
+
+  ⚠️ **What that costs, today, on the deployed site.** The shipped respiratory shape is correct
+  *only because its cast has no AH11*. A real respiratory team typed into the wizard would carry
+  the same one-grade slack, and **nothing on screen says so** — the roster would simply let an
+  AH11 lead NICU. Do not claim grade-floor enforcement to that department until 5(b) ships.
+
 **ANSWERED 2026-08-17** — `Q13`, by the roster owner, after audiology asked for it:
 
 - **Q13 — a task, and an availability, that can say AM or PM.** Audiology's roster master asked
@@ -396,9 +421,18 @@ Still open — **Q** for a question only you can answer:
    with your name instead; note the sandbox swap path only simulates.)*
 3. For the other departments: the platform transfers; **multi-team support does not exist yet** (one shared document, hardcoded login list, hardcoded team directory). Offer a pilot, not a handover.
 
-   **Audiology is now a named instance of this *(2026-08-17)*.** Their roster master — an
-   audiologist — said he **might be interested to try it**, which makes audiology the third
-   profession after respiratory and cardiology. Two things about that department before anything
+   **Respiratory and audiology are both named instances of this *(2026-08-17)*.**
+
+   **Respiratory** now has a shape of their own in the picker, so an RT choosing their profession
+   is told *"this is the shape your own profession described to us"* rather than being offered
+   somebody else's week. That is the strongest version of point 3 you can show. **But read the
+   grade-floor warning in §5 before promising anything about job grades to that department.**
+
+   **Audiology.** Their roster master — an audiologist — said he **might be interested to try
+   it**, which makes audiology the third profession after respiratory and cardiology.
+   Deliberately, audiology has **no** shape: he asked for a feature (AM/PM), he did not describe
+   his week. A conversation is not a structure, and the picker still offers his profession
+   nothing — which is correct until somebody says what an audiology roster looks like. Two things about that department before anything
    is promised:
 
    - **His second-in-charge does the rostering, weekly, a week ahead, in Excel.** The pilot is
