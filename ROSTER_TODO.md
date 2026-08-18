@@ -260,14 +260,23 @@ post-mortem documents.
 ## Current queue — *updated 2026-08-17, and this is the live part of the file*
 
 Everything above is the closed P0–P8 remediation. This is what is actually next, ordered. The
-ordering is not arbitrary: **items 1, 2 and 4 come from what three more roster masters asked
-for**, which is better evidence than an internal judgment about what to build.
+ordering is not arbitrary: **items 1–4 come from two roster masters in other departments** —
+cardiology (items 1, 2 and 3) and audiology (item 4) — which is better evidence than an internal
+judgment about what to build. Attribution deliberately by department rather than by headcount:
+every one of those four rows names the department it came from, so the claim can be checked
+against the table instead of taken on trust.
 
 > ⚠️ **RENUMBERED 2026-08-17.** Half-day sessions entered as a new **item 4** (audiology), so the
 > three items below it each moved up one: the third eligibility axis is now **5** (was 4),
 > supervision pairing **6** (was 5), on-call **7** (was 6). Anything written before this date that
 > cites "item 4" meaning the eligibility axis means **item 5**. Said out loud because this file
 > already carries one banner about an id that quietly came to mean three different things.
+>
+> **Corrected the same day:** the line above briefly read *"items 1, 2 and 4 come from what three
+> more roster masters asked for"*. It was **two** — items 1, 2 and 3 all trace to cardiology's
+> roster master, one person. The count was inflated while the renumber was being made, which is
+> exactly the failure this file's banners exist to catch, so it is logged rather than quietly
+> fixed.
 
 | # | Item | Why it is here, and why in this position |
 |---|---|---|
