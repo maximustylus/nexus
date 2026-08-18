@@ -32,8 +32,14 @@ cannot be dragged into an illegal state. **1639 tests green, lint clean, CI gree
 
 ## 1. What is LIVE right now
 
-`smartdashboard.web.app` is running **v1.14.0** (tag `v1.14.0`) with the **four-band engine** and
-the **numbered 1–7 configuration wizard** in the Sandbox.
+`smartdashboard.web.app` is running **v1.16.0** (tag `v1.16.0`) with the **four-band engine**, the
+**numbered 1–7 configuration wizard**, the **owner's category palette** and the **six-shape
+picker** in the Sandbox.
+
+*(Corrected 2026-08-18: this line read **v1.14.0** and had been stale since v1.15.0 shipped. It is
+the first thing anybody reads before presenting, so it is now updated as part of the release
+rather than after it — the deploy runs on merge to `main`, so the version here and the version the
+app renders are set in the same commit.)*
 
 *Deliberately no commit SHA or bundle hash here: both change on every deploy, so pinning them
 guarantees this line is stale again tomorrow. The version is the durable answer, and it is now

@@ -53,6 +53,92 @@ Nothing yet.
 
 ---
 
+## [1.16.0] - 2026-08-18
+
+A sixth roster structure, and the correction that a shape is one team — not a profession.
+
+### Added
+
+- **A sixth shape: "A grade floor, and a rotation across fixed areas"**, from respiratory
+  therapy. Their therapist lead watched the Sandbox demo on 2026-08-17, walked through the
+  configuration, and described four things: a **minimum job grade of AH12**, three areas
+  (`NICU`, `CICU`, `Ward 65 HiD`), **rotation** across them, and Monday–Friday office hours.
+  Respiratory *lost* an invented fixture in v1.13.0 for claiming a service nobody had described;
+  `mockData.js` has carried the rule for getting one back ever since — *"add a SHAPE (a structure,
+  sourced from a team who told us) or add nothing"* — and this is its first use in the direction
+  it was written for.
+  - **Measured, not asserted** (`generateRosterV2`, 2026-09-07, 4 weeks): `ok = true`,
+    `hardViolations = 0`, an independent `auditHardConstraints` read-back of 0, `unfilled = 0`,
+    `warnings = 0`, 20 days, 60 shifts, exactly **6 distinct leads** — every AH12-and-above person
+    and nobody else — 10 duties each, split 3–4 per area.
+  - **Falsified, the way the physiotherapy gates are:** removing `leadBands` puts three
+    below-floor staff into the lead list (9 leads instead of 6), so the gate does the work rather
+    than agreeing with what fairness would have done anyway.
+  - `coLeads: 0` on all three areas is **forced, not a staffing choice**: a band gates the lead
+    only — *"any grade may co-lead"* — so a second body is a body the floor does not reach.
+  - **Rotation is measured in the output, not enforced by a rule.** She said they rotate; she did
+    not say everybody must cover every area. Encoding a quota floor would be inventing a policy
+    from a description.
+
+- **`sourceScope` on every interviewed shape** — `{ teams, institutions, describedOn }`, required
+  and asserted. See *Changed* for why it exists.
+
+### Changed
+
+- **A shape is ONE TEAM AT ONE INSTITUTION, and the app now says so.** Until this release the
+  picker told a visitor *"this is the shape your own profession described to us"*. Every shape here
+  came from one team at one site, so a respiratory therapist at any other SingHealth institution
+  was told their **profession** had described a structure **one team at one hospital** described —
+  and there are 27 other allied health professions with the same exposure. The copy now reads
+  *"came from ONE team in your profession, at one institution … one team is not a profession,
+  colleagues elsewhere roster differently"*, with a test asserting the old sentence is absent from
+  the DOM. This was a pre-existing defect affecting all five prior shapes, not something the sixth
+  introduced.
+- **Scope is DATA, not prose**, and that is the future-proofing: when a second team from the same
+  profession describes something different, `teams: 2` is a field that changes, where a
+  hand-written sentence is something somebody must remember to rewrite and will not.
+  `describedOn` is `null` for five of the six — four were interviewed before any date was
+  recorded and the owner's own service was never described on a day — which is the measurement,
+  not an oversight.
+- **Attribution and suggestion were one field doing two jobs, and are now two.**
+  `sourceProfession` + `sourceScope` **attribute** (mandatory for every interviewed shape);
+  `sourceProfessionId` is the **auto-suggestion key alone** and is now nullable. **Respiratory
+  declines it**: the shape is fully attributed and offered to nobody, because RTs work across every
+  institution in the cluster and rotate differently. Profession coverage returns to **32 of 37
+  leaves** (measured), and `suggestedShapeFor('respiratory-therapist')` is `null`.
+- **The shape-signature test gained a `bandFloor` dimension.** Respiratory is the first shape to
+  reach an engine field another shape already reaches — it and physiotherapy both use `leadBands` —
+  and on the seven fields previously compared their signatures were identical, so the assertion
+  failed correctly. They are still different structures: physiotherapy gates the **lead** and lets
+  any grade co-lead (a supervision shape), respiratory uses the same field as a **floor on
+  everybody**. The tuple is now stricter, not looser.
+
+### Notes
+
+- **The five shapes that keep an auto-suggestion keep it on borrowed time.** Each is also one team
+  at one institution. The written trigger to remove suggestion-by-profession entirely: the first
+  time two teams in one profession describe two different structures.
+- **Audiology deliberately has no shape.** Their roster master asked for a feature (half-day AM/PM
+  sessions, decision `Q13`); he did not describe his week. A conversation is not a structure.
+- **An expressiveness ledger** now lives at the foot of `ROSTER_TODO.md` — every rule a real team
+  has stated and whether the engine can say it. Four `No`s so far. Every `No` is a team that cannot
+  use the tool, and that list rather than the fixture count is the measure of whether this serves
+  the cluster.
+- **Nothing in `functions/` changed, and `firestore.rules` is still undeployed** (`Q6`), so the
+  authorization posture is exactly as it was.
+- 1655 tests across 29 files, lint clean.
+
+### Known issues — new in this release
+
+| Id | Severity | Defect |
+|---|---|---|
+| **D10** | Medium | **A grade floor cannot be stated, so the respiratory shape gates one grade too wide.** `leadBands` gates by BAND and `junior` is AH11–AH12, so *"minimum AH12"* has no expressible form — the nearest gate admits AH11. The shipped fixture is safe **only because its cast contains no AH11**; a real respiratory team typed into the wizard inherits the slack and **nothing on screen says so**. The bands were deliberately not moved to fix it: they stay aligned to the AHP job grades (`Q11`). Queued as `ROSTER_TODO.md` item 5(b). Do not claim grade-floor enforcement to that department until it ships. |
+
+*(The `### Known issues` table under `[1.13.0]` remains the standing list — **none** of `D2/D3/D9`,
+`D5`, `D6`, `D7`, `D8` or the live-mode iOS zoom was fixed in this release.)*
+
+---
+
 ## [1.15.0] - 2026-08-15
 
 The roster owner's category palette, carried everywhere a shift goes.

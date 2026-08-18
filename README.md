@@ -1,6 +1,6 @@
-# NEXUS: Smart Operations Dashboard v1.15.0 [BETA]
+# NEXUS: Smart Operations Dashboard v1.16.0 [BETA]
 
-![Version](https://img.shields.io/badge/Version-v1.15.0-blue) ![Status](https://img.shields.io/badge/Status-Beta%20Phase-emerald) ![Org](https://img.shields.io/badge/Unit-Sport%20%26%20Exercise%20Medicine-indigo) ![Tech](https://img.shields.io/badge/AI-Gemini%20Powered-purple) ![AURA](https://img.shields.io/badge/AURA-v2.3%20Engine-blue) ![PWA](https://img.shields.io/badge/PWA-Native%20Push%20Enabled-blue) ![CI/CD](https://img.shields.io/badge/CI%2FCD-GitHub%20Actions-2ea44f)
+![Version](https://img.shields.io/badge/Version-v1.16.0-blue) ![Status](https://img.shields.io/badge/Status-Beta%20Phase-emerald) ![Org](https://img.shields.io/badge/Unit-Sport%20%26%20Exercise%20Medicine-indigo) ![Tech](https://img.shields.io/badge/AI-Gemini%20Powered-purple) ![AURA](https://img.shields.io/badge/AURA-v2.3%20Engine-blue) ![PWA](https://img.shields.io/badge/PWA-Native%20Push%20Enabled-blue) ![CI/CD](https://img.shields.io/badge/CI%2FCD-GitHub%20Actions-2ea44f)
 
 **NEXUS** (formerly IDC App) is a clinician-led innovation platform designed to revolutionise workload management, optimise skill-mix routing, and actively protect staff wellbeing at the Sport and Exercise Medicine Centre. 
 
@@ -145,9 +145,9 @@ This application is an operational and workload management tool. It is not a cli
 ### Supported Versions
 | Version | Status |
 | ------- | ------ |
-| 1.15.x  | **Active Beta** (Evaluated by Senior CEPs) |
-| 1.14.x  | Legacy Stable |
-| < 1.14  | Deprecated / Offline |
+| 1.16.x  | **Active Beta** (Evaluated by Senior CEPs) |
+| 1.15.x  | Legacy Stable |
+| < 1.15  | Deprecated / Offline |
 
 > This table is downstream of `package.json` `version`, as are the title line and the
 > `Version-` badge above, and `SECURITY.md`'s table of the same name. `package.json` is the only authoritative copy — see
@@ -186,7 +186,12 @@ Beta testers should utilise Demo Mode to verify system integrity:
 > also lists the **known issues that are documented but not yet fixed**. The summaries
 > below are narrative highlights; where the two disagree, `CHANGELOG.md` is correct.
 
-### NEXUS v1.15.0 [Current Beta]
+### NEXUS v1.16.0 [Current Beta]
+* **A sixth roster structure, and the first one respiratory described.** Respiratory therapy's lead walked through the Sandbox configuration and described their week — a minimum job grade, three named areas, rotation across them, weekdays. It is now a shape in the picker: *"A grade floor, and a rotation across fixed areas"*. Respiratory previously *lost* an invented fixture in v1.13.0 for claiming a service nobody had described; it got a reported one back by being asked, which is the rule working in the direction it was written for.
+* **A shape is one team at one institution, and the app now says so.** Until this release the picker told a visitor *"this is the shape your own profession described to us"* — so a respiratory therapist at any other SingHealth institution was told their **profession** had described a structure that **one team at one hospital** described, and 27 other allied health professions carried the same exposure. Every shape now carries `sourceScope` — how many teams, how many institutions, and when — as a required field rather than a sentence somebody has to remember to rewrite. **The respiratory shape is attributed but deliberately suggested to nobody**, because RTs work across every institution in the cluster and rotate differently.
+* **Known limit shipped knowingly:** the respiratory grade floor is *"minimum AH12"*, and a band gate cannot express a threshold that falls **inside** a band (`junior` is AH11–AH12). See the known-issues table in [`CHANGELOG.md`](CHANGELOG.md).
+
+### NEXUS v1.15.0
 * **Categories are colour-coded, everywhere the shift goes.** Four standard categories — **Clinical** (brown), **Education** (orange), **Research** (lime green), **Management** (yellow) — colour the calendar, the wizard's per-task label, and the downloaded `.ics`: every event carries `CATEGORIES:` (so Outlook can colour by category after a one-time mapping) and, for the four standard ones, RFC 7986 `COLOR:` — whose value must be a CSS colour name, which the palette's four names literally are. One map (`src/utils/rosterCategories.js`) feeds all three surfaces, so the app and the imported file cannot disagree.
 * **The category box now offers the standard four** (free text still works — a weekend quota pools over whatever word its team typed), and a **deterministic suggestion** reads the task name and offers its category *with the word that earned it* — "looks like Research — 'Journal'" — applied only on a tap, never silently. Not AI, on purpose: category changes quota pooling, so a suggestion the roster master cannot check is a claim.
 
