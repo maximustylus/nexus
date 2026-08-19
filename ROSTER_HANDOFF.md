@@ -32,9 +32,16 @@ cannot be dragged into an illegal state. **1639 tests green, lint clean, CI gree
 
 ## 1. What is LIVE right now
 
-`smartdashboard.web.app` is running **v1.16.0** (tag `v1.16.0`) with the **four-band engine**, the
-**numbered 1–7 configuration wizard**, the **owner's category palette** and the **six-shape
-picker** in the Sandbox.
+`smartdashboard.web.app` is running **v1.17.0** with the **four-band engine**, the **numbered 1–7
+configuration wizard**, the **owner's category palette** and the **six-shape picker** in the
+Sandbox — and, as of **2026-08-19 00:26:54 SGT**, with **`firestore.rules` actually deployed**.
+
+⚠️ **That last one is the change that matters most and it is not visible on screen.** Until this
+release, any verified `@kkh.com.sg` address — not just the ten of you — could read every
+clinician's wellbeing record and overwrite the duty roster. It is now the directory allowlist.
+**Roster generation is admin-only from this release**; accepting a swap is unchanged. If anybody
+reports the roster failing to load or a swap refusing, roll back in ~60 seconds: Firebase console
+→ Firestore → Rules → history icon → restore the version before 2026-08-19 → Publish.
 
 *(Corrected 2026-08-18: this line read **v1.14.0** and had been stale since v1.15.0 shipped. It is
 the first thing anybody reads before presenting, so it is now updated as part of the release
