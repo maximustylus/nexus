@@ -6,9 +6,9 @@ We take the security and data privacy of the NEXUS platform very seriously. Curr
 
 | Version | Support Status |
 | ------- | -------------- |
-| 1.16.x  | Supported (Active Beta) |
-| 1.15.x  | Supported (Legacy Stable) |
-| < 1.15  | Unsupported |
+| 1.17.x  | Supported (Active Beta) |
+| 1.16.x  | Supported (Legacy Stable) |
+| < 1.16  | Unsupported |
 
 > This table must match the *Supported Versions* table in [`README.md`](README.md); both are
 > downstream of `package.json` `version`, which is the single authoritative copy. It had

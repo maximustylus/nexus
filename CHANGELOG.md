@@ -53,6 +53,89 @@ Nothing yet.
 
 ---
 
+## [1.17.0] - 2026-08-19
+
+The authorization boundary stops living in a console, and the engine gets stress-tested.
+
+### 🔒 Security — decision `Q6`, open since before v1.6.0, is closed
+
+- **`firestore.rules` is deployed.** `firebase.json` declares it and
+  `.github/workflows/deploy.yml` deploys `--only functions,firestore:rules` on every merge to
+  `main`. Authorization is now versioned, reviewable and diffable like everything else.
+  **Deployed 2026-08-19 00:26:54 SGT**, CI run `32201046521`.
+
+  ⚠️ **BOTH WIRING HALVES WERE REQUIRED AND ONLY ONE IS DOCUMENTED ANYWHERE.** Declaring
+  `firestore` in `firebase.json` deploys nothing on its own — the workflow ran `--only
+  functions`, which **excludes rules**. With the section added and the args untouched, CI goes
+  green, the runbook says "wired", and the boundary is unchanged. If rules ever appear not to
+  take effect, check that flag first.
+
+- **What was live until this release, and why it mattered.** The owner supplied the console's
+  rules on 2026-08-18 — the first time anybody in this repository could see them. The operative
+  clause was `match /{document=**} { allow read, write: if isVerifiedStaff(); }`, and
+  `isVerifiedStaff()` was **any verified `@kkh.com.sg` address, not the ten-person directory**.
+  The Firebase API key ships in the public bundle, so any KKH employee who registered an account
+  could read `wellbeing_history` — the longitudinal burnout record per named clinician —
+  overwrite `system_data/roster_2026`, and approve any `shift_swaps` entry. Whole-hospital
+  exposure, not internet-wide, and it was live the entire time. Four emulator checks now prove
+  that same identity gets nothing.
+
+- **Roster generation is admin-only.** Generation overwrites the whole roster (post-mortem
+  **C2**); a one-day in-place edit — accepting a swap — stays open to every directory member.
+  ⚠️ **Behaviour change:** any of the ten could press Generate yesterday. A non-admin now gets
+  `permission-denied`, which `RosterView.jsx:592` already renders as "The roster was NOT saved"
+  while keeping their configuration.
+
+- **Two live pathways were saved by asking for the console rules rather than deploying on
+  trust.** The proposal as written required `isMember()` on `community_assessments` (public
+  screening telemetry) and `beta_feedback` (the sandbox widget) — both unauthenticated by
+  nature. Deploying it unchanged would have stopped public telemetry **silently**, because
+  `recordTelemetry` swallows its own error and the member of the public still reaches their
+  result page. Both now ship **anonymous but shape-pinned** — key allowlists, size caps and a
+  server clock — which is strictly tighter than the console's unpinned `if true`. The residual
+  risk (an unmetered write endpoint that rules cannot rate-limit) is written into each block
+  rather than left to be discovered.
+
+- **Two of the console's five hand-written blocks governed nothing**, measured by grepping every
+  collection name across `src/` and `functions/`: `community_resources` has **zero** references
+  anywhere, and `feeds` is a **UI view name**, not a collection — the real one is `feed_posts`,
+  which was therefore covered only by the catch-all. Both recorded as deliberate omissions so
+  nobody transcribes them back in.
+
+- **Verified, not asserted:** `scripts/firestore-rules-verify.mjs` — **31 checks, 31 as
+  specified** against the Firestore emulator, committed as a runnable script rather than recorded
+  as prose. It lives in `scripts/` because `vitest.config.js` collects `src/**/*.{test,spec}.*`
+  and CI has no emulator. The pre-existing "139 checks" record in
+  `firestore.rules.README.md` §5 is now explicitly scoped to the blocks it actually exercised,
+  rather than being allowed to vouch for blocks written after it ran.
+
+### Added
+
+- **A stress-tester agent** (`.claude/agents/stress-tester.md`) and its harness
+  (`npm run stress`). Every one of the ~1655 tests is a hand-authored fixture — a good property,
+  but it meant the engine had **never been run on a configuration nobody wrote by hand**, and
+  never above 20 staff. First run, seed `20260818`: **2,525 random rosters, zero broken
+  invariants, zero audit disagreements, zero non-determinism.** The harness self-tests first —
+  it corrupts a known-good roster five ways and requires every one to be caught — because a fuzz
+  harness that cannot fail is worse than none.
+
+### Known issues
+
+- **`D11` — generation blocks the browser** — is recorded in the table under `[1.16.0]`, where it
+  was filed on the day it was found. *Ordering artefact, stated rather than tidied: it was found
+  by the harness that ships in THIS release, so it reads as pre-existing there. It is still open,
+  and `[1.16.0]`'s shipped entry is not rewritten to move it.*
+- Nothing in the standing list under `[1.13.0]` was fixed, and `D10` (the grade floor) is
+  unchanged.
+
+### Notes
+
+- **No application source changed in this release.** `git diff` covers rules, wiring, scripts,
+  agent definitions and documentation only. The behaviour change for users comes entirely from
+  the rules now being enforced.
+
+---
+
 ## [1.16.0] - 2026-08-18
 
 A sixth roster structure, and the correction that a shape is one team — not a profession.
