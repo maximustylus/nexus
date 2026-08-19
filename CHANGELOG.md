@@ -49,6 +49,12 @@ not changed by this release.
 
 ## [Unreleased]
 
+Nothing yet.
+
+---
+
+## [1.17.1] - 2026-08-19
+
 ### Fixed
 
 - **`D2/D3/D9` — a colleague who is never rostered is now named on screen.** An amber panel sits

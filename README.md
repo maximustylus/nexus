@@ -1,6 +1,6 @@
-# NEXUS: Smart Operations Dashboard v1.17.0 [BETA]
+# NEXUS: Smart Operations Dashboard v1.17.1 [BETA]
 
-![Version](https://img.shields.io/badge/Version-v1.17.0-blue) ![Status](https://img.shields.io/badge/Status-Beta%20Phase-emerald) ![Org](https://img.shields.io/badge/Unit-Sport%20%26%20Exercise%20Medicine-indigo) ![Tech](https://img.shields.io/badge/AI-Gemini%20Powered-purple) ![AURA](https://img.shields.io/badge/AURA-v2.3%20Engine-blue) ![PWA](https://img.shields.io/badge/PWA-Native%20Push%20Enabled-blue) ![CI/CD](https://img.shields.io/badge/CI%2FCD-GitHub%20Actions-2ea44f)
+![Version](https://img.shields.io/badge/Version-v1.17.1-blue) ![Status](https://img.shields.io/badge/Status-Beta%20Phase-emerald) ![Org](https://img.shields.io/badge/Unit-Sport%20%26%20Exercise%20Medicine-indigo) ![Tech](https://img.shields.io/badge/AI-Gemini%20Powered-purple) ![AURA](https://img.shields.io/badge/AURA-v2.3%20Engine-blue) ![PWA](https://img.shields.io/badge/PWA-Native%20Push%20Enabled-blue) ![CI/CD](https://img.shields.io/badge/CI%2FCD-GitHub%20Actions-2ea44f)
 
 **NEXUS** (formerly IDC App) is a clinician-led innovation platform designed to revolutionise workload management, optimise skill-mix routing, and actively protect staff wellbeing at the Sport and Exercise Medicine Centre. 
 
@@ -186,7 +186,10 @@ Beta testers should utilise Demo Mode to verify system integrity:
 > also lists the **known issues that are documented but not yet fixed**. The summaries
 > below are narrative highlights; where the two disagree, `CHANGELOG.md` is correct.
 
-### NEXUS v1.17.0 [Current Beta]
+### NEXUS v1.17.1 [Current Beta]
+* **The colleague nobody rostered is now named on screen.** If anybody in the staff pool holds no duty at all, an amber panel says who — and names the four things that cause it: a grade outside every task’s band gate, a missing required skill, unavailable dates covering the run, or an availability window falling outside it. Amber rather than red because it is a *question*, not a failure: it is correct when somebody genuinely is not on that rota, and a silent disaster when it is a typo. *(Their row in the load table always read `0` — what was missing is that a `0` among nine rows does not announce itself.)*
+
+### NEXUS v1.17.0
 * **🔒 The authorization boundary is now versioned, reviewed and enforced.** Until this release, who could read and write the live clinical data was defined only in the Firebase console — and what it said was `allow read, write: if isVerifiedStaff()`, where "verified staff" meant **any verified `@kkh.com.sg` address, not the ten-person team**. The app's Firebase key ships in the public bundle, so any KKH employee who registered an account could read `wellbeing_history` — the per-clinician burnout record — overwrite the duty roster, and approve any swap. `firestore.rules` now replaces that with a directory allowlist, is declared in `firebase.json`, and deploys from CI on every merge. Decision **Q6**, open since before v1.6.0, is closed.
 * **Roster generation is now admin-only.** Generation overwrites the whole roster; a single-day edit (accepting a swap) stays open to every team member. A colleague who presses Generate gets a clean "The roster was NOT saved" and keeps their configuration.
 * **A stress-tester agent and harness** (`npm run stress`) — the engine had never been run on a configuration nobody wrote by hand, nor above 20 staff. 2,525 random rosters: no invariant broken. It also produced the first performance measurement this project has ever had (**D11**).

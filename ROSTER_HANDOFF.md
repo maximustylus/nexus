@@ -32,7 +32,7 @@ cannot be dragged into an illegal state. **1639 tests green, lint clean, CI gree
 
 ## 1. What is LIVE right now
 
-`smartdashboard.web.app` is running **v1.17.0** with the **four-band engine**, the **numbered 1–7
+`smartdashboard.web.app` is running **v1.17.1** with the **four-band engine**, the **numbered 1–7
 configuration wizard**, the **owner's category palette** and the **six-shape picker** in the
 Sandbox — and, as of **2026-08-19 00:26:54 SGT**, with **`firestore.rules` actually deployed**.
 
