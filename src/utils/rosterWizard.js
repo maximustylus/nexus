@@ -464,6 +464,17 @@ export const createTaskRow = (seed = {}) => ({
     leadBands: Array.isArray(seed.leadBands)
         ? BAND_NAMES.filter((band) => seed.leadBands.includes(band))
         : [],
+    /**
+     * The GRADE FLOOR, as a raw string; `''` means no floor. A raw string for the
+     * same reason `hours` is one — the cell must be editable from the first
+     * keystroke — though the control is a closed list, so the only values that
+     * reach here are real grades or `''`.
+     *
+     * ⚠️ IT IS NOT A NARROWER `leadBands` AND MUST NOT BE FOLDED INTO IT. A band
+     * gate is a SET and gates the LEAD; a floor is a RANK and gates EVERY
+     * assignee. They compose by AND, and a row may sensibly carry both.
+     */
+    minGrade: typeof seed.minGrade === 'string' ? seed.minGrade : '',
     days: Array.isArray(seed.days) ? [...seed.days] : [...ROSTER_V2_DEFAULTS.days],
     coLead: seed.coLeads === undefined ? true : Number(seed.coLeads) > 0,
     // Blank = the engine's DEFAULT_TASK_HOURS, which the wizard shows as the
@@ -1675,6 +1686,13 @@ export const buildDemoRosterV2ConfigFromTables = ({
                     // is omitted instead.
                     ...(leadBands.length > 0 ? { leadBands } : {}),
                 }),
+            // THE GRADE FLOOR, AND IT SITS OUTSIDE THE SLOT-MODE BRANCH ON PURPOSE.
+            // `leadBands` had to go inside it because the engine refuses `slots`
+            // beside it; `minGrade` carries no such conflict — `compileSlotPositions`
+            // composes the task's floor onto every slot, because a trio's junior
+            // slot is still somebody covering the duty. So a slotted task keeps its
+            // floor, where it cannot keep its band chips.
+            ...(trimmed(row?.minGrade) === '' ? {} : { minGrade: trimmed(row.minGrade) }),
             // Blank hours = no key at all, so a department that never typed an
             // hour gets the roster it got before hours existed, byte for byte.
             ...(hours.value === null ? {} : { hours: hours.value }),

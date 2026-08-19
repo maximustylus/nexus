@@ -1325,3 +1325,131 @@ describe('generateRosterV2 — band warnings', () => {
         expect(warnings).toEqual([]);
     });
 });
+
+// ═════════════════════════════════════════════════════════════════════════════
+// A GRADE FLOOR — `minGrade`, the fourth eligibility requirement kind
+//
+// WHY IT EXISTS, in one sentence: a band gate asks "is your band in this SET",
+// a floor asks "is your grade AT OR ABOVE this RANK", and they differ exactly
+// when the floor falls INSIDE a band. Respiratory therapy stated a minimum of
+// AH12; `junior` is AH11–AH12; so every expressible band gate admitted AH11 too.
+// That was defect D10, and these tests are its closure.
+//
+// The distinction from `leadBands` that matters most is NOT the arithmetic — it
+// is that a floor applies to EVERY assignee, where a band gates the lead alone.
+// A floor that reached only the lead would be the same bug with a new name, so
+// that is asserted first and separately.
+// ═════════════════════════════════════════════════════════════════════════════
+describe('minGrade — a floor, not a band', () => {
+    const floorCast = () => [
+        { name: 'Eleven', grade: 'AH11' },
+        { name: 'Twelve', grade: 'AH12' },
+        { name: 'Thirteen', grade: 'AH13' },
+        { name: 'Fourteen', grade: 'AH14' },
+    ];
+    const run = (task, staff = floorCast()) => generateRosterV2({
+        startDate: MONDAY_START,
+        weeks: 1,
+        staff,
+        tasks: [{ name: 'NICU', days: [1, 2, 3, 4, 5], leads: 1, coLeads: 0, ...task }],
+        rules: { maxConcurrentPerDay: 1, bands: DEFAULT_GRADE_BANDS },
+    });
+
+    it('excludes the grade immediately below the floor — which no band gate could', () => {
+        const floored = run({ minGrade: 'AH12' });
+        expect(floored.ok).toBe(true);
+        const leads = [...new Set(flatten(floored.roster).map(({ shift }) => shift.lead))];
+        expect(leads).not.toContain('Eleven');
+        expect(leads.sort()).toEqual(['Fourteen', 'Thirteen', 'Twelve']);
+
+        // THE SAME CONFIGURATION, GATED THE ONLY WAY THAT WAS POSSIBLE BEFORE.
+        // `junior` is AH11–AH12, so the nearest band gate admits the AH11. This
+        // assertion is not testing a bug — it is pinning WHY the new kind had to
+        // exist, and it should keep passing forever.
+        const banded = run({ leadBands: ['junior', 'senior', 'principal'] });
+        const bandedLeads = [...new Set(flatten(banded.roster).map(({ shift }) => shift.lead))];
+        expect(bandedLeads).toContain('Eleven');
+    });
+
+    it('applies to a CO-LEAD too, where a band gate applies to the lead only', () => {
+        const result = run({ minGrade: 'AH12', coLeads: 1 });
+        expect(result.ok).toBe(true);
+        const everyone = [...new Set(flatten(result.roster).flatMap(({ shift }) => peopleOn(shift)))];
+        expect(everyone).not.toContain('Eleven');
+        expect(result.unfilled).toEqual([]);
+    });
+
+    it('refuses somebody with no grade recorded — absent is not zero', () => {
+        const result = run({ minGrade: 'AH12' }, [...floorCast(), { name: 'Ungraded' }]);
+        expect(result.ok).toBe(true);
+        const everyone = flatten(result.roster).flatMap(({ shift }) => peopleOn(shift));
+        expect(everyone).not.toContain('Ungraded');
+    });
+
+    it('reads a grade case-insensitively, like every other grade field', () => {
+        const lower = run({ minGrade: 'ah12' });
+        const upper = run({ minGrade: 'AH12' });
+        expect(lower.ok).toBe(true);
+        expect(lower.roster).toEqual(upper.roster);
+    });
+
+    it('composes with a band gate and a skill by AND, not by replacing them', () => {
+        const result = run({
+            minGrade: 'AH13',
+            leadBands: ['senior'],           // AH13–AH14
+        });
+        const leads = [...new Set(flatten(result.roster).map(({ shift }) => shift.lead))];
+        expect(leads.sort()).toEqual(['Fourteen', 'Thirteen']);
+
+        // Narrowing either half narrows the result: the floor is doing work the
+        // band is not, and vice versa.
+        const higher = run({ minGrade: 'AH14', leadBands: ['senior'] });
+        expect([...new Set(flatten(higher.roster).map(({ shift }) => shift.lead))]).toEqual(['Fourteen']);
+    });
+
+    it('changes nothing for a task that does not mention it', () => {
+        const withField = run({ minGrade: null });
+        const without = run({});
+        expect(withField.roster).toEqual(without.roster);
+        expect(withField.score).toEqual(without.score);
+    });
+
+    it('refuses a floor that is not a grade, and says what a grade looks like', () => {
+        const { valid, reason } = validateRosterV2Config({
+            startDate: MONDAY_START,
+            weeks: 1,
+            staff: floorCast(),
+            tasks: [{ name: 'NICU', minGrade: 'AH99' }],
+        });
+        expect(valid).toBe(false);
+        expect(reason).toMatch(/is not a grade on the AH7–AH17 scale/);
+    });
+
+    it('refuses a floor nobody in the pool meets, naming the highest grade there is', () => {
+        const { valid, reason } = validateRosterV2Config({
+            startDate: MONDAY_START,
+            weeks: 1,
+            staff: floorCast(),
+            tasks: [{ name: 'NICU', minGrade: 'AH17' }],
+        });
+        expect(valid).toBe(false);
+        expect(reason).toMatch(/at least AH17/);
+        expect(reason).toMatch(/the highest graded is Fourteen at AH14/);
+        expect(reason).toMatch(/would be unfilled on every date/);
+    });
+
+    it('survives an independent audit read-back', () => {
+        const config = {
+            startDate: MONDAY_START,
+            weeks: 2,
+            staff: floorCast(),
+            tasks: [{ name: 'NICU', days: [1, 2, 3, 4, 5], leads: 1, coLeads: 1, minGrade: 'AH12' }],
+            rules: { maxConcurrentPerDay: 1, bands: DEFAULT_GRADE_BANDS },
+        };
+        const result = generateRosterV2(config);
+        expect(result.score.hardViolations).toBe(0);
+        const audit = auditHardConstraints(result.roster, config);
+        expect(audit.ok).toBe(true);
+        expect(audit.count).toBe(0);
+    });
+});

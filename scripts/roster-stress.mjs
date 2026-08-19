@@ -90,6 +90,8 @@ const subset = (xs, minSize = 1) => {
 
 // ── config generator ─────────────────────────────────────────────────────────
 const GRADES = Array.from({ length: 11 }, (_, i) => `AH${i + 7}`);
+/** Grade -> sortable rank, for the harness's own floor check. */
+const GRADE_RANK = Object.fromEntries(GRADES.map((g, i) => [g, i + 7]));
 const BAND_NAMES = Object.keys(DEFAULT_GRADE_BANDS);
 const SKILLS = ['CPET', 'SLEEP', 'REGISTERED', 'ULTRASOUND'];
 
@@ -141,6 +143,11 @@ const randomConfig = () => {
         // unfilled slots.
         if (chance(0.3) && heldSkills.size > 0) task.requiresSkill = pick([...heldSkills]);
         if (chance(0.4)) task.leadBands = subset(BAND_NAMES);
+        // A FLOOR AT OR BELOW SOMEBODY'S GRADE. Picking from the grades actually
+        // present keeps this a stress case rather than a validator rejection —
+        // a floor above the whole pool is refused at configure time by design,
+        // and that refusal is already exercised by the rejection tally.
+        if (chance(0.3)) task.minGrade = pick(staff.map((p) => p.grade));
         if (chance(0.35)) task.hours = pick([2, 3, 4, 6]);
         return task;
     });
@@ -211,6 +218,18 @@ const violationsOf = (config, roster) => {
                     hoursToday.set(who, (hoursToday.get(who) ?? 0) + h);
                     const wk = `${who}|${shift.week}`;
                     hoursByWeek.set(wk, (hoursByWeek.get(wk) ?? 0) + h);
+                }
+            }
+
+            // A GRADE FLOOR APPLIES TO EVERY ASSIGNEE, unlike a band gate. This is
+            // the assertion that would have caught 5(b) being wired to the lead
+            // only — which is the old bug wearing a new field name.
+            if (task?.minGrade !== undefined && task?.minGrade !== null) {
+                for (const who of assignees) {
+                    const person = byName.get(who);
+                    if (person && (GRADE_RANK[person.grade] ?? -1) < (GRADE_RANK[task.minGrade] ?? 0)) {
+                        bad.push(`${dateKey} ${shift.task}: ${who} is ${person.grade ?? 'ungraded'}, below the ${task.minGrade} floor`);
+                    }
                 }
             }
 
@@ -499,34 +518,56 @@ const runProbes = () => {
         note('C', 'GAP CLOSED', 'AM/PM no longer reproduces — item 4 may have shipped');
     }
 
-    // C2 — D10, the grade floor. AH11 present, gate is junior+.
+    // C2 — D10, the grade floor.
+    //
+    // ⚠️ REWRITTEN 2026-08-19 WHEN 5(b) SHIPPED, and the rewrite is the point of
+    // having probes. The original asked "does a band gate of junior+ admit an
+    // AH11?" — and it always will, because `junior` IS AH11–AH12 and that is
+    // correct band behaviour, not a defect. Left as it was, this probe would have
+    // printed REPRODUCED forever and quietly become a liar.
+    //
+    // The gap was never "the band gate is wrong". It was "there is no way to say
+    // a floor". So the probe now asks the CAPABILITY question — can the engine
+    // express `minimum AH12`, and does it hold for a co-lead as well as a lead? —
+    // and the answer flips to REPRODUCED the moment somebody breaks it.
+    const floorCast = [
+        { name: 'Eleven', fte: 1.0, grade: 'AH11', skills: [], unavailable: [] },
+        { name: 'Twelve', fte: 1.0, grade: 'AH12', skills: [], unavailable: [] },
+        { name: 'Thirteen', fte: 1.0, grade: 'AH13', skills: [], unavailable: [] },
+        { name: 'Fourteen', fte: 1.0, grade: 'AH14', skills: [], unavailable: [] },
+    ];
     const floor = {
         label: 'probe-grade-floor',
         startDate: '2026-09-07',
         weeks: 2,
-        staff: [
-            { name: 'Eleven', fte: 1.0, grade: 'AH11', skills: [], unavailable: [] },
-            { name: 'Twelve', fte: 1.0, grade: 'AH12', skills: [], unavailable: [] },
-            { name: 'Thirteen', fte: 1.0, grade: 'AH13', skills: [], unavailable: [] },
-        ],
+        staff: floorCast,
+        // coLeads: 1 deliberately — a floor that reaches only the lead is the old
+        // bug wearing a new field name.
         tasks: [{
-            name: 'NICU', days: [1, 2, 3, 4, 5], leads: 1, coLeads: 0,
-            category: 'Clinical', leadBands: ['junior', 'senior', 'principal'],
+            name: 'NICU', days: [1, 2, 3, 4, 5], leads: 1, coLeads: 1,
+            category: 'Clinical', minGrade: 'AH12',
         }],
         rules: { maxConcurrentPerDay: 1, bands: DEFAULT_GRADE_BANDS },
     };
     const r2 = generateRosterV2(floor);
-    const leads = r2.ok ? [...new Set(Object.values(r2.roster).flat().map((s) => s.lead))] : [];
-    if (leads.includes('Eleven')) {
-        console.log('  C2  D10 grade floor        REPRODUCED — an AH11 leads a duty whose stated');
-        console.log('                             floor is AH12. `junior` is AH11–AH12, so a band');
-        console.log('                             cannot express a threshold INSIDE a band.');
-        console.log(`                             Leads observed: ${leads.join(', ')}`);
-        note('C', 'KNOWN GAP', 'D10 reproduced — an AH11 led an AH12-floor duty');
+    const everyone = r2.ok
+        ? [...new Set(Object.values(r2.roster).flat().flatMap((s) => s.assignees ?? []))]
+        : [];
+    if (!r2.ok) {
+        console.log(`  C2  D10 grade floor        BROKEN — the floor config was refused: ${r2.reason}`);
+        note('C', 'DEFECT', `minGrade config refused: ${r2.reason}`);
+    } else if (everyone.includes('Eleven')) {
+        console.log('  C2  D10 grade floor        REPRODUCED — an AH11 is on a duty whose floor is');
+        console.log('                             AH12, so `minGrade` is not holding. This is a');
+        console.log('                             REGRESSION: 5(b) shipped 2026-08-19.');
+        console.log(`                             Assignees observed: ${everyone.join(', ')}`);
+        note('C', 'DEFECT', 'D10 regressed — an AH11 held an AH12-floor duty');
     } else {
-        console.log('  C2  D10 grade floor        GAP CLOSED — no AH11 led. Update the D10 row in');
-        console.log('                             CHANGELOG.md and ROSTER_TODO.md item 5(b).');
-        note('C', 'GAP CLOSED', 'D10 no longer reproduces');
+        console.log('  C2  D10 grade floor        GAP CLOSED — `minGrade: AH12` keeps the AH11 out');
+        console.log('                             of BOTH the lead and the co-lead seat, which a');
+        console.log('                             band gate could never do (it gates the lead only).');
+        console.log(`                             Assignees observed: ${everyone.join(', ')}`);
+        note('C', 'GAP CLOSED', 'D10 closed by 5(b) — minGrade gates every assignee');
     }
 };
 

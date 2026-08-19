@@ -1,6 +1,6 @@
-# NEXUS: Smart Operations Dashboard v1.17.1 [BETA]
+# NEXUS: Smart Operations Dashboard v1.18.0 [BETA]
 
-![Version](https://img.shields.io/badge/Version-v1.17.1-blue) ![Status](https://img.shields.io/badge/Status-Beta%20Phase-emerald) ![Org](https://img.shields.io/badge/Unit-Sport%20%26%20Exercise%20Medicine-indigo) ![Tech](https://img.shields.io/badge/AI-Gemini%20Powered-purple) ![AURA](https://img.shields.io/badge/AURA-v2.3%20Engine-blue) ![PWA](https://img.shields.io/badge/PWA-Native%20Push%20Enabled-blue) ![CI/CD](https://img.shields.io/badge/CI%2FCD-GitHub%20Actions-2ea44f)
+![Version](https://img.shields.io/badge/Version-v1.18.0-blue) ![Status](https://img.shields.io/badge/Status-Beta%20Phase-emerald) ![Org](https://img.shields.io/badge/Unit-Sport%20%26%20Exercise%20Medicine-indigo) ![Tech](https://img.shields.io/badge/AI-Gemini%20Powered-purple) ![AURA](https://img.shields.io/badge/AURA-v2.3%20Engine-blue) ![PWA](https://img.shields.io/badge/PWA-Native%20Push%20Enabled-blue) ![CI/CD](https://img.shields.io/badge/CI%2FCD-GitHub%20Actions-2ea44f)
 
 **NEXUS** (formerly IDC App) is a clinician-led innovation platform designed to revolutionise workload management, optimise skill-mix routing, and actively protect staff wellbeing at the Sport and Exercise Medicine Centre. 
 
@@ -145,9 +145,9 @@ This application is an operational and workload management tool. It is not a cli
 ### Supported Versions
 | Version | Status |
 | ------- | ------ |
-| 1.17.x  | **Active Beta** (Evaluated by Senior CEPs) |
-| 1.16.x  | Legacy Stable |
-| < 1.16  | Deprecated / Offline |
+| 1.18.x  | **Active Beta** (Evaluated by Senior CEPs) |
+| 1.17.x  | Legacy Stable |
+| < 1.17  | Deprecated / Offline |
 
 > This table is downstream of `package.json` `version`, as are the title line and the
 > `Version-` badge above, and `SECURITY.md`'s table of the same name. `package.json` is the only authoritative copy — see
@@ -186,7 +186,10 @@ Beta testers should utilise Demo Mode to verify system integrity:
 > also lists the **known issues that are documented but not yet fixed**. The summaries
 > below are narrative highlights; where the two disagree, `CHANGELOG.md` is correct.
 
-### NEXUS v1.17.1 [Current Beta]
+### NEXUS v1.18.0 [Current Beta]
+* **A task can state a minimum job grade.** *"Minimum AH12 covers NICU"* is now sayable — and it holds for **everyone** on the duty, not just the person leading it. That distinction is the whole feature: the band chips gate the *lead* and let any grade assist, which is right for a supervision shape and wrong for a floor. Since `junior` spans AH11–AH12, a department whose floor is AH12 could not express it with bands at all without also admitting AH11. Set it in the task table; the engine refuses at configure time if nobody in your pool meets it.
+
+### NEXUS v1.17.1
 * **The colleague nobody rostered is now named on screen.** If anybody in the staff pool holds no duty at all, an amber panel says who — and names the four things that cause it: a grade outside every task’s band gate, a missing required skill, unavailable dates covering the run, or an availability window falling outside it. Amber rather than red because it is a *question*, not a failure: it is correct when somebody genuinely is not on that rota, and a silent disaster when it is a typo. *(Their row in the load table always read `0` — what was missing is that a `0` among nine rows does not announce itself.)*
 
 ### NEXUS v1.17.0

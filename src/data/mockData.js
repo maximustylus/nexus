@@ -758,30 +758,35 @@ export const DEMO_ARRANGEMENT_PHYSIOTHERAPY = Object.freeze({
 // section 9's rule — add a SHAPE sourced from a team who told us, or add nothing —
 // is what was waiting for this conversation.
 //
-// ⚠️ THE GRADE FLOOR IS AH12 AND THE GATE SAYS AH11. THIS IS THE MOST IMPORTANT LINE
-// IN THIS BLOCK. `leadBands` gates by BAND, and `junior` is AH11–AH12, so the nearest
-// expressible gate — `['junior','senior','principal']` — admits AH11 as well. There is
-// no grade-threshold requirement in the engine at all: eligibility has exactly three
-// kinds (skill, region, cohort window). SO THE FIXTURE IS SAFE ONLY BECAUSE OF ITS
-// CAST: nobody here is AH11, so "junior and above" and "AH12 and above" pick the same
-// six people. IN HER REAL DEPARTMENT THEY WOULD NOT, and an AH11 respiratory therapist
-// would be allowed to lead a duty she says needs AH12.
+// ✅ THE GRADE FLOOR NOW SAYS AH12, BECAUSE THE ENGINE CAN FINALLY SAY IT.
+// *(Was `leadBands: ['junior','senior','principal']` from 2026-08-18 to 2026-08-19.)*
 //
-// THE BANDS WERE NOT MOVED TO FIX IT, and that was the owner's call: setting this
-// department's ruler to [7,11] [12,12] [13,14] [15,17] would make the gate land exactly
-// on AH12 — `validateScaleRegions` permits a one-rank region — but it would relabel an
-// AH11 therapist NON-EXEMPT, and `Q11` already established that AH11–AH12 are junior
-// AHPs. The bands stay aligned to the AHP job grades; the gap is queued as a grade
-// threshold instead. This is `Q12`'s problem one axis over: there a band could not
-// express a ROLE, here it cannot express a THRESHOLD INSIDE A BAND.
+// This block used to open with the opposite warning, and the history is the point.
+// `leadBands` gates by BAND, and `junior` is AH11–AH12, so the nearest expressible
+// gate admitted AH11 as well — one grade below what she stated. The fixture was safe
+// ONLY because its cast contains no AH11, and any real respiratory team with one would
+// have had them leading a duty she says needs AH12. That was defect `D10`, and the
+// stress harness carried a probe that reproduced it on demand.
 //
-// `coLeads: 0` ON ALL THREE, AND IT IS THE GRADE FLOOR THAT FORCES IT. Bands gate the
-// LEAD ONLY — "any grade may co-lead" (`rosterEngineV2.js` header, rule 71) — so a
-// second body on a duty is a body the floor does not apply to. "Minimum AH12 covers
-// this area" and "a co-lead of any grade may stand in it" cannot both be true, so each
-// area is one gated person. She also never said how many people an area takes, and
-// inventing a second body would be inventing staffing — the same reasoning as the
-// physiotherapy weekend duty above.
+// `minGrade` is the fourth eligibility requirement kind (`ELIGIBILITY_MIN_GRADE`),
+// added for exactly this: a floor asks "is your grade AT OR ABOVE this rank", where a
+// band gate asks "is your band in this SET". They differ precisely when the floor falls
+// INSIDE a band, which is this case.
+//
+// THE BANDS WERE NEVER MOVED TO FIX IT, and that was the owner's call: setting this
+// department's ruler to [7,11] [12,12] [13,14] [15,17] would have landed a band gate on
+// AH12 — `validateScaleRegions` permits a one-rank region — but it would relabel an
+// AH11 therapist NON-EXEMPT, and `Q11` established that AH11–AH12 are junior AHPs. The
+// scale stays aligned to the AHP job grades; the engine grew the missing gate instead.
+//
+// `coLeads: 0` STAYS, BUT NOT FOR THE REASON IT WAS ADDED. It was originally forced:
+// bands gate the LEAD ONLY, so a second body was a body the floor could not reach, and
+// one gated person per area was the only honest way to say "minimum AH12 covers this
+// area". `minGrade` gates EVERY assignee, so that constraint is gone — this task could
+// now carry a co-lead and keep its floor. It does not, for the remaining and quite
+// different reason: **she never said how many people an area takes**, and inventing a
+// second body would be inventing staffing. The same reasoning as the physiotherapy
+// weekend duty above, and now the only reasoning.
 //
 // `maxConcurrentPerDay: 1` IS AN ASSUMPTION AND IS FLAGGED AS ONE. It means one area
 // per person per day, which is what "they rotate across areas" reads like for
@@ -841,9 +846,9 @@ export const DEMO_ARRANGEMENT_RESPIRATORY = Object.freeze({
     // Her three areas, by her names for them. Mon–Fri; the engine has no clock, so
     // "office hours" is the weekday pattern and nothing further is claimed — see the
     // hours model's limits ledger, item 12.
-    { name: 'NICU', days: [1, 2, 3, 4, 5], leads: 1, coLeads: 0, category: 'Clinical', leadBands: ['junior', 'senior', 'principal'] },
-    { name: 'CICU', days: [1, 2, 3, 4, 5], leads: 1, coLeads: 0, category: 'Clinical', leadBands: ['junior', 'senior', 'principal'] },
-    { name: 'Ward 65 HiD', days: [1, 2, 3, 4, 5], leads: 1, coLeads: 0, category: 'Clinical', leadBands: ['junior', 'senior', 'principal'] },
+    { name: 'NICU', days: [1, 2, 3, 4, 5], leads: 1, coLeads: 0, category: 'Clinical', minGrade: 'AH12' },
+    { name: 'CICU', days: [1, 2, 3, 4, 5], leads: 1, coLeads: 0, category: 'Clinical', minGrade: 'AH12' },
+    { name: 'Ward 65 HiD', days: [1, 2, 3, 4, 5], leads: 1, coLeads: 0, category: 'Clinical', minGrade: 'AH12' },
   ]),
   rules: Object.freeze({
     maxConcurrentPerDay: 1,

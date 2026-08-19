@@ -1059,6 +1059,20 @@ const REJECT_WINDOW = 'window';
  * this month" is the answer only once none of them applies.
  */
 const REJECT_QUOTA = 'quota';
+/**
+ * Their grade is BELOW the task's stated floor. An eligibility rejection like
+ * `REJECT_SKILL` and `REJECT_BAND`, and reported alongside them.
+ *
+ * WHY THIS IS NOT `REJECT_BAND` WEARING A DIFFERENT NAME, which is the first
+ * thing a reader will suspect. A band gate asks "is your band in this SET"; a
+ * floor asks "is your grade AT OR ABOVE this RANK". They differ exactly when the
+ * floor falls INSIDE a band — and that is not a corner case, it is the case that
+ * created this code: respiratory therapy stated a minimum of AH12, `junior` is
+ * AH11–AH12, so every expressible band gate admitted AH11 too. Counting an AH11
+ * refusal under `REJECT_BAND` would have made the reason sentence say their band
+ * was wrong when their band was right.
+ */
+const REJECT_MIN_GRADE = 'minGrade';
 
 // --- 0e. THE ELIGIBILITY PRIMITIVE --------------------------------------------
 //
@@ -1121,12 +1135,14 @@ const REJECT_QUOTA = 'quota';
 const ELIGIBILITY_SKILL = 'skill';
 const ELIGIBILITY_REGION = 'region';
 const ELIGIBILITY_WINDOW = 'window';
+const ELIGIBILITY_MIN_GRADE = 'minGrade';
 
 /** The requirement kinds, as a value. Adding a kind adds a name here. */
 export const ELIGIBILITY_KIND_NAMES = Object.freeze({
     skill: ELIGIBILITY_SKILL,
     region: ELIGIBILITY_REGION,
     window: ELIGIBILITY_WINDOW,
+    minGrade: ELIGIBILITY_MIN_GRADE,
 });
 
 /**
@@ -1169,6 +1185,23 @@ export const ELIGIBILITY_KINDS = Object.freeze({
         same: (a, b) => a.task === b.task,
         key: (requirement) => `w:${requirement.task}`,
     }),
+    /**
+     * A GRADE FLOOR: at or above a rank, rather than inside a set of bands.
+     *
+     * `person.gradeRank` is already the number this needs — computed once in
+     * `normaliseStaff` so nothing re-parses a grade string — and an unrecorded
+     * grade sits at the scale's `unknownRank`, STRICTLY BELOW its bottom rank.
+     * So `>=` refuses a person with no grade without a special case, which is the
+     * same answer the region kind gives via its `band !== null` guard and the
+     * same rule as section 0b's "absent is not zero". Getting that for free is
+     * the reason this kind stores a rank and not a label.
+     */
+    [ELIGIBILITY_MIN_GRADE]: Object.freeze({
+        rejection: REJECT_MIN_GRADE,
+        met: (person, requirement) => person.gradeRank >= requirement.minRank,
+        same: (a, b) => a.minRank === b.minRank,
+        key: (requirement) => `g:${requirement.minRank}`,
+    }),
 });
 
 /** A skill requirement, or `null` for "this adds no skill". */
@@ -1194,6 +1227,32 @@ export const regionRequirement = (regions) =>
  */
 export const windowRequirement = (taskName) =>
     (isNonEmptyString(taskName) ? Object.freeze({ kind: ELIGIBILITY_WINDOW, task: taskName }) : null);
+
+/**
+ * A GRADE FLOOR requirement from a grade label, or `null` for "no floor".
+ *
+ * ⚠️ THIS GATES EVERY ASSIGNEE, NOT JUST THE LEAD, AND THAT IS THE WHOLE POINT.
+ * `leadBands` gates the lead alone — any grade may co-lead — which is what makes
+ * a senior-supervising-junior pairing expressible and is right for that shape. A
+ * FLOOR is the opposite kind of statement: "nobody below AH12 covers NICU"
+ * includes the second person in the room. So this requirement is composed onto
+ * lead, co-lead and slot positions alike, exactly as `requiresSkill` is.
+ *
+ * The consequence is worth stating because it removes a workaround rather than
+ * adding a feature: before this existed, the only honest way to express a floor
+ * was `coLeads: 0` — one gated person and nobody beside them — because a second
+ * body was a body the gate could not reach. A task can now say the floor and
+ * still have two people on it.
+ *
+ * Stored as a RANK, not a label, so nothing downstream re-parses a grade string;
+ * `label` rides along only for the refusal sentence.
+ */
+export const minGradeRequirement = (grade, scale = ALLIED_HEALTH_SCALE) => {
+    const rank = rankOfGrade(grade, scale);
+    return rank === null
+        ? null
+        : Object.freeze({ kind: ELIGIBILITY_MIN_GRADE, minRank: rank, label: scale.labelOfRank(rank) });
+};
 
 /**
  * Build a requirement list from parts, dropping the absent ones and any exact
@@ -1568,6 +1627,7 @@ const compileSlotPositions = (value, task, scale = ALLIED_HEALTH_SCALE, windowsA
     for (const base of bases) total.set(base, (total.get(base) || 0) + 1);
     const seen = new Map();
     const taskSkill = skillRequirement(task.requiresSkill);
+    const taskFloor = minGradeRequirement(task.minGrade, scale);
 
     return value.map((raw, index) => {
         const band = typeof raw?.band === 'string' && scale.regionOrder.includes(raw.band) ? raw.band : null;
@@ -1597,6 +1657,9 @@ const compileSlotPositions = (value, task, scale = ALLIED_HEALTH_SCALE, windowsA
             eligibility: eligibilityOf(
                 taskSkill,
                 skillRequirement(entry.requiresSkill),
+                // The task's floor applies to every slot too — a trio's junior
+                // slot is still somebody covering the duty.
+                taskFloor,
                 // A single band, as a set, because a region requirement is a set —
                 // which is what makes "senior or principal" a one-line change here
                 // rather than a new mechanism (multi-slot ledger item 4).
@@ -1622,8 +1685,11 @@ const compileSlotPositions = (value, task, scale = ALLIED_HEALTH_SCALE, windowsA
 const compilePairedPositions = (task, leadRegions, windowsActive = false) => {
     const taskSkill = skillRequirement(task.requiresSkill);
     const cohortWindow = windowsActive ? windowRequirement(task.name) : null;
-    const leadEligibility = eligibilityOf(taskSkill, regionRequirement(leadRegions), cohortWindow);
-    const coLeadEligibility = eligibilityOf(taskSkill, cohortWindow);
+    // The floor rides with the SKILL, not with the bands: it applies to everybody
+    // on the duty. See `minGradeRequirement` for why that asymmetry is the point.
+    const taskFloor = minGradeRequirement(task.minGrade);
+    const leadEligibility = eligibilityOf(taskSkill, taskFloor, regionRequirement(leadRegions), cohortWindow);
+    const coLeadEligibility = eligibilityOf(taskSkill, taskFloor, cohortWindow);
     const positions = [];
 
     for (let i = 0; i < task.leads; i += 1) {
@@ -3571,6 +3637,33 @@ export const validateRosterV2Config = (config) => {
             }
         }
 
+        // `minGrade` is a FLOOR ON EVERY ASSIGNEE, not a band gate on the lead.
+        // Absent means no floor, which is every task written before this existed.
+        if (task.minGrade !== undefined && task.minGrade !== null && task.minGrade !== '') {
+            if (typeof task.minGrade !== 'string' || rankOfGrade(task.minGrade, scale) === null) {
+                return invalid(`Task ${name}'s minGrade is ${JSON.stringify(task.minGrade)}, which is not a grade on the ${scale.span} scale. Give a grade such as ${scale.labelOfRank(scale.firstRank)} or ${scale.labelOfRank(scale.lastRank)}, or leave it out so that any grade may cover the task.`);
+            }
+            // NOBODY MEETS IT — refused loudly at configure time, the same way a
+            // skill nobody holds and a band nobody is in already are. A floor
+            // above the whole department is a decimal point in the wrong place,
+            // not a policy, and every slot of the task would be unfilled on every
+            // date.
+            const floorRank = rankOfGrade(task.minGrade, scale);
+            const tallest = staff.reduce(
+                (best, person) => {
+                    const rank = rankOfGrade(person.grade, scale);
+                    return rank !== null && (best === null || rank > best.rank) ? { name: person.name, rank } : best;
+                },
+                null,
+            );
+            if (tallest === null || tallest.rank < floorRank) {
+                const highest = tallest === null
+                    ? 'nobody in the staff pool has a grade recorded at all'
+                    : `the highest graded is ${tallest.name} at ${scale.labelOfRank(tallest.rank)}`;
+                return invalid(`Task ${name} requires a grade of at least ${scale.labelOfRank(floorRank)}, but ${highest}, so every slot of this task would be unfilled on every date. Lower the floor, or record the grades of the people who can cover it.`);
+            }
+        }
+
         // `leadBands` restricts who may LEAD. Absent means "any grade may lead",
         // which is every task that existed before grades did.
         if (task.leadBands !== undefined && task.leadBands !== null) {
@@ -3927,6 +4020,15 @@ const normaliseTasks = (tasks, scale = ALLIED_HEALTH_SCALE, windowsActive = fals
             coLeads,
             category: isNonEmptyString(rawTask.category) ? rawTask.category : ROSTER_V2_DEFAULTS.category,
             leadBands,
+            /**
+             * The GRADE FLOOR, as the canonical label or `null` for none.
+             * Normalised through the scale so `'ah12'` and `'AH12'` are one thing
+             * and an off-scale string is `null` rather than a floor nobody meets —
+             * the validator refuses that case before it can get here.
+             */
+            minGrade: rankOfGrade(rawTask.minGrade, scale) === null
+                ? null
+                : scale.labelOfRank(rankOfGrade(rawTask.minGrade, scale)),
             // Always present, always a number, whether or not the hours model is
             // in force — one task shape, and the value a future always-on model
             // would use is already visible in a debugger today. What the OPT-IN
@@ -3971,6 +4073,7 @@ const normaliseTasks = (tasks, scale = ALLIED_HEALTH_SCALE, windowsActive = fals
 const CONTINUITY_REJECTION_PROSE = Object.freeze({
     [REJECT_SKILL]: 'no longer holds the skill the task requires',
     [REJECT_BAND]: "no longer holds a grade in the task's lead bands",
+    [REJECT_MIN_GRADE]: "no longer holds a grade at or above the task's floor",
     [REJECT_LEAVE]: 'was on leave that day',
     [REJECT_ON_TASK]: 'was already on that task that day',
     [REJECT_CAPACITY]: 'was already at their daily duty limit',
@@ -5773,6 +5876,7 @@ export const generateRosterV2 = (config) => {
                     [REJECT_PAIR]: 0,
                     [REJECT_CONSECUTIVE]: 0,
                     [REJECT_WINDOW]: 0,
+                    [REJECT_MIN_GRADE]: 0,
                     [REJECT_QUOTA]: 0,
                 };
 

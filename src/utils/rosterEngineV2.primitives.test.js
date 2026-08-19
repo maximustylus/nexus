@@ -518,7 +518,15 @@ describe('ELIGIBILITY: the representation', () => {
         // this table's whole design says a new kind should be. Its behaviour is
         // specified in `rosterEngineV2.quotas.test.js`; what is pinned here is that it
         // is a ROW like the other two and not a mechanism beside them.
-        expect(ELIGIBILITY_KIND_NAMES).toEqual({ skill: 'skill', region: 'region', window: 'window' });
+        // FOUR SINCE 2026-08-19. `minGrade` joined when respiratory therapy stated
+        // a floor of AH12 and no band gate could express it — `junior` is AH11–AH12,
+        // so every sayable gate admitted AH11 too. The assertion below is the whole
+        // claim of the table design: a fourth kind was one row here plus one entry
+        // in `ELIGIBILITY_KINDS`, and nothing outside those two places had to learn
+        // that kinds exist.
+        expect(ELIGIBILITY_KIND_NAMES).toEqual({
+            skill: 'skill', region: 'region', window: 'window', minGrade: 'minGrade',
+        });
         // The table IS the extension point: every kind the engine can name has a
         // predicate and a rejection code, and nothing else knows the kinds exist.
         expect(Object.keys(ELIGIBILITY_KINDS).sort()).toEqual(Object.values(ELIGIBILITY_KIND_NAMES).sort());

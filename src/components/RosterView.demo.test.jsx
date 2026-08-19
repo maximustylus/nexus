@@ -2335,8 +2335,18 @@ describe('demo mode: the picker is a profession and a shape', () => {
         // structure and should not be added.
         const signature = (entry) => ({
             leadBands: entry.config.tasks.some((task) => task.leadBands),
+            // A REAL grade floor, since 2026-08-19. `bandFloor` below was the
+            // WORKAROUND for not having this — see its comment.
+            minGrade: entry.config.tasks.some((task) => task.minGrade),
             // A gate becomes a FLOOR only when no band-gated duty carries a co-lead: an
             // ungated second body in the slot is a body the floor does not apply to.
+            //
+            // ⚠️ THIS DIMENSION IS NOW HISTORY, and is kept rather than deleted. It
+            // was added when respiratory's floor could only be approximated with a
+            // band gate plus `coLeads: 0`; `minGrade` replaced that approximation, so
+            // respiratory no longer sets `leadBands` at all and this reads false for
+            // it. It still separates any FUTURE shape that reaches for the old trick,
+            // and removing it would quietly widen what "distinct signature" means.
             bandFloor: entry.config.tasks.some((task) => task.leadBands)
                 && entry.config.tasks.every((task) => !task.leadBands || task.coLeads === 0),
             recurrence: entry.config.tasks.some((task) => task.recurrence),
@@ -2364,14 +2374,16 @@ describe('demo mode: the picker is a profession and a shape', () => {
         expect(signature(shapeOf('shape-weekday-sessions'))).toMatchObject({
             leadBands: false, recurrence: false, slots: false, quota: false, windows: false,
         });
-        // The floor, and the gate it must not be confused with. Both true on `leadBands`;
-        // they part on `bandFloor`, which is the whole difference between "AH12 and above
-        // covers this area" and "a junior leads it, anybody may help".
+        // The floor, and the gate it must not be confused with. Respiratory says its
+        // floor with `minGrade` and sets no bands at all; physiotherapy gates the
+        // LEAD by band and lets any grade co-lead. That is the whole difference
+        // between "AH12 and above covers this area" and "a junior leads it, anybody
+        // may help" — and until 2026-08-19 the first could only be approximated.
         expect(signature(shapeOf('shape-graded-floor-rotation'))).toMatchObject({
-            leadBands: true, bandFloor: true, recurrence: false, slots: false, quota: false,
+            minGrade: true, leadBands: false, recurrence: false, slots: false, quota: false,
         });
         expect(signature(shapeOf('shape-graded-duty'))).toMatchObject({
-            leadBands: true, bandFloor: false,
+            minGrade: false, leadBands: true, bandFloor: false,
         });
     });
 

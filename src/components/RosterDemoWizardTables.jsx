@@ -2148,6 +2148,45 @@ export const TaskTable = ({ rows, errors, bands, onChange, onAdd, onRemove }) =>
                                                     </p>
                                                 </>
                                             )}
+
+                                            {/* THE GRADE FLOOR — a different question from the
+                                                chips above it, and shown here because that is
+                                                where somebody looks when they mean "who may do
+                                                this".
+
+                                                The chips ask WHICH BANDS may LEAD. This asks
+                                                the LOWEST GRADE anybody on the duty may hold —
+                                                lead and co-lead alike. They are not
+                                                interchangeable and the difference is not
+                                                cosmetic: `junior` is AH11–AH12, so a department
+                                                whose floor is AH12 cannot express it with chips
+                                                at all without also admitting AH11.
+
+                                                Unlike the chips it is shown in SLOT MODE too,
+                                                because the engine composes a task's floor onto
+                                                every slot. */}
+                                            <label className="mt-1.5 block">
+                                                <span className="block text-[9px] font-bold uppercase tracking-wider text-slate-400">
+                                                    Minimum grade
+                                                </span>
+                                                {/* `CELL_INPUT`, not hand-rolled styling: it
+                                                    carries the 16px-on-a-phone rule (iOS Safari
+                                                    zooms below that) and the 44px tap-target
+                                                    floor. The first draft of this control used
+                                                    `text-[11px]` and failed four mobile tests —
+                                                    which is precisely what those tests are for. */}
+                                                <select
+                                                    aria-label={`Task row ${index + 1} minimum grade`}
+                                                    value={row.minGrade || ''}
+                                                    onChange={(event) => onChange(row.id, { minGrade: event.target.value })}
+                                                    className={CELL_INPUT}
+                                                >
+                                                    <option value="">No minimum</option>
+                                                    {GRADE_SCALE.map((grade) => (
+                                                        <option key={grade} value={grade}>{grade} and above</option>
+                                                    ))}
+                                                </select>
+                                            </label>
                                         </Cell>
                                         <Cell label={TASK_HEADINGS.days} className="py-1 pr-2 align-top">
                                             {/* In monthly mode these chips would be dropped

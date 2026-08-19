@@ -53,6 +53,61 @@ Nothing yet.
 
 ---
 
+## [1.18.0] - 2026-08-19
+
+A grade floor the engine can actually say — queue item 5(b), closing `D10`.
+
+### Added
+
+- **`minGrade` — a fourth eligibility requirement kind.** A task can now state the lowest grade
+  anybody covering it may hold: `{ name: 'NICU', minGrade: 'AH12' }`. Respiratory therapy's very
+  first requirement was *"minimum job grade AH12"*, and until now it had **no expressible form**:
+  eligibility had exactly three kinds — skill, region (a *set of bands*), cohort window — and
+  none of them is a threshold. `junior` is AH11–AH12, so every sayable band gate admitted AH11
+  too, one grade below what she said.
+
+  **A floor is not a narrow band gate, and the difference is not arithmetic.** A band gate asks
+  *"is your band in this SET"* and gates the **lead alone** — any grade may co-lead, which is what
+  makes a senior-supervising-junior pairing expressible. A floor asks *"is your grade AT OR ABOVE
+  this RANK"* and gates **every assignee**, lead and co-lead and slot alike, exactly as
+  `requiresSkill` does. They compose by AND; a task may carry both.
+
+  **It removes a workaround rather than adding a feature.** Before this, the only honest way to
+  express a floor was `coLeads: 0` — one gated person and nobody beside them — because a second
+  body was a body the gate could not reach. A task can now state its floor *and* have two people
+  on it.
+
+  An unrecorded grade fails the floor without a special case: `person.gradeRank` puts it strictly
+  below the scale's bottom rank, which is section 0b's *"absent is not zero"* holding for free.
+
+- **A minimum-grade control in the Sandbox wizard's task table**, and a refusal at configure time
+  when nobody in the pool meets the floor — naming the highest grade there actually is, the same
+  way an unsatisfiable skill and an empty band already refuse.
+
+### Changed
+
+- **The respiratory shape now says what she said.** `leadBands: ['junior','senior','principal']`
+  → `minGrade: 'AH12'`. Its roster is **byte-identical** — that cast has no AH11, so the two
+  gates coincided *for this cast*, which is exactly what the fixture's comment warned was the
+  only reason it was safe. `coLeads: 0` stays, but now for the one remaining reason: she never
+  said how many people an area takes.
+
+### Notes
+
+- **The stress harness's `D10` probe was rewritten, and that is the point of having probes.** It
+  used to ask *"does a band gate of junior+ admit an AH11?"* — which it always will, because
+  `junior` **is** AH11–AH12 and that is correct band behaviour, not a defect. Left alone it would
+  have printed `REPRODUCED` forever and quietly become a liar. It now asks the **capability**
+  question, and reports `GAP CLOSED` — flipping back to a defect the moment anybody breaks it.
+- **`minGrade` joined the fuzz generator**, and the harness gained its own floor check.
+  Deliberately verified to fail: wiring the floor to the lead only — the old bug wearing a new
+  field name — is caught in **334 of 529** generated rosters.
+- **Four mobile tests caught the new control on its first draft.** It used `text-[11px]`, which
+  iOS Safari zooms on, and missed the 44px tap-target floor. It uses the shared `CELL_INPUT` now.
+- 1667 tests across 29 files (was 1655), lint clean.
+
+---
+
 ## [1.17.1] - 2026-08-19
 
 ### Fixed
@@ -246,7 +301,7 @@ A sixth roster structure, and the correction that a shape is one team — not a 
 | Id | Severity | Defect |
 |---|---|---|
 | **D11** | Medium | **Generation blocks the browser, and the cost grows with both headcount and run length.** Found 2026-08-18 by the new stress harness — the first time anything measured this; no performance figure existed anywhere in the repo before. `generateRosterV2` is called **synchronously inside the Draft click handler** (`RosterView.jsx`), with no worker and nothing yielding, so the tab is frozen for the whole run. Measured on this machine, isolated one variable at a time: with the roster fixed at 2,600 shifts, **25 staff → 0.98s and 200 staff → 5.9s** (roughly linear in headcount); with staff fixed at 100, **650 shifts → 0.38s and 10,400 shifts → 22.6s** — 16× the shifts for **60×** the time, so the per-shift cost itself grows 3.7×. Worst case measured: **200 staff × 40 tasks × 52 weeks = 51s**. Sandbox path only — live mode still uses the V1 `generateRoster` — but the sandbox is the surface every visiting department is shown, and V2 is the engine intended to replace V1. No threshold is asserted because none has been agreed; these are the numbers. Reproduce: `npm run stress`. |
-| **D10** | Medium | **A grade floor cannot be stated, so the respiratory shape gates one grade too wide.** `leadBands` gates by BAND and `junior` is AH11–AH12, so *"minimum AH12"* has no expressible form — the nearest gate admits AH11. The shipped fixture is safe **only because its cast contains no AH11**; a real respiratory team typed into the wizard inherits the slack and **nothing on screen says so**. The bands were deliberately not moved to fix it: they stay aligned to the AHP job grades (`Q11`). Queued as `ROSTER_TODO.md` item 5(b). Do not claim grade-floor enforcement to that department until it ships. |
+| ~~**D10**~~ | ~~Medium~~ | ✅ **FIXED in 1.18.0** by the `minGrade` requirement kind. *(Original text, kept because a known-issues row that vanishes leaves no record that it was ever true:)* ~~**A grade floor cannot be stated, so the respiratory shape gates one grade too wide.** `leadBands` gates by BAND and `junior` is AH11–AH12, so *"minimum AH12"* has no expressible form — the nearest gate admits AH11. The shipped fixture is safe **only because its cast contains no AH11**.~~ |
 
 *(The `### Known issues` table under `[1.13.0]` remains the standing list — **none** of `D2/D3/D9`,
 `D5`, `D6`, `D7`, `D8` or the live-mode iOS zoom was fixed in this release.)*
