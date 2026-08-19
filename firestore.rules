@@ -1,23 +1,53 @@
 // ==============================================================================
-// NEXUS — FIRESTORE SECURITY RULES  ·  P R O P O S A L   ·   N O T   W I R E D
+// NEXUS — FIRESTORE SECURITY RULES  ·  W I R E D   ·   reconciled 2026-08-18
 // ==============================================================================
 //
-// ⛔ THIS FILE IS INERT. NOTHING DEPLOYS IT.
+// ⚠️ THIS FILE IS NOW THE DEPLOYED AUTHORIZATION BOUNDARY — once `main` ships it.
 //
-//    `firebase.json` has NO `firestore` section and this task deliberately did
-//    not add one. `.github/workflows/deploy.yml` deploys `functions` and
-//    `hosting` only and was not touched. Therefore:
+//    `firebase.json` declares `firestore.rules`, and
+//    `.github/workflows/deploy.yml` deploys `--only functions,firestore:rules`.
+//    Editing this file and merging to `main` CHANGES WHO CAN READ AND WRITE THE
+//    LIVE DUTY ROSTER OF PRACTISING CLINICIANS. Treat every edit accordingly.
 //
-//      • `firebase deploy` (no flags) will NOT deploy this file.
-//      • The CI pipeline on `main` will NOT deploy this file.
-//      • The rules currently live in project `idc-app-e0c59` are WHATEVER IS IN
-//        THE FIREBASE CONSOLE. Nobody in this repository knows what they are.
-//        This file is a PROPOSAL for what they should become, not a record of
-//        what they are.
+//    ⚠️ THE `,firestore:rules` IN THAT ARGS STRING IS LOAD-BEARING. The step ran
+//    `deploy --only functions` for its whole life; adding the `firebase.json`
+//    section alone would have deployed NOTHING while the pipeline went green and
+//    this header claimed otherwise. If rules ever appear not to take effect, check
+//    that flag first.
 //
-//    Wiring it up is a deliberate human act. See `firestore.rules.README.md`
-//    §7 for the two-line `firebase.json` change and why you should read §3
-//    (Rules Playground) and §5 (rollback) BEFORE making it.
+// ------------------------------------------------------------------------------
+// WHAT WAS LIVE BEFORE THIS, AND WHY IT HAD TO CHANGE
+// ------------------------------------------------------------------------------
+//
+// The owner supplied the console's rules on 2026-08-18 — the first time anybody
+// in this repository could see them. Their operative clause was:
+//
+//     function isVerifiedStaff() {
+//       return request.auth != null && email_verified == true
+//              && email.lower().matches('.*@kkh\\.com\\.sg');
+//     }
+//     match /{document=**} { allow read, write: if isVerifiedStaff(); }
+//
+// That catch-all is not the ten-person team. It is ANY verified `@kkh.com.sg`
+// address, and the app's Firebase API key is public (it ships in the bundle), so
+// any KKH employee who registers an account could read `wellbeing_history` — the
+// longitudinal burnout record per named clinician — and overwrite the roster and
+// approve any swap. Whole-hospital, not internet-wide, and not hypothetical.
+// Closing that is the entire point of decision `Q6`.
+//
+// TWO OF THE CONSOLE'S FIVE HAND-WRITTEN BLOCKS GOVERNED NOTHING, measured by
+// grepping every collection name across `src/` and `functions/`:
+//   • `community_resources` — 0 references anywhere in the codebase.
+//   • `feeds/{document=**}` — not a collection; the five hits are UI view names
+//     (`id: 'feeds'`). The real collection is `feed_posts`, which was therefore
+//     governed only by the catch-all.
+//
+// AND TWO LIVE PATHWAYS WOULD HAVE BEEN KILLED SILENTLY by the pre-reconciliation
+// version of this file, which required `isMember()` on both: public screening
+// telemetry (`community_assessments`) and sandbox beta feedback. Both are
+// unauthenticated by nature. Both now ship OPEN BUT SHAPE-PINNED — see their
+// blocks, each of which states the accepted risk rather than hiding it. That
+// reconciliation is the reason this file was not deployed as originally written.
 //
 //    Why the caution is not theatre: the master duty roster of four practising
 //    clinicians is rewritten CLIENT-SIDE from a colleague's browser. A rule
@@ -845,16 +875,26 @@ service cloud.firestore {
     // `FeedbackWidget.jsx:29` addDoc; never read by any client. Create-only,
     // shape-pinned, size-capped.
     //
-    // ⚠️ BEHAVIOUR CHANGE: the widget renders in the unauthenticated sandbox
-    //    (`App.jsx:633`), so an anonymous visitor can file feedback today and
-    //    will get "Could not send feedback" tomorrow. A deliberate consequence
-    //    of "authentication required everywhere". If you want sandbox feedback
-    //    back, the honest way is a Cloud Function with App Check — not an open
-    //    create rule on a collection anyone can discover.
+    // ⚠️ ANONYMOUS CREATE IS DELIBERATE, AND IT IS A DECISION, NOT AN OVERSIGHT.
+    //    *(Reconciled 2026-08-18 against the live console, which had
+    //    `allow create: if true` here with no shape check at all.)*
+    //
+    //    The widget renders in the unauthenticated sandbox (`App.jsx:633`).
+    //    Requiring `isMember()` — as the first draft of this file did — means the
+    //    ONLY feedback anyone can ever file is from the ten signed-in colleagues,
+    //    and every visiting department loses the route entirely. The respiratory
+    //    and audiology demos of August 2026 both ran in that sandbox; feedback
+    //    from a visitor is the point of the widget existing.
+    //
+    //    So the gate is the SHAPE, not the identity: the key allowlist below, a
+    //    10,000-character cap, and a server clock. That is strictly tighter than
+    //    what is live today. It is NOT rate-limited — rules cannot do that — so
+    //    this remains an open write endpoint against the billing account, and the
+    //    durable answer is still a Cloud Function with App Check. Accepted
+    //    knowingly rather than discovered later.
     match /beta_feedback/{feedbackId} {
       allow read: if false;
-      allow create: if isMember()
-                    && request.resource.data.keys().hasOnly([
+      allow create: if request.resource.data.keys().hasOnly([
                          'type', 'message', 'reportedBy', 'environment',
                          'timestamp', 'userAgent'
                        ])
@@ -915,22 +955,46 @@ service cloud.firestore {
     // the `publicTriageChat` callable already proves that pattern works for
     // this exact pathway.
     //
-    // If you accept the risk knowingly, the interim form is below, commented
-    // out. It at least pins the shape and caps the size. Deploying it is a
-    // decision with a bill attached, so it does not deploy by default.
+    // ── DECIDED 2026-08-18: THE PUBLIC PATHWAY STAYS OPEN, SHAPE-PINNED. ─────
     //
-    //   match /community_assessments/{assessmentId} {
-    //     allow read: if false;
-    //     allow create: if request.resource.data.keys().hasAll(['createdAt', 'postalSector'])
-    //                   && request.resource.data.createdAt == request.time
-    //                   && request.resource.data.postalSector is string
-    //                   && request.resource.data.postalSector.size() <= 4
-    //                   && request.resource.data.keys().size() <= 20;
-    //     allow update, delete: if false;
-    //   }
+    // The owner supplied the live console rules on that date and they carried
+    // `allow create: if true` here — so the public pathway is not hypothetical,
+    // it is CURRENTLY CARRYING DATA. Switching it to `isMember()` would not have
+    // produced an error anybody could see: `recordTelemetry` swallows its own
+    // failure (`telemetry.js:16-19`), the member of the public still reaches
+    // their result page, and the only symptom would have been screening data
+    // quietly ceasing to arrive. A silent data loss is the worst possible
+    // outcome of a security improvement, so it was taken to the owner as a
+    // decision rather than encoded as a default.
+    //
+    // What ships is the interim form this file already drafted: anonymous create,
+    // but the shape pinned, the size capped and the key count bounded. STRICTLY
+    // TIGHTER THAN WHAT IS LIVE, which pins nothing.
+    //
+    // ⚠️ THE RISK IS ACCEPTED, NOT REMOVED. This is an unmetered write endpoint
+    //    against the billing account and rules cannot rate-limit. The right
+    //    shape remains an `onCall` Cloud Function with App Check enforced,
+    //    writing via the Admin SDK — `publicTriageChat` already proves the
+    //    pattern on this exact pathway. Until that exists, this block is a
+    //    knowing trade: keep the data, cap the blast radius.
+    //
+    // ⚠️ `read` DIFFERS FROM BOTH THE OLD PROPOSAL AND THE CONSOLE, deliberately,
+    //    and it is called out because a silent third option is how a rules file
+    //    starts lying. The proposal had `read: if false` (nothing client-side
+    //    reads this — measured, 1 hit in the codebase and it is the `addDoc`).
+    //    The console has staff read, and the owner's own comment there says
+    //    "only KKH staff can read or analyze the data", so the intent to read it
+    //    exists even though no code does yet. `isMember()` keeps that intent
+    //    reachable while narrowing it from ANY verified `@kkh.com.sg` address to
+    //    the ten in `directory()`. Firebase-console reads are unaffected by rules
+    //    either way.
     match /community_assessments/{assessmentId} {
-      allow read: if false;
-      allow create: if isMember();      // ⚠️ denies the public pathway. By design.
+      allow read: if isMember();        // staff analyse it; the public cannot read it back.
+      allow create: if request.resource.data.keys().hasAll(['createdAt', 'postalSector'])
+                    && request.resource.data.createdAt == request.time
+                    && request.resource.data.postalSector is string
+                    && request.resource.data.postalSector.size() <= 4
+                    && request.resource.data.keys().size() <= 20;
       allow update, delete: if false;
     }
 
@@ -948,6 +1012,21 @@ service cloud.firestore {
     //       `publicTriageChat` (`functions/index.js:688-719`, Admin SDK). No
     //       client code touches it. Both keep working with zero client
     //       permission, so it gets zero.
+    //
+    //   `community_resources`
+    //       Present in the console's rules with `allow read: if true`, and
+    //       referenced by NOTHING — zero hits across `src/` and `functions/`,
+    //       measured 2026-08-18 during the reconciliation. Deliberately given no
+    //       rule here rather than transcribed, because a rule for a collection no
+    //       code touches is a claim this file cannot back. If a future feature
+    //       reads it, add a block then. Console and Admin SDK access to whatever
+    //       it holds are unaffected by rules either way.
+    //
+    //   `feeds/{document=**}`
+    //       Also in the console's rules, also governing nothing: `feeds` is a UI
+    //       VIEW NAME (`id: 'feeds'` in `ResponsiveLayout.jsx`), not a Firestore
+    //       collection. The real one is `feed_posts` and it has its own section
+    //       above. Recorded so nobody transcribes the dead block back in.
     //
     //   `demo_*` — e.g. `demo_staff_loads`, `demo_monthly_workload`
     //       `AuraPulseBot.jsx:829` prefixes AURA's DATA_ENTRY target with

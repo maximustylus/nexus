@@ -15,17 +15,31 @@
 
 ## 0. What is and is not wired
 
+> ### ⚠️ REWRITTEN 2026-08-18 — THIS SECTION USED TO SAY THE OPPOSITE
+>
+> Everything below was `❌ deliberately not added` until the owner supplied the live
+> console rules (see §4, which could finally be filled in) and the file was
+> reconciled against them. **The rules are now wired.** The old table is not kept
+> struck-through here because a table of ticks is exactly the thing a reader skims
+> and mis-reads; the change is recorded in `CHANGELOG.md` instead.
+
 | | |
 |---|---|
-| `firestore.rules` exists in the repo | ✅ tracked and committed (`9c355ff`) |
-| `firebase.json` has a `firestore` section | ❌ **deliberately not added** |
-| `.github/workflows/deploy.yml` touched | ❌ **not touched** |
-| `firebase deploy` would deploy it | ❌ no — with no `firestore` config the CLI cannot see it |
-| CI on merge to `main` would deploy it | ❌ no — the workflow runs `--only functions` and hosting |
+| `firestore.rules` exists in the repo | ✅ tracked and committed |
+| `firebase.json` has a `firestore` section | ✅ **added** — `"firestore": { "rules": "firestore.rules" }` |
+| `.github/workflows/deploy.yml` touched | ✅ **args changed** to `deploy --only functions,firestore:rules` |
+| `firebase deploy` would deploy it | ✅ yes |
+| CI on merge to `main` would deploy it | ✅ **yes — merging to `main` changes the live authorization boundary** |
 | Application code changed | ❌ none. Zero files under `src/` or `functions/` |
 
-So merging this file changes **nothing** about the running system. It becomes live
-only when a human does §8.
+**⚠️ BOTH WIRING HALVES ARE REQUIRED AND ONLY ONE IS OBVIOUS.** The `firebase.json`
+section is the documented step, but the workflow ran `--only functions`, which
+**excludes rules**. With the section added and the args untouched, CI goes green,
+this page says "wired", and nothing is enforced. If rules ever seem not to apply,
+check that flag before anything else.
+
+So merging this file no longer changes nothing. **It is the deploy.** Do §3
+(pre-flight), §6 (Playground) and §7 (rollback) *before* the merge, not after.
 
 ---
 
@@ -159,6 +173,47 @@ addresses and I will correct `directory()`.**
 
 ## 4. Diff the proposal against the console's current rules
 
+> ### ✅ DONE 2026-08-18 — the console rules were supplied by the owner
+>
+> This section existed to be filled in and never could be. It now can. What was live:
+>
+> ```
+> function isVerifiedStaff() {
+>   return request.auth != null && request.auth.token.email_verified == true
+>          && request.auth.token.email.lower().matches('.*@kkh\\.com\\.sg');
+> }
+> match /beta_feedback/{document}         { allow create: if true; allow read, update, delete: if false; }
+> match /feeds/{document=**}              { read/create if isVerifiedStaff(); update/delete if author }
+> match /community_assessments/{doc=**}   { allow create: if true; read/update/delete if isVerifiedStaff(); }
+> match /community_resources/{doc=**}     { allow read: if true; allow write: if isVerifiedStaff(); }
+> match /{document=**}                    { allow read, write: if isVerifiedStaff(); }   // ← everything else
+> ```
+>
+> **The finding.** `isVerifiedStaff()` is *any* verified `@kkh.com.sg` address, not the
+> ten-person directory, and the catch-all grants it read+write on **everything** —
+> `wellbeing_history` (the per-clinician burnout record), `system_data/roster_2026`,
+> `shift_swaps`, `users`. The app's Firebase API key is public, so any KKH employee who
+> registers an account has that access today. Whole-hospital exposure, not internet-wide.
+>
+> **Five collections, checked against the codebase rather than assumed:**
+>
+> | Collection | Console | Referenced by | Verdict |
+> |---|---|---|---|
+> | `community_resources` | public read | **0 hits** in `src/` or `functions/` | dead block — no rule written here |
+> | `feeds/{document=**}` | staff read/write | **0 hits as a collection** — `feeds` is a UI view name (`ResponsiveLayout.jsx`) | dead block — the real one is `feed_posts` |
+> | `community_assessments` | `create: if true` | `telemetry.js:13`, public, no account | **live pathway** — kept open, shape-pinned |
+> | `beta_feedback` | `create: if true` | `FeedbackWidget.jsx`, login-free sandbox | **live pathway** — kept open, shape-pinned |
+> | `resources` | catch-all | `functions/index.js` only (Admin SDK) | rules never apply — correctly granted nothing |
+>
+> **Why this mattered.** The pre-reconciliation proposal required `isMember()` on both live
+> pathways. Deploying it unchanged would have stopped public screening telemetry and sandbox
+> feedback **silently** — `recordTelemetry` swallows its own error, so nothing visible breaks
+> and the data simply stops arriving. Both now ship open-but-shape-pinned, which is strictly
+> tighter than the console's unpinned `if true`, with the accepted risk written into each block.
+
+### The original routes, kept for the next time
+
+
 **There is no `firebase firestore:rules:get` command** — I checked the installed
 CLI (v15.15.0); `firestore:*` covers databases, indexes, backups and delete, and
 nothing reads rules. So there are two routes.
@@ -215,6 +270,53 @@ diff -u ~/nexus-rules-LIVE.rules firestore.rules
 ---
 
 ## 5. Verification record — measured, not asserted
+
+> ### ⚠️ THIS RECORD DOES NOT COVER TWO BLOCKS. READ BEFORE TRUSTING IT.
+>
+> The 139 checks below were run against the file **as it stood before the 2026-08-18
+> reconciliation**. Two blocks changed after that run and are therefore **NOT covered by any
+> assertion on this page**:
+>
+> | Block | Was | Is now | Status |
+> |---|---|---|---|
+> | `community_assessments` | `create: if isMember()` · `read: if false` | anonymous create, shape-pinned · `read: if isMember()` | ✅ **re-verified — see §5.4** |
+> | `beta_feedback` | `create: if isMember()` + shape pins | anonymous create, same shape pins | ✅ **re-verified — see §5.4** |
+>
+> Everything else in the file is byte-identical to what the 139 checks exercised, and those
+> results stand.
+>
+> **This banner exists because letting an old green record vouch for new rules is the exact
+> failure this project's post-mortem is about** — four ledger rows marked `DONE` while the
+> source files were byte-identical to `HEAD`. A verification record that silently widens its
+> own scope is the same defect wearing a tie. The scope is therefore stated explicitly above
+> rather than left to be inferred from a single green tick at the top of the section.
+
+### 5.4 Re-verification of the reconciled blocks — 31 checks, 31 as specified
+
+**2026-08-18, run against the emulator, and committed as a script rather than recorded as
+prose:** `scripts/firestore-rules-verify.mjs`. It lives in `scripts/` because
+`vitest.config.js` collects `src/**/*.{test,spec}.{js,jsx}` — a rules test there would fail
+every build, which is why §5 originally committed nothing. `scripts/` is outside that glob, so
+this one is runnable by anybody with the four-command setup in its header. Project id
+`demo-nexus-rules`; it never contacts `idc-app-e0c59`.
+
+| Group | Checks | What it proves |
+|---|---|---|
+| `beta_feedback` | 8 | an anonymous sandbox visitor **can** file feedback; extra keys, >10,000 chars, an empty message and a client clock are all refused; nobody — **including an admin** — can read it back |
+| `community_assessments` | 8 | a member of the public **can** submit; missing/oversized `postalSector`, a back-dated `createdAt` and >20 keys are refused; the public cannot read back; a directory member can; **a verified KKH outsider cannot** |
+| **`Q6` itself** | 4 | a verified `@kkh.com.sg` address outside `directory()` can no longer read the burnout record, read the roster, overwrite the roster, or read swaps — **all four of which it could do before** |
+| roster verb split | 6 | admin can Generate; a CEP cannot; a CEP can replace exactly one existing day; cannot change two; cannot add a day; nobody can delete |
+| `wellbeing_history` | 5 | own record readable, a colleague's is not, admin can list, a non-admin member cannot, the anonymous bucket is unreadable even by an admin |
+
+⚠️ **One case passed spuriously on the first run and the fix is recorded because the failure
+mode generalises.** `changedKeys()` is `diff().affectedKeys()` — keys whose **value changed**,
+not keys **written**. The "cannot change two days in one write" case originally wrote `[]` over
+a day that was already `[]`; that is not an affected key, so only one key changed and the case
+passed while proving nothing. It now writes two genuinely different values, and a warning sits
+at the top of the script. **A rules test that writes a value back unchanged is testing
+nothing** — the same class of defect as this repo's demo assertion that "would have passed
+forever" (`ROSTER_HANDOFF.md` §0).
+
 
 **No emulator-based test suite is committed, on purpose.** CI has no Firestore
 emulator (`.github/workflows/deploy.yml` runs test, lint and build — no emulator), and vitest collects
