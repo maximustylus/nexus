@@ -26,10 +26,15 @@ jobs:
         working-directory: ./functions
         run: npm ci
 
-      - name: Deploy Backend (Functions)
+      # ⚠️ `firestore:rules` IS LOAD-BEARING AND WAS ADDED 2026-08-18 WITH THE
+      # `firestore` SECTION IN `firebase.json`. Declaring the rules file there is
+      # NOT enough on its own: `--only functions` excludes rules, so the pipeline
+      # would go green, the runbook would say "wired", and the authorization
+      # boundary would be unchanged. Both halves or neither.
+      - name: Deploy Backend (Functions) and Firestore Rules
         uses: w9jds/firebase-action@master
         with:
-          args: deploy --only functions
+          args: deploy --only functions,firestore:rules
         env:
           GCP_SA_KEY: '${{ secrets.FIREBASE_SERVICE_ACCOUNT }}'
           PROJECT_ID: idc-app-e0c59
