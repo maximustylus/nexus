@@ -3147,3 +3147,78 @@ describe('demo mode: the category chip and its suggestion', () => {
         expect(diagnostics.className).not.toMatch(/bg-orange|bg-lime|bg-yellow|#f2e6d8/);
     });
 });
+
+// ═════════════════════════════════════════════════════════════════════════════
+// NEVER ROSTERED — defect D2/D3/D9, and the first UI caller `measureRosterLoad`
+// has ever had.
+//
+// ⚠️ THE DEFECT'S OWN DESCRIPTION WAS WRONG IN A WAY WORTH PINNING. The ledger
+// said the engine "computes this and DISCARDS it — there is no UI caller at
+// all", which reads as "the information is unavailable to the user". It was
+// not: `result.load` is built `for (const person of staff)`, so a never-rostered
+// colleague has ALWAYS had a row in the load table, reading `0`. The real gap is
+// that a `0` among nine rows does not announce itself — and the defect's actual
+// scenario, a mistyped availability window quietly removing somebody, is exactly
+// when nobody thinks to look. These tests therefore pin the CALLOUT, and the
+// first one pins the pre-existing `0` too so a future refactor cannot "fix" the
+// callout by removing the row it points at.
+// ═════════════════════════════════════════════════════════════════════════════
+describe('demo mode: who was never rostered', () => {
+    it('names the people who hold no duty, and does not hide the row that already said so', () => {
+        render(<RosterView user={VISITOR} />);
+        openConfigure();
+        // The respiratory shape gates three below-floor staff out of every task,
+        // so it is the fixture that exercises this without inventing one.
+        loadShapeById('shape-graded-floor-rotation');
+        clickGenerate();
+
+        expectOnScreen(/Never rostered \(3\)/i);
+        expectOnScreen(/March Hare, Dormouse, Bill the Lizard/);
+        expectOnScreen(/hold no duty at all/i);
+
+        // The prose is deliberately read off the PANEL's textContent rather than
+        // through `getAllByText`. Half of these phrases are broken across `<span>`
+        // boundaries by the bolding, and a text matcher cannot span elements — the
+        // first draft of this test failed for exactly that reason and would have
+        // been "fixed" by deleting the bold, which is the wrong direction.
+        const panel = screen.getByText(/Never rostered \(3\)/i).closest('div');
+        const prose = panel.textContent.replace(/\s+/g, ' ');
+        // Why it is not simply an error: here it is correct.
+        expect(prose).toMatch(/correct if they are not part of this rota/i);
+        // And the four causes are named, in order, because "why" is the question a
+        // roster master actually has when this IS a surprise.
+        expect(prose).toMatch(/grade.*skill.*unavailable dates.*window/i);
+
+        // THE PRE-EXISTING ROW STILL EXISTS. This is the assertion that stops a
+        // future change from deleting the table row and calling the callout the
+        // fix — the callout points AT the row.
+        const zeroes = screen.getAllByText('0');
+        expect(zeroes.length).toBeGreaterThanOrEqual(3);
+    });
+
+    it('says so plainly when everybody holds a duty', () => {
+        render(<RosterView user={VISITOR} />);
+        openConfigure();
+        loadShapeById('shape-graded-duty');
+        clickGenerate();
+
+        expectOnScreen(/Never rostered \(0\)/i);
+        expectOnScreen(/Everybody in the staff pool holds at least one duty/i);
+        // No amber alarm when there is nothing to be alarmed about.
+        expect(screen.queryByText(/hold no duty at all/i)).toBeNull();
+    });
+
+    it('reports the heaviest single day, which also had no reader', () => {
+        render(<RosterView user={VISITOR} />);
+        openConfigure();
+        loadShapeById('shape-graded-floor-rotation');
+        clickGenerate();
+
+        // `measureRosterLoad` returns `busiestDay` as "<name> on <date key>".
+        // Asserting the SHAPE rather than a specific name: who is busiest is a
+        // tie-break detail, and pinning it would fail the day fairness changes.
+        expectOnScreen(/Heaviest single day:/i);
+        expectOnScreen(/\w+ on \d{4}-\d{2}-\d{2}/);
+        expectOnScreen(/\(1 duty\)/i);
+    });
+});

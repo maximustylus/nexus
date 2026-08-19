@@ -91,6 +91,7 @@ import {
     parseLocalDateKey,
     validateRosterV2Config,
     bandOfGrade,
+    measureRosterLoad,
     DEFAULT_GRADE_BANDS,
 } from '../utils/rosterEngineV2';
 // 🧪 SANDBOX WIZARD — the structured tables that replaced the two textareas in
@@ -1895,6 +1896,27 @@ const RosterView = ({ user }) => {
     // finished report — the same rule `demoRunGrades` follows for grades.
     const demoLoadHasHours = demoResult ? loadHasHours(demoResult.load) : false;
 
+    // 🧪 WHO WAS NEVER ROSTERED, and how heavy the heaviest day got. Defect
+    // D2/D3/D9's fix, and the first UI caller `measureRosterLoad` has ever had.
+    //
+    // ⚠️ THE DEFECT WAS DESCRIBED SLIGHTLY WRONG AND THE CORRECTION MATTERS.
+    // The ledger said the engine "computes this and DISCARDS it — there is no UI
+    // caller at all". True of the FUNCTION; misleading about what a roster master
+    // sees. `result.load` is built `for (const person of staff)`, so a never-
+    // rostered colleague was already in the load table all along — as a row
+    // reading `0`. Nothing was hidden. What was missing is that a `0` among nine
+    // rows does not ANNOUNCE itself, and D2/D3/D9's actual scenario — a mistyped
+    // availability window quietly removing somebody — is exactly the case where
+    // nobody thinks to go looking. So the fix is a callout, not a data pipe.
+    //
+    // The staff pool is `Object.keys(load)` rather than the wizard's rows, for the
+    // same reason `demoLoadHasHours` reads the result: editing the boxes after
+    // generating must not relabel a finished report.
+    const demoRunMeasure = useMemo(
+        () => (demoResult ? measureRosterLoad(demoResult.roster, Object.keys(demoResult.load)) : null),
+        [demoResult],
+    );
+
     return (
         <div className="md:col-span-2 bg-white dark:bg-slate-800 p-4 sm:p-6 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-700 animate-in fade-in relative z-10">
             
@@ -2512,6 +2534,70 @@ const RosterView = ({ user }) => {
                                     </>
                                 )}
                             </div>
+
+                            {/* --- who was never rostered (defect D2/D3/D9) ---
+                                AMBER, NOT RED, AND THE COLOUR IS THE ARGUMENT. An
+                                unstaffed slot is a failure: work nobody can do.
+                                Nobody rostered is a QUESTION — it is correct when
+                                somebody is genuinely not part of this rota (the
+                                respiratory shape's three below-floor staff are
+                                exactly that, and the roster is right), and a silent
+                                disaster when it is a mistyped leave date. The panel
+                                cannot tell which, so it must not pretend to: it
+                                names the people and names the four things that
+                                cause it, and lets the roster master decide.
+
+                                It sits BELOW "could not be staffed" and ABOVE the
+                                load table on purpose — that is the order the two
+                                failures matter in, and it puts the callout next to
+                                the `0` in the table it is drawing attention to. */}
+                            {demoRunMeasure && (
+                                <div className={`p-3 rounded-xl border ${
+                                    demoRunMeasure.neverRostered.length > 0
+                                        ? 'bg-amber-50 dark:bg-amber-900/20 border-amber-200 dark:border-amber-800'
+                                        : 'bg-slate-50 dark:bg-slate-900 border-slate-200 dark:border-slate-700'
+                                }`}>
+                                    <p className={`text-[10px] font-black uppercase tracking-widest mb-2 ${
+                                        demoRunMeasure.neverRostered.length > 0 ? 'text-amber-700 dark:text-amber-400' : 'text-slate-400'
+                                    }`}>
+                                        Never rostered ({demoRunMeasure.neverRostered.length})
+                                    </p>
+
+                                    {demoRunMeasure.neverRostered.length === 0 ? (
+                                        <p className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed">
+                                            Everybody in the staff pool holds at least one duty in this run.
+                                        </p>
+                                    ) : (
+                                        <>
+                                            <p className="text-xs text-amber-900 dark:text-amber-200 leading-relaxed">
+                                                <span className="font-bold">{demoRunMeasure.neverRostered.join(', ')}</span>
+                                                {demoRunMeasure.neverRostered.length === 1 ? ' holds' : ' hold'} no duty at all —
+                                                the other colleagues absorbed the work, so nothing looks wrong on the calendar.
+                                            </p>
+                                            <p className="text-[10px] text-amber-700/80 dark:text-amber-400/80 mt-2 leading-relaxed">
+                                                That is <span className="font-bold">correct</span> if they are not part of this
+                                                rota. If it is a surprise, the cause is almost always one of four things: a
+                                                <span className="font-bold"> grade</span> outside every task&apos;s band gate, a
+                                                missing <span className="font-bold">skill</span> a task requires,
+                                                <span className="font-bold"> unavailable dates</span> covering the run, or an
+                                                availability <span className="font-bold">window</span> that falls outside it.
+                                                Their row in the table below reads 0.
+                                            </p>
+                                        </>
+                                    )}
+
+                                    {/* The other two figures `measureRosterLoad` returns, which
+                                        had no reader either. The busiest day is the sentence a
+                                        roster master actually checks a draft against. */}
+                                    {demoRunMeasure.busiestDay && (
+                                        <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-2 pt-2 border-t border-slate-200/70 dark:border-slate-700/70">
+                                            Heaviest single day: <span className="font-bold">{demoRunMeasure.busiestDay}</span>
+                                            {' '}({demoRunMeasure.maxDutiesPerPersonPerDay}{' '}
+                                            {demoRunMeasure.maxDutiesPerPersonPerDay === 1 ? 'duty' : 'duties'}).
+                                        </p>
+                                    )}
+                                </div>
+                            )}
 
                             {/* --- per-person load --- */}
                             <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700">

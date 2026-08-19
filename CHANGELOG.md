@@ -49,7 +49,31 @@ not changed by this release.
 
 ## [Unreleased]
 
-Nothing yet.
+### Fixed
+
+- **`D2/D3/D9` — a colleague who is never rostered is now named on screen.** An amber panel sits
+  between *"could not be staffed"* and the load table: it names them, and names the four things
+  that cause it (a grade outside every task's band gate, a missing required skill, unavailable
+  dates covering the run, an availability window falling outside it). It also reports the two
+  other figures `measureRosterLoad` returns and nothing read — the heaviest single day and its
+  duty count. **This is the first UI caller that function has ever had.**
+
+  ⚠️ **The defect's own description was wrong, and correcting it is most of the value.** The
+  ledger said the engine *"computes this and discards it — there is no UI caller at all"*, which
+  reads as *the information is unavailable*. It was not: `result.load` is built
+  `for (const person of staff)`, so a never-rostered colleague has **always** had a row in the
+  load table reading `0`. Nothing was hidden. The real gap is that a `0` among nine rows does not
+  announce itself — and `D2/D3/D9`'s own scenario, a mistyped availability window quietly removing
+  somebody, is precisely when nobody thinks to look. **So the fix is a callout, not a data pipe**,
+  and a test pins the pre-existing `0` row so a later change cannot "fix" the callout by deleting
+  the thing it points at.
+
+  **Amber rather than red, deliberately.** An unstaffed slot is a failure — work nobody can do.
+  Nobody rostered is a *question*: correct when somebody genuinely is not on this rota (the
+  respiratory shape's three below-floor staff are exactly that), and a silent disaster when it is
+  a typo. The panel cannot tell which, so it does not pretend to.
+
+  3 tests, each verified to fail when the panel is removed.
 
 ---
 
