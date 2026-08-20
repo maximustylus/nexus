@@ -67,11 +67,17 @@ module.exports = {
         // ERROR, not warn: `--max-warnings 0` makes warn and error equivalent
         // at the exit code, and an error is honest about that.
         //
-        // `allowExportNames` names the two non-component exports that are
-        // deliberate rather than accidental, instead of switching the rule off
-        // for their whole files:
+        // `allowExportNames` names the non-component exports that are deliberate
+        // rather than accidental, instead of switching the rule off for their
+        // whole files:
         //   * `useNexus`                  — the canonical provider+hook pair in
         //                                   src/context/NexusContext.jsx;
+        //   * `useTeam`                   — the same pattern in
+        //                                   src/context/TeamContext.jsx, added with
+        //                                   the multi-team rebuild. Its context
+        //                                   object is deliberately NOT exported, so
+        //                                   this hook is the only way in and no
+        //                                   component can read the raw value;
         //   * `buildSwapRequestSignature` — a pure helper in RosterView.jsx,
         //                                   exported so the duplicate-request
         //                                   guard is testable without a DOM
@@ -79,7 +85,7 @@ module.exports = {
         // Any *other* stray export in those files is still reported.
         'react-refresh/only-export-components': ['error', {
             allowConstantExport: true,
-            allowExportNames: ['useNexus', 'buildSwapRequestSignature'],
+            allowExportNames: ['useNexus', 'useTeam', 'buildSwapRequestSignature'],
         }],
 
         // OFF: this codebase does not use prop-types anywhere and has no

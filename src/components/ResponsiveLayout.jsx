@@ -1,5 +1,6 @@
 import { LayoutDashboard, Calendar, Activity, BookOpen, MessageCircle } from 'lucide-react';
 import React from 'react';
+import TeamSwitcher from './TeamSwitcher';
 
 const ResponsiveLayout = ({ children, activeTab, onNavigate, floatingWidgets }) => {
   // 🌟 UPDATED: Archive removed, Feeds added!
@@ -20,6 +21,15 @@ const ResponsiveLayout = ({ children, activeTab, onNavigate, floatingWidgets }) 
         <div className="max-w-7xl mx-auto p-4 md:p-6 lg:p-8 
                         pl-[env(safe-area-inset-left)] pr-[env(safe-area-inset-right)] 
                         pb-32 xl:pb-8">
+          {/*
+            ABOVE the content grid rather than inside it, and on every tab rather
+            than only the dashboard: switching team changes what every number below
+            means, so it must be answerable at a glance from wherever you are. It
+            renders NOTHING — no element, no margin — for the great majority of
+            people, who belong to exactly one team.
+          */}
+          <TeamSwitcher className="mb-4" />
+
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6 animate-in fade-in slide-in-from-bottom-4 duration-700">
             {children}
           </div>

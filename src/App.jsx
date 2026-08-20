@@ -44,6 +44,7 @@ import ResultPage from './components/ResultPage';
 import { STAFF_LIST, STAFF_IDS, MONTHS, checkAccess, TEAM_DIRECTORY } from './utils';
 import AccessGate from './components/AccessGate';
 import LeadRequestsPanel from './components/LeadRequestsPanel';
+import { TeamProvider } from './context/TeamContext';
 import { accessStateFor, canEnterApp } from './utils/accessPolicy';
 import { leadRequestPath } from './utils/teamPaths';
 import { APP_VERSION_LABEL } from './version';
@@ -720,7 +721,15 @@ export default function App() {
   );
 
   return (
-    <>
+    /*
+      TeamProvider wraps EVERYTHING, including the public portal routes, and that is
+      deliberate rather than lazy: with no uid it subscribes to nothing at all and
+      `useTeam()` returns an inert context, so the portal pays nothing. Wrapping only
+      the authenticated branch would mean two trees where a component might or might
+      not have a team in scope, which is how `useTeam()` ends up guarded by
+      `if (team)` at every call site.
+    */
+    <TeamProvider uid={isDemo ? null : user?.uid}>
       <Routes>
         <Route path="/individuals/language" element={<LanguageGate />} />
         <Route path="/individuals/pathway" element={<PathwaySelection />} />
@@ -906,6 +915,6 @@ export default function App() {
         )
       } />
     </Routes>
-    </>
+    </TeamProvider>
   );
 }
