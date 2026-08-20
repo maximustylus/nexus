@@ -2,7 +2,8 @@ import React, { useEffect, useState } from 'react';
 import { db, auth } from '../firebase';
 import { doc, onSnapshot, setDoc } from 'firebase/firestore';
 import { Users, Activity, Zap, X, Save, Lock, Bell, BellRing } from 'lucide-react';
-import { STAFF_LIST } from '../utils';
+import { useTeam } from '../context/TeamContext';
+import { pulsePath, userPath, PULSE_PERIOD_DAILY } from '../utils/teamPaths';
 
 // --- CONTEXT, DATA & FIREBASE MESSAGING ---
 import { useNexus } from '../context/NexusContext';
@@ -10,7 +11,11 @@ import { MOCK_STAFF } from '../data/mockData';
 import { requestForToken } from '../firebase'; // 🛡️ IMPORTING THE HANDSHAKE
 
 const WellbeingView = ({ user }) => {
-    const { isDemo } = useNexus(); 
+    const { isDemo } = useNexus();
+    // WHOSE pulse board. `STAFF_LIST` — ten names hardcoded in `src/utils/index.js`
+    // — is replaced by the active team's own member list, so a department sees its
+    // own people rather than another service's clinical exercise physiologists.
+    const { teamId, members } = useTeam(); 
     const [pulseData, setPulseData] = useState({});
     const [stats, setStats] = useState({ avg: 0, active: 0, zone: 'HEALTHY' });
 
@@ -23,7 +28,9 @@ const WellbeingView = ({ user }) => {
     const [isSubscribing, setIsSubscribing] = useState(false);
     const [hasToken, setHasToken] = useState(false);
 
-    const activeStaffList = isDemo ? MOCK_STAFF.map(s => s.name) : STAFF_LIST;
+    const activeStaffList = isDemo
+        ? MOCK_STAFF.map(s => s.name)
+        : members.map(person => person.displayName).filter(Boolean);
 
     useEffect(() => {
         if (isDemo) {
@@ -39,7 +46,11 @@ const WellbeingView = ({ user }) => {
             setPulseData(mockPulse);
             calculateStats(mockPulse);
         } else {
-            const unsub = onSnapshot(doc(db, 'system_data', 'daily_pulse'), (docSnap) => {
+            // NO TEAM, NO LISTENER — `pulsePath` throws on a null teamId rather than
+            // composing `teams//pulse/daily`, so this window has to be an early return.
+            if (!teamId) return undefined;
+
+            const unsub = onSnapshot(doc(db, ...pulsePath(teamId, PULSE_PERIOD_DAILY)), (docSnap) => {
                 if (docSnap.exists()) {
                     const data = docSnap.data();
                     setPulseData(data);
@@ -49,7 +60,7 @@ const WellbeingView = ({ user }) => {
             
             // 🛡️ Check if the user already has a token saved
             if (user?.uid) {
-                const userUnsub = onSnapshot(doc(db, 'users', user.uid), (docSnap) => {
+                const userUnsub = onSnapshot(doc(db, ...userPath(user.uid)), (docSnap) => {
                     if (docSnap.exists() && docSnap.data().fcmToken) {
                         setHasToken(true);
                     }
@@ -58,7 +69,7 @@ const WellbeingView = ({ user }) => {
             }
             return () => unsub();
         }
-    }, [isDemo, user]);
+    }, [isDemo, user, teamId]);
 
     const calculateStats = (data) => {
         const values = Object.values(data);
@@ -143,7 +154,20 @@ const WellbeingView = ({ user }) => {
             setPulseData(updatedData);
             calculateStats(updatedData);
         } else {
-            await setDoc(doc(db, 'system_data', 'daily_pulse'), {
+            if (!teamId) return;
+            /**
+             * ⚠️ THE MAP INSIDE THIS DOCUMENT IS STILL KEYED BY DISPLAY NAME, and the
+             *    team scope above is what makes that safe enough to leave. Two people
+             *    called Sarah in different departments now write into different
+             *    documents; two in the SAME department would still collide, which the
+             *    lead fixes by editing one of the names.
+             *
+             *    Converting these keys to uid means converting the heatmap that reads
+             *    them and the roster vocabulary they are matched against — the same
+             *    display-name-in-the-roster problem the swap mutator has. Tracked with
+             *    it, not smuggled in here.
+             */
+            await setDoc(doc(db, ...pulsePath(teamId, PULSE_PERIOD_DAILY)), {
                 [selectedStaff]: updatePayload
             }, { merge: true });
         }

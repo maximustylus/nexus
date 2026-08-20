@@ -13,6 +13,14 @@ import { db } from '../firebase';
 import { getFunctions, httpsCallable } from 'firebase/functions';
 import { doc, setDoc, getDoc, updateDoc, arrayUnion } from 'firebase/firestore';
 import { useNexus } from '../context/NexusContext';
+import { useTeam } from '../context/TeamContext';
+import {
+    wellbeingDocPath,
+    anonymousWellbeingPath,
+    pulsePath,
+    userPath,
+    PULSE_PERIOD_DAILY,
+} from '../utils/teamPaths';
 // 🤝 THE COVERAGE-REQUEST SURFACE HAS MOVED OUT OF THIS COMPONENT.
 //
 // Until this change, AURA subscribed to `shift_swaps`, force-opened this panel for
@@ -75,6 +83,9 @@ const SEND_COOLDOWN_MS = 2000;
 // beside the refs below.
 export default function AuraPulseBot({ isOpen, onClose, onOpen: _onOpen, user }) {
     const { isDemo, auraHistory, setAuraHistory } = useNexus();
+    // WHOSE wellbeing record. Null in the sandbox and for a signed-in account with
+    // no team — and in both cases nothing is written at all, which is the point.
+    const { teamId } = useTeam();
 
     // ── State ─────────────────────────────────────────────────────────────────
     const [view,              setView]              = useState('SELECT');
@@ -387,16 +398,41 @@ export default function AuraPulseBot({ isOpen, onClose, onOpen: _onOpen, user })
                 status:     isDemo ? 'demo-active' : 'checked-in',
             };
 
-            if (isDemo || selectedPersona?.id === 'anon') {
-                const heatKey = isDemo ? (activeUser?.name ?? 'Demo') : `Anon_${Math.floor(Math.random() * 9999)}`;
-                const anonRef = doc(db, 'wellbeing_history', '_anonymous_logs');
+            /**
+             * ⚠️ THE SANDBOX NO LONGER WRITES TO THE PRODUCTION DATABASE, and that is
+             *    a fix rather than a regression. Demo mode used to append its logs to
+             *    the real `wellbeing_history/_anonymous_logs` and paint a real name
+             *    onto the real pulse board — every walkthrough leaving a trace in
+             *    clinical data. `RosterView` has stated the contract for months ("NO
+             *    FIRESTORE, EVER"); team scoping makes it unavoidable here, because a
+             *    sandbox visitor has no team and therefore no path to write to.
+             */
+            if (isDemo || !teamId) {
+                setMessages(prev => [...prev, {
+                    role: 'bot',
+                    text: 'Sandbox: nothing was saved. In live mode this would have gone to your own wellbeing record.',
+                    mode: 'COACH',
+                }]);
+                setPendingLog(null);
+                safeTimeout(() => { if (onClose) onClose(); }, 2500);
+                return;
+            }
+
+            if (selectedPersona?.id === 'anon') {
+                const heatKey = `Anon_${Math.floor(Math.random() * 9999)}`;
+                const anonRef = doc(db, ...anonymousWellbeingPath(teamId));
                 await setDoc(anonRef, { last_updated: timestamp }, { merge: true });
                 await updateDoc(anonRef, { logs: arrayUnion(logData) });
-                await setDoc(doc(db, 'system_data', 'daily_pulse'), { [heatKey]: heatmapPayload }, { merge: true });
-            } else if (user?.id) {
-                await setDoc(doc(db, 'wellbeing_history', user.id), { logs: arrayUnion(logData) }, { merge: true });
-                await setDoc(doc(db, 'system_data', 'daily_pulse'), { [user.name]: heatmapPayload }, { merge: true });
-                await setDoc(doc(db, 'users', user.id), {
+                await setDoc(doc(db, ...pulsePath(teamId, PULSE_PERIOD_DAILY)), { [heatKey]: heatmapPayload }, { merge: true });
+            } else if (user?.uid) {
+                // ⚠️ `user.uid`, NOT `user.id`. `user.id` is the DIRECTORY id
+                // ('brandon'), and this block used to write the profile to
+                // `users/brandon` while `App.jsx` read it from `users/{uid}` — the
+                // dual-keying the inventory found. Two documents for one person, one
+                // of them never read, and a profile edit that appeared to do nothing.
+                await setDoc(doc(db, ...wellbeingDocPath(teamId, user.uid)), { logs: arrayUnion(logData) }, { merge: true });
+                await setDoc(doc(db, ...pulsePath(teamId, PULSE_PERIOD_DAILY)), { [user.name]: heatmapPayload }, { merge: true });
+                await setDoc(doc(db, ...userPath(user.uid)), {
                     aura_last_phase:    pendingLog.phase,
                     aura_memory:        pendingLog.action,
                     last_interaction:   new Date(),
@@ -419,7 +455,7 @@ export default function AuraPulseBot({ isOpen, onClose, onOpen: _onOpen, user })
         } finally {
             setLoading(false);
         }
-    }, [pendingLog, isDemo, selectedPersona, user, safeTimeout, setMessages, onClose]);
+    }, [pendingLog, isDemo, teamId, selectedPersona, user, safeTimeout, setMessages, onClose]);
 
     const exportToICS = useCallback((text) => {
         if (!text) return;

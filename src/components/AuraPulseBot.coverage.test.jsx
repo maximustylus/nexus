@@ -32,7 +32,7 @@ import React from 'react';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, cleanup, fireEvent } from '@testing-library/react';
 
-const ctx = vi.hoisted(() => ({ isDemo: true }));
+const ctx = vi.hoisted(() => ({ isDemo: true, teamId: null }));
 
 vi.mock('../firebase', () => ({
     db: { __mock: 'firestore-db' },
@@ -89,10 +89,24 @@ vi.mock('../context/NexusContext', async () => {
     };
 });
 
+// The bot writes wellbeing and pulse under the ACTIVE TEAM now. `teamId` is null
+// in the sandbox, which is what stops a walkthrough writing into clinical data.
+vi.mock('../context/TeamContext', () => ({
+    useTeam: () => ({ teamId: ctx.teamId }),
+}));
+
 import { onSnapshot, collection, query, where, getDoc, updateDoc, setDoc } from 'firebase/firestore';
 import AuraPulseBot from './AuraPulseBot';
 
-const USER = { id: 'derlinder', name: 'Derlinder', title: 'Physiotherapist' };
+const USER = {
+    // `uid` is what the wellbeing document is keyed by now. `id` is the old
+    // DIRECTORY id, left on the fixture because the component still reads it for
+    // AURA's prompt context — but nothing routes on it any more.
+    uid: 'uid-derlinder',
+    id: 'derlinder',
+    name: 'Derlinder',
+    title: 'Physiotherapist',
+};
 
 let onOpenSpy;
 
@@ -201,5 +215,41 @@ describe('its other modes still work', () => {
         renderBot();
         expect(screen.getByTitle(/report a bug/i)).toBeTruthy();
         expect(screen.getByRole('dialog', { name: /aura pulse/i })).toBeTruthy();
+    });
+});
+
+// ─── THE SANDBOX WRITES NOTHING ──────────────────────────────────────────────
+
+describe('the sandbox no longer writes into clinical data', () => {
+    /**
+     * A REAL BEHAVIOUR CHANGE, pinned so it cannot quietly come back. Demo mode used
+     * to append its logs to the production `wellbeing_history/_anonymous_logs` and
+     * paint a demo name onto the production pulse board — so every walkthrough with
+     * a visiting department left a trace in real clinical data. `RosterView` has
+     * carried the contract for months ("NO FIRESTORE, EVER"); team scoping makes it
+     * unavoidable here, because a sandbox visitor has no team and therefore no path
+     * to write to.
+     */
+    it('writes nothing at all in demo mode', () => {
+        ctx.isDemo = true;
+        ctx.teamId = null;
+        renderBot();
+        expect(setDoc).not.toHaveBeenCalled();
+        expect(updateDoc).not.toHaveBeenCalled();
+    });
+
+    /**
+     * The same protection for a state that only exists after the rebuild: signed in,
+     * verified, and not yet invited to any team. There is no team to file a
+     * wellbeing log under, so nothing is filed.
+     */
+    it('writes nothing for a signed-in user who has no team yet', () => {
+        ctx.isDemo = false;
+        ctx.teamId = null;
+        renderBot();
+        expect(setDoc).not.toHaveBeenCalled();
+        expect(updateDoc).not.toHaveBeenCalled();
+        ctx.isDemo = true;
+        ctx.teamId = null;
     });
 });

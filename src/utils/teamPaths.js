@@ -238,8 +238,31 @@ export const swapPath = (teamId, swapId) => under(teamId, TEAM_COLLECTIONS.swaps
  * whole rules suite.
  */
 export const wellbeingPath = (teamId) => under(teamId, TEAM_COLLECTIONS.wellbeing);
+
+/**
+ * The one wellbeing document that is NOT a person: the shared bucket an anonymous
+ * check-in appends to, so somebody can log how they are without it being filed
+ * under their name. Named here rather than passed as a string to
+ * `wellbeingDocPath`, because `assertUid` would wave `_anonymous_logs` through
+ * (it has no spaces) and the exemption would then be invisible.
+ *
+ * The leading underscore keeps it out of any list of real people sorted by uid.
+ */
+export const ANONYMOUS_WELLBEING_ID = '_anonymous_logs';
+export const anonymousWellbeingPath = (teamId) =>
+    under(teamId, TEAM_COLLECTIONS.wellbeing, ANONYMOUS_WELLBEING_ID);
 export const wellbeingDocPath = (teamId, uid) => under(teamId, TEAM_COLLECTIONS.wellbeing, assertUid(uid));
 
+/**
+ * The pulse board. `period` exists so a team can keep more than one snapshot —
+ * today there is exactly one, `daily`, which is what `system_data/daily_pulse`
+ * was: a single live document overwritten in place, with no history.
+ *
+ * Named rather than inlined because it is written in one file and read in another,
+ * and two string literals that must agree is how a board ends up reading a document
+ * nothing writes.
+ */
+export const PULSE_PERIOD_DAILY = 'daily';
 export const pulsePath = (teamId, period) => under(teamId, TEAM_COLLECTIONS.pulse, period);
 export const loadsPath = (teamId) => under(teamId, TEAM_COLLECTIONS.loads);
 export const loadPath = (teamId, uid) => under(teamId, TEAM_COLLECTIONS.loads, assertUid(uid));

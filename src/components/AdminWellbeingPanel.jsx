@@ -1,30 +1,37 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { db } from '../firebase';
 import { collection, getDocs } from 'firebase/firestore';
 import { AlertTriangle, Activity, Download, TrendingUp } from 'lucide-react';
-import { STAFF_LIST } from '../utils';
 import { MOCK_STAFF_NAMES } from '../data/mockData'; // Import Marvel Names
 import { useNexus } from '../context/NexusContext'; // Import Context
+import { useTeam } from '../context/TeamContext';
+import { wellbeingPath } from '../utils/teamPaths';
 
 const AdminWellbeingPanel = () => {
     const { isDemo } = useNexus(); // <--- GET DEMO STATE
+    // The team whose burnout monitor this is. `STAFF_LIST` — ten hardcoded names —
+    // is replaced by its member list, and the member list carries the uid each
+    // wellbeing document is keyed by.
+    const { teamId, members } = useTeam();
     const [historyData, setHistoryData] = useState({});
     const [loading, setLoading] = useState(false);
 
-    // Fetch Full History on Mount (Only if NOT in Demo)
-    useEffect(() => {
-        if (!isDemo) {
-            fetchHistory();
-        }
-    }, [isDemo]);
-
-    const fetchHistory = async () => {
+    /**
+     * Declared BEFORE the effect and wrapped in `useCallback`, which it was not: the
+     * effect called a function hoisted from below it with `[isDemo]` as its whole
+     * dependency list. That was survivable while the collection was global; now that
+     * the read depends on `teamId`, an effect that does not depend on it would keep
+     * showing the PREVIOUS team's burnout table after a switch — on the most
+     * sensitive screen in the app.
+     */
+    const fetchHistory = useCallback(async () => {
+        if (!teamId) { setHistoryData({}); return; }
         setLoading(true);
         try {
-            const querySnapshot = await getDocs(collection(db, 'wellbeing_history'));
+            const querySnapshot = await getDocs(collection(db, ...wellbeingPath(teamId)));
             const historyMap = {};
-            querySnapshot.forEach((doc) => {
-                historyMap[doc.id] = doc.data().logs || [];
+            querySnapshot.forEach((entry) => {
+                historyMap[entry.id] = entry.data().logs || [];
             });
             setHistoryData(historyMap);
         } catch (error) {
@@ -32,7 +39,14 @@ const AdminWellbeingPanel = () => {
         } finally {
             setLoading(false);
         }
-    };
+    }, [teamId]);
+
+    // Fetch Full History on Mount (Only if NOT in Demo)
+    useEffect(() => {
+        if (!isDemo) {
+            fetchHistory();
+        }
+    }, [isDemo, fetchHistory]);
 
     const getLast7Days = () => {
         const dates = [];
@@ -61,8 +75,12 @@ const AdminWellbeingPanel = () => {
         return 80 + (dayIndex % 10);
     };
 
-    // Select the correct list based on mode
-    const activeStaffList = isDemo ? MOCK_STAFF_NAMES : STAFF_LIST;
+    // Select the correct list based on mode. Live rows carry a `uid`, which is what
+    // the direct lookup below needs; demo rows are names only and never look anything
+    // up, because the sandbox generates its numbers.
+    const activeStaffList = isDemo
+        ? MOCK_STAFF_NAMES.map((name) => ({ uid: null, name }))
+        : members.map((person) => ({ uid: person.uid, name: person.displayName }));
 
     return (
         <div className="space-y-6">
@@ -104,7 +122,7 @@ const AdminWellbeingPanel = () => {
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-                            {activeStaffList.map((name) => {
+                            {activeStaffList.map(({ uid, name }) => {
                                 let weekAvg = null;
                                 let dailyEnergies = [];
 
@@ -115,9 +133,17 @@ const AdminWellbeingPanel = () => {
                                     weekAvg = Math.round(dailyEnergies.reduce((a,b)=>a+b,0) / 7);
                                 } else {
                                     // --- REAL LOGIC ---
-                                    const staffId = name.toLowerCase().replace(/[^a-z0-9]/g, '_');
-                                    const dataKey = Object.keys(historyData).find(k => k.includes(staffId)) || staffId;
-                                    const logs = historyData[dataKey] || [];
+                                    /**
+                                     * A DIRECT LOOKUP BY uid, replacing a fuzzy string
+                                     * match. This used to slugify the display name and
+                                     * then take the FIRST key that `.includes()` it —
+                                     * so "Sarah" would happily pick up "sarah_lim"'s
+                                     * record, and a renamed clinician silently showed a
+                                     * flat row that read as "no logs" rather than as
+                                     * "looked in the wrong place". On the most sensitive
+                                     * table in the app.
+                                     */
+                                    const logs = historyData[uid] || [];
                                     const dates = getLast7Days();
                                     
                                     dailyEnergies = dates.map(dateStr => {
