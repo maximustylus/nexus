@@ -910,3 +910,209 @@ exports.publicTriageChat = onCall({
     }
 
 });
+// =============================================================================
+// FUNCTION 6: TEAM PROVISIONING (NEXUS multi-team)
+// =============================================================================
+//
+// The three calls that turn a lead's DECLARATION into a team. They run here, on the
+// Admin SDK, for one reason: a client that can create a team and its own membership
+// is a client that can grant itself access to other people's clinical records.
+// `firestore.rules` denies every one of these writes to every client, deliberately,
+// and these functions bypass the rules by design — which is exactly why the checks
+// below are the real security boundary and not a formality.
+//
+// The decision logic lives in `./teamApproval.js` and is unit-tested in
+// `npm test`. What is left here is wiring: read the documents, call the pure
+// function, write the batch.
+
+var teamApproval = require('./teamApproval');
+
+var SUPER_ADMIN_DOC = 'config/superAdmins';
+
+/**
+ * Loads `config/superAdmins` and answers "may this caller approve?". Throws rather
+ * than returning false so no handler can forget to check the answer.
+ *
+ * ⚠️ A READ FAILURE IS A REFUSAL. If the config document cannot be read, nobody is
+ *    a super-admin. The alternative — treating an unreadable config as permissive —
+ *    would make every signed-in user an approver during an outage.
+ */
+async function requireSuperAdmin(db, request) {
+    if (!request.auth || !request.auth.uid) {
+        throw new HttpsError('unauthenticated', 'Sign in first.');
+    }
+
+    var caller = {
+        uid: request.auth.uid,
+        email: request.auth.token && request.auth.token.email,
+        emailVerified: !!(request.auth.token && request.auth.token.email_verified),
+    };
+
+    var config = null;
+    try {
+        var snap = await db.doc(SUPER_ADMIN_DOC).get();
+        config = snap.exists ? snap.data() : null;
+    } catch (error) {
+        logger.error('[TEAMS] superAdmins unreadable; refusing.', error);
+        throw new HttpsError('permission-denied', 'Approvals are unavailable right now.');
+    }
+
+    if (!teamApproval.isSuperAdmin(config, caller)) {
+        // Deliberately does NOT say whether the config exists or who is on it.
+        throw new HttpsError('permission-denied', 'You are not an approver for NEXUS.');
+    }
+
+    return caller;
+}
+
+/**
+ * The pending queue for the super-admin screen.
+ *
+ * It exists as a FUNCTION rather than a query because `firestore.rules` denies
+ * `list` on `lead_requests` to everybody, including administrators. That is what
+ * keeps the list of super-admins out of the rules file — and keeping a third copy
+ * of the team out of the rules is one of the defects this rebuild removes.
+ */
+exports.listLeadRequests = onCall({ cors: true }, async (request) => {
+    var db = getFirestore();
+    await requireSuperAdmin(db, request);
+
+    var status = request.data && request.data.status ? String(request.data.status) : 'pending';
+    if (['pending', 'approved', 'declined'].indexOf(status) === -1) {
+        throw new HttpsError('invalid-argument', 'Unknown status.');
+    }
+
+    var snap = await db.collection('lead_requests').where('status', '==', status).limit(200).get();
+    var requests = [];
+    snap.forEach(function (docSnap) {
+        requests.push(Object.assign({ id: docSnap.id }, docSnap.data()));
+    });
+
+    return { requests: requests, status: status };
+});
+
+/**
+ * APPROVE — the only path that creates a team.
+ *
+ * IDEMPOTENT ON PURPOSE. A double-clicked button, a retried call and a rerun after a
+ * timeout are all the same event, and all three are likely. Approving an already
+ * approved request returns the same teamId and writes nothing, rather than failing
+ * or creating a second half-made team.
+ *
+ * ONE BATCH. The team, the membership, the user's team list and the decision stamp
+ * either all land or none do. A partial approval is the worst outcome available: a
+ * team that exists with no lead in it, or a lead whose `teamIds` names a team that
+ * was never created — both look like a working system and neither is.
+ */
+exports.approveLeadRequest = onCall({ cors: true }, async (request) => {
+    var db = getFirestore();
+    var caller = await requireSuperAdmin(db, request);
+
+    var requestUid = request.data && request.data.requestUid;
+    if (typeof requestUid !== 'string' || requestUid.trim() === '') {
+        throw new HttpsError('invalid-argument', 'Which request?');
+    }
+
+    var requestSnap = await db.doc('lead_requests/' + requestUid).get();
+    var leadRequest = requestSnap.exists ? Object.assign({ uid: requestSnap.id }, requestSnap.data()) : null;
+
+    // The verification check the rules could not make — see `teamApproval.js`.
+    var authUser = null;
+    if (leadRequest) {
+        try {
+            var record = await admin.auth().getUser(requestUid);
+            authUser = { uid: record.uid, email: record.email, emailVerified: record.emailVerified };
+        } catch (error) {
+            logger.warn('[TEAMS] no auth account for ' + requestUid, error);
+        }
+    }
+
+    var probeId = leadRequest
+        ? teamApproval.slugTeamId(leadRequest.institution, leadRequest.department)
+        : null;
+    var teamExists = false;
+    if (probeId) {
+        var teamSnap = await db.doc('teams/' + probeId).get();
+        teamExists = teamSnap.exists;
+    }
+
+    var verdict = teamApproval.assertApprovable({
+        request: leadRequest,
+        authUser: authUser,
+        teamExists: teamExists,
+    });
+
+    if (!verdict.ok) {
+        if (verdict.code === 'already-approved') {
+            return { success: true, teamId: leadRequest.teamId || probeId, alreadyApproved: true };
+        }
+        // The code travels in `details` so the screen can act on it — `team-exists`
+        // in particular is "invite them instead", not "something went wrong".
+        throw new HttpsError('failed-precondition', verdict.message, { code: verdict.code, teamId: verdict.teamId });
+    }
+
+    var now = new Date().toISOString();
+    var writes = teamApproval.buildApprovalWrites({
+        request: leadRequest,
+        teamId: verdict.teamId,
+        approverUid: caller.uid,
+        now: now,
+    });
+
+    var batch = db.batch();
+    batch.set(db.doc(writes.team.path.join('/')), writes.team.data);
+    batch.set(db.doc(writes.member.path.join('/')), writes.member.data);
+    batch.set(
+        db.doc(writes.user.path.join('/')),
+        {
+            displayName: writes.user.data.displayName,
+            email: writes.user.data.email,
+            // A UNION, never an overwrite: somebody can lead one team and be staff in
+            // another, and an overwrite here would silently drop the other membership.
+            teamIds: admin.firestore.FieldValue.arrayUnion.apply(null, writes.user.data.addTeamIds),
+        },
+        { merge: true },
+    );
+    batch.set(db.doc(writes.decision.path.join('/')), writes.decision.data, { merge: true });
+    await batch.commit();
+
+    logger.info('[TEAMS] approved ' + requestUid + ' → ' + verdict.teamId + ' by ' + caller.uid);
+    return { success: true, teamId: verdict.teamId, alreadyApproved: false };
+});
+
+/**
+ * DECLINE — records the decision and nothing else. No team, no membership.
+ *
+ * The reason is stored because the person sees a screen about it, and "declined with
+ * no explanation" is the version of this that generates an email to the developer.
+ */
+exports.declineLeadRequest = onCall({ cors: true }, async (request) => {
+    var db = getFirestore();
+    var caller = await requireSuperAdmin(db, request);
+
+    var requestUid = request.data && request.data.requestUid;
+    if (typeof requestUid !== 'string' || requestUid.trim() === '') {
+        throw new HttpsError('invalid-argument', 'Which request?');
+    }
+
+    var requestSnap = await db.doc('lead_requests/' + requestUid).get();
+    if (!requestSnap.exists) {
+        throw new HttpsError('not-found', 'No such request.');
+    }
+    if (requestSnap.data().status === 'approved') {
+        // Declining an approved request would leave a live team whose own request
+        // says it was refused. Undoing an approval is a separate, deliberate act.
+        throw new HttpsError('failed-precondition', 'That request was already approved; the team exists.');
+    }
+
+    var write = teamApproval.buildDeclineWrite({
+        requestUid: requestUid,
+        approverUid: caller.uid,
+        reason: request.data && request.data.reason,
+        now: new Date().toISOString(),
+    });
+
+    await db.doc(write.path.join('/')).set(write.data, { merge: true });
+    logger.info('[TEAMS] declined ' + requestUid + ' by ' + caller.uid);
+    return { success: true };
+});

@@ -158,6 +158,31 @@ describe('teamPaths — deriving an id from what a lead types', () => {
     });
 
     /**
+     * BOTH PARTS ARE REQUIRED, and the first draft did not enforce it: it joined
+     * whichever parts were truthy, so `('', 'Physiotherapy')` returned
+     * `'physiotherapy'` — an id with NO INSTITUTION IN IT, which makes Physiotherapy
+     * at KKH and Physiotherapy at SGH the same team. That defeats the single
+     * property the test above asserts. Found by the drift guard in
+     * `functions/teamApproval.test.js`, which compares this against the server copy.
+     */
+    it('refuses a half-filled pair rather than composing an id from one part', () => {
+        expect(teamIdFrom('KKH', '')).toBeNull();
+        expect(teamIdFrom('', 'Physiotherapy')).toBeNull();
+        expect(teamIdFrom('KKH', '   ')).toBeNull();
+        expect(teamIdFrom('  ', 'Physiotherapy')).toBeNull();
+    });
+
+    /**
+     * `normalize('NFKD')` decomposes an accented letter into a base letter plus a
+     * combining mark, so the strip removes the mark and keeps the letter. Without
+     * it, 'Thérapie' becomes 'th-rapie'. Asserted here as well as in the drift test
+     * because it is a property of THIS function, not only of the pair.
+     */
+    it('keeps the letter under an accent rather than dropping it', () => {
+        expect(teamIdFrom('KKH', 'Thérapie')).toBe('kkh-therapie');
+    });
+
+    /**
      * Returns null rather than throwing — unlike every other guard here — because
      * this one IS a user-input path. A lead typing nothing should see a form error,
      * not a crash.

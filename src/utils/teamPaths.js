@@ -178,14 +178,35 @@ const assertYear = (value) => {
  *
  * Returns `null` rather than throwing, because this one IS a user-input path: a
  * lead typing an empty department should see a form error, not a crash.
+ *
+ * ⚠️ BOTH PARTS ARE REQUIRED, and the first draft of this function did not enforce
+ *    it — it used `.filter(Boolean).join('-')`, so `teamIdFrom('KKH', '')` returned
+ *    `'kkh'` and, far worse, `teamIdFrom('', 'Physiotherapy')` returned
+ *    `'physiotherapy'`: a team id with NO INSTITUTION IN IT, which defeats the one
+ *    property this module exists to guarantee — that the same department at two
+ *    hospitals never collides. Found by the drift test in
+ *    `functions/teamApproval.test.js`, which compares this against the server's copy.
+ *
+ * ⚠️ NFKD MUST BE FOLLOWED BY A COMBINING-MARK STRIP, AND MUST MATCH THE SERVER
+ *    COPY EXACTLY. NFKD alone decomposes 'é' into 'e' + U+0301 — and then the
+ *    `[^a-z0-9]` pass turns that leftover mark into a HYPHEN, so 'Thérapie' becomes
+ *    `the-rapie`: a hyphen inserted into the middle of a word. Removing the marks
+ *    between the two steps is what actually yields `therapie`. The original comment
+ *    on this function claimed NFKD alone did that; it does not, and the assertion
+ *    written to prove it is what showed otherwise.
  */
 export const teamIdFrom = (institution, department) => {
     const slug = (value) => (typeof value === 'string' ? value : '')
         .toLowerCase()
         .normalize('NFKD')
+        .replace(/[\u0300-\u036f]/g, '')   // ← drop the marks NFKD just split off
         .replace(/[^a-z0-9]+/g, '-')
         .replace(/^-+|-+$/g, '');
-    const id = [slug(institution), slug(department)].filter(Boolean).join('-');
+
+    const parts = [slug(institution), slug(department)];
+    if (parts.some((part) => part === '')) return null;
+
+    const id = parts.join('-');
     return isTeamId(id) ? id : null;
 };
 

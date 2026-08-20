@@ -146,6 +146,19 @@ module.exports = {
             parserOptions: { sourceType: 'script' },
         },
 
+        // ---- Tests INSIDE functions/ (ESM, testing CommonJS) -------------
+        // Must come AFTER the CommonJS block above, because later overrides win
+        // and that one sets `sourceType: 'script'` for everything under
+        // `functions/**`. `functions/teamApproval.test.js` is collected by Vitest
+        // and so is ESM — it imports both the CJS module under test and the ESM
+        // `src/utils/teamPaths.js` it must not drift from. Without this override
+        // the file's `import` lines are a parse error and `npm run lint` exits 1.
+        {
+            files: ['functions/**/*.test.js', 'functions/**/*.spec.js'],
+            env: { node: true, browser: false, es2021: true },
+            parserOptions: { sourceType: 'module' },
+        },
+
         // ---- TEMPORARY: the V2 engine ------------------------------------
         // `src/utils/rosterEngineV2.js` has two unused bindings at the time this
         // config was written:

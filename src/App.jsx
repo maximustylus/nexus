@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 // `useLocation` is intentionally not imported here: App's only use of it was a
 // dead `isPublicPathway` flag. `<Routes>` subscribes to the location itself.
-import { Routes, Route } from 'react-router-dom';
+import { Routes, Route, useLocation } from 'react-router-dom';
 import { getMessaging, onMessage } from "firebase/messaging";
 
 // FIREBASE
@@ -43,6 +43,7 @@ import ResultPage from './components/ResultPage';
 // UTILITIES
 import { STAFF_LIST, STAFF_IDS, MONTHS, checkAccess, TEAM_DIRECTORY } from './utils';
 import AccessGate from './components/AccessGate';
+import LeadRequestsPanel from './components/LeadRequestsPanel';
 import { accessStateFor, canEnterApp } from './utils/accessPolicy';
 import { leadRequestPath } from './utils/teamPaths';
 import { APP_VERSION_LABEL } from './version';
@@ -74,6 +75,11 @@ const CUSTOM_DOMAIN_ORDER = ['MANAGEMENT', 'CLINICAL', 'RESEARCH', 'EDUCATION'];
 // "we asked and the answer was no", and would flash the verification screen for a
 // moment on every load.
 const NO_AUTH_FACTS = Object.freeze({ email: null, emailVerified: null, teamIds: undefined, leadRequest: null });
+
+// The approval queue. Named once so the route and the gate exemption below cannot
+// drift apart — two string literals that must match is exactly how a page ends up
+// unreachable behind its own gate.
+const APPROVALS_PATH = '/admin/teams';
 
 const CustomBarTooltip = ({ active, payload, label }) => {
     if (active && payload && payload.length) {
@@ -181,6 +187,7 @@ export default function App() {
   // Everything the access decision needs, in one object so the decision is made in
   // one place rather than reconstructed at each render site.
   const [authFacts, setAuthFacts] = useState(NO_AUTH_FACTS);
+  const { pathname } = useLocation();
   const [teamData, setTeamData] = useState([]); 
   const [staffLoads, setStaffLoads] = useState({});
   const [attendanceData, setAttendanceData] = useState({}); 
@@ -508,7 +515,18 @@ export default function App() {
     leadRequest: authFacts.leadRequest,
   });
 
-  if (user && !isDemo && !isLegacyDirectoryMember && !canEnterApp(accessState)) {
+  /**
+   * ⚠️ THE APPROVAL QUEUE IS EXEMPT FROM ITS OWN GATE, and this is not a hole — it
+   * breaks a deadlock. A super-admin who belongs to no team would otherwise be sent
+   * to the holding screen, unable to reach the one page that creates teams, and
+   * therefore unable to approve anybody — including themselves. Every call that
+   * page makes is refused server-side by `requireSuperAdmin` unless the caller is
+   * genuinely an approver, so what is exempted here is the ROUTE, never the
+   * permission.
+   */
+  const isApprovalQueue = pathname === APPROVALS_PATH;
+
+  if (user && !isDemo && !isApprovalQueue && !isLegacyDirectoryMember && !canEnterApp(accessState)) {
     return (
       <AccessGate
         state={accessState}
@@ -709,6 +727,15 @@ export default function App() {
         <Route path="/individuals/form" element={<ConventionalForm />} />
         <Route path="/individuals/chat" element={<AuraChat />} />
         <Route path="/individuals/result" element={<ResultPage />} />
+
+        {/*
+          The approval queue. Reachable by typing the URL rather than from a nav
+          item, because it is a queue somebody clears roughly 28 times and then
+          rarely — a permanent nav entry for it would be clutter for everyone else.
+          The server refuses every call it makes unless the caller is an approver,
+          so the obscurity is convenience, not security.
+        */}
+        <Route path={APPROVALS_PATH} element={user ? <LeadRequestsPanel /> : <WelcomeScreen />} />
 
         <Route path="/" element={
           (!user && !isDemo) ? (
