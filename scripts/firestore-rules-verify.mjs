@@ -23,8 +23,16 @@
 // WHAT IT COVERS. The two blocks changed by the 2026-08-18 console reconciliation
 // (`beta_feedback`, `community_assessments`), the Q6 fix itself (a verified
 // @kkh.com.sg address outside the directory is no longer omnipotent), the roster
-// verb split, and `wellbeing_history`. It does NOT replace the 139-check record in
-// `firestore.rules.README.md` §5.2 — it is the delta plus the headline regressions.
+// verb split, `wellbeing_history`, and — added with the multi-team rebuild — the
+// two onboarding paths in Section 10b (`config`, `lead_requests`). It does NOT
+// replace the 139-check record in `firestore.rules.README.md` §5.2 — it is the
+// delta plus the headline regressions.
+//
+// LAST RUN: 2026-08-20 against the Firestore emulator — 50 passed, 0 failed.
+// Still to come with the rules rewrite: the CROSS-TEAM ISOLATION cases, where a
+// member of team A must get NOTHING from team B — roster, swaps, wellbeing,
+// members. That will be the single most important block in this file, and its
+// absence is why Section 10b is only the onboarding half of the model.
 //
 // ⚠️ ONE TRAP, PAID FOR ONCE. `changedKeys()` is `diff().affectedKeys()` — keys
 // whose VALUE CHANGED, not keys written. The first draft of the "two days in one
@@ -167,6 +175,103 @@ await check('a non-admin member CANNOT list the collection',
     assertFails(getDocs(collection(member(CEP).firestore(), 'wellbeing_history'))));
 await check('the anonymous bucket is not readable, even by an admin',
     assertFails(getDoc(doc(member(ADMIN).firestore(), 'wellbeing_history/_anonymous_logs'))));
+
+// ── 6. ONBOARDING — the multi-team entry points (Section 10b) ────────────────
+//
+// These two blocks are what let somebody who is not one of the ten named people
+// reach NEXUS at all, so the cases below are almost entirely about what they must
+// NOT do. Neither path can create a team, a membership, or any read of clinical
+// data — that stays with the approval Cloud Function on the Admin SDK.
+console.log('\n── config: the domain allowlist is public, the super-admin list is not ──');
+await clean();
+// ⚠️ `c.firestore()` MUST BE CALLED ONCE PER CONTEXT. Calling it twice inside one
+// `withSecurityRulesDisabled` throws `failed-precondition: Firestore has already
+// been started and its settings can no longer be changed` — which surfaces as an
+// uncaught crash halfway through the run rather than as a failed check, so it reads
+// like a rules problem instead of a harness one. Paid for once, on this section.
+await env.withSecurityRulesDisabled(async (c) => {
+    const raw = c.firestore();
+    await setDoc(doc(raw, 'config/domains'), { allowed: ['kkh.com.sg', 'singhealth.com.sg'] });
+    await setDoc(doc(raw, 'config/superAdmins'), { uids: ['someone'] });
+});
+{
+    const anon = env.unauthenticatedContext().firestore();
+    await check('an anonymous visitor CAN read config/domains (the pre-sign-in gate)',
+        assertSucceeds(getDoc(doc(anon, 'config/domains'))));
+    // THE ONE-WORD MISTAKE THIS GUARDS: `allow get: if true` on the collection
+    // would hand out the list of accounts that can approve teams.
+    await check('an anonymous visitor CANNOT read config/superAdmins',
+        assertFails(getDoc(doc(anon, 'config/superAdmins'))));
+    await check('a signed-in member ALSO cannot read config/superAdmins',
+        assertFails(getDoc(doc(member(ADMIN).firestore(), 'config/superAdmins'))));
+    await check('nobody can list config (which would leak superAdmins by another route)',
+        assertFails(getDocs(collection(anon, 'config'))));
+    await check('nobody can widen the allowlist from a client',
+        assertFails(setDoc(doc(member(ADMIN).firestore(), 'config/domains'), { allowed: ['gmail.com'] })));
+}
+
+console.log('\n── lead_requests: a claim, not a grant ──');
+await clean();
+const NEWLEAD = 'lead.rt@kkh.com.sg';
+const newLeadCtx = () => env.authenticatedContext('newleadrt', { email: NEWLEAD, email_verified: false });
+const request = (over = {}) => ({
+    uid: 'newleadrt',
+    email: NEWLEAD,
+    displayName: 'Nur',
+    role: 'lead',
+    institution: 'KKH',
+    department: 'Respiratory Therapy',
+    profession: 'respiratory-therapist',
+    proposedTeamId: 'kkh-respiratory-therapy',
+    status: 'pending',
+    requestedAt: '2026-08-20T00:00:00.000Z',
+    ...over,
+});
+
+// The declaration is written seconds after registration, BEFORE the verification
+// email arrives — so an unverified account must be able to write it. The
+// verification check lives in the approval function, where it can be enforced.
+await check('a brand-new UNVERIFIED account CAN lodge its own request',
+    assertSucceeds(setDoc(doc(newLeadCtx().firestore(), 'lead_requests/newleadrt'), request())));
+await check('and CAN read it back (which is what drives the holding screen)',
+    assertSucceeds(getDoc(doc(newLeadCtx().firestore(), 'lead_requests/newleadrt'))));
+
+// ⚠️ THE FOUR REFUSALS THAT MATTER. Each is a way a client could grant itself a
+// team, and each looks harmless until it is written out as a test.
+await clean();
+await check('CANNOT lodge a request under somebody ELSE\'S uid',
+    assertFails(setDoc(doc(newLeadCtx().firestore(), 'lead_requests/somebodyelse'), request({ uid: 'somebodyelse' }))));
+await check('CANNOT approve itself by writing status: approved',
+    assertFails(setDoc(doc(newLeadCtx().firestore(), 'lead_requests/newleadrt'), request({ status: 'approved' }))));
+await check('CANNOT claim an email other than the one on its token',
+    assertFails(setDoc(doc(newLeadCtx().firestore(), 'lead_requests/newleadrt'), request({ email: 'someone.else@kkh.com.sg' }))));
+await check('CANNOT declare a role outside lead/supervisor/administrator',
+    assertFails(setDoc(doc(newLeadCtx().firestore(), 'lead_requests/newleadrt'), request({ role: 'superuser' }))));
+
+await clean();
+await check('a path-escaping proposedTeamId is refused by the slug pattern',
+    assertFails(setDoc(doc(newLeadCtx().firestore(), 'lead_requests/newleadrt'), request({ proposedTeamId: 'a/../b' }))));
+await check('an extra key is refused (shape pinned)',
+    assertFails(setDoc(doc(newLeadCtx().firestore(), 'lead_requests/newleadrt'), request({ isSuperAdmin: true }))));
+await check('an empty department is refused',
+    assertFails(setDoc(doc(newLeadCtx().firestore(), 'lead_requests/newleadrt'), request({ department: '' }))));
+await check('an anonymous visitor cannot lodge anything',
+    assertFails(setDoc(doc(env.unauthenticatedContext().firestore(), 'lead_requests/anon'), request())));
+
+await clean();
+await env.withSecurityRulesDisabled(async (c) => {
+    await setDoc(doc(c.firestore(), 'lead_requests/newleadrt'), request());
+});
+await check('CANNOT edit its own request after lodging it (no self-approval by update)',
+    assertFails(updateDoc(doc(newLeadCtx().firestore(), 'lead_requests/newleadrt'), { status: 'approved' })));
+await check('CANNOT delete its own request',
+    assertFails(deleteDoc(doc(newLeadCtx().firestore(), 'lead_requests/newleadrt'))));
+await check("a colleague CANNOT read somebody else's request",
+    assertFails(getDoc(doc(member(CEP).firestore(), 'lead_requests/newleadrt'))));
+// Denied even for an admin ON PURPOSE: the super-admin screen is served by a
+// callable function, which is what keeps the list of super-admins out of this file.
+await check('not even an admin can LIST pending requests (the function serves them)',
+    assertFails(getDocs(collection(member(ADMIN).firestore(), 'lead_requests'))));
 
 await env.cleanup();
 console.log(`\n${'═'.repeat(60)}\n  ${pass} passed, ${fail} failed\n${'═'.repeat(60)}`);

@@ -16,9 +16,23 @@ import {
     UserCircle, Stethoscope, PlaySquare, Globe,
     Sparkles, Building2 
 } from 'lucide-react';
+import { doc, setDoc } from 'firebase/firestore';
+import { db } from '../firebase';
 import { useNexus } from '../context/NexusContext';
 import { checkAccess } from '../utils';
-import { APP_VERSION_LABEL } from '../version'; 
+import { useDomainAllowlist } from '../hooks/useDomainAllowlist';
+import {
+    isAllowedEmail,
+    domainRefusalMessage,
+    validateLeadDeclaration,
+    buildLeadRequest,
+    isLeadRole,
+    ROLE_OPTIONS,
+    ROLE_STAFF,
+} from '../utils/accessPolicy';
+import { leadRequestPath } from '../utils/teamPaths';
+import { MOH_PROFESSION_OPTIONS } from '../data/mockData';
+import { APP_VERSION_LABEL } from '../version';
 
 // Hoisted out of the component: a fixed, render-independent list. Inside the
 // body it was reallocated every render, which is what made
@@ -50,6 +64,18 @@ const WelcomeScreen = (props) => {
     const [message, setMessage] = useState(''); 
     const [loading, setLoading] = useState(false);
     const [langIndex, setLangIndex] = useState(0);
+
+    // THE REGISTRATION DECLARATION. `role` defaults to staff because most people
+    // registering are staff, and because defaulting to a lead role would invite
+    // everyone to claim one. The other three are only read when `isLeadRole(role)`.
+    const [role, setRole] = useState(ROLE_STAFF);
+    const [institution, setInstitution] = useState('');
+    const [department, setDepartment] = useState('');
+    const [profession, setProfession] = useState('');
+    const [fieldErrors, setFieldErrors] = useState({});
+
+    // Read before sign-in, and falls back closed — see the hook's header.
+    const { domains } = useDomainAllowlist();
 
     useEffect(() => {
         if (activeTab === 'INDIVIDUALS') {
@@ -103,46 +129,133 @@ const WelcomeScreen = (props) => {
         e.preventDefault();
         setError('');
         setMessage('');
+        setFieldErrors({});
         setLoading(true);
-        
+
         try {
-            if (!email.toLowerCase().endsWith('@kkh.com.sg')) {
-                throw new Error("ACCESS DENIED: Only @kkh.com.sg emails are authorised for NEXUS.");
+            // ── GATE 1: THE INSTITUTION ──────────────────────────────────────────
+            // Was `endsWith('@kkh.com.sg')`, which permanently locked out the two
+            // colleagues in the directory holding `@singhealth.com.sg` addresses.
+            // Now an exact match against an allowlist held as DATA, so onboarding an
+            // institution is a Firestore edit rather than a code deploy.
+            //
+            // ⚠️ This is a registration gate, not a security boundary — it runs in the
+            // browser. `firestore.rules` and the approval function are what actually
+            // protect clinical data. See `accessPolicy.js`.
+            if (!isAllowedEmail(email, domains)) {
+                const refusal = new Error(domainRefusalMessage(email, domains));
+                // Shown verbatim rather than SHOUTED — it is two sentences of guidance,
+                // and uppercasing a list of domains makes it harder to read, not louder.
+                refusal.friendly = true;
+                throw refusal;
             }
 
-            const authorisedUser = checkAccess(email);
-            if (!authorisedUser) {
-                throw new Error("ACCESS DENIED: Email is not registered on the official team roster.");
-            }
+            // GATE 2 IS GONE ON PURPOSE. It used to be `checkAccess(email)` — a
+            // ten-person hardcoded list, which is what made NEXUS a one-team product.
+            // Who you are is now decided AFTER sign-in, by whether a membership
+            // document exists for you; `checkAccess` survives below only as a lookup
+            // for the migrated team, and step 5 of the rebuild deletes it.
 
             if (authView === 'LOGIN') {
                 const userCredential = await signInWithEmailAndPassword(auth, email, password);
-                
+
                 if (!userCredential.user.emailVerified) {
                     await sendEmailVerification(userCredential.user);
                     await signOut(auth);
                     throw new Error("VERIFICATION REQUIRED: We just sent a fresh verification link to your email. Please click it before logging in.");
                 }
 
-                if (onAuthSuccess) onAuthSuccess(authorisedUser);
+                // A known face keeps their directory profile; anyone else is handed the
+                // authenticated user and routed by their access state, not by this list.
+                const knownProfile = checkAccess(email);
+                if (onAuthSuccess) onAuthSuccess(knownProfile || {
+                    id: userCredential.user.uid,
+                    uid: userCredential.user.uid,
+                    name: userCredential.user.displayName || email.split('@')[0],
+                    email: email.toLowerCase(),
+                    role: 'staff',
+                });
 
             } else {
                 if (!name) throw new Error("Please enter your full name.");
                 if (password.length < 6) throw new Error("Password must be 6+ characters.");
-                
+
+                // A LEAD DECLARES HERE, AND THE DECLARATION IS A CLAIM, NOT A GRANT.
+                // Validated before the account is created so a typo does not leave an
+                // orphaned auth user behind.
+                const declaring = isLeadRole(role);
+                const declaration = { role, institution, department, profession };
+                if (declaring) {
+                    const { ok, errors } = validateLeadDeclaration(declaration);
+                    if (!ok) {
+                        setFieldErrors(errors);
+                        throw new Error("Complete your team details so we know what to approve.");
+                    }
+                }
+
                 const userCredential = await createUserWithEmailAndPassword(auth, email, password);
                 await updateProfile(userCredential.user, { displayName: name });
+
+                // THE ACCOUNT NOW EXISTS AND CANNOT BE UNDONE FROM HERE. Everything
+                // below is best-effort, and the failure handling reflects that: a
+                // request that does not lodge must NOT be reported as an error that
+                // implies "try again", because trying again hits
+                // `auth/email-already-in-use` and the person concludes NEXUS is broken
+                // when in fact they have a working account.
+                let lodged = false;
+                if (declaring) {
+                    try {
+                        // Written while the new account is still signed in — the only
+                        // moment it holds a uid and a session at once. `status` is pinned
+                        // to 'pending' inside `buildLeadRequest`; nothing here can approve
+                        // itself, and the Cloud Function refuses to approve an account
+                        // whose email is still unverified.
+                        await setDoc(
+                            doc(db, ...leadRequestPath(userCredential.user.uid)),
+                            {
+                                ...buildLeadRequest({
+                                    uid: userCredential.user.uid,
+                                    email,
+                                    displayName: name,
+                                    ...declaration,
+                                }),
+                                requestedAt: new Date().toISOString(),
+                            },
+                        );
+                        lodged = true;
+                    } catch (writeError) {
+                        console.error('[NEXUS] lead request write failed:', writeError);
+                    }
+                }
+
                 await sendEmailVerification(userCredential.user);
                 await signOut(auth);
-                
-                setMessage("PROFILE CREATED. PLEASE CHECK YOUR CORPORATE INBOX TO VERIFY YOUR EMAIL.");
-                setAuthView('LOGIN'); 
-                setPassword(''); 
+
+                if (declaring && !lodged) {
+                    const partial = new Error(
+                        'Your account was created, but we could not lodge your team request. '
+                        + 'Sign in once you have verified your email and you will be able to ask again — '
+                        + 'do not register a second time.',
+                    );
+                    partial.friendly = true;
+                    throw partial;
+                }
+
+                setMessage(declaring
+                    ? "REQUEST LODGED. VERIFY YOUR EMAIL, THEN WAIT FOR YOUR TEAM TO BE APPROVED — YOU WILL BE ABLE TO INVITE YOUR STAFF ONCE IT IS."
+                    : "PROFILE CREATED. VERIFY YOUR EMAIL, THEN ASK YOUR TEAM LEAD TO INVITE YOU.");
+                setAuthView('LOGIN');
+                setPassword('');
             }
         } catch (err) {
             console.error("Auth Exception:", err);
-            if (auth.currentUser) await signOut(auth); 
-            
+            if (auth.currentUser) await signOut(auth);
+
+            if (err.friendly) {
+                setError(err.message);
+                return;
+            }
+
             let cleanError = err.message;
             if (err.code === 'auth/email-already-in-use') cleanError = "ACCOUNT ALREADY EXISTS. PLEASE SIGN IN.";
             else if (err.code === 'auth/wrong-password' || err.code === 'auth/user-not-found' || err.code === 'auth/invalid-credential') cleanError = "INVALID CREDENTIALS PROVIDED.";
@@ -319,9 +432,109 @@ const WelcomeScreen = (props) => {
                                                         type="text" 
                                                         placeholder="Full Display Name" 
                                                         className="w-full bg-slate-50 dark:bg-[#1f2937] border border-slate-200 dark:border-slate-700 shadow-sm rounded-xl py-4 pl-12 pr-4 text-xs font-bold text-slate-900 dark:text-white outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all placeholder:text-slate-400 dark:placeholder:text-slate-600" 
-                                                        value={name} 
-                                                        onChange={e => setName(e.target.value)} 
+                                                        value={name}
+                                                        onChange={e => setName(e.target.value)}
                                                     />
+                                                </div>
+                                            )}
+
+                                            {/*
+                                              THE DECLARATION. The owner's rule is that only leads,
+                                              supervisors and administrators may create a team, and
+                                              that they say so HERE — at registration — rather than
+                                              being promoted later. Everyone else registers and waits
+                                              to be invited, which is the honest description of what
+                                              happens and so is what the option says.
+                                            */}
+                                            {authView === 'REGISTER' && (
+                                                <div className="space-y-4">
+                                                    <div>
+                                                        <label htmlFor="nexus-role" className="block mb-2 text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest">
+                                                            Your role
+                                                        </label>
+                                                        <select
+                                                            id="nexus-role"
+                                                            value={role}
+                                                            onChange={e => { setRole(e.target.value); setFieldErrors({}); }}
+                                                            className="w-full bg-slate-50 dark:bg-[#1f2937] border border-slate-200 dark:border-slate-700 shadow-sm rounded-xl py-4 px-4 text-xs font-bold text-slate-900 dark:text-white outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all"
+                                                        >
+                                                            {ROLE_OPTIONS.map(option => (
+                                                                <option key={option.id} value={option.id}>{option.label}</option>
+                                                            ))}
+                                                        </select>
+                                                        {fieldErrors.role && (
+                                                            <p className="mt-1 text-[10px] font-bold text-red-600 dark:text-red-400">{fieldErrors.role}</p>
+                                                        )}
+                                                    </div>
+
+                                                    {isLeadRole(role) && (
+                                                        <div className="space-y-4 p-4 rounded-xl border border-indigo-200 dark:border-indigo-800/50 bg-indigo-50/50 dark:bg-indigo-900/10">
+                                                            <p className="text-[10px] font-bold text-slate-600 dark:text-slate-300 leading-relaxed">
+                                                                Tell us which team you run. It is created once an administrator
+                                                                approves your request — after that you invite and remove your own
+                                                                people without waiting for anybody.
+                                                            </p>
+
+                                                            <div>
+                                                                <input
+                                                                    type="text"
+                                                                    placeholder="Institution — e.g. KKH"
+                                                                    aria-label="Institution"
+                                                                    className="w-full bg-white dark:bg-[#1f2937] border border-slate-200 dark:border-slate-700 shadow-sm rounded-xl py-4 px-4 text-xs font-bold text-slate-900 dark:text-white outline-none focus:ring-2 focus:ring-indigo-500 transition-all placeholder:text-slate-400 dark:placeholder:text-slate-600"
+                                                                    value={institution}
+                                                                    onChange={e => setInstitution(e.target.value)}
+                                                                />
+                                                                {fieldErrors.institution && (
+                                                                    <p className="mt-1 text-[10px] font-bold text-red-600 dark:text-red-400">{fieldErrors.institution}</p>
+                                                                )}
+                                                            </div>
+
+                                                            <div>
+                                                                <input
+                                                                    type="text"
+                                                                    placeholder="Department or service — e.g. Respiratory Therapy"
+                                                                    aria-label="Department or service"
+                                                                    className="w-full bg-white dark:bg-[#1f2937] border border-slate-200 dark:border-slate-700 shadow-sm rounded-xl py-4 px-4 text-xs font-bold text-slate-900 dark:text-white outline-none focus:ring-2 focus:ring-indigo-500 transition-all placeholder:text-slate-400 dark:placeholder:text-slate-600"
+                                                                    value={department}
+                                                                    onChange={e => setDepartment(e.target.value)}
+                                                                />
+                                                                {fieldErrors.department && (
+                                                                    <p className="mt-1 text-[10px] font-bold text-red-600 dark:text-red-400">{fieldErrors.department}</p>
+                                                                )}
+                                                            </div>
+
+                                                            <div>
+                                                                {/*
+                                                                  MOH's own vocabulary, already in the tree for the demo
+                                                                  picker. Two of the 28 professions nest, so this walks
+                                                                  groups and options rather than a flat list — a browser
+                                                                  will not let anyone select a group heading, which is
+                                                                  the behaviour we want and would otherwise have to
+                                                                  enforce ourselves.
+                                                                */}
+                                                                <select
+                                                                    aria-label="Profession"
+                                                                    value={profession}
+                                                                    onChange={e => setProfession(e.target.value)}
+                                                                    className="w-full bg-white dark:bg-[#1f2937] border border-slate-200 dark:border-slate-700 shadow-sm rounded-xl py-4 px-4 text-xs font-bold text-slate-900 dark:text-white outline-none focus:ring-2 focus:ring-indigo-500 transition-all"
+                                                                >
+                                                                    <option value="">Profession…</option>
+                                                                    {MOH_PROFESSION_OPTIONS.map(entry => (entry.kind === 'group' ? (
+                                                                        <optgroup key={entry.groupId} label={entry.label}>
+                                                                            {entry.options.map(leaf => (
+                                                                                <option key={leaf.id} value={leaf.id}>{leaf.name}</option>
+                                                                            ))}
+                                                                        </optgroup>
+                                                                    ) : (
+                                                                        <option key={entry.id} value={entry.id}>{entry.name}</option>
+                                                                    )))}
+                                                                </select>
+                                                                {fieldErrors.profession && (
+                                                                    <p className="mt-1 text-[10px] font-bold text-red-600 dark:text-red-400">{fieldErrors.profession}</p>
+                                                                )}
+                                                            </div>
+                                                        </div>
+                                                    )}
                                                 </div>
                                             )}
                                             <div className="relative group">

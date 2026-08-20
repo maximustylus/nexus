@@ -6,7 +6,7 @@ import { getMessaging, onMessage } from "firebase/messaging";
 
 // FIREBASE
 import { db, auth } from './firebase';
-import { collection, onSnapshot, doc, query, where, orderBy, updateDoc } from 'firebase/firestore'; 
+import { collection, onSnapshot, doc, query, where, orderBy, updateDoc, getDoc } from 'firebase/firestore'; 
 import { signOut } from 'firebase/auth';
 
 // CHARTS & ICONS
@@ -42,6 +42,9 @@ import ResultPage from './components/ResultPage';
 
 // UTILITIES
 import { STAFF_LIST, STAFF_IDS, MONTHS, checkAccess, TEAM_DIRECTORY } from './utils';
+import AccessGate from './components/AccessGate';
+import { accessStateFor, canEnterApp } from './utils/accessPolicy';
+import { leadRequestPath } from './utils/teamPaths';
 import { APP_VERSION_LABEL } from './version';
 
 // ==========================================
@@ -66,6 +69,11 @@ const STATUS_COLORS = {
 };
 
 const CUSTOM_DOMAIN_ORDER = ['MANAGEMENT', 'CLINICAL', 'RESEARCH', 'EDUCATION'];
+
+// Signed out. `emailVerified: null` rather than `false` on purpose — `false` means
+// "we asked and the answer was no", and would flash the verification screen for a
+// moment on every load.
+const NO_AUTH_FACTS = Object.freeze({ email: null, emailVerified: null, teamIds: undefined, leadRequest: null });
 
 const CustomBarTooltip = ({ active, payload, label }) => {
     if (active && payload && payload.length) {
@@ -170,6 +178,9 @@ export default function App() {
   
   const [user, setUser] = useState(null);
   const [authLoading, setAuthLoading] = useState(true)
+  // Everything the access decision needs, in one object so the decision is made in
+  // one place rather than reconstructed at each render site.
+  const [authFacts, setAuthFacts] = useState(NO_AUTH_FACTS);
   const [teamData, setTeamData] = useState([]); 
   const [staffLoads, setStaffLoads] = useState({});
   const [attendanceData, setAttendanceData] = useState({}); 
@@ -179,19 +190,48 @@ export default function App() {
   useEffect(() => {
     let unsubUserDoc = null;
 
+    /**
+     * A ONE-SHOT READ, not a listener. A lead request changes at most twice in its
+     * life — once when it is made and once when it is decided — and the person is
+     * looking at a screen with a "check again" button, so a live subscription would
+     * cost a permanent connection to save a click that is already offered.
+     *
+     * A read failure is treated as "no request", which routes to the invite screen
+     * rather than to a spinner. That is the right way to be wrong: the invite screen
+     * tells a waiting lead to ask an administrator, which is what they should do
+     * anyway if their request has gone missing.
+     */
+    const readLeadRequest = async (uid) => {
+      try {
+        const snapshot = await getDoc(doc(db, ...leadRequestPath(uid)));
+        setAuthFacts((prev) => ({ ...prev, leadRequest: snapshot.exists() ? snapshot.data() : null }));
+      } catch (error) {
+        console.warn('[NEXUS] lead request unreadable; treating as none.', error);
+        setAuthFacts((prev) => ({ ...prev, leadRequest: null }));
+      }
+    };
+
     const unsubscribe = auth.onAuthStateChanged((u) => {
       if (u) {
         try {
           const initialProfile = checkAccess(u.email);
           const userDocRef = doc(db, 'users', u.uid);
-          
+
+          // The two facts that decide whether this person sees the app or a holding
+          // screen. `emailVerified` comes from the auth token rather than a document,
+          // because a document is something a client can write.
+          setAuthFacts((prev) => ({ ...prev, emailVerified: u.emailVerified, email: u.email }));
+          readLeadRequest(u.uid);
+
           unsubUserDoc = onSnapshot(userDocRef, (docSnap) => {
             if (docSnap.exists()) {
               setUser({ ...initialProfile, ...docSnap.data(), uid: u.uid });
+              setAuthFacts((prev) => ({ ...prev, teamIds: docSnap.data().teamIds }));
             } else {
               setUser({ ...initialProfile, uid: u.uid });
+              setAuthFacts((prev) => ({ ...prev, teamIds: undefined }));
             }
-            setAuthLoading(false); 
+            setAuthLoading(false);
           }, (error) => {
             console.error("Error fetching user data:", error);
             if (auth.currentUser) {
@@ -214,6 +254,7 @@ export default function App() {
         setUser(null);
         setNotifications([]);
         setIsAdminOpen(false);
+        setAuthFacts(NO_AUTH_FACTS);
         setAuthLoading(false);
       }
     });
@@ -440,6 +481,43 @@ export default function App() {
           <div className="animate-spin w-10 h-10 border-4 border-indigo-600 rounded-full border-t-transparent"></div>
       </div>
   );
+
+  /**
+   * ── THE ACCESS GATE, AND THE BRIDGE THAT KEEPS THE LIVE TEAM WORKING ─────────
+   *
+   * `accessStateFor` decides where a signed-in person lands. But the four clinicians
+   * currently rostering on NEXUS have no `teamIds` yet — the migration that gives
+   * them one has not run — so enforcing this unconditionally would take a live
+   * roster away from practising staff the moment this deploys. That is precisely the
+   * irreversible failure the rebuild plan is written to avoid.
+   *
+   * So the legacy directory is a BRIDGE: anyone `checkAccess` still recognises goes
+   * straight through, exactly as today. Only the population that could not exist
+   * before — anybody else at an allowlisted institution — is routed by state.
+   *
+   * ⚠️ DELETE THIS BRIDGE when `scripts/migrate-to-teams.cjs` has run and the ten
+   * directory members hold `teamIds`. Leaving it in place after that would mean ten
+   * named email addresses permanently bypass membership checks, which is the
+   * hardcoded-team defect coming back in a quieter form. The trigger is concrete:
+   * the migration's own verification step.
+   */
+  const isLegacyDirectoryMember = !isDemo && !!checkAccess(user?.email);
+  const accessState = accessStateFor({
+    emailVerified: authFacts.emailVerified,
+    teamIds: authFacts.teamIds,
+    leadRequest: authFacts.leadRequest,
+  });
+
+  if (user && !isDemo && !isLegacyDirectoryMember && !canEnterApp(accessState)) {
+    return (
+      <AccessGate
+        state={accessState}
+        email={authFacts.email}
+        onRetry={() => window.location.reload()}
+        onSignOut={() => signOut(auth)}
+      />
+    );
+  }
 
   const renderDashboardView = () => (
     <>

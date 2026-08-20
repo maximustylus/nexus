@@ -1000,6 +1000,104 @@ service cloud.firestore {
 
 
     // ==========================================================================
+    // SECTION 10b — ONBOARDING: THE ALLOWLIST AND THE LEAD DECLARATION
+    // ==========================================================================
+    //
+    // These two paths are what let somebody who is not already one of ten named
+    // people arrive at NEXUS at all. They are the FIRST pieces of the multi-team
+    // model to land, and they are deliberately the least powerful ones: neither can
+    // create a team, a membership, or any access to clinical data. That remains the
+    // exclusive job of the approval Cloud Function on the Admin SDK.
+
+    // ── config/domains — READ BY AN ANONYMOUS VISITOR, ON PURPOSE ─────────────
+    // `useDomainAllowlist.js` reads this BEFORE sign-in, because the registration
+    // form has to know which institutions NEXUS serves in order to say "we are not
+    // open to nuh.edu.sg yet" instead of failing opaquely. A list of hospital
+    // domains is not a secret and hiding it would only mean nobody could be told
+    // why they were refused.
+    //
+    // ⚠️ `get` IS PINNED TO ONE DOCUMENT ID, AND `list` IS DENIED. Both matter.
+    //    `config/superAdmins` names the people who can approve teams — a reader who
+    //    could list `config`, or `get` any docId, would harvest exactly the accounts
+    //    worth phishing. `allow get: if true` on the whole collection is the
+    //    obvious, wrong, one-word version of this rule.
+    //
+    // Nothing may write it. The allowlist changes when an institution is onboarded,
+    // which is a console or Admin SDK action, not a client one.
+    match /config/{docId} {
+      allow get: if docId == 'domains';
+      allow list: if false;
+      allow write: if false;
+    }
+
+    // ── lead_requests/{uid} — A CLAIM, NOT A GRANT ───────────────────────────
+    // Written once by `WelcomeScreen.jsx` at registration, while the brand-new
+    // account is momentarily signed in; read back by `App.jsx` to decide which
+    // holding screen the person sees.
+    //
+    // WHY `isVerifiedStaff()`-STYLE VERIFICATION IS *NOT* REQUIRED HERE, which
+    // looks like a hole and is not: this document is created seconds after
+    // `createUserWithEmailAndPassword`, before the verification email has even
+    // arrived. Requiring `email_verified` would make the declaration impossible to
+    // write at the only moment the flow has to write it. The verification check
+    // lives where it can actually be enforced — the approval function reads
+    // `getUser(uid).emailVerified` on the Admin SDK and refuses to approve an
+    // unverified account. A pending request from an unverified address grants
+    // nothing and reads nothing.
+    //
+    // THE DOCUMENT ID IS THE UID. That is the whole authorization model of this
+    // block: `uid == request.auth.uid` means a caller can only ever write their own
+    // request, cannot enumerate anyone else's, and cannot forge a request on behalf
+    // of a colleague to get a team created in their name.
+    //
+    // `status` IS PINNED TO 'pending' AND `update` IS DENIED. A client that could
+    // set its own status to 'approved', or edit it afterwards, would be a client
+    // that grants itself a team. The approval path is the Admin SDK, which bypasses
+    // these rules by design and is the only thing that should.
+    //
+    // ⚠️ KNOWN GAP, ACCEPTED: someone whose request is DECLINED cannot re-request —
+    //    `create` does not apply to an existing document and `update` is denied. The
+    //    declined screen tells them to ask their department lead instead, which is
+    //    the better route anyway. If re-declaration is wanted later, the narrow form
+    //    is `allow update: if ... resource.data.status == 'declined' &&
+    //    request.resource.data.status == 'pending'` — not a blanket update.
+    //
+    // `list` IS DENIED, including for administrators. The super-admin screen gets
+    // pending requests from a callable function rather than from a query, so this
+    // file never needs to know who the super-admins are — which is what keeps the
+    // third copy of the team out of the rules.
+    match /lead_requests/{uid} {
+      allow get: if isSignedIn() && uid == request.auth.uid;
+      allow list: if false;
+      allow create: if isSignedIn()
+                    && uid == request.auth.uid
+                    && request.resource.data.keys().hasOnly([
+                         'uid', 'email', 'displayName', 'role', 'institution',
+                         'department', 'profession', 'proposedTeamId', 'status',
+                         'requestedAt'
+                       ])
+                    && request.resource.data.uid == request.auth.uid
+                    && request.resource.data.email == callerEmail()
+                    && request.resource.data.status == 'pending'
+                    && request.resource.data.role in ['lead', 'supervisor', 'administrator']
+                    && request.resource.data.institution is string
+                    && request.resource.data.institution.size() > 0
+                    && request.resource.data.institution.size() <= 120
+                    && request.resource.data.department is string
+                    && request.resource.data.department.size() > 0
+                    && request.resource.data.department.size() <= 120
+                    && request.resource.data.displayName is string
+                    && request.resource.data.displayName.size() <= 120
+                    && request.resource.data.profession is string
+                    && request.resource.data.profession.size() <= 120
+                    && request.resource.data.proposedTeamId is string
+                    && request.resource.data.proposedTeamId.matches('^[a-z0-9]+(-[a-z0-9]+)*$');
+      allow update: if false;           // approval is Admin SDK only — see above.
+      allow delete: if false;
+    }
+
+
+    // ==========================================================================
     // SECTION 11 — PATHS THE CLIENT MUST NOT TOUCH AT ALL
     // ==========================================================================
     //
