@@ -14,6 +14,11 @@
  *   team          its document, for a heading.
  *   teams         every team the user is in, for the switcher.
  *   membership    the caller's own `members/{uid}` document — role, grade, FTE.
+ *   members       everyone in the active team. THIS IS WHAT REPLACES
+ *                 `TEAM_DIRECTORY` — ten people hardcoded in `src/utils/index.js`
+ *                 with nine consumers, and the reason onboarding a clinician used
+ *                 to require a code deploy.
+ *   memberUidByName  for controls that let somebody pick a colleague by name.
  *   isLead        whether they may configure and invite. Derived here, once.
  *   canActOn(id)  ⚠️ the guard anything that WRITES must consult.
  *   switchTeam    changes the active team, refusing ids the user is not in.
@@ -33,9 +38,9 @@
  */
 
 import React, { createContext, useContext, useState, useEffect, useMemo, useCallback } from 'react';
-import { doc, onSnapshot } from 'firebase/firestore';
+import { doc, collection, onSnapshot } from 'firebase/firestore';
 import { db } from '../firebase';
-import { teamPath, memberPath, userPath } from '../utils/teamPaths';
+import { teamPath, memberPath, membersPath, userPath } from '../utils/teamPaths';
 import {
     resolveActiveTeam,
     normaliseTeamIds,
@@ -67,6 +72,7 @@ export const TeamProvider = ({ uid, children }) => {
     const [team, setTeam] = useState(null);
     const [teams, setTeams] = useState({});
     const [membership, setMembership] = useState(null);
+    const [members, setMembers] = useState([]);
     const [loading, setLoading] = useState(true);
 
     // ── 1. Which teams does this person belong to? ───────────────────────────
@@ -132,6 +138,42 @@ export const TeamProvider = ({ uid, children }) => {
         return () => { unsubTeam(); unsubMember(); };
     }, [uid, activeTeamId]);
 
+    /**
+     * ── 2b. THE MEMBER LIST — WHAT REPLACES `TEAM_DIRECTORY` ─────────────────
+     *
+     * Ten people hardcoded in `src/utils/index.js`, with nine consumers, becomes a
+     * subcollection a lead maintains themselves. This is the single change that
+     * makes onboarding a clinician stop being a code deploy.
+     *
+     * Sorted by display name so every list built from it — roster staff pool,
+     * swap target picker, load editor — presents people in the same order. Lists
+     * that reorder between screens make a reader check twice.
+     *
+     * `uid` is the key and `displayName` is a field, which is the whole point: a
+     * rename changes what is rendered and breaks nothing that routes.
+     */
+    useEffect(() => {
+        if (!activeTeamId) {
+            setMembers([]);
+            return undefined;
+        }
+
+        return onSnapshot(
+            collection(db, ...membersPath(activeTeamId)),
+            (snapshot) => setMembers(
+                snapshot.docs
+                    .map((entry) => ({ uid: entry.id, ...entry.data() }))
+                    .sort((a, b) => String(a.displayName || '').localeCompare(String(b.displayName || ''), 'en')),
+            ),
+            (error) => {
+                // Empty, not stale. A member list left over from a team the caller
+                // can no longer read would put the wrong names in a staff pool.
+                console.error('[NEXUS] could not read the member list.', error);
+                setMembers([]);
+            },
+        );
+    }, [activeTeamId]);
+
     // ── 3. Every team the user is in, for the switcher ───────────────────────
     // Only subscribed when there is more than one; a solo member's switcher is
     // never rendered, so paying for the reads would be pure waste.
@@ -169,6 +211,26 @@ export const TeamProvider = ({ uid, children }) => {
         teamIds,
         teams: teamIds.map((id) => teams[id] || { id }),
         membership,
+        members,
+        /**
+         * Name → uid, for the one direction the app genuinely needs: a control that
+         * lets somebody PICK a colleague by name still has to record WHO that is.
+         * Built once here so no screen writes its own lookup over whatever list it
+         * happened to have in scope.
+         *
+         * ⚠️ TWO MEMBERS WITH THE SAME DISPLAY NAME RESOLVE TO ONE UID — the one
+         *    that sorts first, deterministically (the reverse is so the first
+         *    entry, not the last, survives `fromEntries`). Team-scoping has already
+         *    removed the collision that mattered: a Sarah at KKH and a Sarah at SGH
+         *    are now in different subcollections and cannot touch each other's data.
+         *    What remains is two Sarahs in ONE department, where the lead owns the
+         *    member list and can write "Sarah T." — a fix that takes ten seconds and
+         *    needs no deploy. It is a real limitation, it is bounded, and it is
+         *    named rather than papered over.
+         */
+        memberUidByName: Object.fromEntries(
+            [...members].reverse().map((person) => [person.displayName, person.uid]),
+        ),
         // No membership document means no lead powers, which is the correct answer
         // while the document is still loading as well as when it is genuinely absent.
         isLead: membership?.role === 'lead',
@@ -176,7 +238,7 @@ export const TeamProvider = ({ uid, children }) => {
         showSwitcher: needsSwitcher(teamIds),
         switchTeam,
         loading,
-    }), [activeTeamId, team, teamIds, teams, membership, switchTeam, loading]);
+    }), [activeTeamId, team, teamIds, teams, membership, members, switchTeam, loading]);
 
     return <TeamContext.Provider value={value}>{children}</TeamContext.Provider>;
 };
@@ -193,6 +255,8 @@ const INERT = Object.freeze({
     teamIds: [],
     teams: [],
     membership: null,
+    members: [],
+    memberUidByName: {},
     isLead: false,
     canActOn: () => false,
     showSwitcher: false,

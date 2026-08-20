@@ -244,12 +244,35 @@ export const LIVE_ROSTER_DEFAULTS = Object.freeze({
  *
  * Always returns fresh arrays, so a later `setConfig` cannot mutate
  * LIVE_ROSTER_DEFAULTS through a shared reference.
+ *
+ * ── `live` — THE MULTI-TEAM ARGUMENT ─────────────────────────────────────────
+ *
+ * `LIVE_ROSTER_DEFAULTS` above is a FOURTH hardcoded copy of one department: four
+ * names and four task codes belonging to Sport & Exercise Medicine at KKH. It sits
+ * alongside `TEAM_DIRECTORY`, `ADMIN_EMAILS` and the directory in
+ * `firestore.rules`, and it is the copy that decides who a roster can be generated
+ * FOR — so a respiratory therapy lead pressing Generate would have staffed their
+ * week with four clinical exercise physiologists from another service.
+ *
+ * The second parameter lets the caller pass the ACTIVE TEAM's own people and tasks.
+ * It is optional, and omitting it falls back to the hardcoded four, which is what
+ * keeps the pre-migration bridge working and every existing test in
+ * `auraEngine.guards.test.js` passing unchanged.
+ *
+ * ⚠️ DELETE THE FALLBACK once the migration has run and every team supplies its
+ *    own. Until then it is the reason a team with an empty member list still gets a
+ *    usable wizard rather than an empty one.
  */
-export const restoreLiveRosterConfig = (prev) => ({
-    ...(prev || LIVE_ROSTER_DEFAULTS),
-    staff: [...LIVE_ROSTER_DEFAULTS.staff],
-    tasks: [...LIVE_ROSTER_DEFAULTS.tasks],
-});
+export const restoreLiveRosterConfig = (prev, live) => {
+    const pick = (value, fallback) => (
+        Array.isArray(value) && value.length > 0 ? [...value] : [...fallback]
+    );
+    return {
+        ...(prev || LIVE_ROSTER_DEFAULTS),
+        staff: pick(live?.staff, LIVE_ROSTER_DEFAULTS.staff),
+        tasks: pick(live?.tasks, LIVE_ROSTER_DEFAULTS.tasks),
+    };
+};
 
 /** True only for a real calendar date written exactly as `YYYY-MM-DD`. */
 const isRealDateKey = (value) => {

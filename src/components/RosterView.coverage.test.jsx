@@ -79,6 +79,27 @@ vi.mock('../context/NexusContext', () => ({
     NexusProvider: ({ children }) => children,
 }));
 
+// ── TEAM SCOPE ────────────────────────────────────────────────────────────────
+// Every live Firestore path in RosterView is composed from `teamId` now, and the
+// swap listener routes by `targetUid` rather than by display name. Mocked here
+// rather than wrapped in a real provider: these tests are about what the roster
+// DOES, and `TeamContext.test.jsx` owns how a team is resolved.
+const TEAM_ID = 'kkh-sport-exercise-medicine';
+const TEAM_MEMBERS = [
+    { uid: 'uid-brandon', displayName: 'Brandon' },
+    { uid: 'uid-derlinder', displayName: 'Derlinder' },
+    { uid: 'uid-fadzlynn', displayName: 'Fadzlynn' },
+    { uid: 'uid-ying-xian', displayName: 'Ying Xian' },
+];
+vi.mock('../context/TeamContext', () => ({
+    useTeam: () => ({
+        teamId: TEAM_ID,
+        members: TEAM_MEMBERS,
+        memberUidByName: Object.fromEntries(TEAM_MEMBERS.map((m) => [m.displayName, m.uid])),
+    }),
+}));
+
+
 import {
     doc,
     collection,
@@ -100,7 +121,10 @@ const today = new Date();
 const DATE_KEY = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-15`;
 const OTHER_DATE_KEY = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-16`;
 
-const ROSTER_PATH = 'system_data/roster_2026';
+// Was `system_data/roster_2026` — one document for the whole installation. The
+// year is now the document ID beneath the team rather than part of a global name.
+const ROSTER_PATH = `teams/${TEAM_ID}/rosters/2026`;
+const SWAPS_PATH = `teams/${TEAM_ID}/swaps`;
 
 /** Brandon leads EFT with Ying Xian; a second shift that day belongs to nobody in this story. */
 const MODERN_ROSTER = () => ({
@@ -134,6 +158,9 @@ const LEGACY_ROSTER = () => ({
 const PENDING_REQUEST = {
     requestedBy: 'Brandon',
     targetStaff: 'Derlinder',
+    // Written beside `targetStaff`, not instead of it: the listener routes on this,
+    // the roster mutator still matches the day arrays on the NAME.
+    targetUid: 'uid-derlinder',
     originalShiftDate: DATE_KEY,
     originalTask: 'EFT',
     swapRole: 'lead',
@@ -142,7 +169,7 @@ const PENDING_REQUEST = {
     timestamp: 'mock-timestamp',
 };
 
-const DERLINDER = { name: 'Derlinder', role: 'staff', email: 'derlinder@example.org' };
+const DERLINDER = { uid: 'uid-derlinder', name: 'Derlinder', role: 'staff', email: 'derlinder@example.org' };
 
 // --- MOCK STATE --------------------------------------------------------------
 
@@ -150,7 +177,7 @@ const DERLINDER = { name: 'Derlinder', role: 'staff', email: 'derlinder@example.
 let rosterDoc;
 /** Whether that document exists at all. */
 let rosterExists;
-/** The PENDING `shift_swaps` documents the listener query returns. */
+/** The PENDING swap documents the listener query returns. */
 let swapDocs;
 /** Set false to simulate a roster write that resolves without landing. */
 let rosterWritesLand;
@@ -192,7 +219,10 @@ beforeEach(() => {
     callLog = [];
 
     doc.mockImplementation((_db, ...segments) => ({ __mock: 'docRef', path: segments.join('/') }));
-    collection.mockImplementation((_db, name) => ({ __mock: 'collectionRef', path: name }));
+    // ALL the segments, joined. It used to take `(_db, name)` because every
+    // collection in the app was at the root; a team-scoped path is four segments and
+    // a one-segment mock silently records `teams` as the whole path.
+    collection.mockImplementation((_db, ...segments) => ({ __mock: 'collectionRef', path: segments.join('/') }));
     query.mockImplementation((ref, ...constraints) => ({ __mock: 'query', ref, constraints }));
     where.mockImplementation((field, op, value) => ({ __mock: 'where', field, op, value }));
 
@@ -261,7 +291,7 @@ const rosterPatches = () =>
 
 const swapPatches = () =>
     updateDoc.mock.calls
-        .filter(([ref]) => ref.path.startsWith('shift_swaps/'))
+        .filter(([ref]) => ref.path.startsWith(`${SWAPS_PATH}/`))
         .map(([ref, patch]) => ({ path: ref.path, patch }));
 
 // ─── 1. THE REQUEST IS IN THE ROSTER ──────────────────────────────────────────
@@ -271,8 +301,8 @@ describe('a pending coverage request renders in the roster', () => {
         render(<RosterView user={DERLINDER} />);
 
         // The listener query: PENDING requests aimed at the signed-in user.
-        expect(collection).toHaveBeenCalledWith(expect.anything(), 'shift_swaps');
-        expect(where).toHaveBeenCalledWith('targetStaff', '==', 'Derlinder');
+        expect(collection).toHaveBeenCalledWith(expect.anything(), 'teams', TEAM_ID, 'swaps');
+        expect(where).toHaveBeenCalledWith('targetUid', '==', 'uid-derlinder');
         expect(where).toHaveBeenCalledWith('status', '==', 'PENDING');
 
         const card = coverageCard();
@@ -340,7 +370,7 @@ describe('accepting runs the verified sequence and only then reports success', (
             `getDoc:${ROSTER_PATH}`,
             `updateDoc:${ROSTER_PATH}`,
             `getDoc:${ROSTER_PATH}`,
-            'updateDoc:shift_swaps/swap-1',
+            `updateDoc:${SWAPS_PATH}/swap-1`,
         ]);
         expect(swapPatches()[0].patch.status).toBe('APPROVED');
         expect(typeof swapPatches()[0].patch.approvedAt).toBe('string');
@@ -435,7 +465,7 @@ describe('accepting runs the verified sequence and only then reports success', (
             `getDoc:${ROSTER_PATH}`,
             `updateDoc:${ROSTER_PATH}`,
             `getDoc:${ROSTER_PATH}`,
-            'updateDoc:shift_swaps/swap-1',
+            `updateDoc:${SWAPS_PATH}/swap-1`,
         ]);
     });
 
@@ -476,7 +506,7 @@ describe('accepting runs the verified sequence and only then reports success', (
             releaseRead();
         });
         await waitFor(() => expect(swapPatches()).toHaveLength(1));
-        expect(swapPatches()[0].path).toBe('shift_swaps/swap-1');
+        expect(swapPatches()[0].path).toBe(`${SWAPS_PATH}/swap-1`);
         // …and the other one is answerable again.
         expect(coverButton('NC', 'Fadzlynn').disabled).toBe(false);
     });
@@ -500,7 +530,7 @@ describe('accepting runs the verified sequence and only then reports success', (
         fireEvent.click(coverButton('EFT', 'Brandon'));
         await waitFor(() => expect(swapPatches()).toHaveLength(1));
 
-        expect(swapPatches()[0].path).toBe('shift_swaps/swap-1');
+        expect(swapPatches()[0].path).toBe(`${SWAPS_PATH}/swap-1`);
         expect(requestCard('swap-1')).toBeNull();
         expect(requestCard('swap-2')).not.toBeNull();
         expect(screen.getByText(/cover asked of you \(1\)/i)).toBeTruthy();
@@ -631,7 +661,7 @@ describe('a swap that cannot be applied leaves the request PENDING and says so',
             `getDoc:${ROSTER_PATH}`,
             `updateDoc:${ROSTER_PATH}`,
             `getDoc:${ROSTER_PATH}`,
-            'updateDoc:shift_swaps/swap-1',
+            `updateDoc:${SWAPS_PATH}/swap-1`,
         ]);
     });
 
@@ -664,11 +694,11 @@ describe('declining does not touch the roster document', () => {
 
         await waitFor(() => expect(swapPatches()).toHaveLength(1));
         expect(swapPatches()[0]).toEqual({
-            path: 'shift_swaps/swap-1',
+            path: `${SWAPS_PATH}/swap-1`,
             patch: { status: 'DENIED' },
         });
         // The roster was neither read nor written on this path.
-        expect(callLog).toEqual(['updateDoc:shift_swaps/swap-1']);
+        expect(callLog).toEqual([`updateDoc:${SWAPS_PATH}/swap-1`]);
         expect(rosterPatches()).toEqual([]);
         expect(rosterDoc).toEqual(MODERN_ROSTER());
 
@@ -778,9 +808,15 @@ describe('demo mode has no coverage surface at all', () => {
 // ─── 8. WHO THE REQUEST IS FOR ────────────────────────────────────────────────
 
 describe('the listener is keyed on the signed-in user', () => {
+    /**
+     * KEYED ON `uid`, NOT ON `name`. The old query was
+     * `where('targetStaff','==',user.name)`, so editing your display name in your
+     * profile silently stopped every coverage request from reaching you — and a
+     * query matching nothing is indistinguishable from nobody having asked.
+     */
     it('asks for the requests aimed at whoever is signed in', () => {
-        render(<RosterView user={{ name: 'Ying Xian', role: 'staff' }} />);
-        expect(where).toHaveBeenCalledWith('targetStaff', '==', 'Ying Xian');
+        render(<RosterView user={{ uid: 'uid-ying-xian', name: 'Ying Xian', role: 'staff' }} />);
+        expect(where).toHaveBeenCalledWith('targetUid', '==', 'uid-ying-xian');
     });
 
     it('opens no listener at all when there is no signed-in name', () => {

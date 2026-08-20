@@ -37,10 +37,20 @@ vi.mock('../context/NexusContext', () => ({
     useNexus: () => ({ isDemo: demoMode }),
 }));
 
-import CoverageWatcher from './CoverageWatcher';
-import { onSnapshot } from 'firebase/firestore';
+// The watcher is team-scoped now: no team, no listener. Mocked rather than wrapped
+// in a real provider because these tests are about what the watcher NOTICES, not
+// about how a team is resolved — `TeamContext.test.jsx` owns that.
+let activeTeamId = 'kkh-sport-exercise-medicine';
+vi.mock('../context/TeamContext', () => ({
+    useTeam: () => ({ teamId: activeTeamId }),
+}));
 
-const USER = { name: 'Ying Xian', role: 'staff' };
+import CoverageWatcher from './CoverageWatcher';
+import { onSnapshot, collection, where } from 'firebase/firestore';
+
+// `uid` is what the listener routes on now; `name` is still here because the
+// rendered copy names the requester and the duty.
+const USER = { uid: 'uid-ying-xian', name: 'Ying Xian', role: 'staff' };
 
 /** One PENDING shift_swaps document, in the shape the collection really holds. */
 const snapshotOf = (docs) => ({
@@ -51,6 +61,7 @@ const REQUEST = {
     id: 'req-1',
     requestedBy: 'Brandon',
     targetStaff: 'Ying Xian',
+    targetUid: 'uid-ying-xian',
     originalShiftDate: '2026-09-15',
     originalTask: 'Outpatient Clinic',
     swapRole: 'lead',
@@ -161,5 +172,42 @@ describe('CoverageWatcher — notices what the view-gated roster cannot', () => 
 
         expect(screen.getAllByRole('status')).toHaveLength(2);
         expect(screen.getByText(/Derlinder/)).toBeTruthy();
+    });
+});
+
+describe('CoverageWatcher — team scope and uid routing', () => {
+    /**
+     * The defect this replaced: `where('targetStaff','==',user.name)`. The moment
+     * somebody corrected a spelling in their profile, every coverage request aimed
+     * at them stopped arriving — and a query that matches nothing is
+     * indistinguishable from nobody having asked. This component exists precisely to
+     * notice; routing it by a mutable string was the one way it could fail silently.
+     */
+    it('queries the team swaps subcollection by uid, not the global collection by name', () => {
+        activeTeamId = 'kkh-sport-exercise-medicine';
+        render(<CoverageWatcher user={USER} isRosterVisible={false} onOpenRoster={() => {}} />);
+
+        expect(collection).toHaveBeenCalledWith(
+            expect.anything(), 'teams', 'kkh-sport-exercise-medicine', 'swaps',
+        );
+        expect(where).toHaveBeenCalledWith('targetUid', '==', 'uid-ying-xian');
+        expect(where).not.toHaveBeenCalledWith('targetStaff', '==', 'Ying Xian');
+    });
+
+    /**
+     * No team means no path to compose. `swapsPath` throws on a null teamId by
+     * design, so this has to be an early return — a signed-in user waiting for an
+     * invitation must not crash the always-mounted watcher.
+     */
+    it('opens no listener at all without a team', () => {
+        activeTeamId = null;
+        render(<CoverageWatcher user={USER} isRosterVisible={false} onOpenRoster={() => {}} />);
+        expect(listeners).toHaveLength(0);
+        activeTeamId = 'kkh-sport-exercise-medicine';
+    });
+
+    it('opens no listener for a user with no uid', () => {
+        render(<CoverageWatcher user={{ name: 'Ying Xian' }} isRosterVisible={false} onOpenRoster={() => {}} />);
+        expect(listeners).toHaveLength(0);
     });
 });

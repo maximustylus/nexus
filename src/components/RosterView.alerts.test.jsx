@@ -76,6 +76,27 @@ vi.mock('../context/NexusContext', () => ({
     NexusProvider: ({ children }) => children,
 }));
 
+// ── TEAM SCOPE ────────────────────────────────────────────────────────────────
+// Every live Firestore path in RosterView is composed from `teamId` now, and the
+// swap listener routes by `targetUid` rather than by display name. Mocked here
+// rather than wrapped in a real provider: these tests are about what the roster
+// DOES, and `TeamContext.test.jsx` owns how a team is resolved.
+const TEAM_ID = 'kkh-sport-exercise-medicine';
+const TEAM_MEMBERS = [
+    { uid: 'uid-brandon', displayName: 'Brandon' },
+    { uid: 'uid-derlinder', displayName: 'Derlinder' },
+    { uid: 'uid-fadzlynn', displayName: 'Fadzlynn' },
+    { uid: 'uid-ying-xian', displayName: 'Ying Xian' },
+];
+vi.mock('../context/TeamContext', () => ({
+    useTeam: () => ({
+        teamId: TEAM_ID,
+        members: TEAM_MEMBERS,
+        memberUidByName: Object.fromEntries(TEAM_MEMBERS.map((m) => [m.displayName, m.uid])),
+    }),
+}));
+
+
 import { addDoc, setDoc } from 'firebase/firestore';
 import RosterView, { buildSwapRequestSignature } from './RosterView';
 
@@ -100,7 +121,7 @@ const LIVE_ROSTER = {
     ],
 };
 
-const BRANDON = { name: 'Brandon', role: 'staff', email: 'brandon@example.org' };
+const BRANDON = { uid: 'uid-brandon', name: 'Brandon', role: 'staff', email: 'brandon@example.org' };
 const VISITOR = { name: 'Visiting Therapist', role: 'staff', email: 'visitor@example.org' };
 
 let alertSpy;
@@ -459,7 +480,7 @@ describe('duplicate swap requests are refused (M12)', () => {
         expectNoNativeDialogs();
     });
 
-    it('does not change the document written to shift_swaps', async () => {
+    it('does not change the swap document, beyond the routing uid', async () => {
         render(<RosterView user={BRANDON} />);
 
         openSwapModalFor('EFT');
@@ -473,6 +494,12 @@ describe('duplicate swap requests are refused (M12)', () => {
         expect(written).toEqual({
             requestedBy: 'Brandon',
             targetStaff: 'Derlinder',
+            // THE ONE ADDITION. `targetStaff` stays because the roster mutator
+            // matches the day arrays on the NAME; `targetUid` is what the
+            // recipient's listener queries, so a rename can no longer stop a
+            // request from arriving. Written from the same pick, so they cannot
+            // disagree with each other.
+            targetUid: 'uid-derlinder',
             originalShiftDate: LIVE_DATE_KEY,
             originalTask: 'EFT',
             swapRole: 'lead',

@@ -3,6 +3,8 @@ import { db } from '../firebase';
 import { collection, onSnapshot, query, where } from 'firebase/firestore';
 import { ArrowRightLeft, ShieldAlert, X } from 'lucide-react';
 import { useNexus } from '../context/NexusContext';
+import { useTeam } from '../context/TeamContext';
+import { swapsPath } from '../utils/teamPaths';
 import { readCoverageRequests, describeCoverageRequest } from '../utils/rosterCoverage';
 
 /**
@@ -36,18 +38,24 @@ import { readCoverageRequests, describeCoverageRequest } from '../utils/rosterCo
  */
 const CoverageWatcher = ({ user, onOpenRoster, isRosterVisible }) => {
     const { isDemo } = useNexus();
+    const { teamId } = useTeam();
     const [requests, setRequests] = useState([]);
     const [listenerError, setListenerError] = useState(null);
     const [dismissed, setDismissed] = useState(() => new Set());
 
-    const targetStaffName = user?.name;
+    // ROUTED BY UID, NOT BY NAME. `where('targetStaff','==',user.name)` meant that
+    // editing your display name in your profile silently stopped every coverage
+    // request from reaching you — and a query matching nothing looks exactly like
+    // nobody having asked. This component exists to notice; routing it by a mutable
+    // string was the one way it could fail without saying so.
+    const targetUid = user?.uid;
 
     useEffect(() => {
-        if (isDemo || !targetStaffName) return undefined;
+        if (isDemo || !teamId || !targetUid) return undefined;
 
         const q = query(
-            collection(db, 'shift_swaps'),
-            where('targetStaff', '==', targetStaffName),
+            collection(db, ...swapsPath(teamId)),
+            where('targetUid', '==', targetUid),
             where('status', '==', 'PENDING'),
         );
 
@@ -71,7 +79,7 @@ const CoverageWatcher = ({ user, onOpenRoster, isRosterVisible }) => {
         );
 
         return () => unsubscribe();
-    }, [isDemo, targetStaffName]);
+    }, [isDemo, teamId, targetUid]);
 
     const dismiss = useCallback((id) => {
         setDismissed((prev) => new Set(prev).add(id));

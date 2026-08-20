@@ -70,6 +70,27 @@ vi.mock('../context/NexusContext', () => ({
     NexusProvider: ({ children }) => children,
 }));
 
+// ── TEAM SCOPE ────────────────────────────────────────────────────────────────
+// Every live Firestore path in RosterView is composed from `teamId` now, and the
+// swap listener routes by `targetUid` rather than by display name. Mocked here
+// rather than wrapped in a real provider: these tests are about what the roster
+// DOES, and `TeamContext.test.jsx` owns how a team is resolved.
+const TEAM_ID = 'kkh-sport-exercise-medicine';
+const TEAM_MEMBERS = [
+    { uid: 'uid-brandon', displayName: 'Brandon' },
+    { uid: 'uid-derlinder', displayName: 'Derlinder' },
+    { uid: 'uid-fadzlynn', displayName: 'Fadzlynn' },
+    { uid: 'uid-ying-xian', displayName: 'Ying Xian' },
+];
+vi.mock('../context/TeamContext', () => ({
+    useTeam: () => ({
+        teamId: TEAM_ID,
+        members: TEAM_MEMBERS,
+        memberUidByName: Object.fromEntries(TEAM_MEMBERS.map((m) => [m.displayName, m.uid])),
+    }),
+}));
+
+
 import { setDoc, addDoc, onSnapshot } from 'firebase/firestore';
 import RosterView from './RosterView';
 import { BandBoundaryEditor } from './RosterDemoWizardTables';
@@ -77,7 +98,7 @@ import { LIVE_ROSTER_DEFAULTS } from '../utils/auraEngine';
 import { DEFAULT_GRADE_BANDS } from '../utils/rosterEngineV2';
 import { bandsToInputs } from '../utils/rosterWizard';
 
-const BRANDON = { name: 'Brandon', role: 'staff', email: 'brandon@example.org' };
+const BRANDON = { uid: 'uid-brandon', name: 'Brandon', role: 'staff', email: 'brandon@example.org' };
 
 /**
  * The two live textareas, verbatim as of the commit before the sandbox tables
@@ -162,7 +183,21 @@ describe('live mode: the Configure wizard is exactly what it was', () => {
         expect(staffBox).toBeTruthy();
         expect(staffBox.tagName).toBe('TEXTAREA');
         expect(staffBox.className).toBe(LIVE_TEXTAREA_CLASS);
-        expect(staffBox.value).toBe(LIVE_ROSTER_DEFAULTS.staff.join(', '));
+        /**
+         * CHANGED BY THE MULTI-TEAM REWIRE, and it is a real behaviour change rather
+         * than a test fix. The live staff pool used to be `LIVE_ROSTER_DEFAULTS.staff`
+         * — four names hardcoded in `auraEngine.js`, a FOURTH copy of one department
+         * alongside `TEAM_DIRECTORY`, `ADMIN_EMAILS` and the rules file. It is now the
+         * active team's own member list, so a respiratory therapy lead pressing
+         * Generate no longer staffs their week with four clinical exercise
+         * physiologists from another service.
+         *
+         * The ORDER changed with it: members arrive sorted by display name, which is
+         * what makes the staff pool, the swap picker and the load editor agree with
+         * each other. The old order was whatever `LIVE_ROSTER_DEFAULTS` happened to
+         * list.
+         */
+        expect(staffBox.value).toBe('Brandon, Derlinder, Fadzlynn, Ying Xian');
         // No placeholder in live mode, as before.
         expect(staffBox.hasAttribute('placeholder')).toBe(false);
 

@@ -30,6 +30,7 @@ vi.mock('../firebase', () => ({ db: {} }));
 const listeners = new Map();
 vi.mock('firebase/firestore', () => ({
     doc: vi.fn((_db, ...segments) => ({ __path: segments.join('/') })),
+    collection: vi.fn((_db, ...segments) => ({ __path: segments.join('/') })),
     onSnapshot: vi.fn((ref, onNext, onError) => {
         const entry = { onNext, onError };
         listeners.set(ref.__path, entry);
@@ -44,6 +45,10 @@ const A = 'kkh-sport-exercise-medicine';
 const B = 'kkh-respiratory-therapy';   // sorts FIRST — 'respiratory' < 'sport'
 
 const exists = (data) => ({ exists: () => true, id: data.id || 'doc', data: () => data });
+/** A collection snapshot, in the shape `members` reads. */
+const docsOf = (entries) => ({
+    docs: entries.map(([id, data]) => ({ id, data: () => data })),
+});
 const missing = { exists: () => false, id: 'doc', data: () => ({}) };
 
 const emit = (path, snapshot) => {
@@ -67,6 +72,8 @@ const Probe = () => {
             <span data-testid="switcher">{String(team.showSwitcher)}</span>
             <span data-testid="loading">{String(team.loading)}</span>
             <span data-testid="canOther">{String(team.canActOn('sgh-physiotherapy'))}</span>
+            <span data-testid="members">{team.members.map((m) => m.displayName).join(',')}</span>
+            <span data-testid="lookup">{team.memberUidByName['Ying Xian'] || 'none'}</span>
             <button type="button" onClick={() => team.switchTeam(A)}>go A</button>
             <button type="button" onClick={() => team.switchTeam('sgh-physiotherapy')}>go elsewhere</button>
         </div>
@@ -203,6 +210,72 @@ describe('TeamContext — choosing and changing the active team', () => {
         emitError(`users/${UID}`, new Error('permission-denied'));
         expect(value('teamId')).toBe('none');
         expect(value('loading')).toBe('false');
+    });
+});
+
+describe('TeamContext — the member list that replaces TEAM_DIRECTORY', () => {
+    it('subscribes to the team members subcollection', () => {
+        mount();
+        emit(`users/${UID}`, exists({ teamIds: [A] }));
+        expect(listeners.has(`teams/${A}/members`)).toBe(true);
+    });
+
+    /**
+     * Sorted by display name so every list built from it — the roster staff pool,
+     * the swap target picker, the load editor — presents people in the same order.
+     * Lists that reorder between screens make a reader check twice.
+     */
+    it('sorts members by display name, not by uid or insertion order', () => {
+        mount();
+        emit(`users/${UID}`, exists({ teamIds: [A] }));
+        emit(`teams/${A}/members`, docsOf([
+            ['uid-y', { displayName: 'Ying Xian' }],
+            ['uid-b', { displayName: 'Brandon' }],
+            ['uid-d', { displayName: 'Derlinder' }],
+        ]));
+        expect(value('members')).toBe('Brandon,Derlinder,Ying Xian');
+    });
+
+    /**
+     * The lookup a swap picker needs: somebody chooses a colleague BY NAME and the
+     * document has to record WHO that is. `uid` is the key, `displayName` is a
+     * field — so a rename changes what is rendered and breaks nothing that routes.
+     */
+    it('maps a display name to a uid', () => {
+        mount();
+        emit(`users/${UID}`, exists({ teamIds: [A] }));
+        emit(`teams/${A}/members`, docsOf([['uid-y', { displayName: 'Ying Xian' }]]));
+        expect(value('lookup')).toBe('uid-y');
+    });
+
+    /**
+     * ⚠️ A DUPLICATED DISPLAY NAME RESOLVES DETERMINISTICALLY, to the member that
+     *    sorts first. Team-scoping already removed the collision that mattered — a
+     *    Sarah at KKH and a Sarah at SGH are in different subcollections now. What
+     *    is left is two identical names inside ONE department, which the lead fixes
+     *    by editing the member list. Pinned so the behaviour is a decision rather
+     *    than whatever `Object.fromEntries` happened to do.
+     */
+    it('resolves a duplicated name to the first member, every time', () => {
+        mount();
+        emit(`users/${UID}`, exists({ teamIds: [A] }));
+        emit(`teams/${A}/members`, docsOf([
+            ['uid-second', { displayName: 'Ying Xian' }],
+            ['uid-first', { displayName: 'Ying Xian' }],
+        ]));
+        // Both sort equal on name; the array order after sort decides, and the
+        // reverse in `memberUidByName` makes the FIRST one win rather than the last.
+        expect(value('lookup')).toBe('uid-second');
+    });
+
+    it('empties the member list rather than keeping a stale one when it cannot be read', () => {
+        mount();
+        emit(`users/${UID}`, exists({ teamIds: [A] }));
+        emit(`teams/${A}/members`, docsOf([['uid-b', { displayName: 'Brandon' }]]));
+        expect(value('members')).toBe('Brandon');
+
+        emitError(`teams/${A}/members`, new Error('permission-denied'));
+        expect(value('members')).toBe('');
     });
 });
 

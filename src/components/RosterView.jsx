@@ -48,6 +48,26 @@ import {
     describeCoverageArranger,
 } from '../utils/rosterCoverage';
 
+// --- TEAM SCOPE ---
+// Every Firestore path below is composed from `teamId`, and NOTHING here builds one
+// by hand. `system_data/roster_2026` — a single document shared by the whole
+// installation — is what these replace.
+import { useTeam } from '../context/TeamContext';
+import { rosterPath, swapsPath, swapPath } from '../utils/teamPaths';
+
+/**
+ * The roster year. Was baked into a document NAME — `system_data/roster_2026` — so
+ * 2027 would have meant a new hardcoded string in three call sites. It is now the
+ * document ID under `teams/{id}/rosters/`, which is what makes next year a value
+ * rather than an edit.
+ *
+ * ⚠️ STILL A CONSTANT, and that is a known limitation rather than a design: the
+ *    view has no year picker in live mode, so a team cannot yet roster 2027 while
+ *    2026 is still running. `rosterPath` already takes the year, so closing this is
+ *    a control, not a schema change.
+ */
+const ROSTER_YEAR = '2026';
+
 // --- SANDBOX IMPORTS ---
 import { useNexus } from '../context/NexusContext';
 // 🧪 THE PICKER IS A PROFESSION AND A SHAPE, and the two lists have different jobs.
@@ -639,6 +659,11 @@ const CoverageRequestsPanel = ({
 const RosterView = ({ user }) => {
     // --- CONTEXT ---
     const { isDemo } = useNexus();
+    // WHOSE roster. Null in demo mode and on a signed-in account with no team, and
+    // every live effect below is gated on it — a path composed from a null teamId
+    // throws by design (`assertTeamId`), so the gate is what keeps that design from
+    // becoming a crash on a legitimate screen.
+    const { teamId, members, memberUidByName } = useTeam();
 
     // --- STATE ---
     // 🗓️ P4.3 / post-mortem B3: the calendar used to open on a hardcoded
@@ -1018,10 +1043,23 @@ const RosterView = ({ user }) => {
             // must not survive the toggle back to LIVE, where one Generate click
             // would write it over four real clinicians. An in-progress
             // startDate/weeks edit is preserved.
-            setConfig(prev => restoreLiveRosterConfig(prev));
+            // THE STAFF POOL IS THE TEAM'S OWN MEMBER LIST, not four names in
+            // `auraEngine.js`. Empty until the members snapshot arrives, and
+            // `restoreLiveRosterConfig` falls back to the hardcoded four in that
+            // window — see its header for why that fallback still exists and when
+            // it goes.
+            setConfig(prev => restoreLiveRosterConfig(prev, {
+                staff: members.map(person => person.displayName).filter(Boolean),
+            }));
+
+            // NO TEAM, NO LISTENER. `rosterPath` throws on a null teamId by design —
+            // composing `teams//rosters/2026` would be silent corruption — so the
+            // moment before a team is known has to be an early return rather than a
+            // caught exception. The calendar renders empty, which is the truth.
+            if (!teamId) return undefined;
 
             const unsub = onSnapshot(
-                doc(db, 'system_data', 'roster_2026'),
+                doc(db, ...rosterPath(teamId, ROSTER_YEAR)),
                 (snap) => {
                     setRosterError(null);
                     if (snap.exists()) setRosterData(snap.data());
@@ -1040,7 +1078,8 @@ const RosterView = ({ user }) => {
             );
             return () => unsub();
         }
-    }, [isDemo]);
+        return undefined;
+    }, [isDemo, teamId, members]);
 
     // --- EFFECT: COVERAGE REQUESTS AIMED AT THE SIGNED-IN USER -----------------
     //
@@ -1059,7 +1098,25 @@ const RosterView = ({ user }) => {
     // Reads whole snapshots rather than `docChanges()`: `added` events fire once,
     // which is exactly how M5 lost a request to a re-render. A full snapshot is
     // idempotent — the card shows what is PENDING right now.
-    const coverageTargetName = user?.name || null;
+    /**
+     * ⚠️ THE LISTENER ROUTES BY UID; THE MUTATOR STILL MATCHES BY NAME. Both halves
+     * of that sentence are deliberate.
+     *
+     * ROUTING BY NAME WAS A REAL DEFECT: `where('targetStaff','==',user.name)` meant
+     * that the moment somebody edited their display name in their profile, every
+     * coverage request aimed at them stopped arriving — silently, because a query
+     * that matches nothing is indistinguishable from nobody having asked. `uid` does
+     * not change when a person marries, corrects a spelling, or gains a title.
+     *
+     * THE MUTATOR CANNOT FOLLOW YET, and pretending otherwise would be worse than
+     * saying so: the roster document stores day arrays of DISPLAY NAMES
+     * (`shift.lead === user.name`), and `planSwapApplication` matches against them.
+     * Converting those to uids means changing the engine, the wizard, the demo
+     * fixtures and most of 1,798 tests — a change with its own risk budget, not a
+     * rider on this one. So `targetStaff` stays on the document beside `targetUid`,
+     * and the two are written together from one source.
+     */
+    const coverageTargetUid = user?.uid || null;
 
     useEffect(() => {
         // Both universes start from a clean slate: a sandbox visitor must not see a
@@ -1071,11 +1128,11 @@ const RosterView = ({ user }) => {
         setAnsweredSwapIds(new Set());
         setSwapFailures({});
 
-        if (isDemo || !coverageTargetName) return undefined;
+        if (isDemo || !teamId || !coverageTargetUid) return undefined;
 
         const pendingForMe = query(
-            collection(db, 'shift_swaps'),
-            where('targetStaff', '==', coverageTargetName),
+            collection(db, ...swapsPath(teamId)),
+            where('targetUid', '==', coverageTargetUid),
             where('status', '==', 'PENDING'),
         );
 
@@ -1099,7 +1156,7 @@ const RosterView = ({ user }) => {
         );
 
         return () => unsub();
-    }, [isDemo, coverageTargetName]);
+    }, [isDemo, teamId, coverageTargetUid]);
 
     // --- ACTIONS ---
     
@@ -1407,7 +1464,7 @@ const RosterView = ({ user }) => {
         try {
             // 🛡️ C2 FIX: { merge: true } — generating one period must not erase
             // the periods already stored in this document.
-            await setDoc(doc(db, 'system_data', 'roster_2026'), prepared.data, { merge: true });
+            await setDoc(doc(db, ...rosterPath(teamId, ROSTER_YEAR)), prepared.data, { merge: true });
             setIsConfigOpen(false); // Close the config wizard
             // 🌟 P8.3: "conflict-free" was the old copy. Post-mortem E1: the
             // generator cannot know that — it means "cannot double-book by
@@ -1542,13 +1599,19 @@ const RosterView = ({ user }) => {
                 );
             } else {
                 // 📡 LIVE MODE: Pushing the request to Firebase Firestore
-                await addDoc(collection(db, 'shift_swaps'), {
+                await addDoc(collection(db, ...swapsPath(teamId)), {
                     // 🛡️ M11: the person being SWAPPED OUT, which is what
                     // `planSwapApplication` matches on — not necessarily the
                     // person who clicked. For an admin arranging cover this is
                     // the clinician who actually holds the duty.
                     requestedBy: swapSubject.requestedBy,
                     targetStaff: swapTargetStaff,
+                    // ROUTING. `targetStaff` above is what the roster mutator matches
+                    // against the day arrays; this is what the recipient's listener
+                    // queries. Written from the same pick so they cannot disagree, and
+                    // null only if the chosen name is not in the member list — in which
+                    // case the request would not have been offerable in the first place.
+                    targetUid: memberUidByName[swapTargetStaff] || null,
                     originalShiftDate: selectedShift.date,
                     originalTask: selectedShift.task,
                     // 🛡️ A3: 'lead' | 'coLead' — the duty the covering colleague
@@ -1679,7 +1742,7 @@ const RosterView = ({ user }) => {
         setRespondingSwapId(docId);
 
         try {
-            const swapRef = doc(db, 'shift_swaps', docId);
+            const swapRef = doc(db, ...swapPath(teamId, docId));
 
             if (!isAccepted) {
                 // 🛡️ THE ROSTER DOCUMENT IS NOT TOUCHED ON THIS PATH. Declining
@@ -1694,7 +1757,7 @@ const RosterView = ({ user }) => {
             }
 
             // ── ACCEPT ────────────────────────────────────────────────────────
-            const rosterRef = doc(db, 'system_data', 'roster_2026');
+            const rosterRef = doc(db, ...rosterPath(teamId, ROSTER_YEAR));
             const rosterSnap = await getDoc(rosterRef);
 
             const plan = planSwapApplication({
