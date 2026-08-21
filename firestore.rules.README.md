@@ -1,5 +1,36 @@
 # `firestore.rules` — Owner's Runbook
 
+> # ⚠️ SUPERSEDED BY THE MULTI-TEAM REWRITE — 2026-08-21
+>
+> **Everything below describes the SINGLE-TEAM rules file and is now history.** It is
+> kept because the reconciliation record in §4 — the comparison against the live
+> console rules that closed decision `Q6` — is evidence, and deleting evidence to
+> tidy a document is how a repo stops being able to answer "why is it like this".
+>
+> **What changed, and why this document cannot simply be edited in place:**
+>
+> * `directory()`, `directoryNames()` and `adminEmails()` — the ten email addresses,
+>   the ten display names, and the two admin addresses — **are deleted.** This
+>   runbook's central tables enumerate them. They no longer exist.
+> * Authorization is now a question asked of the database:
+>   `exists(/databases/$(database)/documents/teams/$(teamId)/members/$(uid))`.
+>   Onboarding a clinician is a lead adding a member document — **zero rule edits,
+>   zero rules deploys**, which is the defect this runbook's own header called
+>   "KNOWN, ACCEPTED".
+> * Every collection moved beneath `teams/{teamId}/…`. The paths named throughout
+>   this document — `system_data/roster_2026`, `shift_swaps`, `wellbeing_history`,
+>   `staff_loads`, `cep_team`, `feed_posts`, `notifications` — are now **explicitly
+>   unreachable**, and `scripts/firestore-rules-verify.mjs` asserts that.
+> * A property that did not exist before is now the point of the file: **a member of
+>   team A gets nothing from team B.**
+>
+> **The current record is the rules file's own header plus
+> `scripts/firestore-rules-verify.mjs` — 91 checks, last run 2026-08-21 against the
+> emulator, 0 failed.** Read those, not this. The one part below still worth reading
+> is §4, which is how the live console was reconciled and how it should be
+> reconciled again before the next deploy.
+
+
 **Status: PROPOSAL. INERT. Nothing deploys it.**
 **Subject: project `idc-app-e0c59`, Cloud Firestore, `(default)` database.**
 **Companion to:** `firestore.rules` · closes the analysis half of `ROSTER_POSTMORTEM.md` C4 and decision **Q6** (`ROSTER_HANDOFF.md` §5).

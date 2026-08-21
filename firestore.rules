@@ -1,207 +1,124 @@
-// ==============================================================================
-// NEXUS — FIRESTORE SECURITY RULES  ·  W I R E D   ·   reconciled 2026-08-18
-// ==============================================================================
-//
-// ⚠️ THIS FILE IS NOW THE DEPLOYED AUTHORIZATION BOUNDARY — once `main` ships it.
-//
-//    `firebase.json` declares `firestore.rules`, and
-//    `.github/workflows/deploy.yml` deploys `--only functions,firestore:rules`.
-//    Editing this file and merging to `main` CHANGES WHO CAN READ AND WRITE THE
-//    LIVE DUTY ROSTER OF PRACTISING CLINICIANS. Treat every edit accordingly.
-//
-//    ⚠️ THE `,firestore:rules` IN THAT ARGS STRING IS LOAD-BEARING. The step ran
-//    `deploy --only functions` for its whole life; adding the `firebase.json`
-//    section alone would have deployed NOTHING while the pipeline went green and
-//    this header claimed otherwise. If rules ever appear not to take effect, check
-//    that flag first.
-//
-// ------------------------------------------------------------------------------
-// WHAT WAS LIVE BEFORE THIS, AND WHY IT HAD TO CHANGE
-// ------------------------------------------------------------------------------
-//
-// The owner supplied the console's rules on 2026-08-18 — the first time anybody
-// in this repository could see them. Their operative clause was:
-//
-//     function isVerifiedStaff() {
-//       return request.auth != null && email_verified == true
-//              && email.lower().matches('.*@kkh\\.com\\.sg');
-//     }
-//     match /{document=**} { allow read, write: if isVerifiedStaff(); }
-//
-// That catch-all is not the ten-person team. It is ANY verified `@kkh.com.sg`
-// address, and the app's Firebase API key is public (it ships in the bundle), so
-// any KKH employee who registers an account could read `wellbeing_history` — the
-// longitudinal burnout record per named clinician — and overwrite the roster and
-// approve any swap. Whole-hospital, not internet-wide, and not hypothetical.
-// Closing that is the entire point of decision `Q6`.
-//
-// TWO OF THE CONSOLE'S FIVE HAND-WRITTEN BLOCKS GOVERNED NOTHING, measured by
-// grepping every collection name across `src/` and `functions/`:
-//   • `community_resources` — 0 references anywhere in the codebase.
-//   • `feeds/{document=**}` — not a collection; the five hits are UI view names
-//     (`id: 'feeds'`). The real collection is `feed_posts`, which was therefore
-//     governed only by the catch-all.
-//
-// AND TWO LIVE PATHWAYS WOULD HAVE BEEN KILLED SILENTLY by the pre-reconciliation
-// version of this file, which required `isMember()` on both: public screening
-// telemetry (`community_assessments`) and sandbox beta feedback. Both are
-// unauthenticated by nature. Both now ship OPEN BUT SHAPE-PINNED — see their
-// blocks, each of which states the accepted risk rather than hiding it. That
-// reconciliation is the reason this file was not deployed as originally written.
-//
-//    Why the caution is not theatre: the master duty roster of four practising
-//    clinicians is rewritten CLIENT-SIDE from a colleague's browser. A rule
-//    that is one predicate too strict does not degrade the app — it locks
-//    Brandon, Ying Xian, Derlinder and Fadzlynn out of their live working week,
-//    silently, because two of the three affected listeners still have no error
-//    callback (`ROSTER_QC_AUDIT.md` M8 fixed the roster and swap listeners; the
-//    feed and pulse listeners are still silent).
-//
-// ------------------------------------------------------------------------------
-// HOW THIS WAS DERIVED
-// ------------------------------------------------------------------------------
-//
-// Not from a template and not from the collection list in anybody's head. Every
-// path below was found by grepping `doc(`, `collection(`, `setDoc`, `addDoc`,
-// `updateDoc`, `onSnapshot`, `getDoc`, `getDocs`, `deleteDoc`, `query(` across
-// `src/` and `functions/`, then reading each call site to establish who reaches
-// it and under what UI condition. `firestore.rules.README.md` §2 carries the
-// full call-site table, path by path and line by line.
-//
-// Three facts from that sweep shape everything here:
-//
-//   1. CLOUD FUNCTIONS DO NOT PASS THROUGH THESE RULES. `functions/index.js`
-//      uses the Admin SDK (`getFirestore()` / `admin.firestore()`), which
-//      bypasses security rules entirely. So `resources` (read only by
-//      `publicTriageChat`), and `feed_posts` CREATION and EDITING (done by the
-//      `processFeedPost` callable), need no client permission at all. Locking
-//      them here costs the app nothing. This is the single biggest source of
-//      free least-privilege in the whole file.
-//
-//   2. THE DOCUMENTS ARE KEYED BY HUMAN NAME AND DIRECTORY ID, NOT BY UID.
-//      `shift_swaps.targetStaff` is `"Ying Xian"`. `system_data/daily_pulse`
-//      keys are `"Brandon"`. `wellbeing_history/{id}` is `"fadzlynn"`.
-//      `notifications.recipient` is a name. Only `users/{uid}` is keyed by
-//      `request.auth.uid` — and even that collection is ALSO written under the
-//      directory id (see the `users` block). Rules therefore cannot authorise
-//      on `request.auth.uid` alone; they must map the authenticated email to a
-//      display name and a directory id. That map is `DIRECTORY` below.
-//
-//   3. THE `user?.role === 'admin'` CHECKS IN THE UI ARE NOT A BOUNDARY, AND
-//      WORSE, THEY ARE SELF-ASSIGNABLE. `App.jsx:174` merges the
-//      `users/{uid}` document OVER the directory profile
-//      (`{ ...initialProfile, ...docSnap.data() }`), and `ProfileView.jsx:75`
-//      lets any user write a `role` field into their own `users/{uid}`
-//      document. Typing "admin" into the profile Role box therefore satisfies
-//      `hasAdminAccess` in `App.jsx:314` and `user?.role === 'admin'` in
-//      `RosterView.jsx:613`/`:644`. Nothing below trusts that field. `isAdmin()`
-//      here is an EMAIL allowlist, matching `App.jsx:313`'s `ADMIN_EMAILS`.
-//      (The `users` block also refuses to store `role: 'admin'` from a
-//      non-admin, so the escalation stops being available in the UI too — but
-//      that is a courtesy, not the boundary.)
-//
-// ------------------------------------------------------------------------------
-// WHAT THIS FILE COSTS TO OWN — read before you like it
-// ------------------------------------------------------------------------------
-//
-// `DIRECTORY` below is a THIRD copy of the team. `ROSTER_POSTMORTEM.md` C3
-// already indicts the second one (`RosterView.jsx`'s hardcoded pool vs
-// `TEAM_DIRECTORY`), and C-RC2 names the root cause: "a constant embedded in a
-// component instead of imported". This file cannot import anything — Firestore
-// rules have no module system — so the duplication is unavoidable in rules
-// alone. It is therefore a KNOWN, ACCEPTED defect of this design, not an
-// oversight:
-//
-//   • Onboarding or offboarding a clinician now requires editing
-//     `src/utils/index.js` AND this file AND redeploying rules. Miss the second
-//     step and the new joiner is authenticated but cannot read the roster.
-//   • The only durable fix is to stop keying documents by display name. That is
-//     an application change (decision Q4 territory), not a rules change.
-//   • `firestore.rules.README.md` §8 carries this as a standing maintenance
-//     hazard with the exact edit procedure.
-//
-// ------------------------------------------------------------------------------
-// WHAT THESE RULES CANNOT DO — stated up front, not buried
-// ------------------------------------------------------------------------------
-//
-//   • They cannot verify a swap. See the `system_data/roster_2026` block: the
-//     honest ceiling is "one existing day, one field, by a team member",
-//     because the accepting client never tells Firestore WHICH swap it is
-//     acting on. Full detail in that block's comment.
-//   • They cannot rate-limit, and they cannot see query `where` clauses.
-//   • They do not apply to the Firebase console, the Admin SDK, or any Cloud
-//     Function. "Write-only" below means write-only TO CLIENTS.
-//   • They cannot be unit-tested in this repo's `npm test` (no emulator in CI).
-//     The verification path is the Rules Playground cases in the runbook, plus
-//     the local emulator run recorded in `firestore.rules.README.md` §4.
-//
-// rules_version 2 is required: `hasOnly` on lists, `MapDiff.affectedKeys()`,
-// `Map.get(key, default)` and recursive wildcards all depend on it.
-// ==============================================================================
-
 rules_version = '2';
+
+// =============================================================================
+// NEXUS AURA — FIRESTORE SECURITY RULES
+// =============================================================================
+// STATUS: WIRED · multi-team rewrite · `firebase.json` deploys `firestore:rules`
+//         and `.github/workflows/deploy.yml` runs `--only functions,firestore:rules`.
+//
+// -----------------------------------------------------------------------------
+// WHAT THIS FILE STOPPED BEING
+// -----------------------------------------------------------------------------
+//
+// Until this rewrite, this file contained A THIRD COPY OF THE TEAM. `directory()`
+// held ten email addresses and their display names; `directoryNames()` held the same
+// ten names again as a list, because the rules language has no `Map.values()`; and
+// `adminEmails()` held two more. Its own header called that "a KNOWN, ACCEPTED
+// defect": onboarding one clinician meant editing `src/utils/index.js`, editing this
+// file, and redeploying the rules.
+//
+// All three are gone. A rule now asks a question of the DATABASE:
+//
+//     exists(/databases/$(database)/documents/teams/$(teamId)/members/$(uid))
+//
+// Onboarding a clinician is a lead adding a member document. Zero rule edits, zero
+// rules deploys. That is the difference between a file that serves one department
+// and one that serves twenty-eight.
+//
+// -----------------------------------------------------------------------------
+// THE ONE PROPERTY THIS FILE EXISTS TO GUARANTEE
+// -----------------------------------------------------------------------------
+//
+// ⚠️ A MEMBER OF TEAM A GETS NOTHING FROM TEAM B. Not the roster, not the swaps, not
+//    the wellbeing records, not the member list, not even the team's name. Every
+//    team-scoped rule below begins with `isMember(teamId)`, where `teamId` is the
+//    path segment being read — so the question is always "are you in THIS team",
+//    never "are you in A team".
+//
+//    `scripts/firestore-rules-verify.mjs` asserts this for every collection. Those
+//    are the most important cases in the suite: everything else here protects a
+//    department from mistakes, and this protects one department from another.
+//
+// -----------------------------------------------------------------------------
+// IDENTITY IS `uid`, NEVER A DISPLAY NAME
+// -----------------------------------------------------------------------------
+//
+// The previous version of this file carried the diagnosis in its own comments:
+// *"The only durable fix is to stop keying documents by display name. That is an
+// application change."* That change has now happened. `myName()` and `myId()` are
+// deleted along with the directory they read from, and nothing below compares a
+// person to a string a person can edit.
+//
+// -----------------------------------------------------------------------------
+// WHAT `get()` AND `exists()` COST
+// -----------------------------------------------------------------------------
+//
+// Each is a billed document read and they are capped — 10 per single-document
+// request, 20 per query. `isMember()` spends one; `isLead()` spends two. Nothing
+// below nests them, so no rule approaches the cap. Identical lookups inside one
+// evaluation are served from a per-request cache, but no rule here relies on that.
+//
+// The trade is deliberate: a read per request buys a membership model that a lead
+// maintains without a deploy. The alternative — custom claims on the ID token — is
+// free to evaluate and up to an hour stale, which for "remove this person from the
+// team" is the wrong kind of wrong.
+// =============================================================================
 
 service cloud.firestore {
   match /databases/{database}/documents {
 
     // ==========================================================================
-    // SECTION 1 — IDENTITY
+    // SECTION 1 — IDENTITY, AS DATA
     // ==========================================================================
-    //
-    // Transcribed from `TEAM_DIRECTORY` in `src/utils/index.js:22-95`, verbatim,
-    // with every key lower-cased because `request.auth.token.email` preserves
-    // the case the account was created with and the directory itself is
-    // inconsistent about it ('Evelyn.Ong.MH@kkh.com.sg', 'Mini.Abraham@kkh...').
-    // `checkAccess()` in that file compares `.toLowerCase()` on both sides; this
-    // does the same.
-    //
-    // TWO ENTRIES ARE DELIBERATELY PRESENT AND CANNOT LOG IN TODAY.
-    // `WelcomeScreen.jsx:107` rejects any address not ending `@kkh.com.sg`
-    // BEFORE it consults the directory, so `benny.loo.k.g.@singhealth.com.sg`
-    // and `mohammad.ashik.zainuddin@singhealth.com.sg` are unreachable through
-    // the login form regardless of what these rules say. They are listed anyway
-    // so that fixing the login gate does not require a second rules deploy, and
-    // so that the discrepancy is visible rather than silently encoded.
-    // (`benny.loo.k.g.@` also has a trailing dot in its local part, which is not
-    // a valid RFC 5321 address — Firebase Auth may refuse to create it at all.
-    // Flagged in the runbook, not fixed here: guessing at a colleague's real
-    // address is exactly the kind of unverified claim this repo does not do.)
-    function directory() {
-      return {
-        // --- LEADERSHIP & ADMINS ---
-        'muhammad.alif@kkh.com.sg':              { 'name': 'Alif',      'id': 'alif' },
-        'siti.nur.anisah.nh@kkh.com.sg':         { 'name': 'Nisa',      'id': 'nisa' },
-        'evelyn.ong.mh@kkh.com.sg':              { 'name': 'Evelyn',    'id': 'evelyn' },
-        // --- MEDICAL & NURSING LEADS (VIEWERS) ---
-        'benny.loo.k.g.@singhealth.com.sg':      { 'name': 'Benny',     'id': 'benny' },
-        'mohammad.ashik.zainuddin@singhealth.com.sg': { 'name': 'Ashik', 'id': 'ashik' },
-        'mini.abraham@kkh.com.sg':               { 'name': 'Mini',      'id': 'mini' },
-        // --- CLINICAL EXERCISE PHYSIOLOGISTS (STAFF) ---
-        'brandon.feng.gg@kkh.com.sg':            { 'name': 'Brandon',   'id': 'brandon' },
-        'lim.ying.xian@kkh.com.sg':              { 'name': 'Ying Xian', 'id': 'ying_xian' },
-        'derlinder.kaur@kkh.com.sg':             { 'name': 'Derlinder', 'id': 'derlinder' },
-        'fadzlynn.mohamad.fadzully@kkh.com.sg':  { 'name': 'Fadzlynn',  'id': 'fadzlynn' }
-      };
+
+    function isSignedIn() {
+      return request.auth != null && request.auth.uid != null;
     }
 
-    // The display names, as a list, for validating that a swap actually names a
-    // colleague. Must stay in step with `directory()` above — there is no way to
-    // derive one from the other in this language (`Map.values()` does not exist).
-    function directoryNames() {
-      return ['Alif', 'Nisa', 'Evelyn', 'Benny', 'Ashik', 'Mini',
-              'Brandon', 'Ying Xian', 'Derlinder', 'Fadzlynn'];
+    function uid() {
+      return request.auth.uid;
     }
 
-    // `role: 'admin'` in `TEAM_DIRECTORY`, which is also exactly
-    // `ADMIN_EMAILS` at `App.jsx:313`. Two sources, same two people, checked.
-    function adminEmails() {
-      return ['muhammad.alif@kkh.com.sg', 'siti.nur.anisah.nh@kkh.com.sg'];
+    function memberRef(teamId) {
+      return /databases/$(database)/documents/teams/$(teamId)/members/$(uid());
+    }
+
+    /**
+     * THE GATE ON EVERYTHING TEAM-SCOPED. `teamId` is always the path segment being
+     * read or written, so this asks "are you in THIS team" — the question that makes
+     * cross-team isolation true by construction rather than by remembering to check.
+     */
+    function isMember(teamId) {
+      return isSignedIn() && exists(memberRef(teamId));
+    }
+
+    /**
+     * May configure the roster, generate it, edit the member list, and publish
+     * reports. `role` lives on the membership document, so the same person can lead
+     * one department and be staff in another — which the previous `adminEmails()`
+     * list could not express at all.
+     *
+     * ⚠️ NOT the same question as `rostered`. That field says whether somebody holds
+     *    clinical duties and is read by the APP to build the staff pool; it grants
+     *    nothing and is deliberately not consulted here. A team's roster master is a
+     *    lead who is not rostered; its service lead is a lead who is.
+     */
+    function isLead(teamId) {
+      return isMember(teamId) && get(memberRef(teamId)).data.role == 'lead';
+    }
+
+    /** The caller's own document, whatever the collection. */
+    function isSelf(userId) {
+      return isSignedIn() && userId == uid();
     }
 
     // Lower-cased email of the caller, or '' when there is no usable identity.
     // Guarded three ways because `request.auth.token.email` is absent for some
     // providers and null-dereferencing in rules is an evaluation ERROR, which
     // Firestore treats as DENY — a silent lockout rather than a clean false.
+    //
+    // Used in exactly one place now (pinning a lead request to its own account);
+    // nothing else in this file routes by email.
     function callerEmail() {
       return request.auth != null
              && request.auth.token != null
@@ -210,820 +127,356 @@ service cloud.firestore {
              : '';
     }
 
-    function isSignedIn() {
-      return request.auth != null && request.auth.uid != null;
-    }
-
-    // The single gate on essentially everything: signed in AND on the allowlist.
-    // A Firebase Auth account that is not in the directory (someone who created
-    // one straight against the public API key, bypassing `WelcomeScreen`) gets
-    // nothing at all.
-    function isMember() {
-      return isSignedIn() && callerEmail() in directory();
-    }
-
-    function isAdmin() {
-      return isSignedIn() && callerEmail() in adminEmails();
-    }
-
-    // The caller's roster display name / Firestore directory id.
-    // Only ever called behind `isMember()`; the `in` guard prevents the map
-    // lookup from erroring on an unknown key.
-    function myName() {
-      return directory()[callerEmail()].name;
-    }
-
-    function myId() {
-      return directory()[callerEmail()].id;
-    }
-
-    // DELIBERATELY NOT REQUIRED: `request.auth.token.email_verified`.
+    // DELIBERATELY NOT REQUIRED ON READS: `request.auth.token.email_verified`.
     //
-    // `WelcomeScreen.jsx:114-118` already refuses to complete a login for an
-    // unverified account, so this would be belt-and-braces. It is left OFF
-    // because an ID token is cached for up to an hour: a clinician who verifies
-    // their address mid-session carries `email_verified: false` in their token
-    // until it refreshes, and would be denied everything for that hour with no
-    // explanation. Turning it on is a one-line change to `isMember()` and
-    // `isAdmin()` — see `firestore.rules.README.md` §8, "Optional hardening".
-    // FLAGGED FOR YOUR DECISION.
+    // An ID token is cached for up to an hour, so a clinician who verifies their
+    // address mid-session carries `email_verified: false` until it refreshes and
+    // would be denied everything for that hour with no explanation. The check lives
+    // where it can be enforced without that failure mode: `WelcomeScreen` refuses to
+    // complete a login for an unverified account, and `approveLeadRequest` reads
+    // `getUser(uid).emailVerified` on the Admin SDK before creating any team.
 
     // ── Shared shape helpers ────────────────────────────────────────────────
     // A roster date key, e.g. "2026-02-02". Both engines emit exactly this via
-    // local getters (`auraEngine.js:69 toDateKey`,
-    // `rosterEngineV2.js:2193 toLocalDateKey`) — post-mortem Block B is the
-    // reason the format is worth pinning rather than trusting.
+    // local getters (`auraEngine.js` toDateKey, `rosterEngineV2.js` toLocalDateKey).
     function isDateKey(k) {
       return k.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}$');
     }
 
-    // True when this write changes nothing outside the keys the document
-    // already had. Used to stop a non-admin INVENTING a top-level key on a
-    // shared document while still letting them modify an existing one.
+    // True when this write changes nothing outside the keys the document already
+    // had — stops a non-lead INVENTING a top-level key on a shared document while
+    // still letting them modify an existing one.
     function addsNoNewKeys() {
       return request.resource.data.keys().hasOnly(resource.data.keys());
     }
 
+    // ⚠️ `diff().affectedKeys()` is keys whose VALUE CHANGED, not keys written. A
+    //    write that sets a field to what it already held affects nothing. A test
+    //    asserting "cannot change two days in one write" passed spuriously once
+    //    because it wrote `[]` over an already-`[]` day; any case built on this must
+    //    write genuinely different values.
     function changedKeys() {
       return request.resource.data.diff(resource.data).affectedKeys();
     }
 
 
     // ==========================================================================
-    // SECTION 2 — THE MASTER DUTY ROSTER
+    // SECTION 2 — THE TEAM, AND WHO IS IN IT
     // ==========================================================================
     //
-    // Readers  : every directory member (`RosterView.jsx:371` onSnapshot).
-    // Writers  : (a) whoever presses Generate — `RosterView.jsx:575`
-    //                `setDoc(..., { merge: true })`, MANY date keys at once;
-    //            (b) a colleague accepting a swap — `AuraPulseBot.jsx:484`
-    //                `updateDoc(rosterRef, { [plan.dateKey]: plan.shifts })`,
-    //                EXACTLY ONE date key.
-    //
-    // That asymmetry is the whole design of this block, and it is the one piece
-    // of real leverage rules have here. (a) is the destructive operation — C2 in
-    // the post-mortem, "generation overwrites everything" — and it is restricted
-    // to the two admins. (b) is a one-day edit and is open to any team member.
-    //
-    // ⚠️ BEHAVIOUR CHANGE, THE BIGGEST IN THIS FILE. Today the Configure →
-    //    Generate Roster button at `RosterView.jsx:813` is NOT admin-gated in
-    //    the UI at all: any of the ten directory members can press it and
-    //    rewrite the roster. Under these rules only Alif and Nisa can. If a CEP
-    //    presses Generate they get a clean, honest failure — `RosterView.jsx:592`
-    //    already renders `permission-denied` with "The roster was NOT saved" and
-    //    keeps their configuration — but they DID have that power yesterday and
-    //    will not tomorrow. Confirm this is what you want before deploying.
-    //    (`ROSTER_TODO.md` D5 asks a related question and is still open.)
-    //
-    // ── HOW NARROWLY COULD (b) BE SCOPED? THE HONEST ANSWER ──────────────────
-    //
-    // What you would WANT to require is: "this write is permitted because there
-    // exists an APPROVED swap naming this caller as `targetStaff` for this
-    // date". Rules cannot express that, for three independent reasons, and no
-    // amount of cleverness removes any of them:
-    //
-    //   1. THE SWAP IS STILL PENDING AT WRITE TIME. `AuraPulseBot.jsx` was
-    //      deliberately reordered for QC finding M9 so the ledger is flipped to
-    //      APPROVED only AFTER a verified roster read-back (`:506`, after
-    //      `:484`). So at the instant of the roster write there is no APPROVED
-    //      document to point at. Requiring one would deadlock the feature.
-    //      Reversing the order to satisfy rules would REINTRODUCE M9 — an
-    //      APPROVED ledger entry against an untouched roster. Not a trade worth
-    //      making.
-    //   2. RULES CANNOT QUERY. `get()` needs a full document path. The swap's
-    //      id comes from `addDoc` (`RosterView.jsx:709`), so it is a random
-    //      auto-id, and the accepting client does not send it with the roster
-    //      write. There is nothing to `get()`.
-    //   3. RULES CANNOT INDEX INTO A DIFF. `changedKeys()` is a Set with no
-    //      element accessor, so this block can prove that exactly ONE key
-    //      changed but cannot name it, cannot regex it, and cannot inspect the
-    //      shift array that was written into it. Field-level enforcement of a
-    //      swap — "you may only replace yourself into the coLead slot of the
-    //      AM Clinic (Ortho) duty" — is therefore NOT ACHIEVABLE IN RULES ALONE.
-    //      Anyone who tells you otherwise has not tried it.
-    //
-    // The ceiling actually reached below, stated as a capability so you can
-    // judge it: a signed-in team member may replace the entire shift array of
-    // ONE day that ALREADY EXISTS in the document. They cannot create the
-    // document, cannot delete it, cannot add a day, cannot remove a day, cannot
-    // touch two days in one write, and cannot blank the roster. The residual
-    // risk is that a team member can write a wrong-but-well-formed single day —
-    // i.e. rules reduce this from "any member can destroy the roster" to "any
-    // member can vandalise one day, attributably, and the other nine days are
-    // untouched".
-    //
-    // THE ONLY REAL FIX is to stop writing the roster from a browser: a
-    // `applySwap({ swapId })` callable Cloud Function reads the swap, does the
-    // substitution with the Admin SDK, and this block becomes
-    // `allow write: if isAdmin()`. That is an application change and is out of
-    // scope for a rules proposal. Recorded in the runbook as the recommended
-    // next step, and it is what would finally close C4/Q6 properly.
-    match /system_data/roster_2026 {
-      allow get: if isMember();
-      allow list: if false;              // nothing lists `system_data`.
+    // ⚠️ NEITHER OF THESE MAY BE CREATED BY A CLIENT. `approveLeadRequest` on the
+    //    Admin SDK is the only thing that brings a team and its first membership
+    //    into existence, and it bypasses this file by design. A client that could
+    //    write its own membership document could grant itself everything below it —
+    //    every rule here trusts that document, so it is the one document a client
+    //    must never author.
 
-      // (a) Generation. Admins only. `setDoc(..., { merge: true })` is a create
-      //     when the document is absent and an update when it is present, so
-      //     both verbs are needed.
-      allow create, update: if isAdmin();
+    match /teams/{teamId} {
+      allow get: if isMember(teamId);
+      // No client lists teams. A member reaches their teams through
+      // `users/{uid}.teamIds`, which is the only place that relationship lives.
+      allow list: if false;
 
-      // (b) One day, in place, by a team member completing a swap.
-      //
-      //     A `resource != null` guard was here in the first draft, to stop this
-      //     path being used to CREATE the roster. MUTATION-CHECKING PROVED IT
-      //     COULD NOT FAIL and it was removed: Firestore only evaluates an
-      //     `update` rule when the document already exists, so `resource` is
-      //     never null here and the predicate was unreachable dead weight
-      //     dressed as a safety check. The protection it claimed to give comes
-      //     from the verb split instead — `create` above is granted only to
-      //     `isAdmin()`, so a member cannot bring this document into existence.
-      //     Measured: README §4 case R11. This repo does not keep checks that
-      //     cannot fail (`ROSTER_POSTMORTEM.md` A-RC4's sibling problem).
-      allow update: if isMember()
-                    && changedKeys().size() == 1
-                    && addsNoNewKeys();
-
-      // Nothing in the app deletes the roster document, so nothing may.
+      // A lead renames the team or corrects its institution; nothing more.
+      allow create: if false;                      // Cloud Function only.
+      allow update: if isLead(teamId)
+                    && changedKeys().hasOnly(['name', 'institution', 'department', 'profession']);
       allow delete: if false;
-    }
 
+      // ── The member list ────────────────────────────────────────────────────
+      //
+      // THIS SUBCOLLECTION IS WHAT REPLACED `TEAM_DIRECTORY`, `directoryNames()`,
+      // `adminEmails()` and the five-name exclusion list in `AdminPanel.jsx`. A lead
+      // maintaining it is the whole onboarding story.
+      match /members/{memberUid} {
+        // Everyone in the team can see who else is in it — the roster, the swap
+        // picker and the load table are all built from this list.
+        allow get, list: if isMember(teamId);
 
-    // ==========================================================================
-    // SECTION 3 — SHIFT SWAP REQUESTS
-    // ==========================================================================
-    //
-    // Created  : `RosterView.jsx:709` addDoc.
-    // Read     : `AuraPulseBot.jsx:130-133`, a LIST query filtered
-    //            `where('targetStaff','==',myName)` + `where('status','==','PENDING')`.
-    // Updated  : `AuraPulseBot.jsx:455` `{status:'DENIED'}` and `:506`
-    //            `{status:'APPROVED', approvedAt}`.
-    // Deleted  : never, anywhere.
-    //
-    // Today this is an UNGUARDED `addDoc` from any signed-in client — C4's
-    // headline. Anyone could forge a request naming any two colleagues, and
-    // anyone could flip anyone else's request to APPROVED.
-    //
-    // The read rule is a disjunction whose FIRST clause is exactly the app's
-    // query predicate, which is what makes the listener keep working: Firestore
-    // evaluates a list rule against every document the query would return, and
-    // every document that query returns satisfies `targetStaff == myName()`.
-    // The `requestedBy` / `initiatedBy` clauses widen it to the people the
-    // request is ABOUT — no code reads by those fields yet, but decision Q3
-    // ("should the requester be told the outcome?") is open, and pre-authorising
-    // the read costs nothing while forgetting to would make D3 look like a rules
-    // bug later.
-    match /shift_swaps/{swapId} {
-      allow read: if isMember()
-                  && (
-                       resource.data.targetStaff == myName()
-                       || resource.data.requestedBy == myName()
-                       || resource.data.get('initiatedBy', '') == myName()
-                       || isAdmin()
-                     );
+        // ⚠️ A LEAD MAY NOT MINT A MEMBERSHIP FOR AN ARBITRARY uid. `create` is
+        //    denied outright: the invitation path is a Cloud Function, which can
+        //    check that the uid belongs to a real, verified account on an
+        //    allowlisted domain. Rules cannot see any of that. Without this, a lead
+        //    could add a uid they do not control and then sign in as it.
+        allow create: if false;
 
-      // ── CREATE ────────────────────────────────────────────────────────────
-      // The exact field set written by `RosterView.jsx:709-731`. `initiatedBy`
-      // is the only optional one — `submitSwapRequest` spreads it in ONLY for an
-      // on-behalf request, and that absence is load-bearing: it is how a
-      // self-request stays byte-identical to the pre-M11 document shape.
+        // A lead edits anybody's roster attributes. `role` and `rostered` are
+        // included: promoting a colleague to lead, or marking the roster master as
+        // carrying no duties, is exactly this screen's job.
+        allow update: if isLead(teamId)
+                      && changedKeys().hasOnly([
+                           'displayName', 'grade', 'fte', 'skills',
+                           'unavailable', 'role', 'rostered', 'title'
+                         ]);
+
+        // A member maintains their OWN availability and skills without needing a
+        // lead — but cannot touch `role` or `rostered`, which would be granting
+        // themselves powers or duties.
+        allow update: if isSelf(memberUid)
+                      && isMember(teamId)
+                      && changedKeys().hasOnly(['skills', 'unavailable', 'title']);
+
+        // ⚠️ REMOVING SOMEBODY IS A CLOUD FUNCTION, NOT A DELETE. The membership
+        //    document is only half of it: `users/{uid}.teamIds` has to lose the team
+        //    in the same breath, or the person keeps a team in their switcher that
+        //    they can no longer read and every listener fails permission-denied.
+        //    Rules cannot write two documents, so they permit neither.
+        allow delete: if false;
+      }
+
+      // ── The duty roster, one document per year ─────────────────────────────
       //
-      // Two legitimate authors, straight out of `resolveSwapSubject`
-      // (`auraEngine.js:579-658`):
+      // Was `system_data/roster_2026` — ONE document for the whole installation.
+      match /rosters/{year} {
+        allow get: if isMember(teamId);
+        allow list: if false;
+
+        // (a) GENERATION — leads only. `setDoc(..., { merge: true })` is a create
+        //     when the document is absent and an update when it is present, so both
+        //     verbs are needed.
+        allow create: if isLead(teamId);
+        allow update: if isLead(teamId);
+
+        // (b) ONE DAY, IN PLACE, by any member completing a coverage swap.
+        //
+        //     The verb split is what stops this being a way to create the roster: a
+        //     member cannot bring the document into existence, only alter one day of
+        //     an existing one. A `resource != null` guard was here once and was
+        //     removed as unreachable — Firestore only evaluates `update` when the
+        //     document already exists.
+        allow update: if isMember(teamId)
+                      && changedKeys().size() == 1
+                      && addsNoNewKeys();
+
+        allow delete: if false;
+      }
+
+      // ── Coverage / shift swaps ─────────────────────────────────────────────
       //
-      //   SELF     — `requestedBy` is the caller, no `initiatedBy` at all.
-      //   ON BEHALF— an ADMIN arranging cover: `requestedBy` is the clinician who
-      //              holds the duty, `initiatedBy` is the admin. Restricting this
-      //              to admins matches `canArrangeForOthers`
-      //              (`RosterView.jsx:644`) and, critically, means a non-admin
-      //              cannot mint a request in a colleague's name.
+      // ⚠️ ROUTED BY `targetUid`, NOT BY DISPLAY NAME. The read rule's predicate is
+      //    exactly the app's query predicate — Firestore evaluates a list rule
+      //    against every document the query would return — so changing one without
+      //    the other makes the listener silently return nothing, which is
+      //    indistinguishable from nobody having asked.
       //
-      // `status == 'PENDING'` on create is what makes the update rule below
-      // meaningful — without it a forger could create an already-APPROVED
-      // document and skip the transition check entirely.
-      allow create: if isMember()
-                    && request.resource.data.keys().hasOnly([
-                         'requestedBy', 'targetStaff', 'originalShiftDate',
-                         'originalTask', 'swapRole', 'initiatedBy',
-                         'reason', 'status', 'timestamp'
-                       ])
-                    && request.resource.data.keys().hasAll([
-                         'requestedBy', 'targetStaff', 'originalShiftDate',
-                         'originalTask', 'swapRole', 'status', 'timestamp'
-                       ])
-                    && request.resource.data.status == 'PENDING'
-                    // Both parties must be real colleagues, and a swap with
-                    // yourself is not a swap.
-                    && request.resource.data.targetStaff in directoryNames()
-                    && request.resource.data.requestedBy in directoryNames()
-                    && request.resource.data.targetStaff != request.resource.data.requestedBy
-                    // A3: the duty being handed over. `resolveSwapSubject` now
-                    // refuses to produce anything else, and M11 made a null here
-                    // unwritable; this is the server-side latch for the same
-                    // invariant.
-                    && request.resource.data.swapRole in ['lead', 'coLead']
-                    && isDateKey(request.resource.data.originalShiftDate)
-                    && request.resource.data.originalTask is string
-                    && request.resource.data.originalTask.size() > 0
-                    && request.resource.data.originalTask.size() <= 200
-                    && request.resource.data.reason is string
-                    && request.resource.data.reason.size() <= 2000
-                    // `serverTimestamp()` resolves to `request.time` during
-                    // evaluation, so this pins the ledger clock to the server and
-                    // makes a back-dated request unwritable.
-                    && request.resource.data.timestamp == request.time
+      //    `requestedBy` is still a NAME on the document because the roster mutator
+      //    matches it against the roster's own day arrays. It is not used for
+      //    authorization anywhere here.
+      match /swaps/{swapId} {
+        allow read: if isMember(teamId)
                     && (
-                         // SELF
-                         (
-                           request.resource.data.requestedBy == myName()
-                           && !('initiatedBy' in request.resource.data)
-                         )
-                         ||
-                         // ON BEHALF (admins only)
-                         (
-                           isAdmin()
-                           && request.resource.data.get('initiatedBy', '') == myName()
-                         )
+                         resource.data.get('targetUid', '') == uid()
+                         || resource.data.get('requestedUid', '') == uid()
                        );
 
-      // ── UPDATE: the PENDING → APPROVED / DENIED transition ────────────────
-      // Only the named `targetStaff` — the person actually being asked to cover —
-      // and only out of PENDING, so an outcome cannot be re-litigated or
-      // reversed by anyone once recorded. Every identifying field is pinned
-      // unchanged by `hasOnly`: the ledger entry that gets approved must be the
-      // one that was created.
-      //
-      // `approvedAt` is written by `AuraPulseBot.jsx:508` as
-      // `new Date().toISOString()` — a CLIENT clock, and a string, not a
-      // timestamp. It is accepted as-is here because changing it is an app
-      // change; it is not trusted for anything. (`request.time` would be the
-      // right value. Noted in the runbook's follow-ups.)
-      allow update: if isMember()
-                    && resource.data.status == 'PENDING'
-                    && resource.data.targetStaff == myName()
-                    && request.resource.data.status in ['APPROVED', 'DENIED']
-                    && changedKeys().hasOnly(['status', 'approvedAt']);
-
-      // The app never deletes a swap, and the ledger is the audit trail for a
-      // change to somebody's working week. Nothing may delete it.
-      allow delete: if false;
-    }
-
-
-    // ==========================================================================
-    // SECTION 4 — WELLBEING
-    // ==========================================================================
-
-    // ── Per-clinician wellbeing history ──────────────────────────────────────
-    // Written : `AuraPulseBot.jsx:555`
-    //           `setDoc(wellbeing_history/{user.id}, { logs: arrayUnion(...) }, { merge: true })`.
-    //           `user.id` is the TEAM_DIRECTORY id ('fadzlynn'), NOT the auth uid
-    //           — see the `users` block for why that distinction matters.
-    // Read    : `AdminWellbeingPanel.jsx:24` `getDocs(collection(...))`, a LIST
-    //           of the whole collection, rendered as a 7-day burnout monitor
-    //           captioned "CONFIDENTIAL: For HOD/Lead use only".
-    //
-    // This is the most sensitive collection in the project: a longitudinal
-    // energy/burnout record per named clinician. Owner + admins, nobody else.
-    //
-    // `get` AND `list` ARE SPLIT DELIBERATELY, and the split was forced by a
-    // measurement, not by taste. `read` covers both verbs, and with a single
-    // `allow read` here the `isAdmin()` disjunct silently re-opened
-    // `_anonymous_logs` to admins — a `false` in the literal block below cannot
-    // subtract from an `allow` in this one, because rules are OR'd across
-    // matching blocks and there is no `deny`. The emulator run caught it
-    // (`firestore.rules.README.md` §4, case W10). Splitting the verbs fixes it:
-    //   • `get`  — per document, and explicitly excludes the anonymous bucket.
-    //   • `list` — admins only; list requests never consult `get` rules, which
-    //              is exactly what keeps `AdminWellbeingPanel`'s unfiltered
-    //              `getDocs` working while a targeted read of the bucket stays
-    //              refused.
-    //
-    // No update-shape restriction beyond ownership: the write is an
-    // `arrayUnion` append via `setDoc(merge)` and pinning its shape would buy
-    // little while risking the one write path a clinician has to their own
-    // record.
-    match /wellbeing_history/{staffId} {
-      allow get: if isMember()
-                 && staffId != '_anonymous_logs'
-                 && (staffId == myId() || isAdmin());
-      allow list: if isAdmin();
-      allow create, update: if isMember() && staffId == myId();
-      allow delete: if false;           // a wellbeing record is not erasable by
-                                        // the app. Console/Admin SDK only.
-    }
-
-    // ── The anonymous pulse bucket: WRITE-ONLY ───────────────────────────────
-    // Written : `AuraPulseBot.jsx:550-552`, on the `isDemo || persona==='anon'`
-    //           branch — `setDoc(merge)` then `updateDoc(arrayUnion(logs))`.
-    // Read    : nothing, anywhere, ever. Grepped.
-    //
-    // So it is write-only against a TARGETED read, by anyone, including admins —
-    // that much is measured (README §4, cases W9/W10). It is not write-only
-    // against a COLLECTION SCAN, and here is the honest accounting:
-    //
-    //   • `AdminWellbeingPanel.jsx:24` does `getDocs(collection('wellbeing_history'))`
-    //     with no filter. A `list` request is matched by the WILDCARD block
-    //     above — a literal-segment match only ever governs a direct document
-    //     read — so an admin's collection scan STILL RETURNS this document.
-    //     That is not fixable in rules: making the bucket unreadable to a scan
-    //     means the scan fails, and the burnout panel silently renders empty
-    //     (its `catch` at `:29` only logs). Breaking a clinical-safety panel to
-    //     tighten a bucket the panel does not display is the wrong trade.
-    //     THE FIX IS A ONE-LINE APP CHANGE: move the bucket out of this
-    //     collection — `anonymous_pulse/logs` — after which a genuinely
-    //     write-only block can cover it. No rules for that path are written
-    //     here, because writing rules for a collection that does not exist is
-    //     how a rules file starts lying. The block to add is in the runbook.
-    //     FLAGGED FOR YOUR DECISION.
-    //   • No rule can hide anything from the Firebase console or the Admin SDK.
-    //     "Anonymous" here means unattributed IN THE DATA, and the data does
-    //     honour that: `logData` carries no identity, only energy/phase/action.
-    //
-    // `read: if false` below is therefore DOCUMENTATION of intent, not the
-    // mechanism: the mechanism is the `staffId != '_anonymous_logs'` exclusion
-    // in the wildcard's `get`. Stated plainly because the first draft of this
-    // file got that exact point wrong and the emulator, not the author, found it.
-    //
-    // ⚠️ BEHAVIOUR CHANGE. `isMember()` means the SANDBOX can no longer write
-    //    here. Demo mode is reachable with NO LOGIN AT ALL
-    //    (`App.jsx:623` renders the whole app when `isDemo` is true and `user`
-    //    is null), so today an anonymous visitor's simulated pulse log lands in
-    //    the live collection. Denying that is a bug fix wearing a lockout's
-    //    clothing — but it IS a change, and `confirmLog`'s catch will surface
-    //    "Could not sync your pulse log" to a sandbox visitor. See the runbook.
-    match /wellbeing_history/_anonymous_logs {
-      allow read: if false;
-      allow create, update: if isMember();
-      allow delete: if false;
-    }
-
-
-    // ==========================================================================
-    // SECTION 5 — SHARED OPERATIONAL DOCUMENTS IN `system_data`
-    // ==========================================================================
-
-    // ── The team pulse heat-map ──────────────────────────────────────────────
-    // Read    : `WellbeingView.jsx:42` and it is the whole point of the view —
-    //           every member sees every member's energy. Not a leak; a feature.
-    // Written : `WellbeingView.jsx:146` `{ [selectedStaff]: payload }`,
-    //           `AuraPulseBot.jsx:553` `{ [heatKey]: payload }` (anon/demo),
-    //           `:556` `{ [user.name]: payload }`.
-    //
-    // The document is a map keyed by display name, so "you may only update your
-    // own entry" is expressible exactly, and this is the one place in the file
-    // where a diff-based rule lands cleanly. It matches the UI's own
-    // `canEdit` at `WellbeingView.jsx:309` (own row, or admin — the extra
-    // `user?.name === 'Nisa'` clause there is redundant, Nisa is an admin).
-    //
-    // ⚠️ BEHAVIOUR CHANGE. The anon/demo branch at `AuraPulseBot.jsx:553`
-    //    writes a key like `Anon_4718` (and, in demo, a Marvel persona name).
-    //    Neither is the caller's directory name, so both are now DENIED. Same
-    //    judgement as the anonymous bucket above: the sandbox should never have
-    //    been writing to the live pulse map. Listed in the runbook as a break.
-    match /system_data/daily_pulse {
-      allow get: if isMember();
-      allow list: if false;
-      allow create: if isMember()
-                    && (isAdmin() || request.resource.data.keys().hasOnly([myName()]));
-      allow update: if isMember()
-                    && (isAdmin() || changedKeys().hasOnly([myName()]));
-      allow delete: if false;
-    }
-
-    // ── Monthly attendance ───────────────────────────────────────────────────
-    // Read `App.jsx:274` (all members, feeds the dashboard chart); written only
-    // by `AdminPanel.jsx:235`, which lives behind `hasAdminAccess`. Team-level
-    // operational counts — admin-write is both least privilege and current
-    // intent.
-    match /system_data/monthly_attendance {
-      allow get: if isMember();
-      allow list: if false;
-      allow create, update: if isAdmin();
-      allow delete: if false;
-    }
-
-    // ── Published annual reports, and the catch-all for `system_data` ────────
-    //
-    // `system_data/reports_{year}`: read by `SmartReportView.jsx:148` for EVERY
-    // user; written by `SmartAnalysis.jsx:121`.
-    //
-    // ⚠️ KNOWN CONFIDENTIALITY GAP, LEFT OPEN ON PURPOSE — FLAGGED FOR REVIEW.
-    //    That document holds BOTH `publicText` and `privateText`. The private
-    //    half is the HOD-only analysis, and the UI hides it behind
-    //    `isActuallyAdmin` (`SmartReportView.jsx:13`) — which is
-    //    `forceAdminView === true`, a prop `App.jsx` never passes, so the
-    //    private text is currently fetched into every user's browser memory and
-    //    shown to nobody. Restricting READ to admins here would be correct
-    //    least privilege AND would blank the public report card for the six
-    //    non-admins, because one `getDoc` fetches both fields.
-    //
-    //    So: read stays open to members, and the gap is named instead of
-    //    quietly encoded. THE FIX IS AN APP CHANGE — split into
-    //    `reports_{year}` (public) and `reports_{year}_private` (admin), then
-    //    tighten this rule. If you would rather take the breakage now, the
-    //    stricter form is one word: change `allow get` to `if isAdmin()`.
-    //    Recorded in the runbook's decision list; do not let it sit forever.
-    //
-    // The `{docId}` wildcard is regex-gated so it cannot widen the three
-    // documents matched literally above. Anything else that ever appears in
-    // `system_data` gets nothing until somebody writes a rule for it — which is
-    // the desired default for a collection this load-bearing.
-    match /system_data/{docId} {
-      allow get: if isMember() && docId.matches('^reports_[0-9]{4}$');
-      allow list: if false;
-      allow create, update: if isAdmin() && docId.matches('^reports_[0-9]{4}$');
-      allow delete: if false;
-    }
-
-
-    // ==========================================================================
-    // SECTION 6 — TEAM / PROJECT / WORKLOAD DATA
-    // ==========================================================================
-
-    // ── Project portfolio, current year ──────────────────────────────────────
-    // Listed by `App.jsx:255` for every member; mutated only by `AdminPanel.jsx`
-    // (`:262`, `:287`, `:306`, `:327`), all behind `hasAdminAccess`.
-    // `AdminPanel.jsx:327` uses a `writeBatch`; batched writes are evaluated per
-    // document against the same rules, so nothing special is needed.
-    match /cep_team/{staffId} {
-      allow get, list: if isMember();
-      allow create, update: if isAdmin();
-      allow delete: if false;           // no delete path exists in the app.
-    }
-
-    // ── Historical archives, one collection per year ─────────────────────────
-    // `archive_2025`, `archive_2024`, … Listed by `App.jsx:255` (year selector)
-    // and `AdminPanel.jsx:86`; written by `AdminPanel.jsx:181/:184` and
-    // `SmartAnalysis.jsx:133`.
-    //
-    // A single-segment collection wildcard is used rather than enumerating
-    // years, because enumerating them means this file silently expires on
-    // 1 Jan — a maintenance trap worse than the wildcard. The regex is what
-    // keeps it from being a hole: this block grants NOTHING to any collection
-    // whose name is not literally `archive_` + four digits, and it is the only
-    // collection-wildcard block in the file for exactly that reason.
-    match /{archiveCollection}/{staffId} {
-      allow get, list: if isMember()
-                       && archiveCollection.matches('^archive_[0-9]{4}$');
-      allow create, update: if isAdmin()
-                            && archiveCollection.matches('^archive_[0-9]{4}$');
-      allow delete: if false;
-    }
-
-    // ── Clinical load, 12 numbers per clinician ──────────────────────────────
-    // Read : `App.jsx:265` per-document listeners (all members),
-    //        `AdminPanel.jsx:110` list.
-    // Write: `AdminPanel.jsx:205` (admin UI), and `AuraPulseBot.jsx:852`
-    //        — AURA's DATA_ENTRY mode, "Log 35 patients for January", available
-    //        to ANY signed-in user with `target_doc` chosen by the language
-    //        model from a System Note carrying the caller's own id
-    //        (`functions/index.js:241`).
-    //
-    // `staffId == myId()` preserves that self-service flow exactly while
-    // removing the ability to log numbers into a COLLEAGUE's record — which is
-    // currently possible, and would be attributed to them. Note the document is
-    // keyed by directory id ('ying_xian'); `AdminPanel` derives the same string
-    // from the display name, so the two agree.
-    //
-    // ⚠️ `StaffLoadEditor.jsx` writes `staff_loads/{'Ying Xian'}` — the display
-    //    name WITH a space, which nothing reads. It is dead code: no component
-    //    imports or renders it. These rules deny those writes. That is a
-    //    latent-bug reveal, not a regression, but it belongs on the list.
-    match /staff_loads/{staffId} {
-      allow get, list: if isMember();
-      allow create, update: if isMember() && (isAdmin() || staffId == myId());
-      allow delete: if false;
-    }
-
-    // ── Team-wide workload counters written by AURA's DATA_ENTRY mode ────────
-    // `monthly_workload/{mmm_yyyy}` — `functions/index.js:234-236` instructs the
-    // model to target it; `AuraPulseBot.jsx:861` performs the write. NOTHING in
-    // the app reads it back. These are team-level metrics, so admin-write.
-    //
-    // ⚠️ BEHAVIOUR CHANGE: a non-admin asking AURA to "log 145 attendances for
-    //    January" will now get the DATA_ENTRY error bubble instead of a silent
-    //    success. Listed in the runbook.
-    match /monthly_workload/{period} {
-      allow read: if false;             // nothing reads it; nothing may.
-      allow create, update: if isAdmin();
-      allow delete: if false;
-    }
-
-
-    // ==========================================================================
-    // SECTION 7 — USER PROFILES
-    // ==========================================================================
-    //
-    // ⚠️ THIS COLLECTION IS KEYED TWO DIFFERENT WAYS AND BOTH ARE LIVE.
-    //
-    //    BY AUTH UID   — `App.jsx:174`/`:219` (onSnapshot),
-    //                    `NexusContext.jsx:24` (getDoc),
-    //                    `ProfileView.jsx:17`/`:60`/`:75`/`:113`,
-    //                    `WellbeingView.jsx:52`/`:100` (fcmToken).
-    //    BY DIRECTORY ID — `AuraPulseBot.jsx:557`
-    //                    `setDoc(users/{user.id}, { aura_last_phase, aura_memory,
-    //                    last_interaction }, { merge: true })`, where `user.id`
-    //                    is 'alif', not the uid.
-    //
-    //    So every pulse log writes AURA's memory into `users/alif` while the
-    //    entire rest of the app reads `users/<uid>`. That memory is written and
-    //    never read back — grep `aura_memory`: one write, no reads. It is a
-    //    pre-existing split-brain of exactly the A-RC1 species the post-mortem
-    //    is about (one name, two meanings), and it is NOT this proposal's job to
-    //    fix it. Both keyings are permitted below so that deploying rules does
-    //    not break `confirmLog`. FLAGGED: pick one keying, in the app.
-    //
-    // `list` is denied — nothing client-side enumerates users. The scheduled
-    // nudge does (`functions/index.js:482`) and is Admin SDK, so unaffected.
-    //
-    // The `role` clause: `ProfileView.jsx:75` legitimately writes a `role`
-    // string from the profile form, and `App.jsx:174` merges it OVER the
-    // directory profile, so writing `role: 'admin'` grants every
-    // `user?.role === 'admin'` affordance in the UI. Nothing in this file trusts
-    // that field, so the escalation buys no DATA access — but it does buy a
-    // confusing AdminPanel that then fails on every write, so the string is
-    // refused for non-admins. Admins may write it because `startEditing`
-    // pre-fills the form with their own directory role — literally the string
-    // 'admin' — and saving their profile must not fail.
-    match /users/{userId} {
-      allow get: if isMember() && (userId == request.auth.uid || userId == myId());
-      allow list: if false;
-      allow create, update: if isMember()
-                            && (userId == request.auth.uid || userId == myId())
-                            && (isAdmin() || request.resource.data.get('role', '') != 'admin');
-      allow delete: if false;
-    }
-
-
-    // ==========================================================================
-    // SECTION 8 — FEEDS
-    // ==========================================================================
-    //
-    // Posts are CREATED AND EDITED BY A CLOUD FUNCTION
-    // (`functions/index.js:615`/`:625`, `processFeedPost`, Admin SDK), so the
-    // client needs no create permission at all and gets none. What the client
-    // genuinely does:
-    //
-    //   read   `FeedsView.jsx:114` list, ordered by timestamp
-    //   update `:60`  `{ comments: increment(1) }`
-    //          `:204` `{ likes: increment(1) }`
-    //   delete `:174` author-gated in the UI at `:268-299`
-    //
-    // ⚠️ BEHAVIOUR CHANGE. That listener at `:114` has NO `isDemo` guard and NO
-    //    error callback, and demo mode needs no login — so today an
-    //    unauthenticated sandbox visitor reads the live feed. Under
-    //    `isMember()` they will not, and because there is no error callback
-    //    they will see only the mock posts with NO indication anything failed.
-    //    That silence is the worst part of this change; the app fix is an error
-    //    callback (QC M8's sibling, still open for this listener).
-    //
-    // The counter rule cannot stop a member from liking a post ten times — that
-    // is inherent to a client-side `increment()` and would need a
-    // `likes/{uid}` subcollection or a Cloud Function to fix. It does stop a
-    // member rewriting a colleague's post text through the counter path, which
-    // is what an unrestricted update would allow.
-    //
-    // Delete matches the UI's own author test. Note `FeedsView.jsx:271` treats
-    // `post.author === 'Staff Member'` as "you are the author" FOR EVERYONE, so
-    // for legacy posts saved under that placeholder the UI will offer a delete
-    // button that these rules refuse. Visible failure over silent
-    // cross-authorship: correct, but it will look like a bug. On the list.
-    match /feed_posts/{postId} {
-      allow get, list: if isMember();
-      allow create: if false;           // Cloud Function only (Admin SDK).
-      allow update: if isMember()
-                    && changedKeys().hasOnly(['likes', 'comments']);
-      allow delete: if isMember()
-                    && (resource.data.author == myName() || isAdmin());
-
-      // Comments: read by `FeedsView.jsx:41`, created at `:59` with exactly
-      // `{ author, text, timestamp }`.
-      //
-      // ⚠️ `author` is `user?.name || 'Staff Member'`, and `user.name` can be
-      //    OVERWRITTEN by the profile form (see Section 7). A member who renamed
-      //    themselves will be denied here. That same rename ALREADY breaks their
-      //    swap listener and their pulse row today, silently — see the runbook's
-      //    pre-flight check, which is the single most important thing to do
-      //    before deploying this file.
-      match /comments/{commentId} {
-        allow get, list: if isMember();
-        allow create: if isMember()
-                      && request.resource.data.keys().hasOnly(['author', 'text', 'timestamp'])
-                      && request.resource.data.author == myName()
-                      && request.resource.data.text is string
-                      && request.resource.data.text.size() > 0
-                      && request.resource.data.text.size() <= 5000
+        // Anyone in the team may ASK a colleague to cover. The shape is pinned so a
+        // request cannot arrive pre-approved, and `status` must start PENDING.
+        allow create: if isMember(teamId)
+                      && request.resource.data.status == 'PENDING'
+                      && request.resource.data.targetUid is string
+                      && request.resource.data.targetUid != uid()   // not yourself
+                      && request.resource.data.originalShiftDate is string
+                      && isDateKey(request.resource.data.originalShiftDate)
+                      && request.resource.data.swapRole in ['lead', 'coLead']
                       && request.resource.data.timestamp == request.time;
-        allow update: if false;         // no edit path exists in the app.
-        allow delete: if false;         // no delete path exists in the app.
+
+        // ⚠️ ONLY THE PERSON ASKED MAY ANSWER, and only by moving the status. A
+        //    member who could update any swap could approve a hand-over nobody
+        //    agreed to; one who could edit `originalShiftDate` could redirect an
+        //    accepted swap onto a different day after the fact.
+        allow update: if isMember(teamId)
+                      && resource.data.get('targetUid', '') == uid()
+                      && resource.data.status == 'PENDING'
+                      && request.resource.data.status in ['APPROVED', 'DENIED']
+                      && changedKeys().hasOnly(['status', 'approvedAt', 'deniedAt']);
+
+        allow delete: if false;
+      }
+
+      // ── Wellbeing: the most sensitive collection in the project ────────────
+      //
+      // A longitudinal energy and burnout record per clinician. Owner-or-lead, and
+      // NEVER readable by a colleague.
+      match /wellbeing/{memberUid} {
+        allow get: if isSelf(memberUid) && isMember(teamId);
+        // The burnout monitor. A lead sees the team's trends; nobody else lists it.
+        allow list: if isLead(teamId);
+        allow create, update: if isSelf(memberUid) && isMember(teamId);
+        // A wellbeing record is not erasable by the person having a bad month, and
+        // not by anybody else either.
+        allow delete: if false;
+      }
+
+      // The shared bucket an anonymous check-in appends to. WRITE-ONLY: not
+      // readable by anyone, including a lead — the point of logging anonymously is
+      // that it cannot be attributed, and a reader who can see one entry arriving
+      // can attribute it by timing.
+      match /wellbeing/_anonymous_logs {
+        allow read: if false;
+        allow create, update: if isMember(teamId);
+        allow delete: if false;
+      }
+
+      // ── The pulse board ────────────────────────────────────────────────────
+      //
+      // A live snapshot everyone in the team can see and add their own row to.
+      // ⚠️ The MAP INSIDE is still keyed by display name. Team scoping is what makes
+      //    that safe enough to leave: two people called Sarah in different
+      //    departments now write to different documents. Two in the same department
+      //    would still collide, which the lead fixes by editing a name.
+      match /pulse/{period} {
+        allow get: if isMember(teamId);
+        allow list: if false;
+        allow create, update: if isMember(teamId);
+        allow delete: if false;
+      }
+
+      // ── Clinical load, per person per year ─────────────────────────────────
+      match /loads/{memberUid} {
+        allow get, list: if isMember(teamId);
+        // A lead maintains the whole grid; a clinician may correct their own row.
+        allow create, update: if isLead(teamId) || (isSelf(memberUid) && isMember(teamId));
+        allow delete: if false;
+      }
+
+      // ── Projects and domains, per person per year ──────────────────────────
+      //
+      // Was `cep_team` for the current year and `archive_{year}` for every other —
+      // one shape in two differently-named collections. The year is a document and
+      // the people hang beneath it, so 2026 stopped being special.
+      match /projects/{year} {
+        allow read: if isMember(teamId);
+        allow write: if isLead(teamId);
+
+        match /staff/{memberUid} {
+          allow get, list: if isMember(teamId);
+          allow create, update: if isLead(teamId);
+          allow delete: if false;
+        }
+      }
+
+      // ── Team-wide aggregates a lead maintains ──────────────────────────────
+      match /attendance/{year} {
+        allow get: if isMember(teamId);
+        allow list: if false;
+        allow create, update: if isLead(teamId);
+        allow delete: if false;
+      }
+
+      match /workload/{period} {
+        // Nothing reads it today; AURA's DATA_ENTRY writes it. Read stays denied
+        // until something actually reads it, rather than pre-granting access to a
+        // collection whose consumers are unknown.
+        allow read: if false;
+        allow create, update: if isLead(teamId);
+        allow delete: if false;
+      }
+
+      match /reports/{year} {
+        // The AI-generated year-end report. Every member may read it; a lead
+        // publishes it.
+        allow get: if isMember(teamId);
+        allow list: if false;
+        allow create, update: if isLead(teamId);
+        allow delete: if false;
+      }
+
+      // ── The team feed ──────────────────────────────────────────────────────
+      //
+      // Was one global `feed_posts` collection, so a KKH respiratory therapist's
+      // post appeared on an SGH physiotherapist's wall.
+      match /feed/{postId} {
+        allow get, list: if isMember(teamId);
+        // Cloud Function only — `processFeedPost` runs the PDPA guard, and a post
+        // that bypassed it would defeat the point of having one.
+        allow create: if false;
+        // Likes and comment counts are the only client-side mutations.
+        allow update: if isMember(teamId)
+                      && changedKeys().hasOnly(['likes', 'comments']);
+        allow delete: if isMember(teamId);
+
+        match /comments/{commentId} {
+          allow get, list: if isMember(teamId);
+          allow create: if isMember(teamId)
+                        && request.resource.data.keys().hasOnly(['author', 'text', 'timestamp'])
+                        && request.resource.data.text is string
+                        && request.resource.data.text.size() > 0
+                        && request.resource.data.text.size() <= 5000
+                        && request.resource.data.timestamp == request.time;
+          // ⚠️ `author` IS NO LONGER PINNED TO THE CALLER'S NAME, and that is a
+          //    deliberate loosening with a reason. The old rule required
+          //    `author == myName()` against the hardcoded directory — which meant a
+          //    member who renamed themselves in their profile was DENIED their own
+          //    comment, silently. The durable fix is an `authorUid` field the rules
+          //    can pin to `uid()`; the app does not write one yet, so pinning a
+          //    display name would restore the bug rather than the protection.
+          //    Tracked, and the cost is bounded: a member can post a comment under
+          //    another member's name inside their own team's feed.
+          allow update: if false;
+          allow delete: if false;
+        }
+      }
+
+      // ── Notifications ──────────────────────────────────────────────────────
+      //
+      // Same list-rule mechanics as swaps: the read predicate IS the app's query
+      // predicate, so the query stays satisfiable.
+      match /notifications/{notificationId} {
+        allow read: if isMember(teamId)
+                    && resource.data.get('recipientUid', '') == uid();
+        // Created by nothing today. If a Cloud Function is built for it, it will use
+        // the Admin SDK and bypass this rule anyway.
+        allow create: if false;
+        allow update: if isMember(teamId)
+                      && resource.data.get('recipientUid', '') == uid()
+                      && changedKeys().hasOnly(['read']);
+        allow delete: if false;
       }
     }
 
 
     // ==========================================================================
-    // SECTION 9 — NOTIFICATIONS
+    // SECTION 3 — THE PERSON, WHICH IS NOT A MEMBERSHIP
     // ==========================================================================
     //
-    // Read   : `App.jsx:225-230`, `where('recipient','==',user.name)`
-    //          + `orderBy('timestamp','desc')`.
-    // Written: `App.jsx:322` `{ read: true }`.
-    // Created: BY NOTHING. Grep `notifications` across `src/` and `functions/`:
-    //          one query, one flag update, no writer. The bell is fed from
-    //          documents that must be created by hand in the console, or by
-    //          something that does not exist yet. `create` is therefore denied —
-    //          if a Cloud Function is built for it (decision Q3, "tell the
-    //          requester the outcome"), it will use the Admin SDK and bypass
-    //          this rule anyway.
-    //
-    // Same list-rule mechanics as `shift_swaps`: the read predicate is the app's
-    // query predicate, so the query is satisfiable.
-    match /notifications/{notificationId} {
-      allow read: if isMember() && resource.data.recipient == myName();
-      allow create: if false;
-      allow update: if isMember()
-                    && resource.data.recipient == myName()
-                    && changedKeys().hasOnly(['read']);
+    // One human has one profile and may belong to several teams. Scoping this per
+    // team would mean a clinician editing their own name twice.
+
+    match /users/{userId} {
+      allow get: if isSelf(userId);
+      allow list: if false;
+
+      // ⚠️ `teamIds` IS THE ONE FIELD A USER MAY NOT TOUCH. It is the whole
+      //    membership graph as far as the client is concerned — `TeamContext` reads
+      //    it to decide which teams exist for this person, and `canActOn` is derived
+      //    from it. A user who could append to it would hand themselves a team in
+      //    the switcher; the per-team rules would still deny the reads, but they
+      //    would be denials rather than a design. Only the Admin SDK writes it.
+      allow create, update: if isSelf(userId)
+                            && !changedKeys().hasAny(['teamIds']);
       allow delete: if false;
     }
 
 
     // ==========================================================================
-    // SECTION 10 — WRITE-ONLY SINKS
-    // ==========================================================================
-
-    // ── Beta feedback ────────────────────────────────────────────────────────
-    // `FeedbackWidget.jsx:29` addDoc; never read by any client. Create-only,
-    // shape-pinned, size-capped.
-    //
-    // ⚠️ ANONYMOUS CREATE IS DELIBERATE, AND IT IS A DECISION, NOT AN OVERSIGHT.
-    //    *(Reconciled 2026-08-18 against the live console, which had
-    //    `allow create: if true` here with no shape check at all.)*
-    //
-    //    The widget renders in the unauthenticated sandbox (`App.jsx:633`).
-    //    Requiring `isMember()` — as the first draft of this file did — means the
-    //    ONLY feedback anyone can ever file is from the ten signed-in colleagues,
-    //    and every visiting department loses the route entirely. The respiratory
-    //    and audiology demos of August 2026 both ran in that sandbox; feedback
-    //    from a visitor is the point of the widget existing.
-    //
-    //    So the gate is the SHAPE, not the identity: the key allowlist below, a
-    //    10,000-character cap, and a server clock. That is strictly tighter than
-    //    what is live today. It is NOT rate-limited — rules cannot do that — so
-    //    this remains an open write endpoint against the billing account, and the
-    //    durable answer is still a Cloud Function with App Check. Accepted
-    //    knowingly rather than discovered later.
-    match /beta_feedback/{feedbackId} {
-      allow read: if false;
-      allow create: if request.resource.data.keys().hasOnly([
-                         'type', 'message', 'reportedBy', 'environment',
-                         'timestamp', 'userAgent'
-                       ])
-                    && request.resource.data.message is string
-                    && request.resource.data.message.size() > 0
-                    && request.resource.data.message.size() <= 10000
-                    && request.resource.data.timestamp == request.time;
-      allow update, delete: if false;
-    }
-
-    // ── AURA's document sink ─────────────────────────────────────────────────
-    // `AuraPulseBot.jsx:753` and `:792` `setDoc(smart_database/{docId})` with
-    // `docId` = `audit_${Date.now()}` / `doc_${Date.now()}`. Never read back.
-    //
-    // Create-only means a `Date.now()` COLLISION (two documents minted in the
-    // same millisecond) is denied rather than silently overwriting the earlier
-    // one. For an "audit" sink that is the behaviour you want, and it is why
-    // `update` is not granted here.
-    //
-    // Note the sandbox writes here too, with `isDemo: true` in the payload, so
-    // demo content is mixed into the same collection as live content. Not a
-    // rules problem — a data-hygiene one. Noted for the record.
-    match /smart_database/{docId} {
-      allow read: if false;
-      allow create: if isMember()
-                    && request.resource.data.keys().hasOnly([
-                         'timestamp', 'displayDate', 'author', 'role',
-                         'content', 'type', 'isDemo', 'silentlyLogged'
-                       ])
-                    && request.resource.data.author == myName()
-                    && request.resource.data.content is string
-                    && request.resource.data.content.size() <= 100000;
-      allow update, delete: if false;
-    }
-
-    // ── Community screening telemetry ────────────────────────────────────────
-    //
-    // ⚠️⚠️ THE ONE DECISION THIS FILE CANNOT MAKE FOR YOU. READ THIS BLOCK.
-    //
-    // `src/utils/telemetry.js:13` addDoc's into `community_assessments` from
-    // `ConventionalForm.jsx:676`, `AuraChat.jsx:814` and `ResultPage.jsx:529/568/577`.
-    // All five call sites live under `/individuals/*`, which `App.jsx:617-621`
-    // mounts OUTSIDE the auth gate. These writes come from MEMBERS OF THE PUBLIC
-    // WITH NO FIREBASE ACCOUNT.
-    //
-    // "Authentication required everywhere" therefore denies them, and that is
-    // what is implemented. Measured consequence, not guessed:
-    // `recordTelemetry` catches its own error and returns `false`
-    // (`telemetry.js:16-19`), so `await recordTelemetry(...)` NEVER THROWS. The
-    // public user still reaches their result page and still sees their plan.
-    // Nothing visibly breaks. YOU SIMPLY STOP RECEIVING THE DATA — silently,
-    // and the only trace is a console error in a stranger's browser.
-    //
-    // If that data matters, do NOT just flip this to `if true`. An open create
-    // rule on a public collection is an unmetered write endpoint against your
-    // billing account with no rate limit rules can impose. The right shape is a
-    // Cloud Function (`onCall`, App Check enforced) writing via the Admin SDK —
-    // the `publicTriageChat` callable already proves that pattern works for
-    // this exact pathway.
-    //
-    // ── DECIDED 2026-08-18: THE PUBLIC PATHWAY STAYS OPEN, SHAPE-PINNED. ─────
-    //
-    // The owner supplied the live console rules on that date and they carried
-    // `allow create: if true` here — so the public pathway is not hypothetical,
-    // it is CURRENTLY CARRYING DATA. Switching it to `isMember()` would not have
-    // produced an error anybody could see: `recordTelemetry` swallows its own
-    // failure (`telemetry.js:16-19`), the member of the public still reaches
-    // their result page, and the only symptom would have been screening data
-    // quietly ceasing to arrive. A silent data loss is the worst possible
-    // outcome of a security improvement, so it was taken to the owner as a
-    // decision rather than encoded as a default.
-    //
-    // What ships is the interim form this file already drafted: anonymous create,
-    // but the shape pinned, the size capped and the key count bounded. STRICTLY
-    // TIGHTER THAN WHAT IS LIVE, which pins nothing.
-    //
-    // ⚠️ THE RISK IS ACCEPTED, NOT REMOVED. This is an unmetered write endpoint
-    //    against the billing account and rules cannot rate-limit. The right
-    //    shape remains an `onCall` Cloud Function with App Check enforced,
-    //    writing via the Admin SDK — `publicTriageChat` already proves the
-    //    pattern on this exact pathway. Until that exists, this block is a
-    //    knowing trade: keep the data, cap the blast radius.
-    //
-    // ⚠️ `read` DIFFERS FROM BOTH THE OLD PROPOSAL AND THE CONSOLE, deliberately,
-    //    and it is called out because a silent third option is how a rules file
-    //    starts lying. The proposal had `read: if false` (nothing client-side
-    //    reads this — measured, 1 hit in the codebase and it is the `addDoc`).
-    //    The console has staff read, and the owner's own comment there says
-    //    "only KKH staff can read or analyze the data", so the intent to read it
-    //    exists even though no code does yet. `isMember()` keeps that intent
-    //    reachable while narrowing it from ANY verified `@kkh.com.sg` address to
-    //    the ten in `directory()`. Firebase-console reads are unaffected by rules
-    //    either way.
-    match /community_assessments/{assessmentId} {
-      allow read: if isMember();        // staff analyse it; the public cannot read it back.
-      allow create: if request.resource.data.keys().hasAll(['createdAt', 'postalSector'])
-                    && request.resource.data.createdAt == request.time
-                    && request.resource.data.postalSector is string
-                    && request.resource.data.postalSector.size() <= 4
-                    && request.resource.data.keys().size() <= 20;
-      allow update, delete: if false;
-    }
-
-
-    // ==========================================================================
-    // SECTION 10b — ONBOARDING: THE ALLOWLIST AND THE LEAD DECLARATION
+    // SECTION 4 — ONBOARDING: THE ALLOWLIST AND THE LEAD DECLARATION
     // ==========================================================================
     //
-    // These two paths are what let somebody who is not already one of ten named
-    // people arrive at NEXUS at all. They are the FIRST pieces of the multi-team
-    // model to land, and they are deliberately the least powerful ones: neither can
-    // create a team, a membership, or any access to clinical data. That remains the
-    // exclusive job of the approval Cloud Function on the Admin SDK.
+    // The two paths by which somebody who is not already in a team arrives at NEXUS
+    // at all. Deliberately the least powerful in the file: neither can create a
+    // team, a membership, or any access to clinical data.
 
     // ── config/domains — READ BY AN ANONYMOUS VISITOR, ON PURPOSE ─────────────
-    // `useDomainAllowlist.js` reads this BEFORE sign-in, because the registration
-    // form has to know which institutions NEXUS serves in order to say "we are not
-    // open to nuh.edu.sg yet" instead of failing opaquely. A list of hospital
-    // domains is not a secret and hiding it would only mean nobody could be told
-    // why they were refused.
+    // `useDomainAllowlist.js` reads this BEFORE sign-in, so the registration form
+    // can say "we are not open to nuh.edu.sg yet" instead of failing opaquely. A
+    // list of hospital domains is not a secret; hiding it would only mean nobody
+    // could be told why they were refused.
     //
-    // ⚠️ `get` IS PINNED TO ONE DOCUMENT ID, AND `list` IS DENIED. Both matter.
+    // ⚠️ `get` IS PINNED TO ONE DOCUMENT ID AND `list` IS DENIED. Both matter.
     //    `config/superAdmins` names the people who can approve teams — a reader who
     //    could list `config`, or `get` any docId, would harvest exactly the accounts
-    //    worth phishing. `allow get: if true` on the whole collection is the
-    //    obvious, wrong, one-word version of this rule.
-    //
-    // Nothing may write it. The allowlist changes when an institution is onboarded,
-    // which is a console or Admin SDK action, not a client one.
+    //    worth phishing. `allow get: if true` on the collection is the obvious,
+    //    wrong, one-word version of this rule.
     match /config/{docId} {
       allow get: if docId == 'domains';
       allow list: if false;
@@ -1031,52 +484,37 @@ service cloud.firestore {
     }
 
     // ── lead_requests/{uid} — A CLAIM, NOT A GRANT ───────────────────────────
-    // Written once by `WelcomeScreen.jsx` at registration, while the brand-new
-    // account is momentarily signed in; read back by `App.jsx` to decide which
-    // holding screen the person sees.
     //
-    // WHY `isVerifiedStaff()`-STYLE VERIFICATION IS *NOT* REQUIRED HERE, which
-    // looks like a hole and is not: this document is created seconds after
-    // `createUserWithEmailAndPassword`, before the verification email has even
-    // arrived. Requiring `email_verified` would make the declaration impossible to
-    // write at the only moment the flow has to write it. The verification check
-    // lives where it can actually be enforced — the approval function reads
+    // WHY VERIFICATION IS NOT REQUIRED HERE, which looks like a hole and is not:
+    // this document is created seconds after `createUserWithEmailAndPassword`,
+    // before the verification email has arrived. Requiring `email_verified` would
+    // make the declaration impossible to write at the only moment the flow can write
+    // it. The check lives where it can be enforced — `approveLeadRequest` reads
     // `getUser(uid).emailVerified` on the Admin SDK and refuses to approve an
-    // unverified account. A pending request from an unverified address grants
-    // nothing and reads nothing.
+    // unverified account. A pending request grants nothing and reads nothing.
     //
-    // THE DOCUMENT ID IS THE UID. That is the whole authorization model of this
-    // block: `uid == request.auth.uid` means a caller can only ever write their own
-    // request, cannot enumerate anyone else's, and cannot forge a request on behalf
-    // of a colleague to get a team created in their name.
+    // THE DOCUMENT ID IS THE UID, which is the whole authorization model of this
+    // block: a caller can only write their own request, cannot enumerate anyone
+    // else's, and cannot forge one on a colleague's behalf.
     //
-    // `status` IS PINNED TO 'pending' AND `update` IS DENIED. A client that could
-    // set its own status to 'approved', or edit it afterwards, would be a client
-    // that grants itself a team. The approval path is the Admin SDK, which bypasses
-    // these rules by design and is the only thing that should.
+    // ⚠️ KNOWN GAP, ACCEPTED: a DECLINED request cannot be re-made — `create` does
+    //    not apply to an existing document and `update` is denied. The declined
+    //    screen tells the person to ask their department lead instead, which is the
+    //    better route anyway.
     //
-    // ⚠️ KNOWN GAP, ACCEPTED: someone whose request is DECLINED cannot re-request —
-    //    `create` does not apply to an existing document and `update` is denied. The
-    //    declined screen tells them to ask their department lead instead, which is
-    //    the better route anyway. If re-declaration is wanted later, the narrow form
-    //    is `allow update: if ... resource.data.status == 'declined' &&
-    //    request.resource.data.status == 'pending'` — not a blanket update.
-    //
-    // `list` IS DENIED, including for administrators. The super-admin screen gets
-    // pending requests from a callable function rather than from a query, so this
-    // file never needs to know who the super-admins are — which is what keeps the
-    // third copy of the team out of the rules.
-    match /lead_requests/{uid} {
-      allow get: if isSignedIn() && uid == request.auth.uid;
+    // `list` is denied even for administrators: the super-admin screen gets pending
+    // requests from a callable function, which is what keeps the list of
+    // super-admins out of this file.
+    match /lead_requests/{requestUid} {
+      allow get: if isSelf(requestUid);
       allow list: if false;
-      allow create: if isSignedIn()
-                    && uid == request.auth.uid
+      allow create: if isSelf(requestUid)
                     && request.resource.data.keys().hasOnly([
                          'uid', 'email', 'displayName', 'role', 'institution',
                          'department', 'profession', 'proposedTeamId', 'status',
                          'requestedAt'
                        ])
-                    && request.resource.data.uid == request.auth.uid
+                    && request.resource.data.uid == uid()
                     && request.resource.data.email == callerEmail()
                     && request.resource.data.status == 'pending'
                     && request.resource.data.role in ['lead', 'supervisor', 'administrator']
@@ -1092,63 +530,109 @@ service cloud.firestore {
                     && request.resource.data.profession.size() <= 120
                     && request.resource.data.proposedTeamId is string
                     && request.resource.data.proposedTeamId.matches('^[a-z0-9]+(-[a-z0-9]+)*$');
-      allow update: if false;           // approval is Admin SDK only — see above.
+      allow update: if false;           // approval is Admin SDK only.
       allow delete: if false;
     }
 
 
     // ==========================================================================
-    // SECTION 11 — PATHS THE CLIENT MUST NOT TOUCH AT ALL
+    // SECTION 5 — PUBLIC WRITE-ONLY SINKS
     // ==========================================================================
     //
-    // Not listed as separate blocks, because the absence of a rule IS the deny.
-    // Recorded here so a future reader knows the omission was deliberate:
+    // Neither of these is team-scoped, and neither can be: both are written by
+    // people with no account at all.
+
+    // ── Beta feedback ────────────────────────────────────────────────────────
+    // `FeedbackWidget.jsx` addDoc; never read by any client.
+    //
+    // ⚠️ ANONYMOUS CREATE IS DELIBERATE, AND IT IS A DECISION, NOT AN OVERSIGHT.
+    //    The widget renders in the unauthenticated sandbox. Requiring membership —
+    //    as an earlier draft did — means the only feedback anyone can file is from
+    //    people who already have accounts, and every visiting department loses the
+    //    route entirely. The respiratory and audiology demos of August 2026 both ran
+    //    in that sandbox; feedback from a visitor is the point of the widget.
+    //
+    //    So the gate is the SHAPE, not the identity. It is NOT rate-limited — rules
+    //    cannot do that — so this remains an open write endpoint against the billing
+    //    account, and the durable answer is a Cloud Function with App Check.
+    //    Accepted knowingly rather than discovered later.
+    match /beta_feedback/{feedbackId} {
+      allow read: if false;
+      allow create: if request.resource.data.keys().hasOnly([
+                         'type', 'message', 'reportedBy', 'environment',
+                         'timestamp', 'userAgent'
+                       ])
+                    && request.resource.data.message is string
+                    && request.resource.data.message.size() > 0
+                    && request.resource.data.message.size() <= 10000
+                    && request.resource.data.timestamp == request.time;
+      allow update, delete: if false;
+    }
+
+    // ── Community screening telemetry ────────────────────────────────────────
+    // Written by members of the public through the portal, with no account.
+    // `recordTelemetry` swallows its errors, so a rule that denied this would break
+    // the pathway silently — which is exactly what an earlier draft did by requiring
+    // membership.
+    //
+    // ⚠️ Read is TEAM-LESS and therefore has no natural owner. It is granted to any
+    //    signed-in user rather than to a team, because the analysis screen predates
+    //    teams and belongs to nobody in particular. That is a widening compared with
+    //    the previous `isMember()` and it is called out rather than buried: the data
+    //    is postal-sector-level and carries no identifiers.
+    match /community_assessments/{assessmentId} {
+      allow read: if isSignedIn();
+      allow create: if request.resource.data.keys().hasAll(['createdAt', 'postalSector'])
+                    && request.resource.data.createdAt == request.time
+                    && request.resource.data.postalSector is string
+                    && request.resource.data.postalSector.size() <= 4
+                    && request.resource.data.keys().size() <= 20;
+      allow update, delete: if false;
+    }
+
+
+    // ==========================================================================
+    // SECTION 6 — PATHS THE CLIENT MUST NOT TOUCH AT ALL
+    // ==========================================================================
+    //
+    // Not listed as blocks, because the absence of a rule IS the deny. Recorded so a
+    // future reader knows the omission was deliberate:
     //
     //   `resources/{resourceId}`
-    //       The national resource registry. Seeded by
-    //       `scripts/firestore_seed.cjs` (Admin SDK, offline) and read ONLY by
-    //       `publicTriageChat` (`functions/index.js:688-719`, Admin SDK). No
-    //       client code touches it. Both keep working with zero client
-    //       permission, so it gets zero.
+    //       The national resource registry. Seeded by `scripts/firestore_seed.cjs`
+    //       and read only by `publicTriageChat`, both on the Admin SDK. No client
+    //       code touches it, so it gets no client permission.
     //
-    //   `community_resources`
-    //       Present in the console's rules with `allow read: if true`, and
-    //       referenced by NOTHING — zero hits across `src/` and `functions/`,
-    //       measured 2026-08-18 during the reconciliation. Deliberately given no
-    //       rule here rather than transcribed, because a rule for a collection no
-    //       code touches is a claim this file cannot back. If a future feature
-    //       reads it, add a block then. Console and Admin SDK access to whatever
-    //       it holds are unaffected by rules either way.
+    //   `smart_database/{id}`
+    //       AURA's append-only audit sink. Left global and unruled on purpose; it is
+    //       never read back and its documents carry their own author.
     //
-    //   `feeds/{document=**}`
-    //       Also in the console's rules, also governing nothing: `feeds` is a UI
-    //       VIEW NAME (`id: 'feeds'` in `ResponsiveLayout.jsx`), not a Firestore
-    //       collection. The real one is `feed_posts` and it has its own section
-    //       above. Recorded so nobody transcribes the dead block back in.
+    //   `system_data/*`, `shift_swaps`, `wellbeing_history`, `staff_loads`,
+    //   `cep_team`, `feed_posts`, `notifications`, `monthly_workload`, `archive_*`
+    //       THE PRE-MIGRATION COLLECTIONS. Every one of them now has a team-scoped
+    //       successor above, and the client no longer composes a path to any of
+    //       them. They are given NO rule deliberately — the migration COPIES rather
+    //       than moves, so the old documents still exist and must not be reachable
+    //       by the new bundle. Their continued existence is the rollback: restore
+    //       the previous rules from console history, redeploy the previous bundle,
+    //       and the old app reads its own data unharmed.
     //
-    //   `demo_*` — e.g. `demo_staff_loads`, `demo_monthly_workload`
-    //       `AuraPulseBot.jsx:829` prefixes AURA's DATA_ENTRY target with
-    //       `demo_` in sandbox mode, so the simulator writes real documents to a
-    //       parallel collection. ⚠️ BEHAVIOUR CHANGE: those writes now fail, and
-    //       the DATA_ENTRY error bubble will say so. A sandbox that writes to
-    //       the production database is a defect, and the sandbox's own contract
-    //       agrees — `RosterView.jsx:457` states "NO FIRESTORE, EVER" for the
-    //       roster path. This extends that contract to AURA. Deliberate.
+    //   `demo_*` — e.g. `demo_staff_loads`
+    //       The sandbox used to write real documents to a parallel collection. It
+    //       no longer writes at all: a sandbox visitor has no team, so there is no
+    //       path to compose. Deliberate.
     //
     //   Anything else the language model invents
-    //       `AuraPulseBot.jsx:829-835` builds the collection name from
-    //       `workload.target_collection`, WHICH COMES OUT OF GEMINI
-    //       (`functions/index.js:261`). The prompt asks for `monthly_workload`
-    //       or `staff_loads`, but a model is not a validator. Because this file
-    //       enumerates paths explicitly and Firestore denies by default, an
-    //       invented collection name writes NOTHING. That is arguably the single
-    //       largest security win in this proposal, and it comes free from
-    //       default-deny.
+    //       AURA's DATA_ENTRY once built a collection name from Gemini's output.
+    //       The app now allowlists the two it may target and resolves the person
+    //       through the member list — but because this file enumerates paths and
+    //       Firestore denies by default, an invented name would still write NOTHING.
+    //       That remains the single largest security property here, and it comes
+    //       free from default-deny.
     //
-    // The block below is DOCUMENTATION, not enforcement. Firestore already
-    // denies everything unmatched; a rule that evaluates to `false` cannot
-    // override an `allow` elsewhere. It is here so that "is there a catch-all?"
-    // has a visible answer.
+    // The block below is DOCUMENTATION, not enforcement. Firestore already denies
+    // everything unmatched; a rule evaluating to `false` cannot override an `allow`
+    // elsewhere. It is here so "is there a catch-all?" has a visible answer.
     match /{unmatched=**} {
       allow read, write: if false;
     }
