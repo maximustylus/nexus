@@ -663,7 +663,7 @@ const RosterView = ({ user }) => {
     // every live effect below is gated on it — a path composed from a null teamId
     // throws by design (`assertTeamId`), so the gate is what keeps that design from
     // becoming a crash on a legitimate screen.
-    const { teamId, members, memberUidByName } = useTeam();
+    const { teamId, rosteredMembers, memberUidByName } = useTeam();
 
     // --- STATE ---
     // 🗓️ P4.3 / post-mortem B3: the calendar used to open on a hardcoded
@@ -1043,13 +1043,14 @@ const RosterView = ({ user }) => {
             // must not survive the toggle back to LIVE, where one Generate click
             // would write it over four real clinicians. An in-progress
             // startDate/weeks edit is preserved.
-            // THE STAFF POOL IS THE TEAM'S OWN MEMBER LIST, not four names in
-            // `auraEngine.js`. Empty until the members snapshot arrives, and
-            // `restoreLiveRosterConfig` falls back to the hardcoded four in that
-            // window — see its header for why that fallback still exists and when
-            // it goes.
+            // THE STAFF POOL IS WHO HOLDS DUTIES, not everyone in the team — the
+            // roster master configures the roster and is not in it, the oHOD reads
+            // it and is not in it. Filtering by `role` cannot express that: both a
+            // lead who practises and a lead who does not are leads. Empty until the
+            // members snapshot arrives, and `restoreLiveRosterConfig` falls back to
+            // the hardcoded four in that window — see its header.
             setConfig(prev => restoreLiveRosterConfig(prev, {
-                staff: members.map(person => person.displayName).filter(Boolean),
+                staff: rosteredMembers.map(person => person.displayName).filter(Boolean),
             }));
 
             // NO TEAM, NO LISTENER. `rosterPath` throws on a null teamId by design —
@@ -1079,7 +1080,7 @@ const RosterView = ({ user }) => {
             return () => unsub();
         }
         return undefined;
-    }, [isDemo, teamId, members]);
+    }, [isDemo, teamId, rosteredMembers]);
 
     // --- EFFECT: COVERAGE REQUESTS AIMED AT THE SIGNED-IN USER -----------------
     //

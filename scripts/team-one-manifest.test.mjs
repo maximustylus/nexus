@@ -35,10 +35,14 @@ describe('team #1 — the team itself', () => {
 
     /**
      * A team with no lead is a team nobody can configure, invite into, or generate a
-     * roster for — and the only route back is another approval.
+     * roster for — and the only route back is another approval. MORE than one is
+     * normal and correct: this team has a service lead and a roster master, and the
+     * first draft of this test asserted "exactly one", which would have forced the
+     * roster master to be a viewer and taken the roster away from the person who
+     * builds it every week.
      */
-    it('has exactly one lead', () => {
-        expect(MEMBERS.filter((m) => m.role === 'lead')).toHaveLength(1);
+    it('has at least one lead', () => {
+        expect(MEMBERS.filter((m) => m.role === 'lead').length).toBeGreaterThanOrEqual(1);
     });
 });
 
@@ -56,16 +60,50 @@ describe('team #1 — the members', () => {
      * stakeholders were dropped. Asserted so a later tidy-up cannot quietly apply the
      * rule that was never given.
      */
-    it('keeps Benny, who is a viewer but was not one of the three removed', () => {
+    it('keeps Benny — the oHOD — who is a viewer but was not one of the three removed', () => {
         const benny = MEMBERS.find((m) => m.displayName === 'Benny');
         expect(benny).toBeTruthy();
         expect(benny.role).toBe('viewer');
+        expect(benny.rostered).toBe(false);
+        expect(benny.title).toBe('oHOD');
     });
 
-    it('gives everybody one of the three real roles', () => {
+    it('gives everybody one of the three real roles, and an explicit rostered flag', () => {
         MEMBERS.forEach((member) => {
             expect(['lead', 'staff', 'viewer']).toContain(member.role);
+            // Explicit `true`/`false`, never absent: a missing value defaults to
+            // rostered, so leaving it off silently puts somebody in the staff pool.
+            expect(typeof member.rostered).toBe('boolean');
         });
+    });
+
+    /**
+     * ⚠️ THE CASE THAT PROVES `role` AND `rostered` ARE DIFFERENT QUESTIONS, and the
+     *    one this suite exists to protect. NISA IS THE ROSTER MASTER: she builds the
+     *    roster every week, so she must be a `lead` to configure and generate — and
+     *    she carries no clinical load, so she must not be in the staff pool the
+     *    generator draws from, or it will hand her duties she does not do.
+     *
+     *    Filtering the pool by `role !== 'viewer'` puts her in it. Filtering by
+     *    `role === 'staff'` takes the roster away from her. One field cannot answer
+     *    both questions, and choosing between them harder does not make either right.
+     */
+    it('separates what you may DO from whether you hold duties', () => {
+        const nisa = MEMBERS.find((m) => m.displayName === 'Nisa');
+        expect(nisa.role).toBe('lead');       // builds the roster
+        expect(nisa.rostered).toBe(false);    // is not in it
+    });
+
+    /**
+     * THE STAFF POOL MUST STILL BE THE FOUR THE LIVE ROSTER ALREADY COVERS —
+     * exactly `LIVE_ROSTER_DEFAULTS.staff` in `auraEngine.js`. This is the
+     * compatibility gate for the whole migration: if the pool changes, every
+     * generated week changes for four practising clinicians, and it would do so
+     * without anybody asking for it.
+     */
+    it('leaves exactly the four the live roster already covers in the staff pool', () => {
+        expect(MEMBERS.filter((m) => m.rostered).map((m) => m.displayName).sort())
+            .toEqual(['Brandon', 'Derlinder', 'Fadzlynn', 'Ying Xian']);
     });
 
     /**

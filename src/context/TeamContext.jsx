@@ -14,6 +14,8 @@
  *   team          its document, for a heading.
  *   teams         every team the user is in, for the switcher.
  *   membership    the caller's own `members/{uid}` document — role, grade, FTE.
+ *   rosteredMembers  those who hold clinical duties — the staff pool. A separate
+ *                 question from `role`; see the field itself for why.
  *   members       everyone in the active team. THIS IS WHAT REPLACES
  *                 `TEAM_DIRECTORY` — ten people hardcoded in `src/utils/index.js`
  *                 with nine consumers, and the reason onboarding a clinician used
@@ -213,6 +215,25 @@ export const TeamProvider = ({ uid, children }) => {
         membership,
         members,
         /**
+         * THE PEOPLE WHO HOLD DUTIES — the staff pool the generator draws from and
+         * the rows the clinical-load table shows. NOT the same question as `role`,
+         * and conflating them was a real modelling error:
+         *
+         *   • a ROSTER MASTER configures and generates but carries no load —
+         *     `role: 'lead'`, `rostered: false`. Filter the pool by role and the
+         *     engine hands her duties she does not do.
+         *   • a service LEAD may practise as well — `role: 'lead'`,
+         *     `rostered: true`. Exclude leads from the pool and the department loses
+         *     one of its clinicians.
+         *
+         * Both exist in the first team, so no single field can answer both.
+         *
+         * Defaults to TRUE for a membership written before this field existed: the
+         * old model had no way to say "not rostered", so the safe reading of a
+         * missing value is the one everybody in it shared.
+         */
+        rosteredMembers: members.filter((person) => person.rostered !== false),
+        /**
          * Name → uid, for the one direction the app genuinely needs: a control that
          * lets somebody PICK a colleague by name still has to record WHO that is.
          * Built once here so no screen writes its own lookup over whatever list it
@@ -256,6 +277,7 @@ const INERT = Object.freeze({
     teams: [],
     membership: null,
     members: [],
+    rosteredMembers: [],
     memberUidByName: {},
     isLead: false,
     canActOn: () => false,

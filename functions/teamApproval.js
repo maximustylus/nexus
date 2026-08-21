@@ -202,6 +202,24 @@ const buildApprovalWrites = ({ request, teamId, approverUid, now }) => {
                 // roles run a team, so all three become 'lead' membership.
                 role: 'lead',
                 declaredAs: asText(request.role, 'lead'),
+                /**
+                 * ⚠️ `role` AND `rostered` ARE SEPARATE QUESTIONS, and defaulting
+                 * this to `true` is a considered choice rather than an omission.
+                 *
+                 * `role` says what you may DO — configure, generate, invite.
+                 * `rostered` says whether you hold clinical duties. A department's
+                 * ROSTER MASTER is a lead who carries no load; a small service's
+                 * lead usually practises alongside everyone else. Neither can be
+                 * inferred from the other, and the approval function knows only
+                 * that somebody asked to run a team.
+                 *
+                 * True is the safer default: a lead wrongly INCLUDED in the staff
+                 * pool sees their own name in the roster and unticks it, which is
+                 * obvious and harmless. A lead wrongly EXCLUDED silently loses a
+                 * clinician from every generated week, and the roster looks
+                 * plausible without them.
+                 */
+                rostered: true,
                 // Rostering fields, empty until the lead fills them in. Present rather
                 // than absent so the member editor has something to render and so a
                 // missing field never means "unknown" versus "not set yet".

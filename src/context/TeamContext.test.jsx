@@ -74,6 +74,7 @@ const Probe = () => {
             <span data-testid="canOther">{String(team.canActOn('sgh-physiotherapy'))}</span>
             <span data-testid="members">{team.members.map((m) => m.displayName).join(',')}</span>
             <span data-testid="lookup">{team.memberUidByName['Ying Xian'] || 'none'}</span>
+            <span data-testid="rostered">{team.rosteredMembers.map((m) => m.displayName).join(',')}</span>
             <button type="button" onClick={() => team.switchTeam(A)}>go A</button>
             <button type="button" onClick={() => team.switchTeam('sgh-physiotherapy')}>go elsewhere</button>
         </div>
@@ -266,6 +267,43 @@ describe('TeamContext — the member list that replaces TEAM_DIRECTORY', () => {
         // Both sort equal on name; the array order after sort decides, and the
         // reverse in `memberUidByName` makes the FIRST one win rather than the last.
         expect(value('lookup')).toBe('uid-second');
+    });
+
+    /**
+     * ⚠️ WHO HOLDS DUTIES IS NOT THE SAME QUESTION AS `role`, and this is the case
+     *    that proves it. A department's ROSTER MASTER is a `lead` — she configures
+     *    and generates the roster every week — and carries no clinical load, so she
+     *    must not be in the staff pool the generator draws from or it will hand her
+     *    duties she does not do.
+     *
+     *    Filtering the pool by `role !== 'viewer'` includes her. Filtering by
+     *    `role === 'staff'` takes the roster away from her. Neither is right, which
+     *    is why `rostered` exists as its own field.
+     */
+    it('keeps a lead who carries no clinical load OUT of the staff pool', () => {
+        mount();
+        emit(`users/${UID}`, exists({ teamIds: [A] }));
+        emit(`teams/${A}/members`, docsOf([
+            ['uid-nisa', { displayName: 'Nisa', role: 'lead', rostered: false }],
+            ['uid-benny', { displayName: 'Benny', role: 'viewer', rostered: false }],
+            ['uid-brandon', { displayName: 'Brandon', role: 'staff', rostered: true }],
+        ]));
+
+        expect(value('members')).toBe('Benny,Brandon,Nisa');   // all three are members
+        expect(value('rostered')).toBe('Brandon');             // one holds duties
+    });
+
+    /**
+     * A membership written before `rostered` existed has no such field, and the old
+     * model had no way to say "not rostered" — so the safe reading of a missing
+     * value is the one everybody in it shared. Defaulting to false would silently
+     * empty the staff pool of every pre-existing member and generate empty weeks.
+     */
+    it('treats a membership with no rostered field as rostered', () => {
+        mount();
+        emit(`users/${UID}`, exists({ teamIds: [A] }));
+        emit(`teams/${A}/members`, docsOf([['uid-old', { displayName: 'Legacy', role: 'staff' }]]));
+        expect(value('rostered')).toBe('Legacy');
     });
 
     it('empties the member list rather than keeping a stale one when it cannot be read', () => {

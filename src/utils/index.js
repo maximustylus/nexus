@@ -50,7 +50,9 @@ export const TEAM_DIRECTORY = [
     name: 'Nisa', 
     email: 'siti.nur.anisah.nh@kkh.com.sg', 
     role: 'admin',
-    title: 'Administrator'
+    // ROSTER MASTER — she builds the roster every week. In the new model that is
+    // `role: 'lead'` with `rostered: false`; see `scripts/team-one-manifest.cjs`.
+    title: 'Administrator & Roster Master'
   },
   // --- MEDICAL & NURSING LEADS (VIEWERS) ---
   { 
@@ -58,7 +60,7 @@ export const TEAM_DIRECTORY = [
     name: 'Benny', 
     email: 'benny.loo.k.g.@singhealth.com.sg', 
     role: 'viewer', 
-    title: 'Sr. Consultant (Sports Med)'
+    title: 'oHOD'
   },
 
   // --- CLINICAL EXERCISE PHYSIOLOGISTS (STAFF) ---

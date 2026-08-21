@@ -88,11 +88,24 @@ const TEAM_MEMBERS = [
     { uid: 'uid-fadzlynn', displayName: 'Fadzlynn' },
     { uid: 'uid-ying-xian', displayName: 'Ying Xian' },
 ];
+// WHO HOLDS DUTIES, which is not the same question as `role` — a roster master
+// configures the roster and is not in it. All four here are clinicians, matching the
+// live staff pool.
+//
+// ⚠️ HOISTED, NOT COMPUTED INSIDE `useTeam`. RosterView's live effect depends on
+//    `rosteredMembers`, so returning a fresh array from every call gives it a new
+//    reference on every render — effect runs, setConfig, re-render, forever. The
+//    real provider is safe because it builds this inside `useMemo`; a mock that
+//    forgets to be stable HANGS the suite rather than failing it, which is a much
+//    worse way to find out.
+const TEAM_ROSTERED = TEAM_MEMBERS.filter((m) => m.rostered !== false);
+const TEAM_UID_BY_NAME = Object.fromEntries(TEAM_MEMBERS.map((m) => [m.displayName, m.uid]));
 vi.mock('../context/TeamContext', () => ({
     useTeam: () => ({
         teamId: TEAM_ID,
         members: TEAM_MEMBERS,
-        memberUidByName: Object.fromEntries(TEAM_MEMBERS.map((m) => [m.displayName, m.uid])),
+        rosteredMembers: TEAM_ROSTERED,
+        memberUidByName: TEAM_UID_BY_NAME,
     }),
 }));
 

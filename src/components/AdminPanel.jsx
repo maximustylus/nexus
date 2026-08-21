@@ -34,8 +34,8 @@ const AdminPanel = ({ teamData, staffLoads, user }) => {
 
     // --- DYNAMIC STAFF LIST SWITCHER ---
     const activeStaffList = isDemo
-        ? MOCK_STAFF_NAMES.map((name) => ({ uid: null, name, role: 'staff' }))
-        : members.map((m) => ({ uid: m.uid, name: m.displayName, role: m.role }));
+        ? MOCK_STAFF_NAMES.map((name) => ({ uid: null, name, role: 'staff', rostered: true }))
+        : members.map((m) => ({ uid: m.uid, name: m.displayName, role: m.role, rostered: m.rostered !== false }));
 
     /**
      * WHO CARRIES A CLINICAL LOAD — a FIFTH hardcoded copy of the team, now gone.
@@ -45,16 +45,15 @@ const AdminPanel = ({ teamData, staffLoads, user }) => {
      * department that is not Sport & Exercise Medicine would have had five arbitrary
      * exclusions applied to its own people.
      *
-     * The membership role answers it instead: a viewer is a stakeholder — a
-     * consultant, a nurse clinician — who reads the roster but holds no duties.
-     *
-     * ⚠️ ONE VISIBLE DIFFERENCE, and it is worth knowing rather than discovering.
-     *    Nisa is an administrator rather than a viewer, so she was in the old
-     *    exclusion list but is NOT excluded by role. She will appear with a row of
-     *    zeros until a lead sets her membership role to `viewer` — a correction
-     *    that takes one edit and no deploy, which is the whole point.
+     * ⚠️ THE FIRST REPLACEMENT WAS `role !== 'viewer'`, AND IT WAS WRONG. The team's
+     *    ROSTER MASTER is an administrator who builds the roster every week and
+     *    carries no clinical load: she has to be a `lead` to configure it, which put
+     *    her straight back into this table with a row of zeros. `role` answers "what
+     *    may you do"; this table asks "do you hold duties". They are different
+     *    questions and one field cannot answer both — the service lead, who both
+     *    configures AND practises, is the proof in the other direction.
      */
-    const CEP_STAFF = activeStaffList.filter((person) => person.role !== 'viewer');
+    const CEP_STAFF = activeStaffList.filter((person) => person.rostered);
 
     // --- TABS STATE ---
     const [activeTab, setActiveTab] = useState('OPERATIONS'); 

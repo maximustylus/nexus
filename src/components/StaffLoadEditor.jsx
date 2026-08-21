@@ -8,7 +8,10 @@ import { loadPath } from '../utils/teamPaths';
 const StaffLoadEditor = () => {
     // `STAFF_LIST` — ten hardcoded names — is the team's own member list now, and
     // the load document is keyed by uid rather than by the name it renders.
-    const { teamId, members } = useTeam();
+    // `rosteredMembers`, not `members`: this grid is clinical hours, and the roster
+    // master and the oHOD do not have any. See `TeamContext` for why role cannot
+    // answer that.
+    const { teamId, rosteredMembers: members } = useTeam();
     // State to hold the grid of numbers
     const [loads, setLoads] = useState({});
     const [loading, setLoading] = useState(false);

@@ -28,22 +28,44 @@
  *    working, this is why, and a lead can invite them back in seconds without a
  *    deploy.
  *
- * Benny is NOT in that list and stays — he is a Sr. Consultant in Sports Medicine
- * and was kept deliberately when the other three stakeholders were dropped. Stated
- * explicitly because "remove the viewers" would have been the tidier-sounding rule
- * and is not what was asked for.
+ * Benny is NOT in that list and stays — he is the department's **oHOD**, and was
+ * kept deliberately when the other three stakeholders were dropped. Stated
+ * explicitly because "remove the viewers" would have been the tidier-sounding rule,
+ * is not what was asked for, and would have removed the head of the department.
  *
- * ── ROLES ────────────────────────────────────────────────────────────────────
+ * ── TWO INDEPENDENT FACTS, NOT ONE ROLE ──────────────────────────────────────
  *
- *   lead    may configure the roster, generate it, and invite or remove members
- *   staff   holds duties, logs wellbeing, requests and answers coverage
- *   viewer  reads the roster; holds no duties and carries no clinical load
+ *   role      WHAT YOU MAY DO
+ *     lead      configure the roster, generate it, invite and remove members
+ *     staff     answer coverage requests, log wellbeing, hold duties
+ *     viewer    read the roster and nothing else
  *
- * `viewer` is what now decides who is excluded from the clinical-load table — the
- * replacement for a hardcoded list of five names in `AdminPanel.jsx`. Nisa is an
- * ADMINISTRATOR who carries no load, so she is a `viewer` here even though she was
- * `admin` in the old directory: the old model had no way to say "runs the service,
- * holds no duties" and this one does.
+ *   rostered  WHETHER YOU HOLD CLINICAL DUTIES
+ *     true      appears in the staff pool the generator draws from, and in the
+ *               clinical-load table
+ *     false     does not, however senior or however much they configure
+ *
+ * ⚠️ THESE WERE ONE FIELD AND THAT WAS A MODELLING ERROR, corrected here rather
+ *    than worked around. In a ten-person department they coincided closely enough
+ *    to look like one thing, so `role` was used for both and the clinical-load table
+ *    excluded people with `role !== 'viewer'`.
+ *
+ *    NISA IS THE COUNTEREXAMPLE. She is the department's administrator AND its
+ *    ROSTER MASTER — she builds the roster every week — so she must be able to
+ *    configure and generate, which makes her a `lead`. She carries no clinical load,
+ *    so she must not appear in the staff pool the generator draws from, or the
+ *    engine will hand her duties. As a `viewer` she could not roster; as a `lead`
+ *    under the old single-field model she would have been rostered. Neither is true,
+ *    and no amount of choosing between them makes it true.
+ *
+ *    One field cannot express that. `role !== 'viewer'` puts the roster master in
+ *    the staff pool; `role === 'staff'` takes the roster away from her. Both are
+ *    wrong, and choosing between them harder does not make either right.
+ *
+ *    (Team #1 happens to have no lead who also practises — see Alif's note below —
+ *    but that is a fact about this department, not about the model. A small service
+ *    whose lead carries a caseload is the ordinary case elsewhere, and `rostered`
+ *    is what lets this say so without another hardcoded exception.)
  *
  * ── EMAIL IS THE JOIN KEY, AND ONLY FOR THE MIGRATION ────────────────────────
  *
@@ -74,13 +96,29 @@ const TEAM_ONE = Object.freeze({
  * find each person's existing records; nothing reads it afterwards.
  */
 const MEMBERS = Object.freeze([
-    { legacyId: 'alif',       displayName: 'Alif',       email: 'muhammad.alif@kkh.com.sg',              role: 'lead',   title: 'Lead and Sr. CEP (JG14)' },
-    { legacyId: 'nisa',       displayName: 'Nisa',       email: 'siti.nur.anisah.nh@kkh.com.sg',         role: 'viewer', title: 'Administrator' },
-    { legacyId: 'benny',      displayName: 'Benny',      email: 'benny.loo.k.g.@singhealth.com.sg',      role: 'viewer', title: 'Sr. Consultant (Sports Med)' },
-    { legacyId: 'brandon',    displayName: 'Brandon',    email: 'brandon.feng.gg@kkh.com.sg',            role: 'staff',  title: 'CEP (JG11)' },
-    { legacyId: 'ying_xian',  displayName: 'Ying Xian',  email: 'lim.ying.xian@kkh.com.sg',              role: 'staff',  title: 'CEP (JG12)' },
-    { legacyId: 'derlinder',  displayName: 'Derlinder',  email: 'derlinder.kaur@kkh.com.sg',             role: 'staff',  title: 'CEP (JG12)' },
-    { legacyId: 'fadzlynn',   displayName: 'Fadzlynn',   email: 'fadzlynn.mohamad.fadzully@kkh.com.sg',  role: 'staff',  title: 'CEP (JG13)' },
+    /**
+     * ⚠️ `rostered: false` FROM EVIDENCE, NOT FROM THE TITLE — and worth confirming.
+     *    His title reads "Lead and Sr. CEP (JG14)", which sounds like somebody who
+     *    holds duties. But `LIVE_ROSTER_DEFAULTS.staff` in `auraEngine.js` — the
+     *    pool the live roster has actually been generated from — is exactly
+     *    ['Brandon', 'Ying Xian', 'Derlinder', 'Fadzlynn']. The roster he builds
+     *    does not include him.
+     *
+     *    Setting this `true` on the strength of the title would silently add a fifth
+     *    person to every generated week and change rosters that four clinicians rely
+     *    on. Matching what the system already does is the reversible choice; if he
+     *    does take duties, flipping this is one edit in the app and no deploy.
+     */
+    { legacyId: 'alif',       displayName: 'Alif',       email: 'muhammad.alif@kkh.com.sg',              role: 'lead',   rostered: false, title: 'Lead and Sr. CEP (JG14)' },
+    // ROSTER MASTER. Builds the roster every week, so `lead`; carries no clinical
+    // load, so `rostered: false`. The pair of facts this model exists to separate.
+    { legacyId: 'nisa',       displayName: 'Nisa',       email: 'siti.nur.anisah.nh@kkh.com.sg',         role: 'lead',   rostered: false, title: 'Administrator & Roster Master' },
+    // oHOD — reads the roster, holds no duties, configures nothing.
+    { legacyId: 'benny',      displayName: 'Benny',      email: 'benny.loo.k.g.@singhealth.com.sg',      role: 'viewer', rostered: false, title: 'oHOD' },
+    { legacyId: 'brandon',    displayName: 'Brandon',    email: 'brandon.feng.gg@kkh.com.sg',            role: 'staff',  rostered: true,  title: 'CEP (JG11)' },
+    { legacyId: 'ying_xian',  displayName: 'Ying Xian',  email: 'lim.ying.xian@kkh.com.sg',              role: 'staff',  rostered: true,  title: 'CEP (JG12)' },
+    { legacyId: 'derlinder',  displayName: 'Derlinder',  email: 'derlinder.kaur@kkh.com.sg',             role: 'staff',  rostered: true,  title: 'CEP (JG12)' },
+    { legacyId: 'fadzlynn',   displayName: 'Fadzlynn',   email: 'fadzlynn.mohamad.fadzully@kkh.com.sg',  role: 'staff',  rostered: true,  title: 'CEP (JG13)' },
 ]);
 
 /**
