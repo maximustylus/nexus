@@ -24,6 +24,11 @@ export default defineConfig({
         include: [
             'src/**/*.{test,spec}.{js,jsx}',
             'functions/**/*.{test,spec}.{js,cjs}',
+            // `scripts/` joined when the migration manifest landed. That file names
+            // exactly which real clinicians become members of the first team, and a
+            // manifest whose counts silently stop reconciling is a migration that
+            // drops somebody without saying so.
+            'scripts/**/*.{test,spec}.{js,cjs,mjs}',
         ],
         exclude: ['**/node_modules/**', '**/dist/**'],
     },

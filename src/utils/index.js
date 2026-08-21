@@ -16,6 +16,26 @@ export const MONTHS = [
 // ==========================================
 // 2. THE VIP LIST (TEAM_DIRECTORY)
 // ==========================================
+//
+// ⚠️ THIS LIST IS ON ITS WAY OUT. Under the multi-team model a team's people live in
+//    `teams/{teamId}/members/{uid}`, which a lead maintains themselves. What survives
+//    here is a BRIDGE, used by `App.jsx` to let the people already using NEXUS
+//    straight through until `scripts/migrate-to-teams.cjs` has run and given them
+//    real memberships. Delete it — and the bridge — at that point; leaving it would
+//    mean a handful of named email addresses permanently bypass membership checks.
+//
+// ── EVELYN, ASHIK AND MINI WERE REMOVED, AND IT IS A REVOCATION ──────────────
+//
+// The owner's decision for team #1, recorded in `scripts/team-one-manifest.cjs`
+// with the full reasoning. They are dropped from this list as well as from the
+// manifest for a specific reason: the bridge in `App.jsx` waves anyone it still
+// recognises into the app shell, and somebody in the bridge but NOT in a team would
+// land on a roster with nobody in it, an empty wellbeing panel and a blank feed —
+// which is exactly the "looks broken" failure `AccessGate` exists to prevent.
+//
+// Removed from both, they instead see "nobody has added you to a team yet", which
+// is true and tells them who to ask. Their existing records are untouched; a lead
+// can invite them back without a deploy.
 export const TEAM_DIRECTORY = [
   // --- LEADERSHIP & ADMINS ---
   { 
@@ -32,14 +52,6 @@ export const TEAM_DIRECTORY = [
     role: 'admin',
     title: 'Administrator'
   },
-  { 
-    id: 'evelyn', 
-    name: 'Evelyn', 
-    email: 'Evelyn.Ong.MH@kkh.com.sg', 
-    role: 'viewer', 
-    title: 'Asst. Director (Medicine)'
-  },
-
   // --- MEDICAL & NURSING LEADS (VIEWERS) ---
   { 
     id: 'benny', 
@@ -47,20 +59,6 @@ export const TEAM_DIRECTORY = [
     email: 'benny.loo.k.g.@singhealth.com.sg', 
     role: 'viewer', 
     title: 'Sr. Consultant (Sports Med)'
-  },
-  { 
-    id: 'ashik', 
-    name: 'Ashik', 
-    email: 'mohammad.ashik.zainuddin@singhealth.com.sg', 
-    role: 'viewer',
-    title: 'Sr. Consultant (Ortho)'
-  },
-  { 
-    id: 'mini', 
-    name: 'Mini', 
-    email: 'Mini.Abraham@kkh.com.sg', 
-    role: 'viewer', 
-    title: 'Nurse Clinician'
   },
 
   // --- CLINICAL EXERCISE PHYSIOLOGISTS (STAFF) ---
