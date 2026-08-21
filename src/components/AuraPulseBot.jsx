@@ -18,6 +18,8 @@ import {
     wellbeingDocPath,
     anonymousWellbeingPath,
     pulsePath,
+    loadPath,
+    workloadPath,
     userPath,
     PULSE_PERIOD_DAILY,
 } from '../utils/teamPaths';
@@ -85,7 +87,7 @@ export default function AuraPulseBot({ isOpen, onClose, onOpen: _onOpen, user })
     const { isDemo, auraHistory, setAuraHistory } = useNexus();
     // WHOSE wellbeing record. Null in the sandbox and for a signed-in account with
     // no team — and in both cases nothing is written at all, which is the point.
-    const { teamId } = useTeam();
+    const { teamId, memberUidByName } = useTeam();
 
     // ── State ─────────────────────────────────────────────────────────────────
     const [view,              setView]              = useState('SELECT');
@@ -702,18 +704,54 @@ export default function AuraPulseBot({ isOpen, onClose, onOpen: _onOpen, user })
         setLoading(true);
 
         try {
-            const rawDocId = workload.target_doc || 'null';
-            const safeDocId = rawDocId.toLowerCase().trim().replace(/[\s-]+/g, '_');
-            const collectionName = isDemo ? `demo_${workload.target_collection}` : workload.target_collection;
-            
-            if (safeDocId === 'null' || safeDocId === '') {
+            /**
+             * ⚠️ BOTH THE COLLECTION AND THE DOCUMENT ID USED TO COME OUT OF GEMINI.
+             *    `functions/index.js` asks the model for `monthly_workload` or
+             *    `staff_loads` and a person's name, and the old code fed both
+             *    straight into `doc(db, collectionName, safeDocId)` — a language
+             *    model choosing a Firestore path. `firestore.rules` caught the worst
+             *    of it by enumerating paths and denying everything else, which the
+             *    rules file itself calls the single largest security win it has.
+             *
+             *    Team scoping alone would NOT have fixed the rest: a model-slugged
+             *    document id under the right team still writes to whoever that slug
+             *    happens to hit. So the collection is now an allowlist of two, and
+             *    the person is resolved through the member list — a name the model
+             *    invents resolves to nothing and is refused, rather than creating a
+             *    document for a colleague who does not exist.
+             */
+            if (!teamId) {
+                throw new Error("No team is selected, so there is nowhere to write this.");
+            }
+            if (isDemo) {
+                throw new Error("Sandbox mode does not write to the database.");
+            }
+
+            const TARGET_LOADS = 'staff_loads';
+            const TARGET_WORKLOAD = 'monthly_workload';
+            if (![TARGET_LOADS, TARGET_WORKLOAD].includes(workload.target_collection)) {
+                throw new Error("AURA asked to write somewhere I do not recognise. Nothing was saved.");
+            }
+
+            const rawTarget = String(workload.target_doc || '').trim();
+            if (rawTarget === '' || rawTarget.toLowerCase() === 'null') {
                  throw new Error("Missing target document. Please ask AURA to clarify who this is for.");
             }
-            
-            const docRef = doc(db, collectionName, safeDocId);
+
+            let docRef;
+            if (workload.target_collection === TARGET_LOADS) {
+                const targetUid = memberUidByName[rawTarget];
+                if (!targetUid) {
+                    throw new Error(`There is nobody called "${rawTarget}" in this team. Nothing was saved.`);
+                }
+                docRef = doc(db, ...loadPath(teamId, targetUid));
+            } else {
+                docRef = doc(db, ...workloadPath(teamId, rawTarget));
+            }
+
             let updatedMessage = '';
 
-            if (workload.target_collection === 'staff_loads') {
+            if (workload.target_collection === TARGET_LOADS) {
                 const monthIndex = parseInt(workload.target_month);
                 if (isNaN(monthIndex) || monthIndex < 0 || monthIndex > 11) {
                     throw new Error("A valid month (e.g., January) is required to update personal workload.");
@@ -763,7 +801,7 @@ export default function AuraPulseBot({ isOpen, onClose, onOpen: _onOpen, user })
         } finally {
             setLoading(false);
         }
-    }, [isDemo, user, setMessages]);
+    }, [isDemo, user, setMessages, teamId, memberUidByName]);
 
     const formatChatText = (text) => {
         if (!text) return null;

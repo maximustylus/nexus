@@ -1,6 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Sparkles, MessageSquare, ThumbsUp, Share2, ShieldAlert, Image as ImageIcon, Loader2, X, Send, MoreHorizontal, Edit2, Trash2 } from 'lucide-react';
 import { useNexus } from '../context/NexusContext';
+import { useTeam } from '../context/TeamContext';
+import { feedPath, feedPostPath } from '../utils/teamPaths';
 import { db, storage } from '../firebase';
 import { collection, query, orderBy, onSnapshot, doc, updateDoc, increment, addDoc, serverTimestamp, deleteDoc } from 'firebase/firestore';
 import { getFunctions, httpsCallable } from 'firebase/functions';
@@ -35,19 +37,24 @@ const DEMO_MOCK_POSTS = [
 // any future author-side comment moderation) but nothing here reads it, so it is
 // bound to `_postAuthor` rather than deleted from the component's shape.
 const CommentSection = ({ postId, user, isMock, postAuthor: _postAuthor }) => {
+    // Its own `useTeam` call: this is a separate component from `FeedsView`, and a
+    // `teamId` referenced from an enclosing scope it does not have would have been a
+    // runtime ReferenceError on every rendered comment thread.
+    const { teamId } = useTeam();
     const [comments, setComments] = useState([]);
     const [draft, setDraft] = useState('');
     const [isSubmitting, setIsSubmitting] = useState(false);
 
     useEffect(() => {
         if (isMock) return; 
-        const q = query(collection(db, 'feed_posts', postId, 'comments'), orderBy('timestamp', 'asc'));
+        if (!teamId) return undefined;
+        const q = query(collection(db, ...feedPostPath(teamId, postId), 'comments'), orderBy('timestamp', 'asc'));
         const unsubscribe = onSnapshot(q, (snapshot) => {
             const fetched = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
             setComments(fetched);
         });
         return () => unsubscribe();
-    }, [postId, isMock]);
+    }, [postId, isMock, teamId]);
 
     const handleSubmit = async (e) => {
         e.preventDefault();
@@ -59,8 +66,8 @@ const CommentSection = ({ postId, user, isMock, postAuthor: _postAuthor }) => {
         }
         setIsSubmitting(true);
         try {
-            await addDoc(collection(db, 'feed_posts', postId, 'comments'), { author: user?.name || 'Staff Member', text: draft, timestamp: serverTimestamp() });
-            await updateDoc(doc(db, 'feed_posts', postId), { comments: increment(1) });
+            await addDoc(collection(db, ...feedPostPath(teamId, postId), 'comments'), { author: user?.name || 'Staff Member', text: draft, timestamp: serverTimestamp() });
+            await updateDoc(doc(db, ...feedPostPath(teamId, postId)), { comments: increment(1) });
             setDraft(''); 
         } catch (error) { console.error(error); } finally { setIsSubmitting(false); }
     };
@@ -92,6 +99,10 @@ const CommentSection = ({ postId, user, isMock, postAuthor: _postAuthor }) => {
 };
 
 const FeedsView = ({ user }) => {
+    // The feed belongs to a department, not to the whole installation: a KKH
+    // respiratory therapist's post should not appear on an SGH physiotherapist's
+    // wall, and `feed_posts` was one global collection everybody read.
+    const { teamId } = useTeam();
     const { isDemo } = useNexus();
     const [activeFilter, setActiveFilter] = useState('ALL');
     const [draftPost, setDraftPost] = useState('');
@@ -122,7 +133,8 @@ const FeedsView = ({ user }) => {
     const fileInputRef = useRef(null);
 
     useEffect(() => {
-        const q = query(collection(db, 'feed_posts'), orderBy('timestamp', 'desc'));
+        if (!teamId) { setLivePosts([]); return undefined; }
+        const q = query(collection(db, ...feedPath(teamId)), orderBy('timestamp', 'desc'));
         const unsubscribe = onSnapshot(q, (snapshot) => {
             const fetchedPosts = snapshot.docs.map(doc => ({ 
                 id: doc.id, ...doc.data(), 
@@ -131,7 +143,7 @@ const FeedsView = ({ user }) => {
             setLivePosts(fetchedPosts);
         });
         return () => unsubscribe();
-    }, []);
+    }, [teamId]);
 
     const combinedPosts = [...livePosts.filter(p => p.isDemo === !!isDemo), ...(isDemo ? DEMO_MOCK_POSTS : LIVE_MOCK_POSTS)];
     const displayPosts = activeFilter === 'ALL' ? combinedPosts : combinedPosts.filter(post => post.category === activeFilter);
@@ -155,7 +167,11 @@ const FeedsView = ({ user }) => {
             }
             const cleanRole = (user?.title || user?.role || 'Clinical Staff').replace(/\s*\(.*?\)/g, '').trim();
             const processFeedPost = httpsCallable(getFunctions(undefined, 'us-central1'), 'processFeedPost');
-            await processFeedPost({ rawText: draftPost || "", authorName: user?.name || 'Staff Member', authorRole: cleanRole, authorPhotoUrl: user?.photoURL || null, isDemo: !!isDemo, imageUrl: uploadedImageUrl, postId: editingPostId });
+            // `teamId` decides which feed this lands in. The function re-checks
+            // membership rather than trusting it — it runs on the Admin SDK and
+            // bypasses the rules, so the argument alone would be a way into another
+            // department's wall.
+            await processFeedPost({ teamId, rawText: draftPost || "", authorName: user?.name || 'Staff Member', authorRole: cleanRole, authorPhotoUrl: user?.photoURL || null, isDemo: !!isDemo, imageUrl: uploadedImageUrl, postId: editingPostId });
             cancelEditSetup();
         } catch (error) { setPostError("AURA processing failed."); } finally { setIsPosting(false); }
     };
@@ -182,7 +198,7 @@ const FeedsView = ({ user }) => {
     const executeDelete = async () => {
         if (!postToDelete) return;
         try { 
-            await deleteDoc(doc(db, 'feed_posts', postToDelete)); 
+            await deleteDoc(doc(db, ...feedPostPath(teamId, postToDelete))); 
         } catch (error) { 
             console.error("Error deleting post:", error); 
         } finally {
@@ -214,7 +230,7 @@ const FeedsView = ({ user }) => {
         setLikedPosts(prev => new Set(prev).add(postId));
         if (!String(postId).startsWith('m') && !String(postId).startsWith('live')) {
             try {
-                await updateDoc(doc(db, 'feed_posts', postId), { likes: increment(1) });
+                await updateDoc(doc(db, ...feedPostPath(teamId, postId)), { likes: increment(1) });
             } catch (e) {
                 // Deliberately ignored: the like is optimistic and local. A failed
                 // increment leaves the server count behind by one rather than

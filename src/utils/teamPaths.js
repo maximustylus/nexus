@@ -38,7 +38,10 @@
  *   teams/{teamId}/workload/{period}     was `monthly_workload`
  *   teams/{teamId}/reports/{year}        was `system_data/reports_{year}`
  *   teams/{teamId}/attendance/{period}   was `system_data/monthly_attendance`
- *   teams/{teamId}/archive/{year}        was `archive_{year}`
+ *   teams/{teamId}/projects/{year}/staff/{uid}
+ *                                        was `cep_team` for the current year and
+ *                                        `archive_{year}` for every other one —
+ *                                        two collections holding one shape
  *   teams/{teamId}/feed/{postId}         was `feed_posts`
  *   teams/{teamId}/notifications/{id}    was `notifications`
  *
@@ -95,7 +98,13 @@ export const TEAM_COLLECTIONS = Object.freeze({
     workload: 'workload',
     reports: 'reports',
     attendance: 'attendance',
-    archive: 'archive',
+    // WAS TWO COLLECTIONS FOR ONE THING. `cep_team` held the CURRENT year's
+    // per-person project and domain data; `archive_2025`, `archive_2024` … held
+    // exactly the same shape for previous years, and `App.jsx` chose between them
+    // with `dataYear === '2026' ? 'cep_team' : `archive_${dataYear}``. The current
+    // year being a differently-named collection is the kind of special case that
+    // has to be remembered at every call site and eventually is not.
+    projects: 'projects',
     feed: 'feed',
     notifications: 'notifications',
 });
@@ -214,10 +223,19 @@ export const teamIdFrom = (institution, department) => {
 
 export const teamPath = (teamId) => [ROOT_COLLECTIONS.teams, assertTeamId(teamId)];
 
-const under = (teamId, collection, docId) => {
-    const base = [...teamPath(teamId), collection];
-    return docId === undefined ? base : [...base, docId];
-};
+/**
+ * `teams/{id}/…` — the base every team-scoped path is built from.
+ *
+ * Variadic since `projects` arrived: that one nests a second level
+ * (`projects/{year}/staff/{uid}`), and the fixed three-argument version silently
+ * DROPPED the extra segments rather than failing — a path one level short of where
+ * it should be, which reads as an empty collection rather than as a bug.
+ */
+const under = (teamId, collection, ...rest) => [
+    ...teamPath(teamId),
+    collection,
+    ...rest.filter((segment) => segment !== undefined),
+];
 
 /** The team's member list, or one member. Keyed by UID. */
 export const membersPath = (teamId) => under(teamId, TEAM_COLLECTIONS.members);
@@ -268,11 +286,35 @@ export const loadsPath = (teamId) => under(teamId, TEAM_COLLECTIONS.loads);
 export const loadPath = (teamId, uid) => under(teamId, TEAM_COLLECTIONS.loads, assertUid(uid));
 export const workloadPath = (teamId, period) => under(teamId, TEAM_COLLECTIONS.workload, period);
 export const reportPath = (teamId, year) => under(teamId, TEAM_COLLECTIONS.reports, assertYear(year));
-export const attendancePath = (teamId, period) => under(teamId, TEAM_COLLECTIONS.attendance, period);
-export const archivePath = (teamId, year) => under(teamId, TEAM_COLLECTIONS.archive, assertYear(year));
+/**
+ * Monthly attendance. Was ONE global document, `system_data/monthly_attendance`,
+ * holding every month for every year in a single map with no year in the key — so
+ * a second year's data would have overwritten the first's month by month, silently.
+ * Keying it by year here is a fix carried along with the move, not a redesign: the
+ * migration writes the existing document under the year it actually describes.
+ */
+export const attendancePath = (teamId, year) =>
+    under(teamId, TEAM_COLLECTIONS.attendance, assertYear(year));
+/**
+ * Per-person project and domain data for ONE YEAR — was `cep_team` for the current
+ * year and `archive_{year}` for every other, two collections holding one shape.
+ *
+ * The year is a document and the people hang beneath it, so 2026 stops being
+ * special: `projectsYearPath(id, '2026')` and `projectsYearPath(id, '2024')` differ
+ * only in the year, which is what lets the year selector be a value rather than a
+ * branch.
+ */
+export const projectsYearPath = (teamId, year) =>
+    under(teamId, TEAM_COLLECTIONS.projects, assertYear(year));
+export const projectsStaffPath = (teamId, year) =>
+    under(teamId, TEAM_COLLECTIONS.projects, assertYear(year), 'staff');
+export const projectStaffPath = (teamId, year, uid) =>
+    under(teamId, TEAM_COLLECTIONS.projects, assertYear(year), 'staff', assertUid(uid));
 export const feedPath = (teamId) => under(teamId, TEAM_COLLECTIONS.feed);
 export const feedPostPath = (teamId, postId) => under(teamId, TEAM_COLLECTIONS.feed, postId);
 export const notificationsPath = (teamId) => under(teamId, TEAM_COLLECTIONS.notifications);
+export const notificationPath = (teamId, notificationId) =>
+    under(teamId, TEAM_COLLECTIONS.notifications, notificationId);
 
 // ── Root paths — see the header for why each is NOT team-scoped ──────────────
 

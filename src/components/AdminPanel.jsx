@@ -12,7 +12,9 @@ import SmartReportView from './SmartReportView';
 import AdminWellbeingPanel from './AdminWellbeingPanel';
 
 // Utils & Data
-import { STAFF_LIST, STATUS_OPTIONS, DOMAIN_LIST } from '../utils';
+import { STATUS_OPTIONS, DOMAIN_LIST } from '../utils';
+import { useTeam } from '../context/TeamContext';
+import { projectsStaffPath, projectStaffPath, loadPath, loadsPath, attendancePath } from '../utils/teamPaths';
 import { MOCK_STAFF_NAMES } from '../data/mockData'; 
 import { useNexus } from '../context/NexusContext';
 import { APP_VERSION_LABEL } from '../version';   
@@ -20,17 +22,39 @@ import { APP_VERSION_LABEL } from '../version';
 // STATIC VARIABLES
 const MONTH_LABELS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
+// The year whose loads live in `loads/{uid}` rather than inside a project row.
+// Named because it was the string '2026' compared inline, and because it is the one
+// thing still making a year special here.
+const CURRENT_LOAD_YEAR = '2026';
+
 const AdminPanel = ({ teamData, staffLoads, user }) => {
     // --- CONTEXT ---
     const { isDemo } = useNexus(); 
+    const { teamId, members } = useTeam();
 
     // --- DYNAMIC STAFF LIST SWITCHER ---
-    const activeStaffList = isDemo ? MOCK_STAFF_NAMES : STAFF_LIST;
+    const activeStaffList = isDemo
+        ? MOCK_STAFF_NAMES.map((name) => ({ uid: null, name, role: 'staff' }))
+        : members.map((m) => ({ uid: m.uid, name: m.displayName, role: m.role }));
 
-    // --- 🛡️ MOVED INSIDE: Safely filters the list after it is defined ---
-    const CEP_STAFF = activeStaffList.filter(name => 
-        !['Ashik', 'Benny', 'Evelyn', 'Mini', 'Nisa'].includes(name)
-    );
+    /**
+     * WHO CARRIES A CLINICAL LOAD — a FIFTH hardcoded copy of the team, now gone.
+     * This was `!['Ashik', 'Benny', 'Evelyn', 'Mini', 'Nisa'].includes(name)`: five
+     * named colleagues excluded by string so the remainder would be the clinical
+     * exercise physiologists. Onboarding anybody meant editing that array, and a
+     * department that is not Sport & Exercise Medicine would have had five arbitrary
+     * exclusions applied to its own people.
+     *
+     * The membership role answers it instead: a viewer is a stakeholder — a
+     * consultant, a nurse clinician — who reads the roster but holds no duties.
+     *
+     * ⚠️ ONE VISIBLE DIFFERENCE, and it is worth knowing rather than discovering.
+     *    Nisa is an administrator rather than a viewer, so she was in the old
+     *    exclusion list but is NOT excluded by role. She will appear with a row of
+     *    zeros until a lead sets her membership role to `viewer` — a correction
+     *    that takes one edit and no deploy, which is the whole point.
+     */
+    const CEP_STAFF = activeStaffList.filter((person) => person.role !== 'viewer');
 
     // --- TABS STATE ---
     const [activeTab, setActiveTab] = useState('OPERATIONS'); 
@@ -77,53 +101,49 @@ const AdminPanel = ({ teamData, staffLoads, user }) => {
 const fetchData = async () => {
         setLoadLoading(true);
         try {
-            // 🎯 DYNAMIC ROUTING: Anything that isn't 2026 is an Archive
-            const isArchive = loadYear !== '2026';
+            if (!teamId) { setLocalLoads({}); return; }
+
+            /**
+             * KEYED BY uid, AND NO MORE NAME MATCHING. Both branches used to slugify
+             * a display name and then hunt for a document whose id, `staff_name` or
+             * `id` normalised to the same string — three chances to match the wrong
+             * person and one to match nobody, on the numbers that drive the load
+             * chart. A uid is the document id, so the lookup is the lookup.
+             *
+             * ⚠️ TWO STORAGE SHAPES SURVIVE, deliberately. The current year keeps
+             *    `loads/{uid}` = `{ data: [12] }`; earlier years keep the clinical
+             *    load inside `projects/{year}/staff/{uid}` as a project row with
+             *    `monthly_hours`. Unifying them is a DATA change with its own
+             *    migration, not something to smuggle into a path rewire. The branch
+             *    below is that wart, named rather than hidden.
+             */
+            const isArchive = loadYear !== CURRENT_LOAD_YEAR;
             const newLoads = {};
-            const normalize = (str) => String(str || "").toLowerCase().replace(/[\s_]/g, '');
 
             if (isArchive) {
-                // Fetches dynamically from archive_2025, archive_2024, etc.
-                const archiveSnap = await getDocs(collection(db, `archive_${loadYear}`));
-                
+                const archiveSnap = await getDocs(collection(db, ...projectsStaffPath(teamId, loadYear)));
                 archiveSnap.forEach(docSnap => {
-                    const data = docSnap.data();
-                    const matchingStaffName = CEP_STAFF.find(name => 
-                        normalize(name) === normalize(docSnap.id) || 
-                        normalize(name) === normalize(data.staff_name)
+                    const clinicalProject = (docSnap.data().projects || []).find(p =>
+                        p.title?.toLowerCase().includes("clinical load")
                     );
-                    
-                    if (matchingStaffName) {
-                        const clinicalProject = (data.projects || []).find(p => 
-                            p.title?.toLowerCase().includes("clinical load")
-                        );
-                        newLoads[matchingStaffName] = clinicalProject?.monthly_hours || Array(12).fill(0);
-                    }
+                    newLoads[docSnap.id] = clinicalProject?.monthly_hours || Array(12).fill(0);
                 });
-
-                CEP_STAFF.forEach(staff => {
-                    if (!newLoads[staff]) newLoads[staff] = Array(12).fill(0);
-                });
-                
-                setLocalLoads(newLoads);
             } else {
-                // 🎯 LIVE MODE: Fetch 2026 from the staff_loads collection
-                const loadSnap = await getDocs(collection(db, 'staff_loads'));
-                loadSnap.forEach(doc => {
-                    const data = doc.data();
-                    const matchingStaffName = CEP_STAFF.find(name => 
-                        normalize(name) === normalize(doc.id) || 
-                        normalize(name) === normalize(data.staff_name) ||
-                        normalize(name) === normalize(data.id)
-                    );
-                    const finalName = matchingStaffName || doc.id;
-                    newLoads[finalName] = data.data || Array(12).fill(0);
+                const loadSnap = await getDocs(collection(db, ...loadsPath(teamId)));
+                loadSnap.forEach(docSnap => {
+                    newLoads[docSnap.id] = docSnap.data().data || Array(12).fill(0);
                 });
-                setLocalLoads(newLoads);
             }
 
+            // Everyone who carries a load gets a row, present in the data or not —
+            // a missing person is a person nobody can enter hours for.
+            CEP_STAFF.forEach(person => {
+                if (person.uid && !newLoads[person.uid]) newLoads[person.uid] = Array(12).fill(0);
+            });
+            setLocalLoads(newLoads);
+
             // Fetch Attendance
-            const attRef = doc(db, 'system_data', 'monthly_attendance');
+            const attRef = doc(db, ...attendancePath(teamId, attYear));
             const attSnap = await getDoc(attRef);
             if (attSnap.exists()) {
                 setAttValues(attSnap.data()[attYear] || Array(12).fill(0));
@@ -142,7 +162,7 @@ const fetchData = async () => {
     // input that can change its contents. Left for follow-up: useMemo CEP_STAFF,
     // then list it.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-}, [loadYear, attYear, isDemo]);
+}, [loadYear, attYear, isDemo, teamId]);
 
 // --- HANDLER: SAVE LOADS (Smart Routing) ---
 const saveLoads = async () => {
@@ -152,13 +172,14 @@ const saveLoads = async () => {
     }
     setLoadLoading(true);
     try {
-        const isArchive = loadYear !== '2026';
+        if (!teamId) { setMessage('❌ No team selected.'); setLoadLoading(false); return; }
+        const isArchive = loadYear !== CURRENT_LOAD_YEAR;
 
         if (isArchive) {
             // 🛡️ ARCHIVE ROUTE: Updates the correct archive vault dynamically
-            const promises = Object.keys(localLoads).map(async (staffName) => {
-                const docId = staffName.toLowerCase().replace(/\s+/g, '_'); 
-                const staffRef = doc(db, `archive_${loadYear}`, docId); 
+            const promises = Object.keys(localLoads).map(async (uid) => {
+                const staffName = members.find(m => m.uid === uid)?.displayName || uid;
+                const staffRef = doc(db, ...projectStaffPath(teamId, loadYear, uid));
                 
                 const snap = await getDoc(staffRef);
                 if (snap.exists()) {
@@ -168,7 +189,7 @@ const saveLoads = async () => {
                     projects = projects.map(p => {
                         if (p.title?.toLowerCase().includes("clinical load")) {
                             updated = true;
-                            return { ...p, monthly_hours: localLoads[staffName] };
+                            return { ...p, monthly_hours: localLoads[uid] };
                         }
                         return p;
                     });
@@ -179,7 +200,7 @@ const saveLoads = async () => {
                             title: "Clinical Load",
                             item_type: "Task",
                             domain_type: "CLINICAL",
-                            monthly_hours: localLoads[staffName],
+                            monthly_hours: localLoads[uid],
                             year: loadYear
                         });
                     }
@@ -195,7 +216,7 @@ const saveLoads = async () => {
                             title: "Clinical Load",
                             item_type: "Task",
                             domain_type: "CLINICAL",
-                            monthly_hours: localLoads[staffName],
+                            monthly_hours: localLoads[uid],
                             year: loadYear
                         }]
                     }, { merge: true });
@@ -205,12 +226,13 @@ const saveLoads = async () => {
             setMessage(`✅ ${loadYear} Archive Loads Updated!`);
 
         } else {
-            // 🟢 LIVE ROUTE (2026): Update the standard 'staff_loads' collection
-            const promises = Object.keys(localLoads).map(staffName => {
-                const docId = staffName.toLowerCase().replace(/\s+/g, '_');
+            // 🟢 LIVE ROUTE: the team's own loads collection, keyed by uid. The
+            // slugified display name that used to be the document id is gone —
+            // renaming somebody no longer orphans their hours under the old spelling.
+            const promises = Object.keys(localLoads).map(uid =>
                 // 🛡️ CRITICAL FIX: setDoc safely creates the document if it is missing
-                return setDoc(doc(db, 'staff_loads', docId), { data: localLoads[staffName] }, { merge: true });
-            });
+                setDoc(doc(db, ...loadPath(teamId, uid)), { data: localLoads[uid] }, { merge: true })
+            );
             await Promise.all(promises);
             setMessage(`✅ ${loadYear} Live Loads Updated!`);
         }
@@ -221,12 +243,12 @@ const saveLoads = async () => {
     setLoadLoading(false);
 };
 
-    const handleLoadChange = (staff, index, value) => {
+    const handleLoadChange = (uid, index, value) => {
         const newVal = parseInt(value) || 0;
         setLocalLoads(prev => {
-          const updated = [...(prev[staff] || Array(12).fill(0))];
+          const updated = [...(prev[uid] || Array(12).fill(0))];
           updated[index] = newVal;
-          return { ...prev, [staff]: updated };
+          return { ...prev, [uid]: updated };
         });
     };
 
@@ -238,7 +260,8 @@ const saveLoads = async () => {
         }
         setAttLoading(true);
         try {
-            const docRef = doc(db, 'system_data', 'monthly_attendance');
+            if (!teamId) { setMessage('❌ No team selected.'); return; }
+            const docRef = doc(db, ...attendancePath(teamId, attYear));
             await setDoc(docRef, { [attYear]: attValues }, { merge: true });
             setMessage(`✅ Saved Attendance for ${attYear}`);
         } catch (error) {
@@ -265,7 +288,12 @@ const saveLoads = async () => {
         setLoading(true);
         try {
             if (!newOwner || !newTitle) throw new Error("Owner and Title required");
-            const staffRef = doc(db, 'cep_team', newOwner.toLowerCase().replace(' ', '_'));
+            if (!teamId) throw new Error("No team selected");
+            // ⚠️ `newOwner` IS NOW A uid, not a display name. The picker below sends
+            // the uid and renders the name — the `.replace(' ', '_')` slug that used
+            // to build the document id only ever replaced the FIRST space, so
+            // "Mary Anne Tan" became `mary Anne Tan` and silently missed.
+            const staffRef = doc(db, ...projectStaffPath(teamId, newYear, newOwner));
             await updateDoc(staffRef, {
                 projects: arrayUnion({
                     title: newTitle,
@@ -290,7 +318,8 @@ const saveLoads = async () => {
         }
         setLoading(true);
         try {
-            const staffRef = doc(db, 'cep_team', staffId);
+            if (!teamId) throw new Error("No team selected");
+            const staffRef = doc(db, ...projectStaffPath(teamId, item.year || CURRENT_LOAD_YEAR, staffId));
             await updateDoc(staffRef, { projects: arrayRemove(item) });
             setMessage('🗑️ Item deleted');
         } catch (error) { setMessage('❌ Error: ' + error.message); } 
@@ -305,7 +334,8 @@ const saveLoads = async () => {
         }
         setLoading(true);
         try {
-            const staffRef = doc(db, 'cep_team', staffId);
+            if (!teamId) throw new Error("No team selected");
+            const staffRef = doc(db, ...projectStaffPath(teamId, CURRENT_LOAD_YEAR, staffId));
             const snapshot = await getDoc(staffRef);
             if (!snapshot.exists()) throw new Error("Staff not found");
             const projects = snapshot.data().projects || [];
@@ -317,8 +347,13 @@ const saveLoads = async () => {
     };
 
     // --- HANDLER: CHANGE OWNER ---
-    const handleChangeOwner = async (oldStaffId, item, newOwnerName) => {
-        if (oldStaffId === newOwnerName.toLowerCase().replace(' ', '_')) return;
+    const handleChangeOwner = async (oldStaffId, item, newOwnerUid) => {
+        // Both sides are uids now, so this is an identity check rather than a
+        // comparison between a document id and a slug of a name — the old form
+        // compared `oldStaffId` against `name.replace(' ', '_')`, which disagreed
+        // with itself for any name containing two spaces.
+        if (oldStaffId === newOwnerUid) return;
+        const newOwnerName = members.find(m => m.uid === newOwnerUid)?.displayName || newOwnerUid;
         if (isDemo) {
             setMessage(`✅ (Sandbox) Moved to ${newOwnerName}`);
             return;
@@ -326,10 +361,12 @@ const saveLoads = async () => {
         if (!window.confirm(`Move "${item.title}" to ${newOwnerName}?`)) return;
         setLoading(true);
         try {
+            if (!teamId) throw new Error("No team selected");
+            const year = item.year || CURRENT_LOAD_YEAR;
             const batch = writeBatch(db);
-            const oldRef = doc(db, 'cep_team', oldStaffId);
+            const oldRef = doc(db, ...projectStaffPath(teamId, year, oldStaffId));
             batch.update(oldRef, { projects: arrayRemove(item) });
-            const newRef = doc(db, 'cep_team', newOwnerName.toLowerCase().replace(' ', '_'));
+            const newRef = doc(db, ...projectStaffPath(teamId, year, newOwnerUid));
             const newItem = { ...item }; 
             batch.update(newRef, { projects: arrayUnion(newItem) });
             await batch.commit();
@@ -426,18 +463,24 @@ const saveLoads = async () => {
                                 </tr>
                                 </thead>
                                 <tbody className="divide-y divide-slate-50 dark:divide-slate-800">
-                                    {activeStaffList
-                                        // 🛡️ FILTER: Only include the 5 core CEP staff
-                                        .filter(staff => !['Ashik', 'Benny', 'Evelyn', 'Mini', 'Nisa'].includes(staff))
-                                        .map(staff => (
-                                            <tr key={staff} className="hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
-                                                <td className="py-3 font-bold text-slate-700 dark:text-slate-300">{staff}</td>
-                                                {(localLoads[staff] || Array(12).fill(0)).map((val, idx) => (
+                                    {/*
+                                      A SIXTH COPY OF THE SAME FIVE NAMES lived here,
+                                      inline in the render and separate from the one at
+                                      the top of the file — so the table and the save
+                                      could disagree about who carries a load. Both are
+                                      `CEP_STAFF` now, which is derived from the
+                                      membership role.
+                                    */}
+                                    {CEP_STAFF
+                                        .map(person => (
+                                            <tr key={person.uid || person.name} className="hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
+                                                <td className="py-3 font-bold text-slate-700 dark:text-slate-300">{person.name}</td>
+                                                {(localLoads[person.uid] || Array(12).fill(0)).map((val, idx) => (
                                                     <td key={idx} className="p-1">
                                                         <input 
                                                             type="number" 
                                                             value={val}
-                                                            onChange={(e) => handleLoadChange(staff, idx, e.target.value)}
+                                                            onChange={(e) => handleLoadChange(person.uid, idx, e.target.value)}
                                                             className={inputStyle} 
                                                         />
                                                     </td>
@@ -521,7 +564,11 @@ const saveLoads = async () => {
                                 <label className="text-[10px] font-bold text-slate-400 uppercase block mb-1">Owner</label>
                                 <select className={inputStyle} value={newOwner} onChange={(e)=>setNewOwner(e.target.value)}>
                                     <option value="">+ Assign...</option>
-                                    {activeStaffList.map(n => <option key={n} value={n}>{n}</option>)}
+                                    {activeStaffList.map(person => (
+                                        <option key={person.uid || person.name} value={person.uid || person.name}>
+                                            {person.name}
+                                        </option>
+                                    ))}
                                 </select>
                             </div>
 
@@ -594,7 +641,11 @@ const saveLoads = async () => {
                                                         value={staff.staff_name}
                                                         onChange={(e) => handleChangeOwner(staff.id, p, e.target.value)}
                                                     >
-                                                        {activeStaffList.map(n => <option key={n} value={n}>{n}</option>)}
+                                                        {activeStaffList.map(person => (
+                                        <option key={person.uid || person.name} value={person.uid || person.name}>
+                                            {person.name}
+                                        </option>
+                                    ))}
                                                     </select>
                                                 </td>
                                                 <td className="p-2">

@@ -6,6 +6,8 @@ import { getFunctions, httpsCallable } from 'firebase/functions';
 
 // 🛡️ IMPORT CONTEXT
 import { useNexus } from '../context/NexusContext';
+import { useTeam } from '../context/TeamContext';
+import { reportPath, projectStaffPath } from '../utils/teamPaths';
 
 const functions = getFunctions(undefined, 'us-central1');
 // 🛡️ CRITICAL FIX: 300,000ms (5 minutes) timeout to match the backend!
@@ -37,6 +39,7 @@ const MARVEL_PROFILES = {
 
 const SmartAnalysis = ({ teamData, staffLoads, onClose }) => {
     const { isDemo } = useNexus();
+    const { teamId } = useTeam();
     const [targetYear, setTargetYear] = useState('2026'); 
     const [loading, setLoading] = useState(false);
     const [status, setStatus] = useState('GENERATE ANALYSIS');
@@ -123,7 +126,8 @@ const SmartAnalysis = ({ teamData, staffLoads, onClose }) => {
         if (!result) return;
         setLoading(true);
         try {
-            const reportRef = firestore.doc(db, 'system_data', `reports_${targetYear}`);
+            if (!teamId) throw new Error('No team selected.');
+            const reportRef = firestore.doc(db, ...reportPath(teamId, targetYear));
             await firestore.setDoc(reportRef, {
                 privateText: result.private,
                 publicText: result.public,
@@ -132,16 +136,21 @@ const SmartAnalysis = ({ teamData, staffLoads, onClose }) => {
 
             const dataToArchive = importedData || teamData || [];
             
-            const batchPromises = dataToArchive.map(staff => {
-                const sName = staff.staff_name || staff.name || 'unknown';
-                const staffId = sName.toLowerCase().replace(/\s+/g, '_');
-                const staffRef = firestore.doc(db, `archive_${targetYear}`, staffId);
-                return firestore.setDoc(staffRef, {
-                    staff_name: sName,
-                    projects: staff.projects || [],
-                    year: targetYear
+            // ARCHIVED BY uid. The document id used to be a slug of the display
+            // name, so archiving a renamed clinician created a SECOND archive row
+            // under the new spelling and left the old one behind — two partial
+            // histories for one person, in the year-end report nobody re-reads.
+            // `staff.id` is the uid the dashboard listener already carries.
+            const batchPromises = dataToArchive
+                .filter(staff => !!staff.id)
+                .map(staff => {
+                    const staffRef = firestore.doc(db, ...projectStaffPath(teamId, targetYear, staff.id));
+                    return firestore.setDoc(staffRef, {
+                        staff_name: staff.staff_name || staff.name || 'unknown',
+                        projects: staff.projects || [],
+                        year: targetYear
+                    });
                 });
-            });
 
             await Promise.all(batchPromises);
             alert(`SUCCESS: Archived ${targetYear}!`);

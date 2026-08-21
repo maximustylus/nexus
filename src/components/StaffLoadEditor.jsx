@@ -1,9 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import { db } from '../firebase';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
-import { STAFF_LIST, MONTHS } from '../utils';
+import { MONTHS } from '../utils';
+import { useTeam } from '../context/TeamContext';
+import { loadPath } from '../utils/teamPaths';
 
 const StaffLoadEditor = () => {
+    // `STAFF_LIST` — ten hardcoded names — is the team's own member list now, and
+    // the load document is keyed by uid rather than by the name it renders.
+    const { teamId, members } = useTeam();
     // State to hold the grid of numbers
     const [loads, setLoads] = useState({});
     const [loading, setLoading] = useState(false);
@@ -11,41 +16,42 @@ const StaffLoadEditor = () => {
 
     // 1. Fetch existing data when page loads
     useEffect(() => {
+        if (!teamId) { setLoads({}); return; }
+
         const fetchData = async () => {
             const newLoads = {};
-            for (const staff of STAFF_LIST) {
-                const docRef = doc(db, 'staff_loads', staff);
-                const docSnap = await getDoc(docRef);
-                
-                if (docSnap.exists()) {
-                    newLoads[staff] = docSnap.data().data; // Expecting array of 12 numbers
-                } else {
-                    newLoads[staff] = Array(12).fill(0); // Default to zeros
-                }
+            for (const member of members) {
+                const docSnap = await getDoc(doc(db, ...loadPath(teamId, member.uid)));
+                newLoads[member.uid] = docSnap.exists()
+                    ? docSnap.data().data      // an array of 12 numbers
+                    : Array(12).fill(0);
             }
             setLoads(newLoads);
         };
         fetchData();
-    }, []);
+    }, [teamId, members]);
 
     // 2. Handle typing in the boxes
-    const handleChange = (staff, monthIndex, value) => {
+    const handleChange = (uid, monthIndex, value) => {
         const val = parseInt(value) || 0;
         setLoads(prev => ({
             ...prev,
-            [staff]: prev[staff].map((item, idx) => idx === monthIndex ? val : item)
+            [uid]: prev[uid].map((item, idx) => idx === monthIndex ? val : item)
         }));
     };
 
     // 3. Save to Firebase
     const handleSave = async () => {
+        if (!teamId) { setStatus('No team selected.'); return; }
         setLoading(true);
         setStatus('Saving...');
         try {
             // Save each staff member as a separate document
-            const promises = STAFF_LIST.map(staff => 
-                setDoc(doc(db, 'staff_loads', staff), { 
-                    data: loads[staff],
+            // Keyed by uid, so renaming somebody does not orphan their loads under
+            // the old spelling and start a fresh row under the new one.
+            const promises = members.map(member =>
+                setDoc(doc(db, ...loadPath(teamId, member.uid)), {
+                    data: loads[member.uid],
                     lastUpdated: new Date()
                 })
             );
@@ -90,17 +96,17 @@ const StaffLoadEditor = () => {
                         </tr>
                     </thead>
                     <tbody>
-                        {STAFF_LIST.map((staff) => (
-                            <tr key={staff} className="border-b dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700/50">
+                        {members.map((member) => (
+                            <tr key={member.uid} className="border-b dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700/50">
                                 <td className="px-4 py-3 font-medium text-slate-900 dark:text-white">
-                                    {staff}
+                                    {member.displayName}
                                 </td>
-                                {loads[staff]?.map((val, idx) => (
+                                {loads[member.uid]?.map((val, idx) => (
                                     <td key={idx} className="px-1 py-2">
                                         <input
                                             type="number"
                                             value={val}
-                                            onChange={(e) => handleChange(staff, idx, e.target.value)}
+                                            onChange={(e) => handleChange(member.uid, idx, e.target.value)}
                                             className="w-16 p-1 text-center bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-600 rounded focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:text-white"
                                         />
                                     </td>

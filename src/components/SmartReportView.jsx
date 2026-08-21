@@ -1,12 +1,15 @@
 import React, { useState, useEffect } from 'react';
 import { Sparkles, TrendingUp, AlertTriangle, CheckCircle2, ShieldCheck, Maximize2, X, Lock, Users } from 'lucide-react';
 import { useNexus } from '../context/NexusContext';
+import { useTeam } from '../context/TeamContext';
+import { reportPath } from '../utils/teamPaths';
 import { db } from '../firebase';
 import { doc, getDoc } from 'firebase/firestore';
 import SmartAnalysis from './SmartAnalysis';
 
 const SmartReportView = ({ year, teamData, staffLoads, user, forceAdminView }) => {  
   const { isDemo } = useNexus();
+  const { teamId } = useTeam();
   const [loading, setLoading] = useState(true);
   
   // 🛡️ MASTER OVERRIDE: Check if user is admin OR if the parent component forces admin view
@@ -144,7 +147,8 @@ const SmartReportView = ({ year, teamData, staffLoads, user, forceAdminView }) =
           }
           setReports(mockReport);
         } else {
-          const reportRef = doc(db, 'system_data', `reports_${year}`);
+          if (!teamId) { setReports(null); return; }
+          const reportRef = doc(db, ...reportPath(teamId, year));
           const reportSnap = await getDoc(reportRef);
 
           if (reportSnap.exists()) {
@@ -167,7 +171,7 @@ const SmartReportView = ({ year, teamData, staffLoads, user, forceAdminView }) =
     };
     
     fetchReport();
-  }, [isDemo, year, user]);
+  }, [isDemo, year, user, teamId]);
 
   if (loading) return <div className="h-64 bg-slate-800 animate-pulse rounded-3xl" />;
 

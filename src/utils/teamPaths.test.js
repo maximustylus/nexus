@@ -26,7 +26,9 @@ import {
     wellbeingDocPath,
     loadPath,
     reportPath,
-    archivePath,
+    projectsYearPath,
+    projectsStaffPath,
+    projectStaffPath,
     userPath,
     leadRequestPath,
     configPath,
@@ -113,7 +115,9 @@ describe('teamPaths — the paths themselves', () => {
         expect(swapsPath(TEAM)).toEqual(['teams', TEAM, 'swaps']);
         expect(wellbeingDocPath(TEAM, UID)).toEqual(['teams', TEAM, 'wellbeing', UID]);
         expect(reportPath(TEAM, 2026)).toEqual(['teams', TEAM, 'reports', '2026']);
-        expect(archivePath(TEAM, 2025)).toEqual(['teams', TEAM, 'archive', '2025']);
+        expect(projectsYearPath(TEAM, 2025)).toEqual(['teams', TEAM, 'projects', '2025']);
+        expect(projectsStaffPath(TEAM, 2025)).toEqual(['teams', TEAM, 'projects', '2025', 'staff']);
+        expect(projectStaffPath(TEAM, 2025, UID)).toEqual(['teams', TEAM, 'projects', '2025', 'staff', UID]);
     });
 
     /**
@@ -221,6 +225,21 @@ describe('teamPaths — the legacy paths, kept for the migration only', () => {
 });
 
 describe('teamPaths — the collection name tables', () => {
+    /**
+     * THE SPECIAL CASE THAT IS GONE. `cep_team` was the CURRENT year's per-person
+     * project data and `archive_{year}` was every other year's — the same shape in
+     * two differently-named collections, chosen between by
+     * `dataYear === '2026' ? 'cep_team' : ...`. Under `projects` the current year
+     * differs from 2024 only in the year, which is what lets the year selector be a
+     * value rather than a branch.
+     */
+    it('gives the current year and an old year the same shape', () => {
+        const now = projectStaffPath(TEAM, 2026, UID);
+        const then = projectStaffPath(TEAM, 2024, UID);
+        expect(now.length).toBe(then.length);
+        expect(now.filter((s, i) => s !== then[i])).toEqual(['2026']);
+    });
+
     it('exposes names as data so a typo is a test failure, not a silent miss', () => {
         expect(TEAM_COLLECTIONS.rosters).toBe('rosters');
         expect(TEAM_COLLECTIONS.wellbeing).toBe('wellbeing');

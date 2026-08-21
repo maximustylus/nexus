@@ -44,9 +44,17 @@ import ResultPage from './components/ResultPage';
 import { STAFF_LIST, STAFF_IDS, MONTHS, checkAccess, TEAM_DIRECTORY } from './utils';
 import AccessGate from './components/AccessGate';
 import LeadRequestsPanel from './components/LeadRequestsPanel';
-import { TeamProvider } from './context/TeamContext';
+import { useTeam } from './context/TeamContext';
 import { accessStateFor, canEnterApp } from './utils/accessPolicy';
-import { leadRequestPath } from './utils/teamPaths';
+import {
+    leadRequestPath,
+    userPath,
+    notificationsPath,
+    notificationPath,
+    projectsStaffPath,
+    loadPath,
+    attendancePath,
+} from './utils/teamPaths';
 import { APP_VERSION_LABEL } from './version';
 
 // ==========================================
@@ -81,6 +89,12 @@ const NO_AUTH_FACTS = Object.freeze({ email: null, emailVerified: null, teamIds:
 // drift apart — two string literals that must match is exactly how a page ends up
 // unreachable behind its own gate.
 const APPROVALS_PATH = '/admin/teams';
+
+// The year the app treats as "now". Named because it was the string '2026' compared
+// inline in two places, and because `dataYear` is otherwise just a value the year
+// selector produces — the comparison is the only thing that still makes one year
+// special, and it should be visible.
+const CURRENT_DATA_YEAR = '2026';
 
 const CustomBarTooltip = ({ active, payload, label }) => {
     if (active && payload && payload.length) {
@@ -189,6 +203,9 @@ export default function App() {
   // one place rather than reconstructed at each render site.
   const [authFacts, setAuthFacts] = useState(NO_AUTH_FACTS);
   const { pathname } = useLocation();
+  // WHOSE data every effect below reads. The provider is mounted in `main.jsx`,
+  // above this component — see `TeamGate` for why.
+  const { teamId, members } = useTeam();
   const [teamData, setTeamData] = useState([]); 
   const [staffLoads, setStaffLoads] = useState({});
   const [attendanceData, setAttendanceData] = useState({}); 
@@ -276,16 +293,19 @@ export default function App() {
   useEffect(() => {
       let unsubUser, unsubNotifications;
 
-      if (user?.uid && !isDemo) {
-          unsubUser = onSnapshot(doc(db, 'users', user.uid), (docSnap) => {
+      if (user?.uid && teamId && !isDemo) {
+          unsubUser = onSnapshot(doc(db, ...userPath(user.uid)), (docSnap) => {
               if (docSnap.exists() && docSnap.data().photoURL) {
                   setUser(prev => ({ ...prev, photoURL: docSnap.data().photoURL }));
               }
           });
 
+          // ROUTED BY UID. `where('recipient','==',user.name)` meant the bell went
+          // quiet the moment somebody edited their display name — and an empty bell
+          // is indistinguishable from having no notifications.
           const q = query(
-              collection(db, 'notifications'), 
-              where('recipient', '==', user.name),
+              collection(db, ...notificationsPath(teamId)),
+              where('recipientUid', '==', user.uid),
               orderBy('timestamp', 'desc')
           );
           unsubNotifications = onSnapshot(q, (snapshot) => {
@@ -298,7 +318,7 @@ export default function App() {
           if (unsubUser) unsubUser();
           if (unsubNotifications) unsubNotifications();
       };
-  }, [user?.uid, user?.name, isDemo]);
+  }, [user?.uid, teamId, isDemo]);
 
   useEffect(() => {
     let unsubStaff, unsubAttendance;
@@ -310,29 +330,39 @@ export default function App() {
     if (isDemo) {
       console.log("[NEXUS] Loading Sandbox...");
     } else {
-      const targetCollection = dataYear === '2026' ? 'cep_team' : `archive_${dataYear}`;
+      // THE YEAR IS A VALUE NOW, NOT A BRANCH. This used to read
+      // `dataYear === '2026' ? 'cep_team' : `archive_${dataYear}`` — the current
+      // year living in a differently-named collection from every other year, a
+      // special case that had to be remembered at each call site.
+      if (!teamId) return undefined;
 
       try {
-        unsubStaff = onSnapshot(collection(db, targetCollection), (snapshot) => {        
-          const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-          const sortedData = TEAM_DIRECTORY.map(member => {
-            return data.find(d => d.id === member.id) || { id: member.id, staff_name: member.name, projects: [] };
-          });
+        unsubStaff = onSnapshot(collection(db, ...projectsStaffPath(teamId, dataYear)), (snapshot) => {
+          const data = snapshot.docs.map(entry => ({ id: entry.id, ...entry.data() }));
+          // Ordered by the TEAM'S OWN member list, not by ten hardcoded names, and
+          // matched on uid rather than on a directory id.
+          const sortedData = members.map(member => (
+            data.find(d => d.id === member.uid)
+            || { id: member.uid, staff_name: member.displayName, projects: [] }
+          ));
           setTeamData(sortedData);
         }, (err) => console.error("Snapshot Error:", err));
 
-        if (dataYear === '2026') {          
-          activeStaffIds.forEach(staffId => {
-            const u = onSnapshot(doc(db, 'staff_loads', staffId), (docSnap) => {
+        // Loads are per-person and only meaningful for the year being viewed; they
+        // were previously fetched for 2026 only because that was the only year
+        // `staff_loads` covered.
+        if (dataYear === CURRENT_DATA_YEAR) {
+          members.forEach(member => {
+            const u = onSnapshot(doc(db, ...loadPath(teamId, member.uid)), (docSnap) => {
               if (docSnap.exists()) {
-                setStaffLoads(prev => ({ ...prev, [staffId]: docSnap.data().data }));
+                setStaffLoads(prev => ({ ...prev, [member.uid]: docSnap.data().data }));
               }
             });
             unsubLoads.push(u);
           });
         }
 
-        unsubAttendance = onSnapshot(doc(db, 'system_data', 'monthly_attendance'), (docSnap) => {
+        unsubAttendance = onSnapshot(doc(db, ...attendancePath(teamId, dataYear)), (docSnap) => {
             if (docSnap.exists()) { setAttendanceData(docSnap.data()); }
         });
       } catch (error) {
@@ -345,7 +375,11 @@ export default function App() {
       if (unsubAttendance) unsubAttendance();
       unsubLoads.forEach(u => u());
     };
-  }, [isDemo, currentView, dataYear, activeStaffList, activeStaffIds, user]);
+    // `teamId` and `members` are in the list because every path above is composed
+    // from them: without them a team switch would leave the dashboard showing the
+    // previous department's projects, loads and attendance while the header said
+    // otherwise.
+  }, [isDemo, currentView, dataYear, activeStaffList, activeStaffIds, user, teamId, members]);
 
   useEffect(() => {
     const messaging = getMessaging();
@@ -380,7 +414,7 @@ export default function App() {
       if (isDemo || unreadCount === 0) return;
       const unreadAlerts = notifications.filter(n => !n.read);
       for (const alert of unreadAlerts) {
-          try { await updateDoc(doc(db, 'notifications', alert.id), { read: true }); }
+          try { await updateDoc(doc(db, ...notificationPath(teamId, alert.id)), { read: true }); }
           catch (error) { console.error("Failed to mark read:", error); }
       }
   };
@@ -721,15 +755,7 @@ export default function App() {
   );
 
   return (
-    /*
-      TeamProvider wraps EVERYTHING, including the public portal routes, and that is
-      deliberate rather than lazy: with no uid it subscribes to nothing at all and
-      `useTeam()` returns an inert context, so the portal pays nothing. Wrapping only
-      the authenticated branch would mean two trees where a component might or might
-      not have a team in scope, which is how `useTeam()` ends up guarded by
-      `if (team)` at every call site.
-    */
-    <TeamProvider uid={isDemo ? null : user?.uid}>
+    <>
       <Routes>
         <Route path="/individuals/language" element={<LanguageGate />} />
         <Route path="/individuals/pathway" element={<PathwaySelection />} />
@@ -915,6 +941,6 @@ export default function App() {
         )
       } />
     </Routes>
-    </TeamProvider>
+    </>
   );
 }

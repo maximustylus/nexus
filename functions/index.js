@@ -520,9 +520,33 @@ exports.processFeedPost = onCall({ secrets: ['GEMINI_API_KEY'] }, async (request
     var externalLink = request.data.externalLink;
     var imageUrl = request.data.imageUrl;
     var postId = request.data.postId;
+    var teamId = request.data.teamId;
 
     if ((!rawText || rawText.trim() === '') && !imageUrl) {
         throw new HttpsError('invalid-argument', 'Post content cannot be empty.');
+    }
+
+    /**
+     * WHOSE FEED. The only Admin SDK path in this file that needed team scoping —
+     * it wrote to one global `feed_posts` collection, so a KKH respiratory
+     * therapist's post appeared on an SGH physiotherapist's wall.
+     *
+     * ⚠️ MEMBERSHIP IS CHECKED HERE, NOT TRUSTED FROM THE ARGUMENT. This function
+     *    runs on the Admin SDK and bypasses `firestore.rules` entirely, so a caller
+     *    who simply passed another department's teamId would otherwise be able to
+     *    post into it. The rules cannot help; this check is the whole control.
+     */
+    if (!request.auth || !request.auth.uid) {
+        throw new HttpsError('unauthenticated', 'Sign in first.');
+    }
+    if (typeof teamId !== 'string' || !/^[a-z0-9]+(-[a-z0-9]+)*$/.test(teamId)) {
+        throw new HttpsError('invalid-argument', 'Which team is this post for?');
+    }
+    var memberSnap = await getFirestore()
+        .doc('teams/' + teamId + '/members/' + request.auth.uid)
+        .get();
+    if (!memberSnap.exists) {
+        throw new HttpsError('permission-denied', 'You are not a member of that team.');
     }
 
     if (!API_KEY) throw new HttpsError('failed-precondition', 'AI service is not configured.');
@@ -611,7 +635,7 @@ exports.processFeedPost = onCall({ secrets: ['GEMINI_API_KEY'] }, async (request
         };
 
         if (postId) {
-            await admin.firestore().collection('feed_posts').doc(postId).update(postUpdateData);
+            await getFirestore().collection('teams/' + teamId + '/feed').doc(postId).update(postUpdateData);
             return { success: true, postId: postId, category: postUpdateData.category };
         } else {
             postUpdateData.author = authorName || 'Anonymous Staff';
@@ -621,7 +645,7 @@ exports.processFeedPost = onCall({ secrets: ['GEMINI_API_KEY'] }, async (request
             postUpdateData.comments = 0;
             postUpdateData.isDemo = !!isDemo;
 
-            var docRef = await admin.firestore().collection('feed_posts').add(postUpdateData);
+            var docRef = await getFirestore().collection('teams/' + teamId + '/feed').add(postUpdateData);
             return { success: true, postId: docRef.id, category: postUpdateData.category };
         }
 
