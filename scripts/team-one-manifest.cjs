@@ -28,10 +28,10 @@
  *    working, this is why, and a lead can invite them back in seconds without a
  *    deploy.
  *
- * Benny is NOT in that list and stays — he is the department's **oHOD**, and was
- * kept deliberately when the other three stakeholders were dropped. Stated
- * explicitly because "remove the viewers" would have been the tidier-sounding rule,
- * is not what was asked for, and would have removed the head of the department.
+ * Benny is NOT in that list and stays — he is the **Head of Service**, and was kept
+ * deliberately when the other three stakeholders were dropped. Stated explicitly
+ * because "remove the viewers" would have been the tidier-sounding rule, is not what
+ * was asked for, and would have removed the person the service reports to.
  *
  * ── TWO INDEPENDENT FACTS, NOT ONE ROLE ──────────────────────────────────────
  *
@@ -117,8 +117,18 @@ const MEMBERS = Object.freeze([
     // ROSTER MASTER. Builds the roster every week, so `lead`; carries no clinical
     // load, so `rostered: false`. The pair of facts this model exists to separate.
     { legacyId: 'nisa',       displayName: 'Nisa',       email: 'siti.nur.anisah.nh@kkh.com.sg',         role: 'lead',   rostered: false, title: 'Administrator & Roster Master' },
-    // oHOD — reads the roster, holds no duties, configures nothing.
-    { legacyId: 'benny',      displayName: 'Benny',      email: 'benny.loo.k.g.@singhealth.com.sg',      role: 'viewer', rostered: false, title: 'oHOD' },
+    /**
+     * HEAD OF SERVICE. `viewer` and `rostered: false` — he reads the roster, holds no
+     * duties in it, and does not configure it.
+     *
+     * ⚠️ SENIORITY IS NOT A ROLE HERE, and that is worth saying because it reads
+     *    oddly: the most senior person in this list has the fewest permissions. Role
+     *    describes what somebody DOES in NEXUS, not where they sit in the hierarchy —
+     *    the roster is built by the roster master and the service lead, and the Head
+     *    of Service reads it. If he should also be able to configure or invite, that
+     *    is `role: 'lead'` and one edit; it has not been asked for.
+     */
+    { legacyId: 'benny',      displayName: 'Benny',      email: 'benny.loo.k.g.@singhealth.com.sg',      role: 'viewer', rostered: false, title: 'Head of Service' },
     { legacyId: 'brandon',    displayName: 'Brandon',    email: 'brandon.feng.gg@kkh.com.sg',            role: 'staff',  rostered: true,  title: 'CEP (JG11)' },
     { legacyId: 'ying_xian',  displayName: 'Ying Xian',  email: 'lim.ying.xian@kkh.com.sg',              role: 'staff',  rostered: true,  title: 'CEP (JG12)' },
     { legacyId: 'derlinder',  displayName: 'Derlinder',  email: 'derlinder.kaur@kkh.com.sg',             role: 'staff',  rostered: true,  title: 'CEP (JG12)' },

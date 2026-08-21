@@ -1044,9 +1044,9 @@ const RosterView = ({ user }) => {
             // would write it over four real clinicians. An in-progress
             // startDate/weeks edit is preserved.
             // THE STAFF POOL IS WHO HOLDS DUTIES, not everyone in the team — the
-            // roster master configures the roster and is not in it, the oHOD reads
-            // it and is not in it. Filtering by `role` cannot express that: this
-            // team has both a lead who practises and a lead who does not.
+            // roster master configures the roster and is not in it, the Head of
+            // Service reads it and is not in it. Filtering by `role` cannot express
+            // that: this team has both a lead who practises and a lead who does not.
             //
             // ⚠️ WITH A TEAM, THE POOL IS THE TEAM'S — EVEN WHILE IT IS EMPTY. The
             //    hardcoded fallback in `auraEngine.js` is STALE (four names for a

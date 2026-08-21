@@ -60,7 +60,7 @@ export const TEAM_DIRECTORY = [
     name: 'Benny', 
     email: 'benny.loo.k.g.@singhealth.com.sg', 
     role: 'viewer', 
-    title: 'oHOD'
+    title: 'Head of Service'
   },
 
   // --- CLINICAL EXERCISE PHYSIOLOGISTS (STAFF) ---

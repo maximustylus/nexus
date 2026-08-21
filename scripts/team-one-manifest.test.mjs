@@ -60,12 +60,18 @@ describe('team #1 — the members', () => {
      * stakeholders were dropped. Asserted so a later tidy-up cannot quietly apply the
      * rule that was never given.
      */
-    it('keeps Benny — the oHOD — who is a viewer but was not one of the three removed', () => {
+    /**
+     * SENIORITY IS NOT A ROLE. The most senior person in the team has the fewest
+     * permissions, because `role` describes what somebody does in NEXUS rather than
+     * where they sit in the hierarchy. Asserted because it reads oddly enough that a
+     * later reader might "fix" it.
+     */
+    it('keeps Benny — Head of Service — as a viewer who holds no duties', () => {
         const benny = MEMBERS.find((m) => m.displayName === 'Benny');
         expect(benny).toBeTruthy();
         expect(benny.role).toBe('viewer');
         expect(benny.rostered).toBe(false);
-        expect(benny.title).toBe('oHOD');
+        expect(benny.title).toBe('Head of Service');
     });
 
     it('gives everybody one of the three real roles, and an explicit rostered flag', () => {
