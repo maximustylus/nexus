@@ -78,32 +78,45 @@ describe('team #1 — the members', () => {
     });
 
     /**
-     * ⚠️ THE CASE THAT PROVES `role` AND `rostered` ARE DIFFERENT QUESTIONS, and the
-     *    one this suite exists to protect. NISA IS THE ROSTER MASTER: she builds the
-     *    roster every week, so she must be a `lead` to configure and generate — and
-     *    she carries no clinical load, so she must not be in the staff pool the
-     *    generator draws from, or it will hand her duties she does not do.
+     * ⚠️ TWO COUNTEREXAMPLES IN ONE TEAM, and together they are why `role` and
+     *    `rostered` cannot be one field.
      *
-     *    Filtering the pool by `role !== 'viewer'` puts her in it. Filtering by
-     *    `role === 'staff'` takes the roster away from her. One field cannot answer
-     *    both questions, and choosing between them harder does not make either right.
+     *    NISA IS THE ROSTER MASTER: she builds the roster every week, so she must be
+     *    a `lead` to configure and generate — and carries no clinical load, so she
+     *    must not be in the pool the generator draws from, or it hands her duties she
+     *    does not do.
+     *
+     *    ALIF IS A LEAD WHO PRACTISES: he configures the roster AND holds duties in
+     *    it.
+     *
+     *    `role !== 'viewer'` puts Nisa in the pool. `role === 'staff'` drops Alif out
+     *    of his own rota. Every single-field rule gets one of them wrong.
      */
-    it('separates what you may DO from whether you hold duties', () => {
+    it('separates what you may DO from whether you hold duties, in both directions', () => {
         const nisa = MEMBERS.find((m) => m.displayName === 'Nisa');
         expect(nisa.role).toBe('lead');       // builds the roster
         expect(nisa.rostered).toBe(false);    // is not in it
+
+        const alif = MEMBERS.find((m) => m.displayName === 'Alif');
+        expect(alif.role).toBe('lead');       // also builds the roster
+        expect(alif.rostered).toBe(true);     // and holds duties in it
     });
 
     /**
-     * THE STAFF POOL MUST STILL BE THE FOUR THE LIVE ROSTER ALREADY COVERS —
-     * exactly `LIVE_ROSTER_DEFAULTS.staff` in `auraEngine.js`. This is the
-     * compatibility gate for the whole migration: if the pool changes, every
-     * generated week changes for four practising clinicians, and it would do so
-     * without anybody asking for it.
+     * ⚠️ THE STAFF POOL IS FIVE, NOT THE FOUR `LIVE_ROSTER_DEFAULTS.staff` HARDCODES.
+     *    That constant lists ['Brandon','Ying Xian','Derlinder','Fadzlynn'] and had
+     *    simply gone stale — the service lead practises and was never added to it.
+     *    Nobody edits an array when a department changes, which is the whole reason
+     *    the member list replaces it.
+     *
+     *    This IS a behaviour change and is recorded as one: the next generated roster
+     *    distributes duties across five people rather than four. Rosters already
+     *    stored are untouched, because the migration copies and never rewrites — so
+     *    it affects the next Generate, not history.
      */
-    it('leaves exactly the four the live roster already covers in the staff pool', () => {
+    it('puts all five practising clinicians in the staff pool', () => {
         expect(MEMBERS.filter((m) => m.rostered).map((m) => m.displayName).sort())
-            .toEqual(['Brandon', 'Derlinder', 'Fadzlynn', 'Ying Xian']);
+            .toEqual(['Alif', 'Brandon', 'Derlinder', 'Fadzlynn', 'Ying Xian']);
     });
 
     /**

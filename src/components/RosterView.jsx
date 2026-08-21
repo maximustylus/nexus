@@ -1045,13 +1045,22 @@ const RosterView = ({ user }) => {
             // startDate/weeks edit is preserved.
             // THE STAFF POOL IS WHO HOLDS DUTIES, not everyone in the team — the
             // roster master configures the roster and is not in it, the oHOD reads
-            // it and is not in it. Filtering by `role` cannot express that: both a
-            // lead who practises and a lead who does not are leads. Empty until the
-            // members snapshot arrives, and `restoreLiveRosterConfig` falls back to
-            // the hardcoded four in that window — see its header.
-            setConfig(prev => restoreLiveRosterConfig(prev, {
-                staff: rosteredMembers.map(person => person.displayName).filter(Boolean),
-            }));
+            // it and is not in it. Filtering by `role` cannot express that: this
+            // team has both a lead who practises and a lead who does not.
+            //
+            // ⚠️ WITH A TEAM, THE POOL IS THE TEAM'S — EVEN WHILE IT IS EMPTY. The
+            //    hardcoded fallback in `auraEngine.js` is STALE (four names for a
+            //    five-clinician department), so falling back to it during the moment
+            //    before the members snapshot arrives would let a Generate produce a
+            //    four-person roster that looks entirely plausible. An empty pool
+            //    disables Generate and says why; waiting beats guessing.
+            //
+            //    Without a team — the pre-migration bridge — there is nobody to ask,
+            //    so the fallback is still the right answer and `undefined` requests it.
+            setConfig(prev => restoreLiveRosterConfig(
+                prev,
+                teamId ? { staff: rosteredMembers.map(person => person.displayName).filter(Boolean) } : undefined,
+            ));
 
             // NO TEAM, NO LISTENER. `rosterPath` throws on a null teamId by design —
             // composing `teams//rosters/2026` would be silent corruption — so the

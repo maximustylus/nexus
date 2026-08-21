@@ -227,6 +227,19 @@ const MONTH_LABELS = [
  * is blocked on which roles are rosterable. Changing the pool here would change
  * live behaviour, which this plan must not do.
  */
+/**
+ * ⚠️ KNOWN STALE, AND KEPT THAT WAY DELIBERATELY. `staff` lists four clinicians;
+ *    the department has five, because the service lead practises too and nobody
+ *    edited this array when that became true. That is exactly the failure a
+ *    hardcoded team produces — the list quietly stops describing the department and
+ *    nothing says so.
+ *
+ *    It is NOT corrected here, for two reasons: it is deleted by the migration
+ *    anyway, and `auraEngine.guards.test.js` pins these values as the fixture for
+ *    the demo-poisoning guard — editing them would obscure what that suite is for.
+ *    The authority is now the team's own member list, and
+ *    `scripts/team-one-manifest.cjs` records the real five.
+ */
 export const LIVE_ROSTER_DEFAULTS = Object.freeze({
     staff: Object.freeze(['Brandon', 'Ying Xian', 'Derlinder', 'Fadzlynn']),
     tasks: Object.freeze(['EFT', 'IPT+SKG', 'NC', 'FSG+WI']),
@@ -259,14 +272,24 @@ export const LIVE_ROSTER_DEFAULTS = Object.freeze({
  * keeps the pre-migration bridge working and every existing test in
  * `auraEngine.guards.test.js` passing unchanged.
  *
- * ⚠️ DELETE THE FALLBACK once the migration has run and every team supplies its
- *    own. Until then it is the reason a team with an empty member list still gets a
- *    usable wizard rather than an empty one.
+ * ⚠️ AN EMPTY ARRAY IS AN ANSWER, NOT A MISSING ONE. If the caller passes
+ *    `staff: []` it means "this team has nobody in the pool yet" and is used
+ *    verbatim; only an ABSENT `staff` falls back to the hardcoded four. That
+ *    distinction is load-bearing: `LIVE_ROSTER_DEFAULTS.staff` turned out to be
+ *    STALE — it lists four clinicians and the service lead, who also practises, was
+ *    never added to it. Falling back to it while a team's members were still loading
+ *    would have let a lead press Generate and produce a four-person roster for a
+ *    five-person department, which looks entirely plausible.
+ *
+ *    With an empty pool `validateRosterConfig` disables Generate and says "staff
+ *    pool is empty", which is true and harmless. Waiting beats guessing.
+ *
+ * ⚠️ DELETE THE FALLBACK — and `LIVE_ROSTER_DEFAULTS` with it — once the migration
+ *    has run. It exists only for the pre-migration bridge, where there is no team to
+ *    ask.
  */
 export const restoreLiveRosterConfig = (prev, live) => {
-    const pick = (value, fallback) => (
-        Array.isArray(value) && value.length > 0 ? [...value] : [...fallback]
-    );
+    const pick = (value, fallback) => (Array.isArray(value) ? [...value] : [...fallback]);
     return {
         ...(prev || LIVE_ROSTER_DEFAULTS),
         staff: pick(live?.staff, LIVE_ROSTER_DEFAULTS.staff),
