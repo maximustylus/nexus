@@ -56,6 +56,7 @@ import {
     attendancePath,
 } from './utils/teamPaths';
 import { APP_VERSION_LABEL } from './version';
+import NotFound from './components/NotFound';
 
 // ==========================================
 // CONFIGURATION & CONSTANTS
@@ -764,6 +765,14 @@ export default function App() {
         <Route path="/individuals/result" element={<ResultPage />} />
 
         {/*
+          The catch-all. It must stay LAST — react-router picks the best match, but
+          keeping the order explicit stops a future edit from shadowing a real route.
+          Without it, `firebase.json`'s `** → /index.html` rewrite meant a mistyped
+          URL loaded the app and rendered nothing at all: a blank page rather than a
+          404. See `src/components/NotFound.jsx`.
+        */}
+
+        {/*
           The approval queue. Reachable by typing the URL rather than from a nav
           item, because it is a queue somebody clears roughly 28 times and then
           rarely — a permanent nav entry for it would be clutter for everyone else.
@@ -771,6 +780,8 @@ export default function App() {
           so the obscurity is convenience, not security.
         */}
         <Route path={APPROVALS_PATH} element={user ? <LeadRequestsPanel /> : <WelcomeScreen />} />
+
+        <Route path="*" element={<NotFound />} />
 
         <Route path="/" element={
           (!user && !isDemo) ? (

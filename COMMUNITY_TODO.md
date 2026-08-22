@@ -48,8 +48,9 @@ never measured activity — live in it.
 
 | | Count | Ids |
 |---|---|---|
-| `DONE`, evidenced | 10 | `CP1` `CP2` `CP3` `CP5` `CP6` `CP9` `CP13` `CP14` `CP15` `CP17` + theme half of `CP12` |
-| `OPEN`, mine | 5 | `CP7` `CP8` `CP10` `CP12` `CP16` |
+| `DONE`, evidenced | 12 | `CP1` `CP2` `CP3` `CP5` `CP6` `CP9` `CP12` `CP13` `CP14` `CP15` `CP17` `CP18` |
+| `OPEN`, mine | 3 | `CP7` `CP8` `CP16` |
+| `OPEN`, translation | 1 | `CP10` — merged into `CD10`, below |
 | `OPEN`, **owner's decision** | 3 | `CD4` `CD10` `CD11` |
 
 **`CP13` is fixed.** The portal wrote a health profile to a database while showing
@@ -154,9 +155,9 @@ Cheap, and each one removes a way the portal can drift back into a P1.
 | 4.1 | One theme key | `CP12`. A prior *"FIX 1"* changed three files to `nexus-theme` and left four on `nexus_theme`, including `App.jsx`, which owns the class on `<html>` — splitting the setting along the pathway gate rather than unifying it. | Opus-alone | `DONE` | `189a61b` · `src/utils/theme.js` |
 | 4.2 | Share `selectCTA` and the tier table | Two copies kept in agreement by a comment that was **already false** (`CP9`). Move beside `calculateRiskScore` in `src/utils/`. `ctaTierParity.test.js` detects the drift; a shared module makes it unrepresentable, and that test can then be deleted rather than maintained. | Opus-alone | `OPEN` | — |
 | 4.3 | Test the remaining pure logic | `deriveFlags` and `parseClinicalData` have no tests. `calculateRiskScore` had none either, and it was wrong for its entire life. | Opus-alone | `OPEN` | — |
-| 4.4 | Persist in-progress state | `CP12`. Thirteen questions, then a reload, and everything is gone — including a completed result, because `ResultPage.jsx:470` redirects when router state is absent. `sessionStorage`. | Opus-alone | `OPEN` | — |
-| 4.5 | `path="*"` route | `CP12`. `App.jsx:759-780` has none, and `firebase.json` rewrites everything to `index.html`, so a mistyped URL renders a blank page. | Opus-alone | `OPEN` | — |
-| 4.6 | One session id | `CP12`. Four are minted (`LanguageGate.jsx:20`, `PathwaySelection.jsx:49`, `AuraChat.jsx:686`, `ResultPage.jsx:479`) and all four are shown to the user as *"ID:"*. The one written to Firestore is the third. A person quoting the id on their screen may not be quoting the one in the record. | Opus-alone | `OPEN` | — |
+| 4.4 | Persist in-progress state | `CP12`. **`sessionStorage`, not `localStorage`** — the portal runs on community-centre terminals and clinic tablets, and answers about food insecurity and psychological distress left for the next person are identifying in practice. The result is mirrored on arrival and restored before the redirect effect runs; both pathways resume mid-assessment; `clearAssessment()` wipes id, answers and result together. | Opus-alone | `DONE` | `src/utils/assessmentSession.js` · 15 tests |
+| 4.5 | `path="*"` route | `CP12`. `firebase.json` rewrites everything to `index.html`, so a mistyped URL loaded the whole SPA and rendered **nothing** — a blank page, indistinguishable from a broken site, for visitors arriving from a QR code or a forwarded link. | Opus-alone | `DONE` | `NotFound.jsx` · 14 tests asserting the wildcard cannot shadow a real route, against react-router's own matcher |
+| 4.6 | One session id | `CP12`. **Five** were minted — the four screens plus a fallback in `ResultPage` — and all were shown as *"ID:"*. The one written to Firestore was the third, so an id quoted off any other screen matched nothing in the record, on a portal that invites returning respondents to type a previous id in. | Opus-alone | `DONE` | `getSessionId()` · `grep Math.random src/components/` returns nothing |
 
 ---
 

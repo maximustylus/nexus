@@ -14,6 +14,7 @@ import {
   isNoPreviousId,
 } from '../utils/clinicalFlags';
 import { readLanguage, applyDocumentLanguage } from '../utils/language';
+import { getSessionId, saveProgress, loadProgress, clearProgress } from '../utils/assessmentSession';
 
 // ── Cloud Function — same pattern as AuraPulseBot.jsx ────────────────────────
 // Gemini API key is secured in Firebase Cloud Functions (never client-side)
@@ -687,14 +688,33 @@ const AuraChatbot = () => {
 
   const [lang]      = useState(() => applyDocumentLanguage(readLanguage()));
   const langData    = DICTIONARY[lang] || DICTIONARY.en;
-  const [sessionId] = useState(() => 'NX-' + Math.random().toString(36).substr(2, 9).toUpperCase());
+  const [sessionId] = useState(getSessionId);
 
-  const [currentStep,   setCurrentStep]   = useState(0);
-  const [messages,      setMessages]      = useState([]);
+  /**
+   * ⚠️ RESTORED, NOT RESET. A thirteen-question conversation lived only here, so a
+   *    refresh, a rotation that triggered one, or iOS reclaiming a backgrounded
+   *    tab started the person again at question one — after they had already
+   *    answered questions about chest pain, food insecurity and their mental
+   *    health. See `src/utils/assessmentSession.js`.
+   *
+   *    `messages` is restored too, not just the answers: resuming into an empty
+   *    transcript at question nine would read as a different, broken product.
+   */
+  const saved = loadProgress('chat');
+  const [currentStep,   setCurrentStep]   = useState(() => saved?.currentStep ?? 0);
+  const [messages,      setMessages]      = useState(() => saved?.messages ?? []);
   const [userInput,     setUserInput]     = useState('');
   const [isTyping,      setIsTyping]      = useState(false);
-  const [collectedData, setCollectedData] = useState({});
+  const [collectedData, setCollectedData] = useState(() => saved?.collectedData ?? {});
   const [isComplete,    setIsComplete]    = useState(false);
+
+  // Mirrored on every turn, so the next load can resume mid-conversation.
+  // `isComplete` is deliberately NOT saved: a finished assessment is restored from
+  // the result store on `/individuals/result`, and resuming a completed chat into
+  // a screen with no result would be a dead end.
+  useEffect(() => {
+    if (!isComplete) saveProgress('chat', { currentStep, messages, collectedData });
+  }, [currentStep, messages, collectedData, isComplete]);
 
   useEffect(() => {
     document.documentElement.classList.toggle('dark', isDark);
@@ -826,6 +846,9 @@ const AuraChatbot = () => {
   };
 
   const concludeTriage = async (finalData) => {
+    // The conversation has become a result; the in-progress copy is no longer the
+    // live one and keeping it would resume a completed assessment.
+    clearProgress();
     const parsed    = parseClinicalData(finalData);
     const riskScore = calculateRiskScore(parsed);
     const ctaData   = selectCTA(parsed);

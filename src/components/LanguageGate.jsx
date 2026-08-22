@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 // ADDED MISSING ICONS
 import { Globe2, ChevronRight, ChevronLeft, Sun, Moon } from 'lucide-react';
 import { writeLanguage } from '../utils/language';
+import { getSessionId } from '../utils/assessmentSession';
 
 const LANGUAGES = [
   { code: 'en', label: 'English', greeting: 'Welcome', color: 'indigo' },
@@ -18,7 +19,8 @@ export default function LanguageGate() {
 
   // ADDED MISSING THEME STATE
   const [isDark, setIsDark] = useState(false);
-  const [sessionId] = useState(() => 'nx-' + Math.random().toString(36).substr(2, 9)); 
+  // One id per assessment, shared by every screen — see `src/utils/assessmentSession.js`.
+  const [sessionId] = useState(getSessionId);
 
   // ADDED THEME INITIALIZER
   useEffect(() => {

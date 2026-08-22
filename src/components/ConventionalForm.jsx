@@ -57,6 +57,7 @@ import {
 } from 'lucide-react';
 import { readTheme, writeTheme } from '../utils/theme';
 import { readLanguage, writeLanguage, applyDocumentLanguage } from '../utils/language';
+import { getSessionId, saveProgress, loadProgress, clearProgress } from '../utils/assessmentSession';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // OPTION TABLES — values match AuraChatbot quick-reply strings exactly
@@ -571,7 +572,13 @@ const LANGS = [
 export default function ConventionalForm() {
   const navigate    = useNavigate();
   const [lang,      setLang]    = useState('en');
-  const [step,      setStep]    = useState(0);
+  /**
+   * ⚠️ RESTORED FROM sessionStorage, NOT RESET TO ZERO. Four steps of answers
+   *    lived only in component state, so a refresh — or a rotation that triggered
+   *    one, or iOS reclaiming a backgrounded tab — sent the person back to the
+   *    first question with nothing kept. See `src/utils/assessmentSession.js`.
+   */
+  const [step,      setStep]    = useState(() => loadProgress('form')?.step ?? 0);
   const [ready,     setReady]   = useState(false);
   // Lazy init — reads localStorage SYNCHRONOUSLY before first render.
   // Sets classList.dark inside the initialiser so Tailwind dark: utilities
@@ -585,14 +592,22 @@ export default function ConventionalForm() {
     } catch { return false; }
   });
   const [busy,      setBusy]    = useState(false);
-  const [sessionId] = useState(() => 'NX-' + Math.random().toString(36).substr(2, 9).toUpperCase());
+  const [sessionId] = useState(getSessionId);
 
-  const [f, setF] = useState({
+  const EMPTY_ANSWERS = {
     pavsDays: '', pavsMins: '', strength: '', medical: [], wellbeing: '',
     barriers: [], social: '', foodInsecure: null, incomeAdequacy: '', housing: '',
     aware: null, referred: null, rating: '', trust: '3', improve: '',
     ageGroup: '', gender: '', race: '', postalCode: '', previousId: '',
-  });
+  };
+  // Spread over the empty shape rather than used directly: a saved object from an
+  // older build may be missing a key this one reads, and `f.medical.includes(...)`
+  // on an absent array throws during render.
+  const [f, setF] = useState(() => ({ ...EMPTY_ANSWERS, ...(loadProgress('form')?.answers ?? {}) }));
+
+  // Mirrored on every change. Cheap — one small JSON write per tap — and it is
+  // what makes the restore above possible.
+  useEffect(() => { saveProgress('form', { answers: f, step }); }, [f, step]);
 
   const set    = useCallback((k, v) => setF(p => ({ ...p, [k]: v })), []);
   const togArr = useCallback((k, v) => setF(p => ({ ...p, [k]: p[k].includes(v) ? p[k].filter(x => x !== v) : [...p[k], v] })), []);
@@ -689,6 +704,9 @@ export default function ConventionalForm() {
         demographics: { age: f.ageGroup, gender: f.gender, race: f.race, sector },
       });
 
+      // The answers have become a result; the in-progress copy is no longer the
+      // live one and keeping it would resume a completed assessment.
+      clearProgress();
       navigate('/individuals/result', {
         state: { score, data: flags, postalSector: sector, sessionId, previousSessionId: flags.previousId, ctaTier },
       });

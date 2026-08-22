@@ -11,6 +11,7 @@ import html2canvas from 'html2canvas';
 import { recordTelemetry } from '../utils/telemetry';
 import { readTheme, writeTheme } from '../utils/theme';
 import { readLanguage, writeLanguage, applyDocumentLanguage } from '../utils/language';
+import { getSessionId, saveResult, loadResult } from '../utils/assessmentSession';
 
 // ─── DICTIONARY ───────────────────────────────────────────────────────────────
 const DICTIONARY = {
@@ -552,17 +553,40 @@ export default function ResultPage() {
   const printRef  = useRef(null);
   const printRef2 = useRef(null);
 
-  const hasState = location.state?.score != null;
+  /**
+   * ⚠️ A FINISHED ASSESSMENT USED TO DIE ON RELOAD. The result arrived only as
+   *    react-router navigation state, which does not survive a page load, and the
+   *    effect below redirects to the pathway picker when it is absent. So a
+   *    refresh, a rotation that triggered one, iOS reclaiming a backgrounded tab,
+   *    or tapping a resource link and pressing back, all erased thirteen questions
+   *    and a completed risk assessment — with no warning and no way back.
+   *
+   *    The result is now mirrored into `sessionStorage` on arrival and restored
+   *    here when the router has nothing. `useState` with an initialiser, not an
+   *    effect: the restore must happen BEFORE the redirect effect runs, or the
+   *    person is bounced on the first render regardless.
+   */
+  const [restored] = useState(() => (location.state?.score != null ? null : loadResult()));
+  const resultState = location.state?.score != null ? location.state : restored;
+  const hasState = resultState?.score != null;
+
+  // Mirror it as soon as it arrives, so the NEXT load can restore it.
+  useEffect(() => {
+    if (location.state?.score != null) saveResult(location.state);
+  }, [location.state]);
 
   useEffect(() => {
     if (!hasState) navigate('/individuals/pathway', { replace: true });
   }, [hasState, navigate]);
 
-  const safe = location.state || { score: 0, data: {}, postalSector: '00' };
+  const safe = resultState || { score: 0, data: {}, postalSector: '00' };
   const { score, data, postalSector, sessionId, previousSessionId, ctaTier } = safe;
 
   const riskTier        = getRiskTier(score);
-  const activeSessionId = sessionId || ('NX-' + Math.random().toString(36).substr(2, 9).toUpperCase());
+  // The id the record was written under, not a fresh one. This used to mint a
+  // fourth id when router state was missing, so the value printed on the result —
+  // and on the downloaded PDF — matched nothing in Firestore.
+  const activeSessionId = sessionId || getSessionId();
   const formattedDate   = new Date().toLocaleDateString('en-GB');
   const nexusUrl        = 'https://for.sg/nexus';
   const qrCodeUrl       = `https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent(nexusUrl)}`;
