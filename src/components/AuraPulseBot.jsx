@@ -9,6 +9,7 @@ import {
   Mic, ChevronLeft, CalendarCheck, Maximize2, Minimize2, Minus 
 } from 'lucide-react';
 import { DEMO_PERSONAS, LIVE_PERSONAS } from '../config/personas';
+import { respondAsDemoAura } from '../utils/demoAura';
 import { db } from '../firebase'; 
 import { getFunctions, httpsCallable } from 'firebase/functions';
 import { doc, setDoc, getDoc, updateDoc, arrayUnion } from 'firebase/firestore';
@@ -292,9 +293,36 @@ export default function AuraPulseBot({ isOpen, onClose, onOpen: _onOpen, user })
                     parts: [{ text: m.text }],
                 }));
 
-            const contextPrompt = isDemo
-                ? `System Note: The user's exact database ID is '${selectedPersona?.id}'.\n\n${selectedPersona?.prompt ?? ''}`
-                : [
+            let analysis;
+
+            if (isDemo) {
+                // ⚠️ THE SANDBOX ANSWERS LOCALLY, AND THAT IS THE WHOLE POINT.
+                //
+                // This branch used to be a `contextPrompt` string and nothing else:
+                // the call to `chatWithAura` was made either way, so a demo
+                // visitor's typing reached Google's Gemini API on the project's
+                // billed key — from a session with no account, because Demo Mode is
+                // reachable from the SIGNED-OUT landing page and `toggleDemo` is two
+                // lines of React state. The tab's own copy promised "a sandboxed
+                // environment... without processing live clinical data", which was
+                // true of Firestore and false of this.
+                //
+                // Answering locally also unblocks the `request.auth` check on
+                // `chatWithAura` — whose system prompt names KKH/SingHealth and
+                // prints the internal Firestore schema. It could not be added while
+                // unauthenticated demo visitors were the function's callers.
+                //
+                // `respondAsDemoAura` returns the same object this code would have
+                // parsed out of the model's JSON, so every downstream branch — the
+                // mode badge, the document-export card, the wellbeing-log prompt —
+                // behaves in the demo exactly as it does live.
+                analysis = respondAsDemoAura({
+                    userText: text,
+                    persona: selectedPersona,
+                    turnIndex: messages.filter(m => m.role === 'user').length,
+                });
+            } else {
+                const contextPrompt = [
                     `System Note: The user's exact database ID is '${user?.id}'.`,
                     user?.title ? `This staff member is a ${user.title} at KKH/SingHealth.` : '',
                     user?.department ? `Department: ${user.department}.` : '',
@@ -302,24 +330,23 @@ export default function AuraPulseBot({ isOpen, onClose, onOpen: _onOpen, user })
                     selectedPersona?.prompt ? `\n\n${selectedPersona.prompt}` : '' 
                   ].filter(Boolean).join('\n');
 
-            const result = await secureChatWithAura({
-                userText: text,
-                history,
-                role:   selectedPersona?.title ?? user?.title ?? 'Staff',
-                prompt: contextPrompt,
-                isDemo,
-            });
+                const result = await secureChatWithAura({
+                    userText: text,
+                    history,
+                    role:   selectedPersona?.title ?? user?.title ?? 'Staff',
+                    prompt: contextPrompt,
+                });
 
-            let analysis;
-            try {
-                const raw      = result.data?.text ?? '';
-                const stripped = raw.replace(/```json|```/g, '').trim();
-                const start    = stripped.indexOf('{');
-                const end      = stripped.lastIndexOf('}') + 1;
-                if (start === -1 || end === 0) throw new Error('No JSON object found');
-                analysis = JSON.parse(stripped.substring(start, end));
-            } catch {
-                throw new Error('AURA returned an unreadable format. Please try again.');
+                try {
+                    const raw      = result.data?.text ?? '';
+                    const stripped = raw.replace(/```json|```/g, '').trim();
+                    const start    = stripped.indexOf('{');
+                    const end      = stripped.lastIndexOf('}') + 1;
+                    if (start === -1 || end === 0) throw new Error('No JSON object found');
+                    analysis = JSON.parse(stripped.substring(start, end));
+                } catch {
+                    throw new Error('AURA returned an unreadable format. Please try again.');
+                }
             }
 
             if (!analysis || !analysis.reply) {

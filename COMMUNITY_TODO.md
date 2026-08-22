@@ -48,9 +48,9 @@ never measured activity — live in it.
 
 | | Count | Ids |
 |---|---|---|
-| `DONE`, evidenced | 8 | `CP1` `CP2` `CP3` `CP5` `CP9` `CP13` `CP17` + `CP6` (bar the demo decision) + theme half of `CP12` |
+| `DONE`, evidenced | 8 | `CP1` `CP2` `CP3` `CP5` `CP6` `CP9` `CP13` `CP17` + theme half of `CP12` |
 | `OPEN`, mine | 7 | `CP7` `CP8` `CP10` `CP12` `CP14` `CP15` `CP16` |
-| `OPEN`, **owner's decision** | 4 | `CD4` `CD10` `CD11` + **demo mode**, `P0.2` |
+| `OPEN`, **owner's decision** | 3 | `CD4` `CD10` `CD11` |
 
 **`CP13` is fixed.** The portal wrote a health profile to a database while showing
 the person no disclaimer and no privacy notice on screen — both rendered off-screen
@@ -60,7 +60,7 @@ record is written. Both are still English-only, which is `CD10` and is yours.
 
 ---
 
-## P0 — The shared AI endpoint · `CP6` + `CP7` · risk: **high** · **MOSTLY SHIPPED**
+## P0 — The shared AI endpoint · `CP6` + `CP7` · risk: **high** · **SHIPPED** (bar App Check)
 
 Everything else in this file is about what one member of the public is told. This is
 about what *anyone on the internet* can reach, and it leads for that reason.
@@ -74,7 +74,7 @@ AGENT` heading.
 | # | Item | Detail | Tier | Status | Evidence |
 |---|---|---|---|---|---|
 | 0.1 | Public callable, separate prompt | **`communityAck`** replaces `publicTriageChat` in `functions/index.js`. No KKH framing, no schema, no modes. It takes `{domain, answer, priorAnswers, language}` — **no caller-supplied prompt, no `role`, no `history`, no attachments** — and returns plain text. `WELL_WELL_PROMPT` moved out of the browser and onto the server, so the persona can no longer be replaced by the caller. | Fable-supervised | `DONE` | `functions/communityAck.js` + 41 tests |
-| 0.2 | `request.auth` on `chatWithAura` | ⚠️ **BLOCKED — and it is your call, not a defect.** Adding the check breaks the public demo. `isDemo` is a plain React boolean (`NexusContext.jsx:9`) with **no anonymous auth anywhere in the repo**, and the *signed-out* landing page has an INITIALISE DEMO button (`WelcomeScreen.jsx:705`) that opens the whole staff shell with `user === null`. `AuraPulseBot` then calls `chatWithAura` unconditionally and renders a persistent *"Neural link unstable"* bubble on failure. Three ways out: give demo mode Firebase anonymous auth; have demo use a canned reply as it already uses `MOCK_TEAM_DATA` everywhere else; or drop the public demo. | **OWNER** | `OPEN` | verified: no `signInAnonymously` in `src/` |
+| 0.2 | `request.auth` on `chatWithAura` | **DONE**, and the demo is now a real sandbox rather than a claimed one. Demo Mode called this function unconditionally — `isDemo` only chose the prompt text — so a visitor with no account, arriving from the *signed-out* landing page, sent their typing to Gemini on the project's billed key. `src/utils/demoAura.js` answers demo turns locally, deterministically and in the same object shape the component parses, so the mode badge, the document-export card and the wellbeing-log prompt all still work. With nothing unauthenticated left calling it, `chatWithAura` now refuses a caller with no `request.auth`. | Fable-supervised | `DONE` | 26 tests · the only remaining call site is the authenticated branch of `AuraPulseBot` |
 | 0.3 | App Check + rate limit on the public callable | `CP7`. Still unauthenticated — the portal is *for* the public — but the blast radius is now a prompt with no hospital framing and no schema. `maxOutputTokens` is down from 8192 to 200 and the fetch timeout from 90s to 20s, so an abuse loop costs far less. App Check remains the real mitigation. | Opus-alone | `OPEN` | — |
 | 0.4 | Validate content, not only length | `domain` and `language` are closed sets checked as closed sets. `priorAnswers` is **rebuilt** from the known domain list rather than filtered, so a caller cannot influence the shape of what reaches the model — only the values of at most thirteen known keys. `prompt`/`role`/`history`/`attachments` are ignored entirely, asserted by test. | Opus-alone | `DONE` | `functions/communityAck.test.js` — 41 tests |
 | 0.5 | Abort on the discard window | `AuraChat.jsx` gives the model 1,500 ms then discards the answer without aborting, so it runs to completion server-side and bills in full. Reduced but not fixed: the server timeout is now 20s rather than 90s and the output cap 200 tokens rather than 8192. | Opus-alone | `OPEN` | — |
@@ -171,7 +171,6 @@ In order. `P0` first because it is the only item on this page whose blast radius
 larger than one respondent.
 
 ```
-P0.2  demo-mode decision                    ─ OWNER'S; unblocks auth on chatWithAura
 P0.3  App Check + rate limit
 P0.5  abort the discarded request
 CD4 / CD10 / CD11                            ─ owner's, in parallel, not blocked on me

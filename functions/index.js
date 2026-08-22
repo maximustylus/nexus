@@ -297,6 +297,27 @@ exports.chatWithAura = onCall({
     var prompt = request.data.prompt || '';
     var attachments = request.data.attachments || [];
 
+    // ⚠️ STAFF ONLY. This function's systemInstruction is `AURA_SYSTEM_PROMPT`,
+    //    which names KKH/SingHealth, describes a "MODE 3: DATA ENTRY AGENT" acting
+    //    as a database gateway, and prints the internal Firestore schema. It was
+    //    reachable by anyone on the internet.
+    //
+    //    The check could not be added until two other things were true, and both
+    //    now are:
+    //
+    //      1. The public community screening called this function. It now calls
+    //         `communityAck`, which holds its own prompt and takes no caller-supplied
+    //         one.
+    //      2. Demo Mode called it while unauthenticated — `isDemo` is React state,
+    //         not a sign-in, and the demo is reachable from the signed-out landing
+    //         page. `AuraPulseBot` now answers demo turns locally via
+    //         `src/utils/demoAura.js`.
+    //
+    //    So a caller with no `request.auth` is no longer a legitimate one.
+    if (!request.auth || !request.auth.uid) {
+        throw new HttpsError('unauthenticated', 'Sign in to use AURA.');
+    }
+
     if (!API_KEY) throw new HttpsError('failed-precondition', 'AI service is not configured.');
 
     validateChatInput({ userText: userText, history: history, role: role, prompt: prompt, attachments: attachments });
