@@ -6,9 +6,9 @@ We take the security and data privacy of the NEXUS platform very seriously. Curr
 
 | Version | Support Status |
 | ------- | -------------- |
-| 1.18.x  | Supported (Active Beta) |
-| 1.17.x  | Supported (Legacy Stable) |
-| < 1.17  | Unsupported |
+| 2.0.x   | Supported (Active Beta — multi-team) |
+| 1.18.x  | Supported (rollback target for the v2.0.0 migration) |
+| < 1.18  | Unsupported |
 
 > This table must match the *Supported Versions* table in [`README.md`](README.md); both are
 > downstream of `package.json` `version`, which is the single authoritative copy. It had
@@ -17,7 +17,9 @@ We take the security and data privacy of the NEXUS platform very seriously. Curr
 
 ## Reporting a Vulnerability
 
-Given the internal operational nature of this application within the Sport and Exercise Medicine Centre, any potential security vulnerabilities must be reported and escalated immediately.
+As of **v2.0.0** this application serves more than one department, so a vulnerability here may expose data belonging to a team other than the reporter's. Any potential security vulnerability must be reported and escalated immediately.
+
+**The property to report against:** a member of one team must be able to read and write nothing belonging to another — not the roster, not swaps, not wellbeing records, not the member list, not even the team's name. If you can reach another department's data, that is the highest-severity report this project can receive.
 
 Please do not report security vulnerabilities through public GitHub issues or public discussion boards.
 
@@ -27,4 +29,4 @@ All security reports will be treated with the highest priority. You can expect a
 
 ## Data Governance Reminder
 
-As a strict operational policy, live production data is strictly segregated from the Demo Sandbox environment. At no point should Protected Health Information (PHI) or specific patient identifiers be entered into the NEXUS system or processed by the AURA intelligence engine. Please utilise anonymous placeholders for all clinical logging.
+As a strict operational policy, live production data is strictly segregated from the Demo Sandbox environment. **As of v2.0.0 that segregation is structural rather than procedural:** a sandbox visitor belongs to no team, so there is no path for the sandbox to write to. Before v2.0.0 demo sessions appended to the production anonymous wellbeing log and painted names onto the production pulse board. At no point should Protected Health Information (PHI) or specific patient identifiers be entered into the NEXUS system or processed by the AURA intelligence engine. Please utilise anonymous placeholders for all clinical logging.

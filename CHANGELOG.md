@@ -49,6 +49,177 @@ not changed by this release.
 
 ## [Unreleased]
 
+## [2.0.0] - 2026-08-21
+
+**MULTI-TEAM.** NEXUS was built for one ten-person department, with every collection at
+the root of the database and the team itself hardcoded in *six* separate places. It now
+serves a team per department per institution — Respiratory Therapy at KKH and
+Respiratory Therapy at SGH are different teams, rostering differently, unable to see
+each other.
+
+> ### ⚠️ THIS IS A BREAKING DATA CHANGE, AND THE CUTOVER HAS AN ORDER
+>
+> Every collection moved beneath `teams/{teamId}/`. The deployed app reads the new
+> paths and **nothing else**. So:
+>
+> 1. **Run `scripts/migrate-to-teams.cjs --write` FIRST.**
+> 2. **Then** merge to `main`, which auto-deploys.
+>
+> Deploy first and the department sees empty everything until the migration catches
+> up. The migration **copies and never moves**, so the pre-migration documents survive
+> untouched — that is the rollback: restore the previous rules from console history,
+> redeploy the previous bundle, and the old app reads its own data as if nothing had
+> happened.
+
+### The six hardcoded copies of one department, all removed
+
+Each was found while rewiring the thing that used it, and each is recorded because
+"the code says four" looked like evidence at least once:
+
+| Where | What it held |
+|---|---|
+| `TEAM_DIRECTORY` (`src/utils/index.js`) | 10 people, 9 consumers |
+| `ADMIN_EMAILS` (`App.jsx`) | 2 addresses |
+| `directory()` + `directoryNames()` + `adminEmails()` (`firestore.rules`) | the same 10 again, plus 2 |
+| `LIVE_ROSTER_DEFAULTS.staff` (`auraEngine.js`) | 4 clinicians — **and it was stale** |
+| `AdminPanel.jsx` top of file | 5 names excluded to leave "the CEPs" |
+| `AdminPanel.jsx` render | **the same 5 again**, so the table and the save could disagree |
+
+The stale one is the argument for the whole change: nobody edited the array when the
+department changed, and it quietly stopped describing it. Onboarding a clinician now
+means a lead adding a member document — **zero code edits, zero deploys, zero rules
+changes**.
+
+### Added
+
+- **`teams/{teamId}` and `teams/{teamId}/members/{uid}`.** A team is a *department at an
+  institution*, not a profession. Membership is data, and `firestore.rules` asks the
+  database — `exists(/teams/$(teamId)/members/$(uid))` — instead of consulting a list.
+
+- **`src/utils/teamPaths.js`,** the one place a Firestore path is composed. Two guards
+  **throw** rather than returning null, because the failures are silent corruption:
+  `teams/a/../../b/rosters/2026` is a real path, and `assertUid` refuses strings with
+  spaces to catch the display-name habit surviving a copy-paste.
+
+- **A domain allowlist held as data** (`config/domains`), replacing a hardcoded
+  `@kkh.com.sg` test that **permanently locked out two colleagues** on
+  `@singhealth.com.sg` — they passed the directory check and failed the domain test one
+  line above it.
+
+- **Lead declaration at registration, and an approval Cloud Function.** A declaration is
+  a *claim*; only `approveLeadRequest` on the Admin SDK may create a team. It is
+  idempotent, writes in one batch, and refuses an account whose email is unverified —
+  the check `firestore.rules` deliberately cannot make, because the declaration is
+  written seconds after registration.
+
+- **`AccessGate`** — the state the old app had no answer for. An authenticated user with
+  no team used to get the full shell over empty collections, which looks exactly like
+  broken software. Each waiting state now names **who moves next**.
+
+- **`rostered`, separate from `role`.** Two questions that coincided in a ten-person
+  department and do not in general: the roster master is a `lead` who holds no duties;
+  the service lead is a `lead` who does. Every single-field rule gets one of them wrong.
+
+- **Team context and a switcher**, plus `canActOn` — the guard anything that writes must
+  consult. The active team is always one the user is actually in, however the id
+  arrived; `localStorage` is user-editable and is not evidence of membership.
+
+- **Cross-team isolation in `firestore.rules`,** asserted by 16 cases whose outsider is
+  a real **lead of a real second team** — the case that breaks if a rule ever asks "are
+  you a lead" without asking "of which team".
+
+### Changed
+
+- **Every collection is team-scoped.** `system_data/roster_2026` → `teams/{id}/rosters/{year}`;
+  `shift_swaps`, `wellbeing_history`, `staff_loads`, `system_data/daily_pulse`,
+  `monthly_attendance`, `reports_{year}`, `feed_posts`, `notifications`, `monthly_workload`
+  all likewise.
+
+- **`cep_team` and `archive_{year}` were the same thing** — one shape in two
+  differently-named collections, chosen between by `dataYear === '2026' ? … : …`. Both
+  are `projects/{year}/staff/{uid}`, so the current year stopped being special and the
+  year selector became a value rather than a branch.
+
+- **Coverage requests and notifications route by `uid`.** `where('targetStaff','==',user.name)`
+  meant that editing your display name silently stopped every request from reaching you
+  — and a query matching nothing is indistinguishable from nobody having asked.
+
+- **The staff pool is the team's own member list**, and while it is still loading the
+  pool is **empty rather than the hardcoded four**. Generate is disabled with "staff
+  pool is empty", which is true; falling back would have produced a four-person roster
+  for a five-clinician department, and it would have looked entirely plausible.
+
+### Fixed
+
+- **The dual-keyed user write.** `AuraPulseBot` wrote the profile to `users/{user.id}` —
+  the *directory* id — while `App.jsx` read `users/{uid}`. Two documents for one person,
+  one never read, and a profile edit that appeared to do nothing.
+
+- **A fuzzy lookup on the burnout monitor.** `AdminWellbeingPanel` slugified a display
+  name and took the first key that `.includes()` it, so "Sarah" would pick up
+  "sarah_lim"'s record, and a renamed clinician showed a flat row reading as *no logs*
+  rather than *looked in the wrong place*.
+
+- **The sandbox wrote into clinical data.** Demo mode appended to the production
+  `wellbeing_history/_anonymous_logs` and painted a demo name onto the real pulse board,
+  so every walkthrough with a visiting department left a trace. A sandbox visitor has no
+  team, so there is now no path to write to.
+
+- **A language model was choosing a Firestore path.** AURA's `DATA_ENTRY` took *both*
+  the collection name and the document id from Gemini's output. The collection is now an
+  allowlist of two and the person is resolved through the member list, so an invented
+  name is refused rather than creating a document for a colleague who does not exist.
+
+- **`.replace(' ', '_')` replaces only the FIRST space,** so "Mary Anne Tan" silently
+  missed. Used in two places in `AdminPanel`, both gone with the slugs themselves.
+
+- **`teamIdFrom('', 'Physiotherapy')` returned `'physiotherapy'`** — an id with no
+  institution in it, making Physiotherapy at KKH and at SGH the same team. Found by the
+  drift test comparing the client slug against the server's copy, which also caught the
+  accent handling: NFKD alone turns 'Thérapie' into `the-rapie`.
+
+### Security
+
+- **`firestore.rules` rewritten around membership-as-data.** 91 emulator checks, up from
+  50. `directory()`, `directoryNames()` and `adminEmails()` are deleted.
+
+- **No client may author a membership document — including a lead.** Every rule trusts
+  it, so it is the one document a client must never write. Inviting is a Cloud Function,
+  which can check the uid belongs to a real verified account; rules cannot see that.
+
+- **`users.teamIds` is not client-writable.** It is the membership graph; a user who
+  could append to it would hand themselves a team in the switcher.
+
+- **The pre-migration collections are explicitly unreachable,** asserted by five cases —
+  so a stale path left anywhere in the app fails loudly instead of quietly continuing to
+  work against data the new model has moved on from.
+
+- **One deliberate loosening, recorded rather than buried:** feed comments no longer pin
+  `author` to the caller's name. The old rule compared it against the hardcoded
+  directory, so a member who renamed themselves was denied their own comment, silently.
+  The durable fix is an `authorUid` field the app does not yet write. Bounded cost: a
+  member can comment under a colleague's name inside their own team's feed.
+
+### Known limitations, stated rather than discovered
+
+- **The roster's day arrays, the pulse heatmap keys and swap `targetStaff` are still
+  display names.** Team scoping removed the collision that mattered — a Sarah at KKH and
+  a Sarah at SGH are in different subcollections. Two in *one* department would still
+  collide, which a lead fixes by editing a name. Converting them means changing the
+  engine, the wizard, the demo fixtures and most of 1,837 tests: its own risk budget,
+  not a rider on this one.
+
+- **`D11` is untouched.** Generation is synchronous in the Draft click handler; ~23s for
+  100 staff over a year. Per-team partitioning keeps most departments at 20–40 people
+  where it is comfortable, but a large department rostering a year ahead will still
+  freeze the tab.
+
+- **Removing a member is not yet possible from the app.** It needs a Cloud Function,
+  because the membership document and `users.teamIds` must change together and rules
+  cannot write two documents. Half a removal leaves a team in the switcher that every
+  listener then fails to read.
+
+
 Nothing yet.
 
 ---

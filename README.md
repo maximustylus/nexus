@@ -1,6 +1,6 @@
-# NEXUS: Smart Operations Dashboard v1.18.0 [BETA]
+# NEXUS: Smart Operations Dashboard v2.0.0 [BETA]
 
-![Version](https://img.shields.io/badge/Version-v1.18.0-blue) ![Status](https://img.shields.io/badge/Status-Beta%20Phase-emerald) ![Org](https://img.shields.io/badge/Unit-Sport%20%26%20Exercise%20Medicine-indigo) ![Tech](https://img.shields.io/badge/AI-Gemini%20Powered-purple) ![AURA](https://img.shields.io/badge/AURA-v2.3%20Engine-blue) ![PWA](https://img.shields.io/badge/PWA-Native%20Push%20Enabled-blue) ![CI/CD](https://img.shields.io/badge/CI%2FCD-GitHub%20Actions-2ea44f)
+![Version](https://img.shields.io/badge/Version-v2.0.0-blue) ![Status](https://img.shields.io/badge/Status-Beta%20Phase-emerald) ![Teams](https://img.shields.io/badge/Multi--Team-28%20AHP%20professions-indigo) ![Tech](https://img.shields.io/badge/AI-Gemini%20Powered-purple) ![AURA](https://img.shields.io/badge/AURA-v2.3%20Engine-blue) ![PWA](https://img.shields.io/badge/PWA-Native%20Push%20Enabled-blue) ![CI/CD](https://img.shields.io/badge/CI%2FCD-GitHub%20Actions-2ea44f)
 
 **NEXUS** (formerly IDC App) is a clinician-led innovation platform designed to revolutionise workload management, optimise skill-mix routing, and actively protect staff wellbeing at the Sport and Exercise Medicine Centre. 
 
@@ -145,16 +145,25 @@ This application is an operational and workload management tool. It is not a cli
 ### Supported Versions
 | Version | Status |
 | ------- | ------ |
-| 1.18.x  | **Active Beta** (Evaluated by Senior CEPs) |
-| 1.17.x  | Legacy Stable |
-| < 1.17  | Deprecated / Offline |
+| 2.0.x   | **Active Beta** (multi-team) |
+| 1.18.x  | Legacy — single-team, pre-migration data model |
+| < 1.18  | Deprecated / Offline |
+
+> ⚠️ **1.18.x is the rollback target, not merely an old version.** The v2.0.0 migration
+> COPIES rather than moves, so a 1.18.x bundle still reads its own pre-migration
+> collections unharmed. Restoring it means redeploying that bundle *and* restoring the
+> matching rules from Firebase console history — the v2 rules seal the old paths.
 
 > This table is downstream of `package.json` `version`, as are the title line and the
 > `Version-` badge above, and `SECURITY.md`'s table of the same name. `package.json` is the only authoritative copy — see
 > [`CHANGELOG.md`](CHANGELOG.md) for the standing rule on bumping it.
 
 ### The "Data Firewall" and Security Policies
-1. **Strict Whitelisting (client-side):** access is limited to pre-approved `@kkh.com.sg` addresses against an allowlist array. ⚠️ **This is enforced in the browser, not on a server** — the domain and directory checks run in `WelcomeScreen.jsx` against `TEAM_DIRECTORY` in `src/utils/index.js`, and **no Cloud Function checks the caller** (`grep -c 'request.auth' functions/index.js` → 0). *(Corrected 2026-08-15: previously called a "Backend Firewall".)*
+1. **Registration is gated by an institution allowlist; ACCESS is gated by membership.** Two different things, and conflating them was the old defect.
+
+   The domain check (`config/domains`, held as data) runs in the browser and is **advisory** — it gives somebody at an unlisted institution a clear "NEXUS is not open to your organisation yet" instead of an account that silently does nothing. Anyone can call the Firebase Auth SDK directly and bypass it.
+
+   What actually protects clinical data is server-side and did not exist before v2.0.0: **`firestore.rules` asks the database whether a membership document exists** — `exists(/teams/$(teamId)/members/$(uid))` — and the approval and invitation Cloud Functions are the only things that may create one. A registered account with no membership reads nothing. *(Corrected 2026-08-15: previously called a "Backend Firewall" when it was neither. Rewritten 2026-08-21: as of v2.0.0 there is now a real server-side boundary, and the client-side check is described as the convenience it is.)*
 2. **PDPA Compliance:** Do not upload sensitive patient data or PHI. NEXUS tracks operational load, not patient records. AURA does not have EMR access. Use placeholders exclusively (e.g. `[Patient]`, `[Clinician]`).
 3. **Demo isolation (client-side):** Demo Mode injects `MOCK_TEAM_DATA` and the roster path writes nothing — three separate latches short-circuit before `setDoc`, and the sandbox roster is generated in the browser and lost on reload. ⚠️ **There are no separate demo collections**, so this is a guard in the code rather than a boundary in the database; and it is not total — `FeedsView.jsx:158` calls `processFeedPost` with `isDemo` and no short-circuit, so a demo feed post does reach the production `feed_posts` collection and is hidden from live users by a **client-side** filter (`FeedsView.jsx:136`). *(Corrected 2026-08-15: previously claimed "strictly isolated Firebase collections".)*
 
@@ -186,7 +195,15 @@ Beta testers should utilise Demo Mode to verify system integrity:
 > also lists the **known issues that are documented but not yet fixed**. The summaries
 > below are narrative highlights; where the two disagree, `CHANGELOG.md` is correct.
 
-### NEXUS v1.18.0 [Current Beta]
+### NEXUS v2.0.0 [Current Beta] — Multi-Team
+
+NEXUS was built for one ten-person department, with every collection at the root of the database and the team itself hardcoded in **six** separate places — including one array that had quietly gone stale and stopped describing the department it named. It now serves a team per department per institution: Respiratory Therapy at KKH and Respiratory Therapy at SGH are different teams, rostering differently, and structurally unable to see each other.
+
+Onboarding a clinician is a lead adding a member document — **zero code edits, zero deploys, zero rules changes**. `firestore.rules` asks the database whether a membership exists rather than consulting a list it carries itself, and 91 emulator checks assert that a member of one team gets nothing from another.
+
+⚠️ **This is a breaking data change with a cutover order** — the migration runs BEFORE the merge, not after. See [`RELEASE-v2.0.0.md`](RELEASE-v2.0.0.md) for the full procedure, the rollback, and who loses access.
+
+### NEXUS v1.18.0 [Legacy]
 * **A task can state a minimum job grade.** *"Minimum AH12 covers NICU"* is now sayable — and it holds for **everyone** on the duty, not just the person leading it. That distinction is the whole feature: the band chips gate the *lead* and let any grade assist, which is right for a supervision shape and wrong for a floor. Since `junior` spans AH11–AH12, a department whose floor is AH12 could not express it with bands at all without also admitting AH11. Set it in the task table; the engine refuses at configure time if nobody in your pool meets it.
 
 ### NEXUS v1.17.1
