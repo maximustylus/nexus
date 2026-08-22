@@ -177,6 +177,26 @@ future deploy.
 
 ---
 
+## P3d — From the Regional Health System review · `CP19` `CP20` · risk: **high**
+
+An RHS lead weighted toward social prescribing reviewed the portal — see
+[REVIEW-RHS-SOCIAL-PRESCRIBING.md](REVIEW-RHS-SOCIAL-PRESCRIBING.md). Two findings
+are defects rather than opinions and are verified.
+
+| # | Item | Detail | Tier | Status | Evidence |
+|---|---|---|---|---|---|
+| 3d.1 | **The chat's postal sector is the chip's example, not the person's** | `CP19`. The form asks for the real first two digits; the chat offers region chips and `parseClinicalData` runs `locStr.match(/\d{2}/)` over the LABEL. So `'North (e.g. 73, 75)'` records sector **73** for everyone who taps North — and `getRegionalHealthSystem` then picks which RHS's resources to show from that. The geographic data collected "for population-level resource planning" is four constants from the chat pathway, and the two pathways are not comparable. | Opus-alone | `OPEN` | `North→73 · East→46 · West→60 · North-East→53` |
+| 3d.2 | **The evidence page claims more instrument than is administered** | `CP20`. The PDF cites the **Lubben Social Network Scale (LSNS-6)** with an alpha coefficient, and a **PHQ-2 aligned** wellbeing domain. LSNS-6 is six items and PHQ-2 is two; the portal asks **one** question each. A one-item screen is defensible — citing a validated multi-item scale beside it, to the public, with a reliability statistic attached, is not. Either administer it or cite it as *"adapted from"* and say how. | **OWNER** | `OPEN` | `ResultPage.jsx` evidence block vs `DOMAIN_CONFIG` |
+
+**Also raised, as design rather than defect** — recorded here so they are not lost:
+caregiver strain is merged into one wellbeing chip with financial pressure (the highest
+value entry point in social prescribing, currently invisible); the 60+ cohort is screened
+on PAVS with no falls or frailty question; and the URGENT tier hands off to nobody. The
+review's central argument — that social prescribing needs a consent-to-refer path and a
+human on the other end, which de-identification forecloses — belongs with `CD5` in `P5`.
+
+---
+
 ## P5 — Decide whether the data is for anything · `CD5`
 
 Every screening is written and read by nothing (`CP5`). Two honest options, and the
