@@ -76,6 +76,8 @@ const { TEAM_ONE, MEMBERS, EXCLUDED, LEGACY_DIRECTORY_SIZE } = require('./team-o
 // only be exercised by pointing it at production is logic nobody checks.
 const { buildLegacyIndex, classifyLegacyDoc } = require('./legacyMatch.cjs');
 const { reconcile } = require('./reconcile.cjs');
+const { classifyAuthFailure, environmentReport } = require('./authFailure.cjs');
+const { describeCredentialFile } = require('./credential.cjs');
 
 const WRITE = process.argv.includes('--write');
 const TEAM = TEAM_ONE.teamId;
@@ -110,6 +112,28 @@ async function main() {
     console.log(`  Team: ${TEAM_ONE.name} (${TEAM_ONE.institution})   →   teams/${TEAM}`);
     console.log('='.repeat(78));
 
+    // ── 0. Say which project this is pointed at, before touching anything ─────
+    //
+    // ⚠️ A KEY FOR THE WRONG PROJECT LOOKS EXACTLY LIKE AN EMPTY ONE. Every lookup
+    //    succeeds at the transport level and finds nobody, so the run reports that
+    //    none of the clinicians have registered — which is true of that project and
+    //    entirely misleading about this one. There is no later point where the
+    //    mistake becomes visible, so it is named here, on the first line, where it
+    //    can be compared against the Firebase console before anything is written.
+    const cred = describeCredentialFile(process.env.GOOGLE_APPLICATION_CREDENTIALS);
+    console.log(`  Project: ${cred.projectId || '(none named)'}`);
+    console.log(`  Key:     ${cred.path || '(GOOGLE_APPLICATION_CREDENTIALS is not set)'}`);
+    if (cred.clientEmail) console.log(`  As:      ${cred.clientEmail}`);
+    if (!cred.ok) {
+        fail(cred.problem);
+        return summary();
+    }
+    console.log('');
+    console.log(`  ⚠️  Is "${cred.projectId}" the NEXUS project? Compare it against the Firebase`);
+    console.log('      console before continuing. A key for another project finds none of your');
+    console.log('      colleagues and reports that none of them have registered.');
+    console.log('='.repeat(78));
+
     // ── 1. Resolve every email to a Firebase Auth uid ─────────────────────────
     //
     // ⚠️ AN ADDRESS WITH NO ACCOUNT IS SKIPPED, NEVER INVENTED. A membership under
@@ -128,8 +152,20 @@ async function main() {
                 warn(`${member.displayName} has not verified their email. They will be a member, but cannot sign in until they do.`);
             }
         } catch (error) {
-            fail(`NO AUTH ACCOUNT for ${member.displayName} <${member.email}> — skipped. `
-               + 'They must register once, then re-run this script; it is idempotent.');
+            // ⚠️ THE ERROR IS READ, NOT ASSUMED. This used to report every failure as
+            //    "NO AUTH ACCOUNT", so a wrong key or a key for the wrong project
+            //    printed seven clinicians' names and told the reader they each needed
+            //    to register. See `scripts/authFailure.cjs`.
+            const classified = classifyAuthFailure(error);
+            if (classified.kind === 'no-account') {
+                fail(`NO AUTH ACCOUNT for ${member.displayName} <${member.email}> — skipped. `
+                   + 'They must register once, then re-run this script; it is idempotent.');
+                continue;
+            }
+            // Environmental: identical for everyone left. Stop, so the one real
+            // error is the last thing on screen rather than the first of eight.
+            environmentReport(member, classified).forEach((line, i) => (i === 0 ? fail(line) : console.log(`  ${line}`)));
+            return summary();
         }
     }
 

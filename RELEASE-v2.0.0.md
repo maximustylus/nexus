@@ -90,13 +90,19 @@ GOOGLE_APPLICATION_CREDENTIALS=~/path/to/key.json \
    appeared even on a run where nothing resolved at all; it is now a separate
    `MANIFEST INCONSISTENT` warning that stays silent unless the manifest itself has
    drifted. See `scripts/reconcile.cjs` and its tests.
-2. **`NO AUTH ACCOUNT` errors.** ⚠️ Benny's address carries a trailing dot in its local
+2. **The project id on the first screen.** The run now prints `Project:` and the
+   service-account address before it reads anything. **Check it against the Firebase
+   console.** A key for a different project authenticates fine, finds none of your
+   colleagues, and reports that none of them have registered — which is true of that
+   project and says nothing about this one.
+
+3. **`NO AUTH ACCOUNT` errors.** ⚠️ Benny's address carries a trailing dot in its local
    part (`benny.loo.k.g.@singhealth.com.sg`), which is not a valid RFC 5321 address —
    Firebase Auth may never have created it. If he is missing, he registers once and you
    re-run. The script is idempotent, so re-running costs nothing.
-3. **`matches nobody in the manifest` warnings.** Each one is a document that will be
+4. **`matches nobody in the manifest` warnings.** Each one is a document that will be
    left behind. A former colleague is fine; a current one is not.
-4. **The roster line** — does the day count look like a year of rostering?
+5. **The roster line** — does the day count look like a year of rostering?
 
 ---
 
