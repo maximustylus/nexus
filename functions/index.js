@@ -678,6 +678,47 @@ exports.processFeedPost = onCall({ secrets: ['GEMINI_API_KEY'] }, async (request
 });
 
 // =============================================================================
+// publicTriageChat — CLOSED, and deliberately still exported
+// =============================================================================
+//
+// The 145-line public triage protocol that used to live here is gone. It was
+// unauthenticated, it interpolated `request.data.language` straight into its own
+// system instruction with no allowlist, and it had **no callers** — a live,
+// injectable endpoint serving nobody.
+//
+// ⚠️ SO WHY IS THERE STILL AN EXPORT? Because deleting the source does not delete
+//    the DEPLOYED function, and the deploy pipeline cannot delete it either.
+//    `.github/workflows/deploy.yml:37` runs
+//
+//        deploy --only functions,firestore:rules
+//
+//    with no `--force`, on a CI runner with no TTY. When firebase-tools finds a
+//    deployed function that no longer exists in source it asks for confirmation,
+//    and with nothing to prompt it ABORTS the deploy rather than skipping the
+//    deletion. Removing the export outright would therefore half-apply the next
+//    merge to `main`: the rules release, the functions release throws on the
+//    orphan, `communityAck` never lands, the `chatWithAura` auth check never
+//    lands, and the Hosting step never runs. Every later push fails the same way
+//    until somebody removes the orphan by hand.
+//
+//    Adding `--force` to the workflow is not the answer either: it also
+//    suppresses the unsafe-trigger-migration, min-instance-billing and
+//    service-account confirmations, permanently, for every future deploy.
+//
+// So the export stays and the endpoint is closed. It reaches no model, reads no
+// Firestore, and carries no prompt — there is nothing left in it to exploit.
+//
+// TO REMOVE IT PROPERLY, once and by hand:
+//
+//     firebase functions:delete publicTriageChat --project idc-app-e0c59 --force
+//
+// then delete this block. Until then this costs one cold start to anybody who
+// finds the URL, and tells them nothing.
+exports.publicTriageChat = onCall({ cors: true }, async () => {
+    throw new HttpsError('not-found', 'This endpoint has been retired.');
+});
+
+// =============================================================================
 // FUNCTION: communityAck  —  the PUBLIC pathway's own endpoint
 // =============================================================================
 //

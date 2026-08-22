@@ -78,7 +78,7 @@ AGENT` heading.
 | 0.3 | App Check + rate limit on the public callable | `CP7`. Still unauthenticated — the portal is *for* the public — but the blast radius is now a prompt with no hospital framing and no schema. `maxOutputTokens` is down from 8192 to 200 and the fetch timeout from 90s to 20s, so an abuse loop costs far less. App Check remains the real mitigation. | Opus-alone | `OPEN` | — |
 | 0.4 | Validate content, not only length | `domain` and `language` are closed sets checked as closed sets. `priorAnswers` is **rebuilt** from the known domain list rather than filtered, so a caller cannot influence the shape of what reaches the model — only the values of at most thirteen known keys. `prompt`/`role`/`history`/`attachments` are ignored entirely, asserted by test. | Opus-alone | `DONE` | `functions/communityAck.test.js` — 41 tests |
 | 0.5 | Abort on the discard window | `AuraChat.jsx` gives the model 1,500 ms then discards the answer without aborting, so it runs to completion server-side and bills in full. Reduced but not fixed: the server timeout is now 20s rather than 90s and the output cap 200 tokens rather than 8192. | Opus-alone | `OPEN` | — |
-| 0.6 | Delete the dead endpoints | `publicTriageChat` — 145 lines, unauthenticated, interpolated `request.data.language` into its own system instruction with no allowlist, and **had no callers**. `src/utils/auraChat.js` — `analyzeWellbeing`, zero importers, and the last written trace of the `isDemo` "bypassing auth checks" fiction (there were no auth checks). Both removed. | Opus-alone | `DONE` | export count unchanged at 8; `grep` for both returns nothing |
+| 0.6 | Close the dead endpoints | `publicTriageChat` — 145 lines, unauthenticated, interpolated `request.data.language` into its own system instruction with no allowlist, **and had no callers**. Its body is gone; the **export deliberately remains as a stub that throws**. ⚠️ Deleting the source does not delete the deployed function, and `deploy.yml:37` runs `deploy --only functions,firestore:rules` with no `--force` on a TTY-less runner — firebase-tools ABORTS on an orphan rather than skipping it, which would half-apply the merge (rules land, `communityAck` does not, the auth check does not, Hosting never runs, and every later push fails the same way). `src/utils/auraChat.js` deleted outright — it is client code and deploys with the bundle. | Opus-alone | `DONE` | export diff vs `origin/main` shows **additions only**, so no deletion prompt |
 
 ---
 
@@ -149,6 +149,22 @@ Cheap, and each one removes a way the portal can drift back into a P1.
 | 4.4 | Persist in-progress state | `CP12`. Thirteen questions, then a reload, and everything is gone — including a completed result, because `ResultPage.jsx:470` redirects when router state is absent. `sessionStorage`. | Opus-alone | `OPEN` | — |
 | 4.5 | `path="*"` route | `CP12`. `App.jsx:759-780` has none, and `firebase.json` rewrites everything to `index.html`, so a mistyped URL renders a blank page. | Opus-alone | `OPEN` | — |
 | 4.6 | One session id | `CP12`. Four are minted (`LanguageGate.jsx:20`, `PathwaySelection.jsx:49`, `AuraChat.jsx:686`, `ResultPage.jsx:479`) and all four are shown to the user as *"ID:"*. The one written to Firestore is the third. A person quoting the id on their screen may not be quoting the one in the record. | Opus-alone | `OPEN` | — |
+
+---
+
+## Manual, once — retiring the stub
+
+`publicTriageChat` is closed but still deployed, for the deploy-safety reason in
+`P0.6`. To remove it properly, after the branch has merged and deployed cleanly:
+
+```
+firebase functions:delete publicTriageChat --project idc-app-e0c59 --force
+```
+
+Then delete the stub block from `functions/index.js`. **Do not** add `--force` to
+`deploy.yml` instead — it also suppresses the unsafe-trigger-migration,
+min-instance-billing and service-account confirmations, permanently, for every
+future deploy.
 
 ---
 
