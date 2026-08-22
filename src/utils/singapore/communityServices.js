@@ -152,6 +152,14 @@ export const SERVICE_KINDS = Object.freeze({
         finderLabel: 'Check what you qualify for (CHAS)',
         national: true,
     },
+    caregiverSupport: {
+        id: 'caregiverSupport',
+        label: 'Caregiver support',
+        blurb: 'Training, respite and support for people caring for a family member — including help arranging a needs assessment for the person you care for.',
+        finder: 'https://www.aic.sg/caregiving',
+        finderLabel: 'Caregiver services and support (AIC)',
+        national: true,
+    },
     socialSupport: {
         id: 'socialSupport',
         label: 'Social Service Offices',
@@ -190,6 +198,15 @@ export const servicesForSector = (sectorInput, flags = {}) => {
     } else if (flags.sdohSocial) {
         add(SERVICE_KINDS.communityClub);
     }
+
+    /**
+     * ⚠️ CAREGIVER STRAIN ROUTES BEFORE GENERAL FINANCIAL HELP, because a carer
+     *    who says they are overwhelmed is describing a load, not a budget. This
+     *    branch exists at all only because the wellbeing chip was split — the two
+     *    used to be one answer, and a carer was routed as though they had said
+     *    "money is tight".
+     */
+    if (flags.caregiverStrain) add(SERVICE_KINDS.caregiverSupport);
 
     if (flags.sdohFinancial)    add(SERVICE_KINDS.financialSupport);
     if (flags.sdohFoodInsecure) add(SERVICE_KINDS.socialSupport);

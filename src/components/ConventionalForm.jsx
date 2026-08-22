@@ -116,7 +116,12 @@ const WELLBEING_OPTIONS = [
   { value: 'Feeling good overall',                           en: 'Feeling good overall',                             ms: 'Perasaan baik secara keseluruhannya',        zh: '整体感觉不错',            ta: 'ஒட்டுமொத்தமாக நல்லாக உணர்கிறேன்'        },
   { value: 'Some stress but managing',                       en: 'Some stress, but managing',                        ms: 'Ada sedikit tekanan tapi boleh kawal',       zh: '有些压力但能应对',        ta: 'சில மன அழுத்தம் ஆனால் சமாளிக்கிறேன்'    },
   { value: 'Feeling quite stressed or low',                  en: 'Feeling quite stressed or low in mood',            ms: 'Rasa sangat tertekan atau sedih',            zh: '感到很压抑或情绪低落',    ta: 'மிகவும் மன அழுத்தம் அல்லது மனச்சோர்வு'  },
-  { value: 'Overwhelmed — caregiving or financial pressure', en: 'Overwhelmed — caregiving or financial pressure',   ms: 'Terbeban — penjagaan atau tekanan kewangan', zh: '不知所措 — 照顾或经济压力', ta: 'அதிக சுமை — பராமரிப்பு அல்லது நிதி அழுத்தம்' },
+  // ⚠️ SPLIT FROM ONE CHIP INTO TWO. Caregiver strain and financial strain lead to
+  //    completely different places, and merging them hid the unpaid family carer —
+  //    the highest-value entry point in social prescribing. Both halves use each
+  //    language's own existing wording; nothing was newly translated.
+  { value: 'Overwhelmed — caregiving',         en: 'Overwhelmed — caregiving',         ms: 'Terbeban — penjagaan',        zh: '不知所措 — 照顾',     ta: 'அதிக சுமை — பராமரிப்பு' },
+  { value: 'Overwhelmed — financial pressure', en: 'Overwhelmed — financial pressure', ms: 'Terbeban — tekanan kewangan', zh: '不知所措 — 经济压力', ta: 'அதிக சுமை — நிதி அழுத்தம்' },
 ];
 
 const INCOME_OPTIONS = [
@@ -162,7 +167,9 @@ const MED_FLAG_VALUES     = new Set(['High blood pressure', 'Prediabetes or diab
 const SYMPTOM_FLAG_VALUE  = 'Dizziness or chest pain when active';
 const FINANCIAL_BARR_VALS = new Set(['Too expensive', 'Too far away']);
 const SOCIAL_FLAG_VALS    = new Set(['I mostly manage on my own', 'I feel quite isolated']);
-const PSYCHO_FLAG_VALS    = new Set(['Some stress but managing', 'Feeling quite stressed or low', 'Overwhelmed — caregiving or financial pressure']);
+const PSYCHO_FLAG_VALS    = new Set(['Some stress but managing', 'Feeling quite stressed or low', 'Overwhelmed — caregiving', 'Overwhelmed — financial pressure']);
+/** Caregiver strain is its own route, and also counts as psychological distress. */
+const CAREGIVER_FLAG_VALS = new Set(['Overwhelmed — caregiving']);
 
 // Identical to AuraChatbot selectCTA()
 const selectCTA = ({ symptomFlag, medFlag, age, sdohPsychological, sdohFinancial, sdohSocial, pavsScore }) => {
@@ -191,6 +198,7 @@ const deriveFlags = (f) => {
   const sdohFinancial     = f.barriers.some(v => FINANCIAL_BARR_VALS.has(v)) || f.incomeAdequacy === 'Inadequate';
   const sdohSocial        = SOCIAL_FLAG_VALS.has(f.social);
   const sdohPsychological = PSYCHO_FLAG_VALS.has(f.wellbeing);
+  const caregiverStrain   = CAREGIVER_FLAG_VALS.has(f.wellbeing);
   const sdohFoodInsecure  = f.foodInsecure === true;
   const sdohHousing       = f.housing === 'HDB 1-2 Room';
 
@@ -200,7 +208,7 @@ const deriveFlags = (f) => {
   return {
     pavsScore, pavsDays, pavsMinutes, strengthDays,
     medFlag, symptomFlag,
-    sdohFinancial, sdohSocial, sdohPsychological,
+    sdohFinancial, sdohSocial, sdohPsychological, caregiverStrain,
     psychoFlag: sdohPsychological,
     sdohFoodInsecure, sdohHousing,
     age, gender,

@@ -12,7 +12,8 @@
 import { describe, it, expect } from 'vitest';
 import {
     buildMatcher, matchesSymptom, matchesCondition, matchesFinancialBarrier,
-    matchesSocialIsolation, matchesPsychologicalDistress, matchesFoodInsecurity,
+    matchesSocialIsolation, matchesPsychologicalDistress, matchesCaregiverStrain,
+    matchesFoodInsecurity,
     matchesFemale, matchesMale, isNoPreviousId,
 } from './clinicalFlags';
 
@@ -180,5 +181,57 @@ describe('gender — order is load-bearing because male is inside female', () =>
      */
     it('no longer sees "male" inside "female" for the Latin terms', () => {
         expect(matchesMale('Female, 41–60')).toBe(false);
+    });
+});
+
+describe('caregiver strain — its own domain since the chip was split', () => {
+    /**
+     * ⚠️ THE POINT OF THE SPLIT. "Overwhelmed — caregiving or financial pressure"
+     *    was one chip, so a carer and a person under financial pressure gave the
+     *    same answer and were routed identically. A Regional Health System reviewer
+     *    named the unpaid family carer — who often has not yet identified as one —
+     *    as the highest-value entry point in social prescribing, and the tool could
+     *    not see them at all.
+     */
+    it('recognises the caregiving half in every language', () => {
+        [
+            'Overwhelmed — caregiving',
+            'Terbeban — tanggungjawab penjagaan',
+            '感到不知所措 — 照顾',
+            'அதிக சுமை — பராமரிப்பு',
+        ].forEach((chip) => {
+            expect(matchesCaregiverStrain(chip), chip).toBe(true);
+        });
+    });
+
+    it('does NOT fire on the financial half', () => {
+        [
+            'Overwhelmed — financial pressure',
+            'Terbeban — tekanan kewangan',
+            '感到不知所措 — 经济压力',
+            'அதிக சுமை — நிதி அழுத்தம்',
+        ].forEach((chip) => {
+            expect(matchesCaregiverStrain(chip), chip).toBe(false);
+        });
+    });
+
+    /**
+     * Both halves are still distress — splitting the referral must not lose the
+     * psychological flag that drives the WELLBEING tier.
+     */
+    it('leaves both halves counting as psychological distress', () => {
+        expect(matchesPsychologicalDistress('Overwhelmed — caregiving')).toBe(true);
+        expect(matchesPsychologicalDistress('Overwhelmed — financial pressure')).toBe(true);
+    });
+
+    it('does not fire on unrelated free text', () => {
+        ['I feel good', 'work is busy', 'I care about my health'].forEach((t) => {
+            expect(matchesCaregiverStrain(t), t).toBe(false);
+        });
+    });
+
+    it('catches the words a person types rather than taps', () => {
+        expect(matchesCaregiverStrain('I am a caregiver for my mother')).toBe(true);
+        expect(matchesCaregiverStrain('caring duties')).toBe(false);   // no bare stem match
     });
 });

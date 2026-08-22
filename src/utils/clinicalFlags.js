@@ -108,6 +108,26 @@ export const matchesPsychologicalDistress = buildMatcher([
     '压抑', '不知所措', 'மன அழுத்தம்', 'மனச்சோர்வு', 'அதிக சுமை',
 ]);
 
+/**
+ * Unpaid caregiving strain — its own domain since the wellbeing chip was split.
+ *
+ * ⚠️ WHY THIS IS SEPARATE FROM PSYCHOLOGICAL DISTRESS. A carer and a person under
+ *    financial pressure both answer "overwhelmed", and they need different things:
+ *    one needs respite, caregiver support and often a needs assessment for the
+ *    person they care for; the other needs subsidies. Merging them into one chip
+ *    made the unpaid family carer — who frequently has not yet identified as one —
+ *    invisible to the tool. Caregiver strain still counts as distress; it now also
+ *    routes on its own.
+ *
+ * Every term is lifted from the four existing chips, not newly translated.
+ */
+export const matchesCaregiverStrain = buildMatcher([
+    'caregiving', 'caregiver', 'carer',
+    'penjagaan',            // ms — "tanggungjawab penjagaan"
+    '照顾',                  // zh — "照顾"
+    'பராமரிப்பு',            // ta — "பராமரிப்பு"
+]);
+
 export const matchesFoodInsecurity = buildMatcher(['yes', 'ya', '是', 'ஆம்']);
 
 export const matchesFemale = buildMatcher(['female', 'perempuan', '女', 'பெண்']);

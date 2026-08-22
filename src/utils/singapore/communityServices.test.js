@@ -159,3 +159,33 @@ describe('⚠️ the module does not claim to know branch details', () => {
         });
     });
 });
+
+describe('caregiver strain routes to carer services', () => {
+    it('offers caregiver support when the carer half was chosen', () => {
+        const ids = servicesForSector('73', { caregiverStrain: true }).services.map((s) => s.id);
+        expect(ids).toContain('caregiverSupport');
+    });
+
+    /**
+     * The two halves of the old chip must now lead somewhere different — that is
+     * the entire reason for splitting it.
+     */
+    it('does not offer caregiver support to somebody under financial pressure', () => {
+        const ids = servicesForSector('73', { sdohFinancial: true }).services.map((s) => s.id);
+        expect(ids).not.toContain('caregiverSupport');
+        expect(ids).toContain('financialSupport');
+    });
+
+    it('offers both when both were reported', () => {
+        const ids = servicesForSector('73', { caregiverStrain: true, sdohFinancial: true })
+            .services.map((s) => s.id);
+        expect(ids).toEqual(expect.arrayContaining(['caregiverSupport', 'financialSupport']));
+    });
+
+    it('works in every region, not just the north', () => {
+        ['64', '46', '82', '56'].forEach((sector) => {
+            expect(servicesForSector(sector, { caregiverStrain: true }).services.map((s) => s.id))
+                .toContain('caregiverSupport');
+        });
+    });
+});

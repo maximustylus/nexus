@@ -11,7 +11,8 @@ import { toSector } from '../utils/singapore/postalSectors';
 // saying they felt fine. See `src/utils/clinicalFlags.js`.
 import {
   matchesSymptom, matchesCondition, matchesFinancialBarrier, matchesSocialIsolation,
-  matchesPsychologicalDistress, matchesFoodInsecurity, matchesFemale, matchesMale,
+  matchesPsychologicalDistress, matchesCaregiverStrain, matchesFoodInsecurity,
+  matchesFemale, matchesMale,
   isNoPreviousId,
 } from '../utils/clinicalFlags';
 import { readLanguage, applyDocumentLanguage } from '../utils/language';
@@ -294,7 +295,19 @@ const DICTIONARY = {
       /* 4 barriers        */ ['Lack of time', 'Too expensive', 'Too far away', 'I prefer hospitals over community', 'Unsure what is available', 'No barriers for me'],
       /* 5 social          */ ['I have several people I can rely on', 'I have one or two close people', 'I mostly manage on my own', 'I feel quite isolated'],
       /* 6 food_insecurity */ ['Yes, this has happened', 'No, I have always had enough'],
-      /* 7 wellbeing       */ ['Feeling good overall', 'Some stress but managing', 'Feeling quite stressed or low', 'Overwhelmed — caregiving or financial pressure'],
+      /*
+        ⚠️ CAREGIVER STRAIN AND FINANCIAL STRAIN ARE TWO DIFFERENT REFERRALS, and
+        they used to share one chip: "Overwhelmed — caregiving or financial
+        pressure". A Regional Health System reviewer put it plainly — the unpaid
+        family carer who has not yet identified as one is the highest-value entry
+        point in social prescribing, and merging the two made that person
+        invisible to the tool.
+
+        Both halves are split from each language's OWN existing wording, on the
+        connector already in the sentence ("or" / "atau" / "或" / "அல்லது"). No new
+        clinical copy was translated — see `CD10`.
+      */
+      /* 7 wellbeing       */ ['Feeling good overall', 'Some stress but managing', 'Feeling quite stressed or low', 'Overwhelmed — caregiving', 'Overwhelmed — financial pressure'],
       /* 8 demographics    */ ['Male, 21–40', 'Female, 21–40', 'Male, 41–60', 'Female, 41–60', 'Male, 60+', 'Female, 60+'],
       /* 9 ethnicity       */ ['Chinese', 'Malay', 'Indian', 'Eurasian', 'Others', 'Prefer not to say'],
       /* 10 housing_type   */ ['HDB 1-2 Room', 'HDB 3 Room', 'HDB 4 Room', 'HDB 5 Room / Exec', 'Condo / Private', 'Landed'],
@@ -367,7 +380,7 @@ const DICTIONARY = {
       ['Kekurangan masa', 'Terlalu mahal', 'Terlalu jauh', 'Lebih suka hospital', 'Tidak pasti apa yang ada', 'Tiada halangan'],
       ['Ada beberapa orang yang boleh saya hubungi', 'Ada satu atau dua orang rapat', 'Saya mostly uruskan sendiri', 'Saya rasa agak keseorangan'],
       ['Ya, ini pernah berlaku', 'Tidak, saya sentiasa ada makanan yang cukup'],
-      ['Perasaan baik secara keseluruhannya', 'Ada sedikit tekanan tapi boleh kawal', 'Rasa sangat tertekan atau sedih', 'Terbeban — tanggungjawab penjagaan atau tekanan kewangan'],
+      ['Perasaan baik secara keseluruhannya', 'Ada sedikit tekanan tapi boleh kawal', 'Rasa sangat tertekan atau sedih', 'Terbeban — tanggungjawab penjagaan', 'Terbeban — tekanan kewangan'],
       ['Lelaki, 21–40', 'Perempuan, 21–40', 'Lelaki, 41–60', 'Perempuan, 41–60', 'Lelaki, 60+', 'Perempuan, 60+'],
       ['Cina', 'Melayu', 'India', 'Eurasian', 'Lain-lain', 'Tidak mahu beritahu'],
       ['HDB 1-2 Bilik', 'HDB 3 Bilik', 'HDB 4 Bilik', 'HDB 5 Bilik / Eksekutif', 'Kondo / Pangsapuri', 'Landed'],
@@ -440,7 +453,7 @@ const DICTIONARY = {
       ['没时间', '太贵了', '太远了', '更喜欢去医院', '不确定有哪些资源', '没有障碍'],
       ['有几个可以依靠的人', '有一两个亲近的人', '大多数情况自己处理', '感到相当孤立'],
       ['是的', '没有，我一直都有足够的食物'],
-      ['整体感觉不错', '有些压力但能应对', '感到很压抑或情绪低落', '感到不知所措 — 照顾或经济压力'],
+      ['整体感觉不错', '有些压力但能应对', '感到很压抑或情绪低落', '感到不知所措 — 照顾', '感到不知所措 — 经济压力'],
       ['男, 21–40', '女, 21–40', '男, 41–60', '女, 41–60', '男, 60+', '女, 60+'],
       ['华人', '马来人', '印度人', '欧亚裔', '其他', '不愿透露'],
       ['HDB 1-2 房式', 'HDB 3 房式', 'HDB 4 房式', 'HDB 5 房式 / 执行组屋', '私人公寓', '有地住宅'],
@@ -513,7 +526,7 @@ const DICTIONARY = {
       ['நேரமின்மை', 'மிகவும் விலை அதிகம்', 'மிகவும் தூரம்', 'மருத்துவமனைகளை விரும்புகிறேன்', 'என்ன கிடைக்கும் என்று தெரியாது', 'தடைகள் இல்லை'],
       ['பல நம்பகமான நபர்கள் உள்ளனர்', 'ஒன்று அல்லது இரண்டு நெருங்கிய நபர்கள்', 'பெரும்பாலும் சுயமாக சமாளிக்கிறேன்', 'மிகவும் தனிமையாக உணர்கிறேன்'],
       ['ஆம், இது நடந்துள்ளது', 'இல்லை, என்னிடம் எப்போதும் போதுமான உணவு இருந்தது'],
-      ['ஒட்டுமொத்தமாக நல்லாக உணர்கிறேன்', 'சில மன அழுத்தம் ஆனால் சமாளிக்கிறேன்', 'மிகவும் மன அழுத்தம் அல்லது மனச்சோர்வு', 'அதிக சுமை — பராமரிப்பு அல்லது நிதி அழுத்தம்'],
+      ['ஒட்டுமொத்தமாக நல்லாக உணர்கிறேன்', 'சில மன அழுத்தம் ஆனால் சமாளிக்கிறேன்', 'மிகவும் மன அழுத்தம் அல்லது மனச்சோர்வு', 'அதிக சுமை — பராமரிப்பு', 'அதிக சுமை — நிதி அழுத்தம்'],
       ['ஆண், 21–40', 'பெண், 21–40', 'ஆண், 41–60', 'பெண், 41–60', 'ஆண், 60+', 'பெண், 60+'],
       ['சீனர்', 'மலாய்', 'இந்தியர்', 'யுரேஷியன்', 'மற்றவை', 'கூற விரும்பவில்லை'],
       ['HDB 1-2 அறை', 'HDB 3 அறை', 'HDB 4 அறை', 'HDB 5 அறை / எக்ஸிகியூட்டிவ்', 'காண்டோ / தனியார் அபார்ட்மெண்ட்', 'நிலம் உள்ள வீடு'],
@@ -582,6 +595,8 @@ const parseClinicalData = (raw) => {
   // SDOH — Psychological 
   const wellStr      = (raw.wellbeing || '').toLowerCase();
   const sdohPsychological = matchesPsychologicalDistress(wellStr);
+  // Its own domain as well as a distress signal — see `matchesCaregiverStrain`.
+  const caregiverStrain   = matchesCaregiverStrain(wellStr);
 
   // Demographics
   const demoStr = (raw.demographics || '').toLowerCase();
@@ -622,6 +637,7 @@ const parseClinicalData = (raw) => {
     pavsScore, pavsDays, pavsMinutes, strengthDays,
     symptomFlag, medFlag,
     sdohFinancial, sdohSocial, sdohPsychological, sdohFoodInsecure,
+    caregiverStrain,
     gender, age, ethnicity, housingType, postalSector, previousId,
     psychoFlag: sdohPsychological,
   };
