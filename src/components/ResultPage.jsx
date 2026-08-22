@@ -469,6 +469,12 @@ const DataGovernance = () => (
       NRIC, name, contact, or financial account information. Aggregated, anonymised data may be
       used to improve community health programming across Singapore.
     </p>
+    <p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed mt-3">
+      <strong>How long it is kept:</strong> assessment records are deleted automatically{' '}
+      <strong>24 months</strong> after they are created. Nothing is kept beyond that, and there is
+      no account to close — the record cannot be traced back to you, which is also why it cannot
+      be retrieved or amended on request.
+    </p>
   </div>
 );
 
@@ -900,14 +906,40 @@ export default function ResultPage() {
                 Academic and Evidence Grounding
               </div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                {/*
+                  ⚠️ THIS BLOCK USED TO CLAIM MORE INSTRUMENT THAN IS ADMINISTERED,
+                     and it was handed to the public with a reliability coefficient
+                     attached. Five of the seven rows overstated:
+
+                       - "PHQ-2 aligned" beside ONE question. PHQ-2 is two items.
+                       - "Lubben Social Network Scale (LSNS-6) … alpha 0.80–0.89"
+                         beside ONE question. LSNS-6 is six items, and a published
+                         scale's reliability does not transfer to a single item
+                         lifted out of it.
+                       - "validated 2-question instrument" for food insecurity,
+                         beside ONE question.
+                       - "3-level validated screen" for income — the FORM asks it;
+                         the CHAT has no income question at all and infers financial
+                         strain from reported access barriers. Both pathways printed
+                         this identical page.
+                       - "1–2 Room HDB RENTAL" — the portal asks flat type and never
+                         asks tenure.
+
+                     A brief screen is a legitimate design choice and the right one
+                     here: one honest question beats six abandoned ones. Citing a
+                     validated multi-item scale beside a single item is a different
+                     thing, and it is the sort of page that stops a pilot at a
+                     research office. Every row below now says what is actually
+                     asked, and names the source as what it was adapted FROM.
+                */}
                 {[
-                  ['Physical Activity', 'ACSM Physical Activity Vital Sign (PAVS) — validated 2-question screening tool.'],
-                  ['National Targets', 'Sport Singapore Physical Activity Guidelines (SPAG) — 150–300 mins/week moderate-intensity aerobic activity.'],
-                  ['Psychological Wellbeing', 'BioPsychoSocial Risk Screener II (BPS-RS II), Domain P22 — PHQ-2 aligned, 2-week timeframe.'],
-                  ['Social Isolation', 'Lubben Social Network Scale (LSNS-6) — validated for community-dwelling adults in Singapore (alpha 0.80–0.89).'],
-                  ['Food Insecurity', 'Lien Centre for Social Innovation Food Insufficiency Screen — validated 2-question instrument.'],
-                  ['Financial Adequacy', 'Duke-NUS Medical School Perceived Income Adequacy Scale — 3-level validated screen.'],
-                  ['Housing Risk', 'BPS-RS II Housing Schema — 1–2 Room HDB rental as geographic social risk indicator.'],
+                  ['Physical Activity', 'ACSM Physical Activity Vital Sign (PAVS) — administered as published: 2 questions (days per week, minutes per session).'],
+                  ['National Targets', 'Sport Singapore Physical Activity Guidelines (SPAG) — 150–300 mins/week moderate-intensity aerobic activity. A reference target, not an instrument.'],
+                  ['Psychological Wellbeing', 'SINGLE-ITEM screen adapted from BPS-RS II Domain P22 (PHQ-2 aligned, 2-week timeframe). One item, not the two-item PHQ-2, and not separately validated in this form.'],
+                  ['Social Isolation', 'SINGLE-ITEM screen adapted from the Lubben Social Network Scale (LSNS-6). One item, not the six-item scale; LSNS-6\u2019s published reliability does not transfer to it.'],
+                  ['Food Insecurity', 'SINGLE-ITEM screen adapted from the Lien Centre for Social Innovation Food Insufficiency Screen (2 items).'],
+                  ['Financial Adequacy', 'Self-guided pathway: 3-level screen adapted from the Duke-NUS Perceived Income Adequacy Scale. Chat pathway: NOT asked — inferred from reported access barriers.'],
+                  ['Housing Risk', 'Self-reported HDB flat type, used as a social-risk proxy. Flat type is asked; tenure (rented or owned) is not.'],
                 ].map(([label, text], i) => (
                   <div key={i} style={{ display: 'flex', gap: 10, paddingBottom: 5, borderBottom: i < 7 ? '1px solid #f1f5f9' : 'none' }}>
                     <div style={{ fontWeight: 800, fontSize: 9, color: '#0d9488', minWidth: 110, paddingTop: 1, textTransform: 'uppercase', letterSpacing: 0.5, flexShrink: 0 }}>{label}</div>

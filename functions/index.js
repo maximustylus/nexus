@@ -9,6 +9,7 @@
 const { onCall, HttpsError } = require('firebase-functions/v2/https');
 const logger = require('firebase-functions/logger');
 const { onSchedule } = require('firebase-functions/v2/scheduler');
+const retention = require('./retention.cjs');
 const { getFirestore } = require('firebase-admin/firestore');
 const { getMessaging } = require('firebase-admin/messaging');
 
@@ -868,6 +869,78 @@ exports.communityAck = onCall({
         // client discards any error anyway in favour of the static sentence.
         throw new HttpsError('internal', 'Acknowledgement unavailable.');
     }
+});
+
+// =============================================================================
+// SCHEDULED: expireCommunityAssessments — the 24-month notice, enforced
+// =============================================================================
+//
+// The portal tells every visitor, before they answer anything, that records are
+// deleted automatically after 24 months. This is what makes that true.
+//
+// ⚠️ A RETENTION NOTICE NOTHING ENFORCES IS THE SAME DEFECT AS A PRIVACY CLAIM
+//    NOTHING HONOURS — and this project has already shipped one of those and had
+//    to fix it (`CP3`: "de-identified at the point of capture", written beside
+//    `clientReference: navigator.userAgent`). A stated period with no mechanism is
+//    worse, because nothing on screen ever contradicts it.
+//
+// The decision logic is in `./retention.cjs` as pure functions, unit-tested in
+// `npm test`. What is left here is the wiring: read a page, ask what should go,
+// delete in batches, log what was kept and what could not be dated.
+//
+// ⚠️ RUNS ON THE ADMIN SDK, WHICH BYPASSES `firestore.rules` ENTIRELY.
+//    `community_assessments` denies `delete` to every client — deliberately, so
+//    nobody can erase population data — and this function is the single exception.
+//    That is precisely why the period lives in a constant next to the code rather
+//    than being passed in from anywhere a caller could influence.
+exports.expireCommunityAssessments = onSchedule({
+    // Nightly, off-peak Singapore time. Expiry is not urgent; missing a night
+    // costs one day of over-retention, and the next run clears it.
+    schedule: '20 3 * * *',
+    timeZone: 'Asia/Singapore',
+    timeoutSeconds: 540,
+}, async () => {
+    const db = getFirestore();
+    const now = new Date();
+    const cutoff = retention.expiryCutoff(now);
+
+    let deleted = 0;
+    let undated = 0;
+    let scanned = 0;
+
+    // Ordered by `createdAt` so the oldest are handled first and a run that hits
+    // the timeout still makes progress from the correct end.
+    const snap = await db.collection('community_assessments')
+        .where('createdAt', '<', cutoff)
+        .orderBy('createdAt')
+        .limit(5000)
+        .get();
+
+    scanned = snap.size;
+    const plan = retention.planSweep(
+        snap.docs.map((doc) => ({ id: doc.id, data: doc.data() })), now);
+
+    for (const ids of retention.intoBatches(plan.toDelete)) {
+        const batch = db.batch();
+        ids.forEach((id) => batch.delete(db.collection('community_assessments').doc(id)));
+        await batch.commit();
+        deleted += ids.length;
+    }
+    undated = plan.undated.length;
+
+    // ⚠️ A SWEEP THAT DELETED NOTHING AND A SWEEP THAT NEVER RAN LOOK IDENTICAL IN
+    //    A CONSOLE. Logging every run, including the empty ones, is what makes the
+    //    promise auditable rather than merely asserted.
+    logger.info('[RETENTION] community_assessments sweep complete', {
+        cutoff: cutoff.toISOString(),
+        retentionMonths: retention.RETENTION_MONTHS,
+        scanned,
+        deleted,
+        undated,
+        note: undated > 0
+            ? 'Records with no usable createdAt were NOT deleted — investigate, they may be a write bug'
+            : undefined,
+    });
 });
 
 // =============================================================================

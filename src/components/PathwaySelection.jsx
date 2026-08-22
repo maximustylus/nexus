@@ -211,7 +211,8 @@ export default function PathwaySelection() {
             programmes can be planned for the areas that need them. It is{' '}
             <strong>de-identified at the point of capture</strong>: it does not collect or store
             your name, NRIC, contact details or financial information, and your postal sector is
-            used only to map you to nearby services. You will get your result either way.
+            used only to map you to nearby services. Records are deleted automatically after{' '}
+            <strong>24 months</strong>. You will get your result either way.
           </p>
         </div>
       </div>
