@@ -67,7 +67,14 @@ node_modules/
 
 # dataconnect generated files
 .dataconnect
+# ⚠️ A SERVICE ACCOUNT KEY IS A MASTER KEY TO THE WHOLE FIREBASE PROJECT — it
+# bypasses every rule in `firestore.rules`. `scripts/migrate-to-teams.cjs` needs one
+# to run. These patterns catch the common filenames, but the only real protection is
+# keeping the file OUTSIDE the repo entirely: a path you type by hand is a path
+# `.gitignore` never sees.
 serviceAccountKey.json
+*serviceAccount*.json
+*-firebase-adminsdk-*.json
 
 # Build output (never commit — would dirty the tree and bloat deploys)
 dist/
