@@ -99,6 +99,14 @@ evidence.
 - 4 cases added to `scripts/firestore-rules-verify.mjs` for the
   `community_assessments` rule. Suite: **95 emulator checks, 0 failed.** `45323f2`
 
+### Audit
+
+- A 158-agent adversarial sweep of the portal returned **75 verified findings** across
+  seven surfaces. Five that change what a member of the public sees were re-verified
+  by hand and are listed under Known Issues as `CP13`–`CP17`; one of them (`CP16`)
+  corrects an earlier finding of my own. The remaining 70 are **not** transcribed into
+  the ledger, because that file's evidence rule does not admit rows nobody has checked.
+
 ### Documentation
 
 - [POSTMORTEM-COMMUNITY.md](POSTMORTEM-COMMUNITY.md) — architecture, stated purpose
@@ -120,6 +128,11 @@ Open, and each one is live on the deployed portal today. Full detail in
 | **`CD11`** | The chat's cardiac screen asks two questions at once with single-tap chips, so a condition and exertional chest pain cannot both be recorded. Tapping the condition loses `symptomFlag` — and with it the URGENT tier — and routes the person to a paid exercise programme. The form pathway records both correctly. | **Owner's.** Splitting it changes the assessment instrument. |
 | **`CD4`** | The URGENT tier's resource list includes an exercise programme. | **Owner's clinical call.** My recommendation is in the post-mortem, §3.4. |
 | **`CP8`** | The prompt labels the inventory *"VERIFIED RESOURCE INVENTORY"* and the model quotes prices and hours to the public as fact. `lastVerified` is written on every seed run and **read by nothing**, so it records when a script ran, not when a human checked a price. | Needs a freshness contract, or the word "VERIFIED" removed. |
+| **`CP13`** | **The portal shows no medical disclaimer and no privacy notice on screen.** Both exist only inside the off-screen PDF template (`ResultPage.jsx:746` and `:782`, nested inside the `top:-10000px` block opened at `:636`). The form pathway offers one half-sentence on step 4 of 4; **the chat pathway offers nothing at all** and still writes age band, gender, ethnicity, housing, postal sector and four health flags. | The smallest change with the largest exposure — move both onto the page, and put the notice before the first question. |
+| **`CP14`** | **"Low Needs (Green)" tells people below the activity guidelines that they meet them.** The tier is banded off the *risk score*, not off PAVS: 100 min/week plus twice-weekly strength training scores 1 → Green → *"You meet the physical activity guidelines"*, on the same screen where the PAVS panel renders `below`. | Same conflation as `CP1`, in the copy rather than the arithmetic. |
+| **`CP15`** | **The chat's clinical flags are unanchored substring regex over free text.** `/low/` matches inside "slowly", "follow" and "allow", so *"I walk slowly but I feel great"* is flagged as psychological distress. Negation-blind too: *"I do not get chest pain"* triggers URGENT. | Both directions over-triage — the safe way to be wrong, but still wrong, and it feeds the tier ladder. |
+| **`CP16`** | **The seeded `resources` collection reaches nobody**, and **this corrects `CP8`.** Its 22 records are read only by `publicTriageChat`, which has no callers. The public actually sees a second, unrelated 16-entry registry hardcoded at `ResultPage.jsx:191-208` — which has no `lastVerified` field at all. | The freshness problem is real but lives in the other registry. |
+| **`CP17`** | `index.html:5` sets `user-scalable=no`, **disabling pinch-zoom** on a tool built for elderly users. `index.html:2` is `<html lang="en">` and never changes, so a screen reader announces Malay, Chinese and Tamil content as English. | Two lines. |
 | **`CP12`** | No `path="*"` route, so a mistyped URL renders a blank page. Four session ids minted per person, all four shown as *"ID:"*, and the one written to Firestore is the third. A finished assessment does not survive a reload. | Cheap; queued together in `P4`. |
 
 ---
