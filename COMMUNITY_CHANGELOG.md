@@ -1,0 +1,132 @@
+# Changelog — NEXUS Community Portal
+
+Changes to the **`/individuals/*` surface**: the public health screening, its two
+pathways, and the Cloud Function behind the chat.
+
+> ### How this relates to the other two files
+>
+> | | |
+> |---|---|
+> | **[CHANGELOG.md](CHANGELOG.md)** | the whole application, and **authoritative for the version**. `package.json` `version` is the single source of truth; nothing here overrides it. |
+> | **this file** | the community portal only, in more detail than a whole-app changelog can carry, and cross-referenced to the ledger |
+> | **[COMMUNITY_TODO.md](COMMUNITY_TODO.md)** | what is still open, with ids `CP`n and `CD`n |
+>
+> The portal ships inside the same bundle as the roster, so it has **no version of its
+> own**. Entries below are filed under the app version they will ship in. Creating a
+> separate version series for one surface is how a project ends up with two numbers that
+> disagree, and this repository already documents that failure once.
+>
+> ### ⚠️ Nothing in this file is deployed
+>
+> Every entry below is on a branch. The portal members of the public can reach **today**
+> still contains the defects listed under *Fixed* — including `CP1`, the risk score that
+> never measured activity. This file records what is ready, not what is live. It will
+> say otherwise on the day it is true and not before.
+
+---
+
+## [Unreleased] — on `claude/nexus-community-portal`
+
+Ids in **bold** are from [COMMUNITY_TODO.md](COMMUNITY_TODO.md); `§` references are
+sections of [POSTMORTEM-COMMUNITY.md](POSTMORTEM-COMMUNITY.md), which carries the
+evidence.
+
+### Fixed
+
+- **`CP1`** *(§3.1)* — **The risk score never measured physical activity.** `scoring.js`
+  compared `pavsMinutes` — minutes **per session** — against the ACSM benchmark of 150
+  minutes **per week**. `MINS_MIDPOINT` tops out at `'60+ mins': 65`, so the threshold
+  was unreachable and **every respondent who ever completed the screening** was charged
+  the inactivity point. The weekly figure was sitting in the next field along,
+  `pavsScore`, computed one line later. A person exercising 390 minutes a week was shown
+  *"Moderate Risk"* on the same page whose banner — correctly using `pavsScore` —
+  congratulated them at the ADVANCED tier. Now reads `pavsScore`. `35f46ad`
+
+- **`CP2`** *(§3.2)* — **Missing data scored as perfect health.** Absent or unparseable
+  fields coerced to a value that passed the check, so a gap in the record read as
+  fitness. `asNumber()` now returns `null` for anything non-finite, and `null` counts as
+  a deficit. `35f46ad`
+
+- **`CP9`** *(§3.9)* — **The isolation tier routed to nothing.** `AuraChat.selectCTA`
+  ranks `SOCIAL_CARE` **second**, behind only chest pain, for a resident aged 60+ who
+  reports being isolated. `ResultPage` had no such key in `CTA_BANNER` or
+  `tierPrimaries`, and both read sites fall back to `START` — so that person was told
+  *"Download the Healthy 365 app and search Start2Move"*, and the SingHealth CareLine
+  referral written for exactly them disappeared with no error and no log. The
+  demographic least able to act on an app-store instruction was the one receiving it.
+
+  Also corrected: `ConventionalForm.jsx:159` claims *"Identical to AuraChatbot
+  selectCTA()"*. The two differ by exactly one rule — the isolation branch — and that
+  one divergent rule was the broken one, so the same isolated senior got the right
+  answer through the form and a silent fallback through the chat. The chat is the
+  pathway built for elderly and non-English-first users. `189a61b`
+
+- **`CP3`** *(§3.3)* — **The portal fingerprinted the public while telling them it had
+  not.** `telemetry.js` wrote `clientReference: navigator.userAgent` into every
+  `community_assessments` document, on a flow whose result page states the record is
+  de-identified (`ResultPage.jsx:758`). Removed. `301bb5a`
+
+- **`CP5`** *(§3.5)* — **Every signed-in staff member could read the public's health
+  records.** `community_assessments` allowed `read: if isSignedIn()`. Grep confirmed no
+  reader exists anywhere in the app — the permission was granted for an analysis screen
+  that was never built. Now `read: if false`. `301bb5a`, verification `45323f2`
+
+- **`CP12`** *(§3.12, theme)* — **The theme setting was split in half.** A prior repair
+  recorded at `ConventionalForm.jsx:6` as *"FIX 1 — Theme key: nexus_theme →
+  nexus-theme"* was applied to three files and not to the other four, including
+  `App.jsx`, which owns the `dark` class on `<html>`. The result split the product along
+  the pathway gate: choose dark on `/individuals/language`, tap through, and the form
+  opens light. Centralised in `src/utils/theme.js`, which still reads the old key as a
+  fallback so nobody loses a setting they already made. `189a61b`
+
+### Added
+
+- `src/utils/scoring.test.js` — **9 cases against a module that had none.**
+  `calculateRiskScore` shipped to the public with zero tests and was wrong for its
+  entire life. Covers the weekly/per-session distinction directly, so `CP1` cannot
+  return silently. `35f46ad`
+
+- `src/utils/ctaTierParity.test.js` — **5 cases.** Reads the tier names out of all three
+  components and asserts every tier either pathway can emit has both a `CTA_BANNER`
+  entry and a `tierPrimaries` entry. **It fails on `CP9` before the fix.** Parses by
+  brace matching rather than indentation: an earlier draft sliced to end-of-file and
+  reported `flexDirection` as a CTA tier, and a test whose parse is looser than the
+  thing it checks is worse than none. `189a61b`
+
+- `src/utils/theme.js` — one key, with a documented fallback and `try`/`catch` around
+  every storage access, because Safari private mode throws on `localStorage`. `189a61b`
+
+- 4 cases added to `scripts/firestore-rules-verify.mjs` for the
+  `community_assessments` rule. Suite: **95 emulator checks, 0 failed.** `45323f2`
+
+### Documentation
+
+- [POSTMORTEM-COMMUNITY.md](POSTMORTEM-COMMUNITY.md) — architecture, stated purpose
+  against delivered behaviour, twelve findings with `file:line`, and the plan for the
+  next version. `31fafde`, corrected and extended `53f9bd7`.
+- [COMMUNITY_TODO.md](COMMUNITY_TODO.md) — this work as a ledger, with the same
+  evidence rule the roster ledger uses.
+
+### Known issues — **authoritative list for this surface**
+
+Open, and each one is live on the deployed portal today. Full detail in
+[COMMUNITY_TODO.md](COMMUNITY_TODO.md).
+
+| Id | | Why it is still open |
+|---|---|---|
+| **`CP6`** | The public chat calls the **staff** AI endpoint. `chatWithAura` has no `request.auth` check and no App Check, and its system prompt names KKH/SingHealth and prints the internal Firestore schema under a `DATA ENTRY AGENT` heading. It returns text and performs no write, so this is disclosure and an injection surface, not data modification. | Needs a second callable with its own prompt, then auth on the first. Ordered as `P0` in the ledger. |
+| **`CP7`** | Unauthenticated and uncapped against a paid API key. Also: the chat discards the model's answer after 1,500 ms without aborting the request, so every late answer is billed and thrown away. | Depends on `CP6.1`. |
+| **`CD10`** | Urgent advice — including *"call 995"* — is **English-only** on a four-language tool. Only the labels around it are translated. | **Owner's.** Translating urgent clinical advice is not a paraphrase job. `CTA_BANNER` already holds reviewed `ms`/`zh`/`ta` for the same tiers and is the source to adapt from. |
+| **`CD11`** | The chat's cardiac screen asks two questions at once with single-tap chips, so a condition and exertional chest pain cannot both be recorded. Tapping the condition loses `symptomFlag` — and with it the URGENT tier — and routes the person to a paid exercise programme. The form pathway records both correctly. | **Owner's.** Splitting it changes the assessment instrument. |
+| **`CD4`** | The URGENT tier's resource list includes an exercise programme. | **Owner's clinical call.** My recommendation is in the post-mortem, §3.4. |
+| **`CP8`** | The prompt labels the inventory *"VERIFIED RESOURCE INVENTORY"* and the model quotes prices and hours to the public as fact. `lastVerified` is written on every seed run and **read by nothing**, so it records when a script ran, not when a human checked a price. | Needs a freshness contract, or the word "VERIFIED" removed. |
+| **`CP12`** | No `path="*"` route, so a mistyped URL renders a blank page. Four session ids minted per person, all four shown as *"ID:"*, and the one written to Firestore is the third. A finished assessment does not survive a reload. | Cheap; queued together in `P4`. |
+
+---
+
+## Before this file existed
+
+The community portal shipped inside app releases up to **v2.0.0** with no changelog of
+its own, and — as `CP1` shows — with no tests on its scoring. Nothing before
+`[Unreleased]` above has been reconstructed, and this file does not pretend to a history
+it did not record. [CHANGELOG.md](CHANGELOG.md) is the record for those releases.
