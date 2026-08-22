@@ -48,9 +48,9 @@ never measured activity — live in it.
 
 | | Count | Ids |
 |---|---|---|
-| `DONE`, evidenced | 7 | `CP1` `CP2` `CP3` `CP5` `CP9` `CP13` `CP17` + theme half of `CP12` |
-| `OPEN`, mine | 8 | `CP6` `CP7` `CP8` `CP10` `CP12` `CP14` `CP15` `CP16` |
-| `OPEN`, **owner's decision** | 3 | `CD4` `CD10` `CD11` |
+| `DONE`, evidenced | 8 | `CP1` `CP2` `CP3` `CP5` `CP9` `CP13` `CP17` + `CP6` (bar the demo decision) + theme half of `CP12` |
+| `OPEN`, mine | 7 | `CP7` `CP8` `CP10` `CP12` `CP14` `CP15` `CP16` |
+| `OPEN`, **owner's decision** | 4 | `CD4` `CD10` `CD11` + **demo mode**, `P0.2` |
 
 **`CP13` is fixed.** The portal wrote a health profile to a database while showing
 the person no disclaimer and no privacy notice on screen — both rendered off-screen
@@ -60,7 +60,7 @@ record is written. Both are still English-only, which is `CD10` and is yours.
 
 ---
 
-## P0 — The shared AI endpoint · `CP6` + `CP7` · risk: **high** · **DO FIRST**
+## P0 — The shared AI endpoint · `CP6` + `CP7` · risk: **high** · **MOSTLY SHIPPED**
 
 Everything else in this file is about what one member of the public is told. This is
 about what *anyone on the internet* can reach, and it leads for that reason.
@@ -73,11 +73,12 @@ AGENT` heading.
 
 | # | Item | Detail | Tier | Status | Evidence |
 |---|---|---|---|---|---|
-| 0.1 | Public callable, separate prompt | A new callable for `/individuals/chat` whose system prompt contains no KKH framing, no Firestore schema, no DATA_ENTRY mode. `publicTriageChat` (`functions/index.js:663`) is most of it already written and **has no caller** — finish it or delete it. Today it is neither. | Fable-supervised | `OPEN` | — |
-| 0.2 | `request.auth` on `chatWithAura` | Every other privileged callable has one (`processFeedPost`, `functions/index.js:539`). Once the public is off it, nothing legitimate calls it unauthenticated. **Do 0.1 first** — this order matters, the reverse breaks the live portal. | Opus-alone | `OPEN` | — |
-| 0.3 | App Check + rate limit on the public callable | `CP7`. Unauthenticated, `maxOutputTokens: 8192`, 90s fetch in a 120s function. A loop bills `GEMINI_API_KEY`. | Opus-alone | `OPEN` | — |
-| 0.4 | Validate content, not only length | `validateChatInput` bounds `role` and `prompt` by length and type only. Allowlist `language` to the four the portal sends; stop passing caller-supplied `role`/`prompt` into model context. | Opus-alone | `OPEN` | — |
-| 0.5 | Abort on the discard window | `AuraChat.jsx:726` gives the model 1,500 ms then discards the answer — but never aborts, so it runs to completion server-side and bills in full. Every late answer is paid for and thrown away. | Opus-alone | `OPEN` | — |
+| 0.1 | Public callable, separate prompt | **`communityAck`** replaces `publicTriageChat` in `functions/index.js`. No KKH framing, no schema, no modes. It takes `{domain, answer, priorAnswers, language}` — **no caller-supplied prompt, no `role`, no `history`, no attachments** — and returns plain text. `WELL_WELL_PROMPT` moved out of the browser and onto the server, so the persona can no longer be replaced by the caller. | Fable-supervised | `DONE` | `functions/communityAck.js` + 41 tests |
+| 0.2 | `request.auth` on `chatWithAura` | ⚠️ **BLOCKED — and it is your call, not a defect.** Adding the check breaks the public demo. `isDemo` is a plain React boolean (`NexusContext.jsx:9`) with **no anonymous auth anywhere in the repo**, and the *signed-out* landing page has an INITIALISE DEMO button (`WelcomeScreen.jsx:705`) that opens the whole staff shell with `user === null`. `AuraPulseBot` then calls `chatWithAura` unconditionally and renders a persistent *"Neural link unstable"* bubble on failure. Three ways out: give demo mode Firebase anonymous auth; have demo use a canned reply as it already uses `MOCK_TEAM_DATA` everywhere else; or drop the public demo. | **OWNER** | `OPEN` | verified: no `signInAnonymously` in `src/` |
+| 0.3 | App Check + rate limit on the public callable | `CP7`. Still unauthenticated — the portal is *for* the public — but the blast radius is now a prompt with no hospital framing and no schema. `maxOutputTokens` is down from 8192 to 200 and the fetch timeout from 90s to 20s, so an abuse loop costs far less. App Check remains the real mitigation. | Opus-alone | `OPEN` | — |
+| 0.4 | Validate content, not only length | `domain` and `language` are closed sets checked as closed sets. `priorAnswers` is **rebuilt** from the known domain list rather than filtered, so a caller cannot influence the shape of what reaches the model — only the values of at most thirteen known keys. `prompt`/`role`/`history`/`attachments` are ignored entirely, asserted by test. | Opus-alone | `DONE` | `functions/communityAck.test.js` — 41 tests |
+| 0.5 | Abort on the discard window | `AuraChat.jsx` gives the model 1,500 ms then discards the answer without aborting, so it runs to completion server-side and bills in full. Reduced but not fixed: the server timeout is now 20s rather than 90s and the output cap 200 tokens rather than 8192. | Opus-alone | `OPEN` | — |
+| 0.6 | Delete the dead endpoints | `publicTriageChat` — 145 lines, unauthenticated, interpolated `request.data.language` into its own system instruction with no allowlist, and **had no callers**. `src/utils/auraChat.js` — `analyzeWellbeing`, zero importers, and the last written trace of the `isDemo` "bypassing auth checks" fiction (there were no auth checks). Both removed. | Opus-alone | `DONE` | export count unchanged at 8; `grep` for both returns nothing |
 
 ---
 
@@ -170,9 +171,9 @@ In order. `P0` first because it is the only item on this page whose blast radius
 larger than one respondent.
 
 ```
-P0.1  public callable + own prompt          ─ then P0.2, which depends on it
+P0.2  demo-mode decision                    ─ OWNER'S; unblocks auth on chatWithAura
 P0.3  App Check + rate limit
-P0.4  content validation
+P0.5  abort the discarded request
 CD4 / CD10 / CD11                            ─ owner's, in parallel, not blocked on me
 P3.4  resource freshness
 P4.2  share selectCTA                        ─ retires ctaTierParity.test.js

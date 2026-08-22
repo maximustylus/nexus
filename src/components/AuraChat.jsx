@@ -10,33 +10,24 @@ import { readLanguage, applyDocumentLanguage } from '../utils/language';
 // ── Cloud Function — same pattern as AuraPulseBot.jsx ────────────────────────
 // Gemini API key is secured in Firebase Cloud Functions (never client-side)
 const functions = getFunctions(undefined, 'us-central1');
-const secureChatWithAura = httpsCallable(functions, 'chatWithAura');
+// The community pathway's OWN endpoint. It was `chatWithAura`, which is the staff
+// assistant's callable — see the note at the call site.
+const communityAck = httpsCallable(functions, 'communityAck');
 
 // ── Well Well persona system prompt for community health triage ───────────────
 // Used as the `prompt` param passed to the Cloud Function, same as personas
 // in AuraPulseBot. Well Well uses Motivational Interviewing (OARS) and is
 // calibrated for Singapore community members, not clinical staff.
-const WELL_WELL_PROMPT =
-  'You are Well Well, a warm and professionally trained community health navigator ' +
-  "within Singapore's NEXUS health programme. You use Motivational Interviewing (MI) " +
-  'techniques — specifically OARS: Open questions, Affirmations, Reflective listening, and Summaries.\n\n' +
-  'You are currently guiding a community member through the NEXUS structured health assessment. ' +
-  'After each answer, you will receive the question domain, the user\'s answer, and all prior ' +
-  'answers collected so far. Your job is to write a brief, natural acknowledgement ' +
-  '(1\u20132 sentences, under 40 words) that:\n' +
-  '- Reflects what the person actually said — specific, never generic\n' +
-  '- Uses an affirming, non-judgmental MI tone\n' +
-  '- Matches emotional register: warm and encouraging for positive behaviours, compassionate ' +
-  'and non-alarming for health concerns, calm and matter-of-fact for neutral answers\n' +
-  '- Naturally bridges to the next question (which will follow automatically — do NOT write the next question yourself)\n\n' +
-  'Hard rules:\n' +
-  '- NEVER say "Great!", "Wonderful!", "Awesome!" — these feel hollow\n' +
-  '- NEVER say "on those active days" or similar if the person answered 0 days of exercise\n' +
-  '- NEVER minimise a health concern (e.g. chest pain, isolation, food insecurity) with cheerful filler\n' +
-  '- NEVER use clinical jargon — speak plainly, as a trusted health coach would\n' +
-  '- Do NOT repeat the question back to the person\n' +
-  '- Do NOT mention AURA, Well Well, NEXUS, or any system names\n' +
-  '- Respond in English unless the person\'s answer is clearly in Malay, Chinese, or Tamil — then mirror their language';
+// ⚠️ `WELL_WELL_PROMPT` USED TO LIVE HERE, AND THAT WAS THE PROBLEM.
+//
+// The community persona was a client constant, shipped to every browser and sent
+// back to the server on every turn as `prompt`. A system prompt the caller supplies
+// is a system prompt the caller can replace — and the endpoint it was sent to,
+// `chatWithAura`, accepted up to 8,000 characters of it without authentication.
+//
+// It now lives in `functions/index.js` beside `communityAck`, which takes no
+// caller-supplied prompt at all. Nothing here needs it: this component sends the
+// domain, the answer and the prior answers, and receives one sentence back.
 
 // ─── DOMAIN CONFIGURATION ─────────────────────────────────────────────────────
 // Each step declares its clinical domain for badge display and progress colouring.
@@ -751,29 +742,42 @@ const AuraChatbot = () => {
       setMessages(prev => [...prev, { sender: 'bot', text: staticText, step: nextStep, _id: msgId }]);
       setIsTyping(false);
 
-      const historySnap = messages
-        .filter(m => !m.isGreeting)
-        .map(m => ({ role: m.sender === 'bot' ? 'model' : 'user', parts: [{ text: m.text }] }));
-
-      const answersSoFar = Object.entries(updatedData)
-        .map(function(e) { return '  ' + e[0] + ': ' + e[1]; }).join('\n');
-      const contextPrompt = [
-        WELL_WELL_PROMPT,
-        'Assessment domain: ' + stepKey + ' (step ' + (currentStep + 1) + ' of ' + TOTAL_STEPS + ')',
-        'User just answered: "' + text + '"',
-        'Answers so far:\n' + answersSoFar,
-      ].join('\n');
-
+      // ⚠️ WHAT THIS SENDS, AND WHAT IT DELIBERATELY NO LONGER SENDS.
+      //
+      // This used to call `chatWithAura` — the same callable as the internal staff
+      // assistant, unauthenticated, whose system prompt names KKH/SingHealth and
+      // prints the internal Firestore schema. It shipped `WELL_WELL_PROMPT` to the
+      // browser and passed all 1,718 characters back on every turn as a
+      // caller-supplied `CONTEXT/OVERRIDE`, which meant anybody could replace it.
+      //
+      // The persona now lives on the server (`functions/index.js`, `communityAck`)
+      // and there is no `prompt` field to override. Two more things are gone:
+      //
+      //   `history`  — the whole transcript was sent alongside the answers, which
+      //                duplicated `priorAnswers` for a one-sentence acknowledgement
+      //                and re-sent the person's full health profile to Google twice
+      //                per turn. Only the answers go now, and only known domains.
+      //   `role`     — went into the model context verbatim from an unauthenticated
+      //                caller, defaulting to 'Staff'.
+      //
+      // What the reply does is unchanged and worth restating: it rewrites the text
+      // of the acknowledgement already on screen. `parseClinicalData`,
+      // `calculateRiskScore` and `selectCTA` never see it.
       var upgradeExpired = false;
       var upgradeTimer   = setTimeout(function() { upgradeExpired = true; }, AI_UPGRADE_WINDOW_MS);
 
-      secureChatWithAura({
-        userText: text, history: historySnap,
-        role: 'Community Member — Well Well', prompt: contextPrompt, isDemo: false,
+      communityAck({
+        domain: stepKey,
+        answer: text,
+        priorAnswers: updatedData,
+        language: lang,
       }).then(function(result) {
         clearTimeout(upgradeTimer);
-        if (upgradeExpired) return; 
+        if (upgradeExpired) return;
 
+        // `communityAck` returns plain text — the server prompt asks for a sentence,
+        // not JSON. The fence-strip and the brace-scan stay as tolerance for a model
+        // that wraps it anyway; they are no longer the expected path.
         var raw      = (result.data && result.data.text) ? result.data.text : '';
         var stripped = raw.replace(/```json|```/g, '').trim();
         var isErr    = !stripped || /fallback|missing.api|api.key|error|unauthorized|unavailable/i.test(stripped);
@@ -784,8 +788,8 @@ const AuraChatbot = () => {
           var s = stripped.indexOf('{'); var e = stripped.lastIndexOf('}') + 1;
           if (s !== -1 && e > s) { var p = JSON.parse(stripped.substring(s, e)); aiAck = (p.reply || '').trim(); }
         } catch(ex) {
-          // Ignored on purpose: a non-JSON reply is expected here. `aiAck` stays
-          // empty and the raw stripped text is used as the acknowledgement below.
+          // Ignored on purpose: plain text is now the expected shape. `aiAck` stays
+          // empty and the stripped text is used as the acknowledgement below.
         }
         if (!aiAck) aiAck = stripped;
         if (!aiAck) return;
