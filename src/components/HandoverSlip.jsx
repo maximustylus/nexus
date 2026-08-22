@@ -1,4 +1,5 @@
 import React from 'react';
+import { createPortal } from 'react-dom';
 import { sectorInfo } from '../utils/singapore/postalSectors';
 import { servicesForSector } from '../utils/singapore/communityServices';
 import { RETENTION_MONTHS_LABEL } from '../utils/retentionLabel';
@@ -66,7 +67,35 @@ const HandoverSlip = ({ score, riskTier, data = {}, postalSector, sessionId, for
     data.healthierSgEnrolled === false && 'Not enrolled with a Healthier SG GP',
   ].filter(Boolean);
 
-  return (
+  /*
+   * ⚠️ PORTALLED TO `document.body`, AND THAT IS A PRINTING FIX, NOT A REFACTOR.
+   *
+   * Rendered in place, the slip sits inside the result page's glass card. Three
+   * separate properties of that card each break printing, and all three were
+   * measured in headless Chromium under print emulation:
+   *
+   *   1. The card is `position: relative`, so the slip's `top: 0; left: 0` meant
+   *      the top-left of the CARD — it landed 237px down and 62px in, wasting
+   *      about 63mm of the first sheet and printing off-centre.
+   *   2. The card also carries a `transform` AND a `backdrop-filter`. Either one
+   *      establishes a containing block for an absolutely positioned descendant
+   *      — `backdrop-filter` even for `position: fixed` — so NO amount of
+   *      `absolute` or `fixed` on the slip reaches the sheet while it is a
+   *      descendant. Resetting `position` on the ancestors was tried and did not
+   *      help; the containing block came from the filter, not the position.
+   *   3. Hiding the page with `visibility: hidden` leaves every hidden box still
+   *      occupying layout. The document stayed 7591px tall, so "Save as PDF"
+   *      produced EIGHT pages: the slip, then seven blank ones.
+   *
+   * As a direct child of `<body>` the slip has none of those ancestors, so the
+   * print block can simply `display: none` its siblings — which collapses the
+   * layout as well as hiding it — and the slip needs no positioning at all.
+   * `src/utils/printCss.test.js` asserts that this portal and that rule stay in
+   * step, because they are only safe together: `display: none` on a body-level
+   * selector is exactly the rule that once printed a blank page, and it is safe
+   * now ONLY because the slip is no longer inside `#root`.
+   */
+  const slip = (
     <div className="handover-slip" aria-hidden="true">
       <header className="slip-head">
         <div>
@@ -137,6 +166,10 @@ const HandoverSlip = ({ score, riskTier, data = {}, postalSector, sessionId, for
       </footer>
     </div>
   );
+
+  // No `document` during a server render or a bare-module import; render nothing
+  // rather than throw. Printing is a browser-only concern in any case.
+  return typeof document === 'undefined' ? null : createPortal(slip, document.body);
 };
 
 export default HandoverSlip;

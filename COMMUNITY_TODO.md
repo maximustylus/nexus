@@ -162,7 +162,7 @@ Decisions taken by the owner, recorded so the reasoning survives:
 | 3e.3 | Caregiver strain its own domain | `DONE` | split in 4 languages from existing wording · routes to `caregiverSupport` |
 | 3e.4 | Falls & function for 60+ | `DONE` | `parseFallsAnswer` · routes ahead of the activity route · "No falls" pinned |
 | 3e.5 | Healthier SG enrolment | `DONE` | `parseHealthierSg` · `null` for "not sure" AND "not asked", never `false` |
-| 3e.6 | Printable handover slip | `DONE` | `HandoverSlip.jsx` + print CSS · 19 tests, most of them about what it does NOT claim |
+| 3e.6 | Printable handover slip | `DONE` | `HandoverSlip.jsx` + print CSS · 19 tests, most of them about what it does NOT claim. Print output verified in headless Chromium after `CP21`: **one A4 page**, slip at 0,0, 0 stray controls |
 
 **Not built, because the consent decision forecloses them:** partner-facing queue,
 closed-loop referral status, re-assessment recall, proxy/assisted mode with an
@@ -262,7 +262,20 @@ so a lighter glass fails `npm test` and names the tier.
 `body > * { display: none }`, which hides `#root` — and the slip is a *descendant*
 of `#root`, so `display: block !important` could not revive it. Printing produced a
 blank page. The slip's 19 tests all checked what it *says*, not whether it could
-reach paper. Fixed to the `visibility` pattern, guarded by `printCss.test.js`.
+reach paper.
+
+**⚠️ The first fix got it onto paper, and it still printed badly** (`CP21`). Switching
+to the `visibility` pattern revealed the slip, but nobody had looked at the sheet.
+Screenshotting the print media measured three faults: the slip landed **237px down and
+62px in**, because `position: absolute` resolves against the result page's `relative`
+glass card; that card's `transform` and `backdrop-filter` each establish a containing
+block, so no positioning value could escape it; and `visibility: hidden` boxes still
+occupy layout, leaving the document 7591px tall and "Save as PDF" producing **eight**
+pages, seven of them blank. The slip is now **portalled to `document.body`** and the
+print block hides its siblings with `display: none`, which collapses the layout instead
+of merely hiding it. Measured after: **one page, slip at 0,0**. `printCss.test.js` now
+reads the component as well as the stylesheet, because that `display: none` is safe only
+while the portal is there.
 
 **⚠️ Three constraints that are not negotiable, because they are fixes already
 shipped on this branch and a restyle is exactly how they get undone:**

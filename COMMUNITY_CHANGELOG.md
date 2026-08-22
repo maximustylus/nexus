@@ -79,6 +79,34 @@ evidence.
   opens light. Centralised in `src/utils/theme.js`, which still reads the old key as a
   fallback so nobody loses a setting they already made. `189a61b`
 
+- **`CP21`** — **The handover slip printed, but it printed badly: three A4 sheets, the
+  first two-thirds empty.** The blank-page bug (`display: none` on an ancestor) was
+  fixed earlier by switching to `visibility: hidden`, and that got the slip onto paper
+  — but nobody had looked at the paper. Screenshotting the print media in headless
+  Chromium showed three things at once:
+
+  1. The slip is `position: absolute; top: 0; left: 0`, which resolves against its
+     nearest **positioned** ancestor — the result page's `relative` glass card. Measured:
+     the slip started **237px down and 62px in**, wasting roughly 63mm of the first
+     sheet and printing off-centre.
+  2. That card also carries a `transform` **and** a `backdrop-filter`. Either one
+     establishes a containing block for an absolutely positioned descendant —
+     `backdrop-filter` even for `position: fixed` — so no positioning value on the slip
+     could escape it. Resetting `position` on the ancestors was tried and measured: it
+     did not help, because the containing block came from the filter, not the position.
+  3. `visibility: hidden` boxes **still occupy layout**. The document stayed 7591px
+     tall, so "Save as PDF" produced **eight** pages: the slip, then seven blank.
+
+  `HandoverSlip.jsx` now portals the slip to `document.body`, so it has no ancestor but
+  `<body>`, and the print block hides its siblings with `display: none` — which collapses
+  the layout rather than merely hiding it. Measured after: **one page**, slip at 0,0, no
+  stray controls on the sheet. `printCss.test.js` now reads **both** files, because
+  `display: none` on a body-level selector is the exact shape of the original bug and is
+  safe only while the portal is there; either one alone prints a blank page.
+
+  Found by producing the sample screenshot report, not by a test — no unit test can tell
+  you what came out of a printer, which is why the slip's 19 tests all passed throughout.
+
 ### Added
 
 - `src/utils/scoring.test.js` — **9 cases against a module that had none.**

@@ -21,7 +21,17 @@ const base = {
     sessionId: 'NX-ABC123XYZ', formattedDate: '22/08/2026',
     data: { pavsScore: 100 },
 };
-const slip = (over = {}) => render(<HandoverSlip {...base} {...over} />);
+/**
+ * ⚠️ `container` IS `document.body`, NOT RTL's WRAPPER DIV. The slip is portalled
+ *    to `document.body` (see the note in `HandoverSlip.jsx` — it is what lets the
+ *    print stylesheet hide the page with `display: none` without hiding the slip
+ *    too), so RTL's own container is empty and every `container.textContent`
+ *    assertion below would silently pass against an empty string.
+ */
+const slip = (over = {}) => {
+    render(<HandoverSlip {...base} {...over} />);
+    return { container: document.body };
+};
 
 describe('⚠️ it must not read as a referral', () => {
     /**
@@ -107,9 +117,12 @@ describe('what it reports', () => {
         expect(slip({ data: { healthierSgEnrolled: false } }).container.textContent)
             .toMatch(/Not enrolled with a Healthier SG GP/);
         [null, undefined, true].forEach((value) => {
+            // ⚠️ BEFORE the render, not after. `container` is `document.body`, so a
+            //    slip left mounted from the previous case is still in it and a
+            //    negative assertion would read the wrong one.
+            cleanup();
             expect(slip({ data: { healthierSgEnrolled: value } }).container.textContent)
                 .not.toMatch(/Not enrolled with a Healthier SG GP/);
-            cleanup();
         });
     });
 });

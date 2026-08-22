@@ -64,29 +64,42 @@ body {
 
 @media print {
   /*
-    ⚠️ `visibility`, NOT `display: none` — AND THAT IS A BUG FIX, NOT A PREFERENCE.
+    ⚠️ `display: none` ON THE SLIP'S SIBLINGS — WHICH IS SAFE ONLY BECAUSE THE
+       SLIP IS PORTALLED OUT OF `#root`. Read this before touching either half.
 
-    This rule was `body > * { display: none }`, which hides `#root`. The slip is a
+    THE ORIGINAL BUG. The rule was `body > * { display: none }` while the slip was
+    still rendered inside the result page. `#root` was hidden, the slip was a
     DESCENDANT of `#root`, and a descendant of a `display: none` element is not
-    rendered no matter what its own `display` says — so `.handover-slip { display:
-    block !important }` could not revive it. Printing produced a BLANK PAGE, and
-    the tests for the slip all checked what it SAYS rather than whether it reaches
+    rendered whatever its own `display` says — so `.handover-slip { display: block
+    !important }` could not revive it. Printing produced a BLANK PAGE, and every
+    one of the slip's tests checked what it SAYS rather than whether it reaches
     paper, so nothing caught it.
 
-    `visibility: hidden` is different: it is inherited but CAN be overridden on a
-    descendant, which is the whole reason this is the standard print-one-element
-    pattern. `src/utils/printCss.test.js` now asserts the distinction.
+    THE FIRST FIX, AND WHY IT WAS NOT ENOUGH. Switching to `visibility: hidden`
+    put the slip on paper, because visibility is inherited but overridable on a
+    descendant. Screenshotting it in headless Chromium under print emulation
+    showed what that still left wrong:
+
+      · the slip landed 237px down and 62px in, because `position: absolute` is
+        resolved against the result page's `relative` glass card;
+      · that card also carries `transform` and `backdrop-filter`, each of which
+        establishes a containing block for an absolutely positioned descendant —
+        `backdrop-filter` even for `position: fixed` — so no positioning value on
+        the slip could escape it;
+      · `visibility: hidden` boxes STILL OCCUPY LAYOUT. The document stayed
+        7591px tall and "Save as PDF" produced EIGHT pages: the slip, then seven
+        blank.
+
+    THE FIX. `HandoverSlip.jsx` portals the slip to `document.body`, so it has no
+    ancestor but `<body>`. `display: none` on its siblings then collapses the
+    layout instead of merely hiding it — one page of paper, no positioning games,
+    no blank sheets. `src/utils/printCss.test.js` asserts that the portal and this
+    rule stay in step; neither is safe without the other.
   */
-  body * { visibility: hidden !important; }
-  .handover-slip, .handover-slip * { visibility: visible !important; }
+  body > *:not(.handover-slip) { display: none !important; }
 
   .handover-slip {
     display: block !important;
-    /* Lifted out of the page flow so it starts at the top of the sheet rather
-       than wherever the hidden layout left a gap. */
-    position: absolute;
-    left: 0;
-    top: 0;
     width: 100%;
     /* Paper is white whatever the viewer's theme is. Dark mode on a printer is
        both unreadable and expensive. */

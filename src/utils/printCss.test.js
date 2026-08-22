@@ -12,7 +12,7 @@
  * ── THE BUG ──────────────────────────────────────────────────────────────────
  *
  * The stylesheet said `body > * { display: none }`, which hides `#root`. The
- * handover slip is a DESCENDANT of `#root`, and a descendant of a `display: none`
+ * handover slip was a DESCENDANT of `#root`, and a descendant of a `display: none`
  * element is not rendered whatever its own `display` says — so
  * `.handover-slip { display: block !important }` could not revive it. Printing
  * produced a BLANK PAGE.
@@ -21,6 +21,19 @@
  * is not a referral, that it carries the disclaimer — and not one checked whether
  * it could reach paper at all. A feature can be entirely correct and entirely
  * unreachable.
+ *
+ * ── ⚠️ WHY THIS FILE ALSO READS `HandoverSlip.jsx` ───────────────────────────
+ *
+ * The stylesheet is `display: none` on the slip's siblings AGAIN — the very shape
+ * of the original bug. It is correct now for exactly one reason: the slip is
+ * portalled to `document.body`, so it is no longer a descendant of anything the
+ * rule hides. The CSS and the portal are a PAIR. Either one alone prints a blank
+ * page, so the assertions below check both in the same file rather than trusting
+ * two suites to be changed together.
+ *
+ * The intermediate `visibility: hidden` version is not the answer either, and the
+ * measurements are in the stylesheet comment: hidden boxes still occupy layout,
+ * so it printed the slip followed by seven blank pages.
  */
 
 import { describe, it, expect } from 'vitest';
@@ -52,29 +65,52 @@ const printBlock = () => {
     throw new Error('Unbalanced braces in the @media print block.');
 };
 
+/** `HandoverSlip.jsx` with its comments stripped, for the same reason. */
+const slipSource = readFileSync(
+    resolve(dirname(fileURLToPath(import.meta.url)), '..', 'components', 'HandoverSlip.jsx'), 'utf8')
+    .replace(/\/\*[\s\S]*?\*\//g, '');
+
 describe('⚠️ the slip can actually reach paper', () => {
     /**
-     * THE REGRESSION TEST. `display: none` on an ancestor is unrecoverable;
-     * `visibility: hidden` is inherited but overridable on a descendant, which is
-     * why it is the standard print-one-element pattern.
+     * THE REGRESSION TEST, IN TWO HALVES. The rule below hides the slip's siblings
+     * with `display: none` — unrecoverable for any descendant of what it hides.
+     * That is only safe while the slip is NOT a descendant, which is what the
+     * portal buys. Asserting one without the other is how the blank page comes
+     * back.
      */
-    it('hides the page with visibility, never with display on an ancestor', () => {
+    it('hides the siblings with display, and exempts the slip from that rule', () => {
         const block = printBlock();
-        expect(block, 'body * must be hidden with visibility, not display')
-            .toMatch(/body\s*\*\s*\{[^}]*visibility:\s*hidden/);
-        expect(block, 'display:none on a body-level selector would hide the slip with it')
-            .not.toMatch(/body\s*>?\s*\*\s*\{[^}]*display:\s*none/);
+        expect(block, 'the page must be hidden with display:none, so it occupies no paper')
+            .toMatch(/body\s*>\s*\*:not\(\.handover-slip\)\s*\{[^}]*display:\s*none/);
     });
 
-    it('re-reveals the slip AND its descendants', () => {
-        const block = printBlock();
-        expect(block).toMatch(/\.handover-slip\s*,\s*\.handover-slip\s*\*\s*\{[^}]*visibility:\s*visible/);
+    it('the slip is portalled to document.body, out of every display:none ancestor', () => {
+        expect(slipSource, 'HandoverSlip must import createPortal')
+            .toMatch(/import\s*\{[^}]*createPortal[^}]*\}\s*from\s*'react-dom'/);
+        expect(slipSource, 'the slip must be portalled to document.body')
+            .toMatch(/createPortal\([^)]*document\.body\s*\)/);
     });
 
-    it('gives the slip a display and takes it out of the hidden layout', () => {
+    it('no body-level display:none rule catches the slip itself', () => {
         const block = printBlock();
-        expect(block).toMatch(/\.handover-slip\s*\{[\s\S]*?display:\s*block/);
-        expect(block).toMatch(/\.handover-slip\s*\{[\s\S]*?position:\s*absolute/);
+        const bodyRules = block.match(/body\s*>?\s*\*[^{]*\{[^}]*display:\s*none[^}]*\}/g) || [];
+        expect(bodyRules.length, 'expected exactly one body-level display:none rule').toBe(1);
+        expect(bodyRules[0], 'that rule must exempt .handover-slip')
+            .toMatch(/:not\(\.handover-slip\)/);
+    });
+
+    it('gives the slip a display of its own inside the print block', () => {
+        expect(printBlock()).toMatch(/\.handover-slip\s*\{[\s\S]*?display:\s*block/);
+    });
+
+    /**
+     * Positioning is deliberately ABSENT now. As the only rendered child of
+     * `<body>` the slip starts at the top of the sheet on its own, and every
+     * attempt to position it while it lived inside the glass card was defeated by
+     * that card's `transform` and `backdrop-filter`.
+     */
+    it('needs no positioning, because it has no positioned ancestor left', () => {
+        expect(printBlock()).not.toMatch(/\.handover-slip\s*\{[^}]*position:\s*(absolute|fixed)/);
     });
 
     it('the slip is hidden on screen, outside the print block', () => {
