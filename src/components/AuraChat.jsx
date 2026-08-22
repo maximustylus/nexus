@@ -5,6 +5,14 @@ import { calculateRiskScore } from '../utils/scoring';
 import { ChevronLeft, Send, Sun, Moon, ExternalLink, CheckCircle, BrainCircuit } from 'lucide-react';
 import { getFunctions, httpsCallable } from 'firebase/functions';
 import { readTheme, writeTheme } from '../utils/theme';
+// ⚠️ Word-bounded matchers, not raw substring regexes. `/low/` used to fire inside
+// "slowly", "follow" and "allow", flagging psychological distress on somebody
+// saying they felt fine. See `src/utils/clinicalFlags.js`.
+import {
+  matchesSymptom, matchesCondition, matchesFinancialBarrier, matchesSocialIsolation,
+  matchesPsychologicalDistress, matchesFoodInsecurity, matchesFemale, matchesMale,
+  isNoPreviousId,
+} from '../utils/clinicalFlags';
 import { readLanguage, applyDocumentLanguage } from '../utils/language';
 
 // ── Cloud Function — same pattern as AuraPulseBot.jsx ────────────────────────
@@ -506,26 +514,29 @@ const parseClinicalData = (raw) => {
 
   // Medical safety
   const medStr      = (raw.medical || '').toLowerCase();
-  const symptomFlag = /(dizziness|chest pain|pening|dada|头晕|胸痛|தலைச்சுற்றல்|நெஞ்சு வலி)/.test(medStr);
-  const medFlag     = /(blood pressure|prediabetes|diabetes|heart|darah tinggi|高血压|糖尿病|心脏|உயர் இரத்த|நீரிழிவு|இதய)/.test(medStr);
+  const symptomFlag = matchesSymptom(medStr);
+  const medFlag     = matchesCondition(medStr);
 
   // SDOH — Financial
   const barrStr      = (raw.barriers || '').toLowerCase();
-  const sdohFinancial = /(expensive|cost|afford|mahal|kos|贵|செலவு|too far|jauh|太远)/.test(barrStr);
+  const sdohFinancial = matchesFinancialBarrier(barrStr);
 
   // SDOH — Social 
   const socialStr    = (raw.social || '').toLowerCase();
-  const sdohSocial   = /(isolated|alone|on my own|keseorangan|孤立|தனிமை)/.test(socialStr);
+  const sdohSocial   = matchesSocialIsolation(socialStr);
 
   // SDOH — Psychological 
   const wellStr      = (raw.wellbeing || '').toLowerCase();
-  const sdohPsychological = /(stressed|stress|low|overwhelmed|tertekan|murung|terbeban|压抑|不知所措|மன அழுத்தம்|மனச்சோர்வு|அதிக சுமை)/.test(wellStr);
+  const sdohPsychological = matchesPsychologicalDistress(wellStr);
 
   // Demographics
   const demoStr = (raw.demographics || '').toLowerCase();
   let gender = 'Unknown';
-  if (/(female|perempuan|女|பெண்)/.test(demoStr))        gender = 'Female';
-  else if (/(male|lelaki|男|ஆண்)/.test(demoStr))          gender = 'Male';
+  // Female is tested first because `male` is a substring of `female`; the
+  // matchers are word-bounded now, but the order is load-bearing for the
+  // non-Latin terms and is kept deliberately.
+  if (matchesFemale(demoStr))       gender = 'Female';
+  else if (matchesMale(demoStr))    gender = 'Male';
 
   let age = 'Unknown';
   if (demoStr.includes('60+'))                             age = '60+';
@@ -543,10 +554,10 @@ const parseClinicalData = (raw) => {
 
   // Continuity
   const foodStr        = (raw.food_insecurity || '').toLowerCase();
-  const sdohFoodInsecure = /(yes|ya|是|ஆம்)/.test(foodStr);
+  const sdohFoodInsecure = matchesFoodInsecurity(foodStr);
 
   const prevStr    = (raw.previous_id || '');
-  const isNoId     = /(no|none|tidak|tiada|没|无|不|இல்லை)/i.test(prevStr) || prevStr.trim() === '';
+  const isNoId     = isNoPreviousId(prevStr);
   const previousId = isNoId ? null : prevStr.trim().toUpperCase();
 
   return {

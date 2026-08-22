@@ -48,8 +48,8 @@ never measured activity — live in it.
 
 | | Count | Ids |
 |---|---|---|
-| `DONE`, evidenced | 8 | `CP1` `CP2` `CP3` `CP5` `CP6` `CP9` `CP13` `CP17` + theme half of `CP12` |
-| `OPEN`, mine | 7 | `CP7` `CP8` `CP10` `CP12` `CP14` `CP15` `CP16` |
+| `DONE`, evidenced | 10 | `CP1` `CP2` `CP3` `CP5` `CP6` `CP9` `CP13` `CP14` `CP15` `CP17` + theme half of `CP12` |
+| `OPEN`, mine | 5 | `CP7` `CP8` `CP10` `CP12` `CP16` |
 | `OPEN`, **owner's decision** | 3 | `CD4` `CD10` `CD11` |
 
 **`CP13` is fixed.** The portal wrote a health profile to a database while showing
@@ -125,8 +125,8 @@ what a member of the public sees. **`CP16` corrects `CP8` above.**
 | # | Item | Detail | Tier | Status | Evidence |
 |---|---|---|---|---|---|
 | 3b.1 | **No disclaimer and no privacy notice on screen** | `CP13`. Both the *"Important Medical Disclaimer"* (`ResultPage.jsx:746`) and the full data-governance text (`:782`) sit **four to five divs deep inside the off-screen PDF template** opened at `:636` with `position:absolute; top:-10000px`. Neither renders on the visible page. On screen the form pathway offers one half-sentence, on step 4 of 4, after the health questions are already answered (`ConventionalForm.jsx:253`). **The chat pathway offers nothing at all** — `grep -ci "de-identified\|privacy\|consent\|we collect" AuraChat.jsx` returns `0`, and it writes age band, gender, ethnicity, housing, postal sector and four health flags. | Fable-supervised | `DONE` | `MedicalDisclaimer` + `DataGovernance` render on the visible page; `PathwaySelection` carries a collection notice **before** either pathway starts. English only — `CD10`. |
-| 3b.2 | **"Green" tells people below the guidelines that they meet them** | `CP14`. `greenDesc` is *"You meet the physical activity guidelines."* The tier comes from the **risk score**, not from PAVS: `getRiskTier` returns Green for 0–1. Someone at 100 min/week who strength-trains twice a week scores exactly 1 → Green → told they meet guidelines, **on the same screen where `getPavsTier(100)` renders `below`**. | Opus-alone | `OPEN` | runnable case: `pavsScore 100, strengthDays 2 → score 1 → Green` |
-| 3b.3 | **Chat flags are unanchored substring regex** | `CP15`. `AuraChat.jsx:516-530` tests raw free text. `/low/` is unanchored, so *"I walk slowly but I feel great"*, *"I follow a routine"* and *"I allow myself rest days"* all flag as **psychological distress** and route to the WELLBEING tier. It is also negation-blind: *"I do not get chest pain"* sets `symptomFlag` and triggers URGENT. Both directions over-triage, which is the safe way to be wrong — but it is wrong, and it is the tier ladder's input. | Opus-alone | `OPEN` | tested against the live regexes |
+| 3b.2 | **"Green" tells people below the guidelines that they meet them** | `CP14`. `greenDesc` is *"You meet the physical activity guidelines."* The tier comes from the **risk score**, not from PAVS: `getRiskTier` returns Green for 0–1. Someone at 100 min/week who strength-trains twice a week scores exactly 1 → Green → told they meet guidelines, **on the same screen where `getPavsTier(100)` renders `below`**. | Opus-alone | `DONE` | Green now uses `pavsBelowDesc` — already translated in all four languages — when the figure is below target |
+| 3b.3 | **Chat flags are unanchored substring regex** | `CP15`. `AuraChat.jsx:516-530` tests raw free text. `/low/` is unanchored, so *"I walk slowly but I feel great"*, *"I follow a routine"* and *"I allow myself rest days"* all flag as **psychological distress** and route to the WELLBEING tier. It is also negation-blind: *"I do not get chest pain"* sets `symptomFlag` and triggers URGENT. Both directions over-triage, which is the safe way to be wrong — but it is wrong, and it is the tier ladder's input. | Opus-alone | `DONE` | `src/utils/clinicalFlags.js` · 46 tests · plus a linkage bug of my own finding, below |
 | 3b.4 | **The seeded resource collection reaches nobody** — ⚠️ **corrects `CP8`** | `CP16`. `scripts/firestore_seed.cjs` writes 22 records to `resources`. Its only reader is `publicTriageChat`, which **has no callers** (`CP6`). What the public actually sees is a *second, unrelated* registry of 16 entries hardcoded in JSX at `ResultPage.jsx:191-208` — different ids, different URLs, nothing derives one from the other. So `CP8`'s freshness finding was about a collection with no reader; the freshness problem that matters is the hardcoded one, which has no `lastVerified` field at all. | Opus-alone | `OPEN` | `grep -rn "'resources'" src/` → only `teamPaths.js:120` (roster-side) |
 | 3b.5 | **The page is not usable by the people it targets** | `CP17`. `index.html:5` sets `maximum-scale=1.0, user-scalable=no` — **pinch-zoom is disabled portal-wide** on a tool explicitly built for elderly users. `index.html:2` is `<html lang="en">` and never changes, so a screen reader announces Malay, Chinese and Tamil content as English. | Opus-alone | `DONE` | `user-scalable=no` removed; `src/utils/language.js` sets `<html lang>` on every screen · 16 tests |
 
@@ -134,6 +134,14 @@ what a member of the public sees. **`CP16` corrects `CP8` above.**
 and the resource registry — at `/tmp/…/tasks/wem72mlov.output`. They are not
 transcribed here because I have not personally verified them, and this ledger's
 evidence rule does not allow rows I have not checked.
+
+---
+
+## P3c — Found while fixing `CP15` · `CP18` · risk: **high** · **SHIPPED**
+
+| # | Item | Detail | Tier | Status | Evidence |
+|---|---|---|---|---|---|
+| 3c.1 | **A returning respondent's record linkage was silently discarded** | `CP18`. "Have you done this before?" was read with `/(no\|none\|tidak\|tiada\|没\|无\|不\|இல்லை)/i` over the raw answer — an unanchored substring test, like the flags. Assessment ids are base-36 uppercase, so an id **containing** the letters "no" was read as the word "no": `NX-XKNO4J2`, `NX-A3NONE1` and `NX-KZ1NOV8` all had `previousId` set to `null`. The person typed their id in, the page told them nothing, and the longitudinal link the portal advertises was dropped. `isNoPreviousId` now recognises an id by shape before testing for a negative word. | Opus-alone | `DONE` | 4 ids that used to be discarded, now kept |
 
 ---
 

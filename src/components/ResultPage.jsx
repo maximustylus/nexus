@@ -607,7 +607,29 @@ export default function ResultPage() {
   };
   const th        = themeMap[riskTier] || themeMap.Green;
   const tierLabel = riskTier === 'Red' ? t.red : riskTier === 'Amber' ? t.amber : t.green;
-  const tierDesc  = riskTier === 'Red' ? t.redDesc : riskTier === 'Amber' ? t.amberDesc : t.greenDesc;
+  /**
+   * ⚠️ `greenDesc` MAKES A CLAIM ABOUT ACTIVITY THAT THE GREEN TIER DOES NOT
+   *    MEASURE. It reads "You meet the physical activity guidelines", but the tier
+   *    comes from `getRiskTier(score)` — the weighted RISK score — while meeting
+   *    the guidelines is a fact about `pavsScore`, which is a different number.
+   *
+   *    They come apart in a case that is not exotic. Someone doing 100 min/week,
+   *    below the 150 guideline, who strength-trains twice a week and has no
+   *    clinical or SDOH flags, scores exactly 1: the single activity-deficit point
+   *    and nothing else. `getRiskTier(1)` is Green. So the page told them they
+   *    meet the guidelines directly above a PAVS panel rendering `below` — two
+   *    contradictory statements about the same person, on one screen.
+   *
+   *    The fix uses copy that already exists and is already translated into all
+   *    four languages: when the tier is Green but the figure is below target, the
+   *    description is `pavsBelowDesc`, which states the real position and cites
+   *    SPAG. Nothing here was newly translated — see `CD10`.
+   */
+  const meetsActivityTarget = getPavsTier(Number(data?.pavsScore) || 0) !== 'below';
+  const tierDesc  = riskTier === 'Red'   ? t.redDesc
+                  : riskTier === 'Amber' ? t.amberDesc
+                  : meetsActivityTarget  ? t.greenDesc
+                                         : t.pavsBelowDesc;
 
   // ── PDF GENERATION ─────────────────────────────────────────────────────────
   const handleDownloadPDF = async () => {
