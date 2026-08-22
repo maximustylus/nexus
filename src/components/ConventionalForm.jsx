@@ -58,6 +58,7 @@ import {
 import { readTheme, writeTheme } from '../utils/theme';
 import { readLanguage, writeLanguage, applyDocumentLanguage } from '../utils/language';
 import { getSessionId, saveProgress, loadProgress, clearProgress } from '../utils/assessmentSession';
+import { toSector, isValidSector } from '../utils/singapore/postalSectors';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // OPTION TABLES — values match AuraChatbot quick-reply strings exactly
@@ -679,7 +680,11 @@ export default function ConventionalForm() {
       if (!f.ageGroup)               return 'ageGroup';
       if (!f.gender)                 return 'gender';
       if (!f.race)                   return 'race';
-      if (f.postalCode.length !== 2) return 'postalCode';
+      // ⚠️ VALIDATES THE SECTOR, NOT THE LENGTH. `'99'` and `'74'` are two
+      //    characters and neither is a Singapore postal sector; the old check let
+      //    both through and they were stored as locations. `isValidSector` tests
+      //    against the real list of 81.
+      if (!isValidSector(f.postalCode)) return 'postalCode';
     }
     return null;
   };
@@ -694,7 +699,11 @@ export default function ConventionalForm() {
       const flags   = deriveFlags(f);
       const ctaTier = selectCTA(flags);
       const score   = calculateRiskScore(flags);
-      const sector  = f.postalCode || '00';
+      // ⚠️ VALIDATED, AND `null` WHEN IT IS NOT A REAL SECTOR. The form asks for
+      //    the first two digits and only checked the LENGTH, so '99' or '74' —
+      //    neither of which is a Singapore sector — went into the record as though
+      //    they were places, and `|| '00'` turned a blank into one too.
+      const sector  = toSector(f.postalCode);
 
       await recordTelemetry(sector, {
         sessionId, action: 'conventional_form_v4', language: lang,

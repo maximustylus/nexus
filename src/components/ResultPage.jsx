@@ -12,6 +12,8 @@ import { recordTelemetry } from '../utils/telemetry';
 import { readTheme, writeTheme } from '../utils/theme';
 import { readLanguage, writeLanguage, applyDocumentLanguage } from '../utils/language';
 import { getSessionId, saveResult, loadResult } from '../utils/assessmentSession';
+import { clusterForSector } from '../utils/singapore/communityServices';
+import { sectorInfo } from '../utils/singapore/postalSectors';
 
 // ─── DICTIONARY ───────────────────────────────────────────────────────────────
 const DICTIONARY = {
@@ -238,12 +240,34 @@ const CTA_BANNER = {
 };
 
 // ─── HELPERS ──────────────────────────────────────────────────────────────────
-const getRegionalHealthSystem = (sector) => {
-  const s = parseInt(sector, 10);
-  if (isNaN(s)) return 'NHG';
-  if (s >= 58 && s <= 71) return 'NUHS';
-  if ((s >= 1 && s <= 27) || (s >= 31 && s <= 52) || s === 81) return 'SingHealth';
-  return 'NHG';
+/**
+ * ⚠️ REPLACED BY THE NATIONAL LOOKUP. This used to be a range check over
+ *    `parseInt(sector)`, and it had two faults that mattered outside the north:
+ *
+ *      - `parseInt('00')` is 0, which failed every range and fell through to the
+ *        final `return 'NHG'`. So "I would rather not say" — and every chat
+ *        respondent, whose sector was fabricated from a chip label — was assigned
+ *        a health cluster as though it were a place.
+ *      - The ranges were contiguous numbers, not the real sector list. `74` is not
+ *        a Singapore sector at all and still resolved to a cluster.
+ *
+ *    `clusterForSector` returns `null` for anything that is not one of the 81 live
+ *    sectors, and the caller renders that as unknown rather than as a default.
+ */
+const getRegionalHealthSystem = (sector) => clusterForSector(sector);
+
+/**
+ * How a location is written on screen and in the PDF.
+ *
+ * ⚠️ AN UNKNOWN LOCATION SAYS SO. It used to print `Sector 00` — a sector that
+ *    does not exist — for anybody who declined, mistyped, or came through the chat
+ *    at all. Naming the district when it IS known is the other half: it lets a
+ *    person see at a glance that the portal placed them correctly, which is the
+ *    only check available to them.
+ */
+const describeSector = (sector) => {
+  const info = sectorInfo(sector);
+  return info ? `${info.locality} (Sector ${info.sector}, District ${info.district})` : 'Not provided';
 };
 
 const getRiskTier  = (n) => n >= 5 ? 'Red' : n >= 2 ? 'Amber' : 'Green';
@@ -273,9 +297,12 @@ const generateActionPlan = (riskTier, ctaTier, data, postalSector) => {
   else if (riskTier === 'Amber')         plan.push(ALL_RESOURCES.start2move, ALL_RESOURCES.pa_courses);
   else                                   plan.push(ALL_RESOURCES.activesg_gym, ALL_RESOURCES.pa_courses);
 
-  if (rhs === 'SingHealth') plan.push(ALL_RESOURCES.singhealth_healthup);
-  else if (rhs === 'NUHS')  plan.push(ALL_RESOURCES.nuhs_chp);
-  else                      plan.push(ALL_RESOURCES.nhg_coaches);
+  // ⚠️ NO CLUSTER MEANS NO CLUSTER RESOURCE. An unknown sector used to fall
+  //    through to one particular cluster's page; now it simply contributes
+  //    nothing, and the nationally-available resources below still apply.
+  if (rhs === 'SingHealth')      plan.push(ALL_RESOURCES.singhealth_healthup);
+  else if (rhs === 'NUHS')       plan.push(ALL_RESOURCES.nuhs_chp);
+  else if (rhs === 'NHG')        plan.push(ALL_RESOURCES.nhg_coaches);
 
   const hasPsycho = data.psychoFlag || data.sdohPsychological;
   if (hasPsycho)          plan.push(ALL_RESOURCES.mental_wellness);
@@ -306,7 +333,12 @@ const PdfHeader = ({ baseUrl, subtitle, t, formattedDate, activeSessionId, previ
       <div><strong style={{ color: 'white' }}>{t.date}:</strong> {formattedDate}</div>
       <div><strong style={{ color: 'white' }}>{t.assessmentId}:</strong> {activeSessionId}</div>
       {previousSessionId && <div><strong style={{ color: 'white' }}>{t.prevId}:</strong> {previousSessionId}</div>}
-      <div><strong style={{ color: 'white' }}>{t.postalSector}:</strong> Sector {postalSector}</div>
+      {/*
+        Shows the DISTRICT NAME when the sector is known, so a person can see the
+        portal understood where they live — and says so plainly when it did not,
+        rather than printing "Sector --" or a fabricated "Sector 00".
+      */}
+      <div><strong style={{ color: 'white' }}>{t.postalSector}:</strong> {describeSector(postalSector)}</div>
     </div>
   </div>
 );
@@ -579,7 +611,8 @@ export default function ResultPage() {
     if (!hasState) navigate('/individuals/pathway', { replace: true });
   }, [hasState, navigate]);
 
-  const safe = resultState || { score: 0, data: {}, postalSector: '00' };
+  // `null`, not '00' — an absent result has no location, and '00' is not a sector.
+  const safe = resultState || { score: 0, data: {}, postalSector: null };
   const { score, data, postalSector, sessionId, previousSessionId, ctaTier } = safe;
 
   const riskTier        = getRiskTier(score);

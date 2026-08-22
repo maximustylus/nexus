@@ -43,12 +43,18 @@
 
 import { db } from '../firebase';
 import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
+import { toSector, UNKNOWN_SECTOR } from './singapore/postalSectors';
 
 export const recordTelemetry = async (postalSector, payload) => {
     try {
         const assessmentData = {
             ...payload,
-            postalSector: postalSector || '00',
+            // ⚠️ `'--'`, NOT `'00'`. A person who did not give a usable postal
+            //    sector must not be recorded as living in one. `'00'` is two digits
+            //    and reads as a place — it was the old sentinel, and it flowed
+            //    straight into the health-cluster lookup, which resolved it to one
+            //    particular cluster. See `UNKNOWN_SECTOR`.
+            postalSector: toSector(postalSector) ?? UNKNOWN_SECTOR,
             createdAt: serverTimestamp(),
         };
 

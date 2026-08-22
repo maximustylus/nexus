@@ -5,6 +5,7 @@ import { calculateRiskScore } from '../utils/scoring';
 import { ChevronLeft, Send, Sun, Moon, ExternalLink, CheckCircle, BrainCircuit } from 'lucide-react';
 import { getFunctions, httpsCallable } from 'firebase/functions';
 import { readTheme, writeTheme } from '../utils/theme';
+import { toSector } from '../utils/singapore/postalSectors';
 // ⚠️ Word-bounded matchers, not raw substring regexes. `/low/` used to fire inside
 // "slowly", "follow" and "allow", flagging psychological distress on somebody
 // saying they felt fine. See `src/utils/clinicalFlags.js`.
@@ -297,7 +298,20 @@ const DICTIONARY = {
       /* 8 demographics    */ ['Male, 21–40', 'Female, 21–40', 'Male, 41–60', 'Female, 41–60', 'Male, 60+', 'Female, 60+'],
       /* 9 ethnicity       */ ['Chinese', 'Malay', 'Indian', 'Eurasian', 'Others', 'Prefer not to say'],
       /* 10 housing_type   */ ['HDB 1-2 Room', 'HDB 3 Room', 'HDB 4 Room', 'HDB 5 Room / Exec', 'Condo / Private', 'Landed'],
-      /* 11 postal_code    */ ['North (e.g. 73, 75)', 'East (e.g. 46, 52)', 'West (e.g. 60, 64)', 'North-East (e.g. 53, 82)', 'Central/South (e.g. 01–33)', 'Other / Type my own'],
+      /* 11 postal_code    */ 
+      /*
+        ⚠️ NO EXAMPLE DIGITS IN THESE CHIPS, AND THAT IS THE WHOLE POINT.
+        This row used to read 'North (e.g. 73, 75)', 'East (e.g. 46, 52)' and so on.
+        `parseClinicalData` took the first two digits it found in the answer — which
+        for a TAPPED CHIP is the label — so every respondent who tapped North was
+        recorded as sector 73, East as 46, West as 60. The geographic data collected
+        'for population-level resource planning' was four constants, and it also chose
+        which health cluster's services the person was shown.
+        The question already asks for the digits. Only the 'type my own' chip remains,
+        in each language's existing wording; anything unreadable is now `null`, not a
+        place. See `src/utils/singapore/postalSectors.js`.
+      */
+      ['Other / Type my own'],
       /* 12 previous_id    */ ['No previous ID'],
     ],
   },
@@ -357,7 +371,20 @@ const DICTIONARY = {
       ['Lelaki, 21–40', 'Perempuan, 21–40', 'Lelaki, 41–60', 'Perempuan, 41–60', 'Lelaki, 60+', 'Perempuan, 60+'],
       ['Cina', 'Melayu', 'India', 'Eurasian', 'Lain-lain', 'Tidak mahu beritahu'],
       ['HDB 1-2 Bilik', 'HDB 3 Bilik', 'HDB 4 Bilik', 'HDB 5 Bilik / Eksekutif', 'Kondo / Pangsapuri', 'Landed'],
-      ['Utara (cth. 73, 75)', 'Timur (cth. 46, 52)', 'Barat (cth. 60, 64)', 'Timur Laut (cth. 53, 82)', 'Tengah/Selatan (cth. 01–33)', 'Lain-lain / Taip sendiri'],
+      
+      /*
+        ⚠️ NO EXAMPLE DIGITS IN THESE CHIPS, AND THAT IS THE WHOLE POINT.
+        This row used to read 'North (e.g. 73, 75)', 'East (e.g. 46, 52)' and so on.
+        `parseClinicalData` took the first two digits it found in the answer — which
+        for a TAPPED CHIP is the label — so every respondent who tapped North was
+        recorded as sector 73, East as 46, West as 60. The geographic data collected
+        'for population-level resource planning' was four constants, and it also chose
+        which health cluster's services the person was shown.
+        The question already asks for the digits. Only the 'type my own' chip remains,
+        in each language's existing wording; anything unreadable is now `null`, not a
+        place. See `src/utils/singapore/postalSectors.js`.
+      */
+      ['Lain-lain / Taip sendiri'],
       ['Tiada ID'],
     ],
   },
@@ -417,7 +444,20 @@ const DICTIONARY = {
       ['男, 21–40', '女, 21–40', '男, 41–60', '女, 41–60', '男, 60+', '女, 60+'],
       ['华人', '马来人', '印度人', '欧亚裔', '其他', '不愿透露'],
       ['HDB 1-2 房式', 'HDB 3 房式', 'HDB 4 房式', 'HDB 5 房式 / 执行组屋', '私人公寓', '有地住宅'],
-      ['北部 (如 73, 75)', '东部 (如 46, 52)', '西部 (如 60, 64)', '东北部 (如 53, 82)', '中南部 (如 01–33)', '其他 / 手动输入'],
+      
+      /*
+        ⚠️ NO EXAMPLE DIGITS IN THESE CHIPS, AND THAT IS THE WHOLE POINT.
+        This row used to read 'North (e.g. 73, 75)', 'East (e.g. 46, 52)' and so on.
+        `parseClinicalData` took the first two digits it found in the answer — which
+        for a TAPPED CHIP is the label — so every respondent who tapped North was
+        recorded as sector 73, East as 46, West as 60. The geographic data collected
+        'for population-level resource planning' was four constants, and it also chose
+        which health cluster's services the person was shown.
+        The question already asks for the digits. Only the 'type my own' chip remains,
+        in each language's existing wording; anything unreadable is now `null`, not a
+        place. See `src/utils/singapore/postalSectors.js`.
+      */
+      ['其他 / 手动输入'],
       ['没有之前的 ID'],
     ],
   },
@@ -477,7 +517,20 @@ const DICTIONARY = {
       ['ஆண், 21–40', 'பெண், 21–40', 'ஆண், 41–60', 'பெண், 41–60', 'ஆண், 60+', 'பெண், 60+'],
       ['சீனர்', 'மலாய்', 'இந்தியர்', 'யுரேஷியன்', 'மற்றவை', 'கூற விரும்பவில்லை'],
       ['HDB 1-2 அறை', 'HDB 3 அறை', 'HDB 4 அறை', 'HDB 5 அறை / எக்ஸிகியூட்டிவ்', 'காண்டோ / தனியார் அபார்ட்மெண்ட்', 'நிலம் உள்ள வீடு'],
-      ['வடக்கு (எ.கா. 73, 75)', 'கிழக்கு (எ.கா. 46, 52)', 'மேற்கு (எ.கா. 60, 64)', 'வடகிழக்கு (எ.கா. 53, 82)', 'மத்திய/தெற்கு (எ.கா. 01–33)', 'மற்றவை / தட்டச்சு செய்கிறேன்'],
+      
+      /*
+        ⚠️ NO EXAMPLE DIGITS IN THESE CHIPS, AND THAT IS THE WHOLE POINT.
+        This row used to read 'North (e.g. 73, 75)', 'East (e.g. 46, 52)' and so on.
+        `parseClinicalData` took the first two digits it found in the answer — which
+        for a TAPPED CHIP is the label — so every respondent who tapped North was
+        recorded as sector 73, East as 46, West as 60. The geographic data collected
+        'for population-level resource planning' was four constants, and it also chose
+        which health cluster's services the person was shown.
+        The question already asks for the digits. Only the 'type my own' chip remains,
+        in each language's existing wording; anything unreadable is now `null`, not a
+        place. See `src/utils/singapore/postalSectors.js`.
+      */
+      ['மற்றவை / தட்டச்சு செய்கிறேன்'],
       ['முந்தைய ID இல்லை'],
     ],
   },
@@ -549,9 +602,13 @@ const parseClinicalData = (raw) => {
   const housingType = raw.housing_type || 'Unknown';
 
   // Location
-  const locStr       = (raw.postal_code || '');
-  const sectorMatch  = locStr.match(/\d{2}/);
-  const postalSector = sectorMatch ? sectorMatch[0] : '00';
+  // ⚠️ A REAL SECTOR OR `null` — NEVER '00'. `toSector` validates against the 81
+  //    live Singapore sectors and rejects anything that is not a postal code, so a
+  //    chip label, a typo or a refusal all come back as `null` and stay unknown all
+  //    the way to the result. The old code produced the string '00', which is not a
+  //    sector, and the cluster lookup resolved it to one particular cluster as
+  //    though it were a place.
+  const postalSector = toSector(raw.postal_code);
 
   // Continuity
   const foodStr        = (raw.food_insecurity || '').toLowerCase();

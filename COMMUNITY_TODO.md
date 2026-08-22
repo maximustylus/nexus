@@ -48,7 +48,7 @@ never measured activity — live in it.
 
 | | Count | Ids |
 |---|---|---|
-| `DONE`, evidenced | 12 | `CP1` `CP2` `CP3` `CP5` `CP6` `CP9` `CP12` `CP13` `CP14` `CP15` `CP17` `CP18` |
+| `DONE`, evidenced | 13 | `CP1` `CP2` `CP3` `CP5` `CP6` `CP9` `CP12` `CP13` `CP14` `CP15` `CP17` `CP18` `CP19` |
 | `OPEN`, mine | 3 | `CP7` `CP8` `CP16` |
 | `OPEN`, translation | 1 | `CP10` — merged into `CD10`, below |
 | `OPEN`, **owner's decision** | 3 | `CD4` `CD10` `CD11` |
@@ -185,7 +185,7 @@ are defects rather than opinions and are verified.
 
 | # | Item | Detail | Tier | Status | Evidence |
 |---|---|---|---|---|---|
-| 3d.1 | **The chat's postal sector is the chip's example, not the person's** | `CP19`. The form asks for the real first two digits; the chat offers region chips and `parseClinicalData` runs `locStr.match(/\d{2}/)` over the LABEL. So `'North (e.g. 73, 75)'` records sector **73** for everyone who taps North — and `getRegionalHealthSystem` then picks which RHS's resources to show from that. The geographic data collected "for population-level resource planning" is four constants from the chat pathway, and the two pathways are not comparable. | Opus-alone | `OPEN` | `North→73 · East→46 · West→60 · North-East→53` |
+| 3d.1 | **The chat's postal sector is the chip's example, not the person's** | `CP19`. The form asks for the real first two digits; the chat offers region chips and `parseClinicalData` runs `locStr.match(/\d{2}/)` over the LABEL. So `'North (e.g. 73, 75)'` records sector **73** for everyone who taps North — and `getRegionalHealthSystem` then picks which RHS's resources to show from that. The geographic data collected "for population-level resource planning" is four constants from the chat pathway, and the two pathways are not comparable. | Opus-alone | `DONE` | `src/utils/singapore/` — all **81** live sectors, 28 districts · 52 tests · chips carry no digits in any of the four languages · unknown stays `null` end to end |
 | 3d.2 | **The evidence page claims more instrument than is administered** | `CP20`. The PDF cites the **Lubben Social Network Scale (LSNS-6)** with an alpha coefficient, and a **PHQ-2 aligned** wellbeing domain. LSNS-6 is six items and PHQ-2 is two; the portal asks **one** question each. A one-item screen is defensible — citing a validated multi-item scale beside it, to the public, with a reliability statistic attached, is not. Either administer it or cite it as *"adapted from"* and say how. | **OWNER** | `OPEN` | `ResultPage.jsx` evidence block vs `DOMAIN_CONFIG` |
 
 **Also raised, as design rather than defect** — recorded here so they are not lost:
