@@ -58,14 +58,13 @@
  *    under the old single-field model she would have been rostered. Neither is true,
  *    and no amount of choosing between them makes it true.
  *
- *    One field cannot express that. `role !== 'viewer'` puts the roster master in
- *    the staff pool; `role === 'staff'` takes the roster away from her. Both are
- *    wrong, and choosing between them harder does not make either right.
+ *    ALIF IS THE SAME PROOF IN REVERSE: a lead who DOES practise. He configures the
+ *    roster and holds duties in it.
  *
- *    (Team #1 happens to have no lead who also practises — see Alif's note below —
- *    but that is a fact about this department, not about the model. A small service
- *    whose lead carries a caseload is the ordinary case elsewhere, and `rostered`
- *    is what lets this say so without another hardcoded exception.)
+ *    So team #1 alone contains both counterexamples, and no single field survives
+ *    them. `role !== 'viewer'` puts the roster master in the staff pool;
+ *    `role === 'staff'` takes the roster away from her AND drops the service lead
+ *    out of his own rota. Choosing between them harder does not make either right.
  *
  * ── EMAIL IS THE JOIN KEY, AND ONLY FOR THE MIGRATION ────────────────────────
  *
