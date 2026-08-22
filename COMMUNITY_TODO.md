@@ -146,6 +146,39 @@ evidence rule does not allow rows I have not checked.
 
 ---
 
+## P3e — The RHS asks, settled · **SHIPPED**
+
+Decisions taken by the owner, recorded so the reasoning survives:
+
+| | Decision |
+|---|---|
+| **Consent model** | **Anonymous only.** NEXUS recommends; it does not refer. No consent-to-refer, no partner queue, no closed-loop tracking, no re-contact. What that buys is that every privacy claim the portal makes can be *true* — and `CD5` is settled with it. |
+| **Retention** | **24 months**, stated in both public notices and enforced nightly by `expireCommunityAssessments`. |
+
+| # | Item | Status | Evidence |
+|---|---|---|---|
+| 3e.1 | Retention enforced, not just stated | `DONE` | `functions/retention.cjs` · 26 tests · a test asserts the constant and both notices state one number |
+| 3e.2 | Evidence page corrected (`CP20`) | `DONE` | five of seven rows rewritten to what is administered |
+| 3e.3 | Caregiver strain its own domain | `DONE` | split in 4 languages from existing wording · routes to `caregiverSupport` |
+| 3e.4 | Falls & function for 60+ | `DONE` | `parseFallsAnswer` · routes ahead of the activity route · "No falls" pinned |
+| 3e.5 | Healthier SG enrolment | `DONE` | `parseHealthierSg` · `null` for "not sure" AND "not asked", never `false` |
+| 3e.6 | Printable handover slip | `DONE` | `HandoverSlip.jsx` + print CSS · 19 tests, most of them about what it does NOT claim |
+
+**Not built, because the consent decision forecloses them:** partner-facing queue,
+closed-loop referral status, re-assessment recall, proxy/assisted mode with an
+identified handoff. If the model ever changes, `HandoverSlip.jsx` is where a real
+reference number would go and where the "this is not a referral" notice would come
+out — that file carries the note.
+
+⚠️ **Still open from the review, and still the owner's:** `CD10`. The falls and
+Healthier SG questions, the disclaimer, the privacy notice and the printed slip are
+all **English-only**. `src/utils/chatSteps.js` skips a question the active language
+cannot render, so nobody is asked something they cannot read — but a Malay, Chinese
+or Tamil speaker currently gets a shorter assessment and an English slip. Adding a
+translation is one line per question.
+
+---
+
 ## P4 — Structure · `CP12` + the duplication · risk: low
 
 Cheap, and each one removes a way the portal can drift back into a P1.

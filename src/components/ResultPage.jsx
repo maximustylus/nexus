@@ -4,7 +4,7 @@ import {
   Download, Share2, ArrowLeft, ExternalLink,
   ShieldAlert, Activity, CheckCircle2, Loader2,
   TrendingUp, Sun, Moon, Zap, Users, Brain,
-  DollarSign, Target, Globe,
+  DollarSign, Target, Globe, Printer,
 } from 'lucide-react';
 import { jsPDF } from 'jspdf';
 import html2canvas from 'html2canvas';
@@ -14,6 +14,7 @@ import { readLanguage, writeLanguage, applyDocumentLanguage } from '../utils/lan
 import { getSessionId, saveResult, loadResult } from '../utils/assessmentSession';
 import { clusterForSector } from '../utils/singapore/communityServices';
 import { sectorInfo } from '../utils/singapore/postalSectors';
+import HandoverSlip from './HandoverSlip';
 
 // ─── DICTIONARY ───────────────────────────────────────────────────────────────
 const DICTIONARY = {
@@ -695,6 +696,18 @@ export default function ResultPage() {
                                          : t.pavsBelowDesc;
 
   // ── PDF GENERATION ─────────────────────────────────────────────────────────
+  /**
+   * Prints the one-page slip. Telemetry is recorded the same way the download and
+   * share are, so a printed handover is not invisible in the usage data — it is
+   * the output for the population least likely to be counted otherwise.
+   */
+  const handlePrintSlip = () => {
+    recordTelemetry(postalSector, {
+      event: 'print_handover_slip', sessionId: activeSessionId, ctaTier,
+    });
+    window.print();
+  };
+
   const handleDownloadPDF = async () => {
     if (!printRef.current || !printRef2.current) return;
     recordTelemetry(postalSector, { action: 'download_pdf', score, language: lang, ctaTier });
@@ -1032,6 +1045,20 @@ export default function ResultPage() {
               className="flex items-center gap-2 px-4 py-2 bg-teal-600 text-white font-bold text-xs uppercase tracking-widest rounded-full shadow-sm hover:bg-teal-700 hover:-translate-y-0.5 transition-all">
               <Download size={13} /> {t.download}
             </button>
+            {/*
+              ⚠️ English-only, deliberately, like the disclaimer beside it — the
+              printed slip is English and a translated button leading to an English
+              page would be the worse half-measure. Tracked as `CD10`.
+
+              `window.print()` rather than another jsPDF export: it reaches a real
+              printer, the "Save as PDF" in every browser's print dialogue, and a
+              screen reader, because the slip stays TEXT. The download above
+              rasterises the page through html2canvas.
+            */}
+            <button onClick={handlePrintSlip}
+              className="flex items-center gap-2 px-4 py-2 bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 font-bold text-xs uppercase tracking-widest rounded-full border border-slate-200 dark:border-slate-700 shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all">
+              <Printer size={13} /> Print summary
+            </button>
           </div>
         </div>
 
@@ -1079,6 +1106,17 @@ export default function ResultPage() {
             </div>
 
             <DataGovernance />
+
+            {/*
+              Invisible on screen; the only thing on paper. See the print rules in
+              `src/index.css` and the note in `HandoverSlip.jsx` about why it leads
+              with "this is not a referral".
+            */}
+            <HandoverSlip
+              score={score} riskTier={riskTier} data={data}
+              postalSector={postalSector} sessionId={activeSessionId}
+              formattedDate={formattedDate}
+            />
 
             <div className="pt-4 border-t border-slate-100 dark:border-slate-800 flex justify-between items-center">
               <div className="flex items-center gap-3">

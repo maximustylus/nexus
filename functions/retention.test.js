@@ -184,3 +184,21 @@ describe('the notice and the code agree', () => {
         });
     });
 });
+
+describe('the client-side label agrees with the enforced period', () => {
+    /**
+     * ⚠️ TWO FILES, ONE NUMBER. The client bundle cannot import from `functions/` —
+     *    that directory is CommonJS with its own dependency tree and is deployed
+     *    separately — so the period appears in `src/utils/retentionLabel.js` as
+     *    text. If the two drift, the portal tells people one thing and the sweep
+     *    does another, which is the promise-without-a-mechanism defect in reverse.
+     */
+    it('src/utils/retentionLabel.js states the same number', async () => {
+        const { readFileSync } = await import('node:fs');
+        const { fileURLToPath } = await import('node:url');
+        const { dirname, resolve } = await import('node:path');
+        const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
+        const text = readFileSync(resolve(root, 'src/utils/retentionLabel.js'), 'utf8');
+        expect(text).toContain(`${RETENTION_MONTHS} months`);
+    });
+});
