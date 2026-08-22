@@ -81,6 +81,8 @@ const { describeCredentialFile } = require('./credential.cjs');
 const { suggestMatches, suggestionReport } = require('./emailMatch.cjs');
 
 const WRITE = process.argv.includes('--write');
+/** Prints every address with an account. Read-only; safe to combine with a dry run. */
+const LIST_ACCOUNTS = process.argv.includes('--list-accounts');
 const TEAM = TEAM_ONE.teamId;
 
 initializeApp();
@@ -190,18 +192,52 @@ async function main() {
     //    manifest holds an address they never registered with. Offer what exists
     //    and let a human decide — nothing here is ever auto-selected, because
     //    picking for them files a wellbeing history under a colleague.
-    if (unresolved.length > 0) {
-        let existingEmails = [];
+    if (unresolved.length > 0 || LIST_ACCOUNTS) {
+        let existingEmails = null;   // null = the listing itself failed. NOT the same as [].
         try {
             const page = await getAuth().listUsers(1000);
             existingEmails = page.users.map((u) => u.email).filter(Boolean);
         } catch (error) {
-            warn(`Could not list existing accounts to suggest near matches — ${error.code || error.message}. `
-               + 'The resolution above is unaffected.');
+            warn(`Could not list existing accounts to compare against — ${error.code || error.message}. `
+               + 'The resolution above is unaffected, but no near-match check was possible.');
         }
-        for (const member of unresolved) {
-            suggestionReport(member, suggestMatches(member.email, existingEmails))
-                .forEach((line) => console.log(line));
+
+        if (existingEmails !== null) {
+            // ⚠️ ALWAYS PRINT THE DENOMINATOR. The first version of this printed
+            //    suggestions when it had them and NOTHING when it did not, which
+            //    left the reader unable to tell "no account resembles this address"
+            //    from "the account listing came back empty and the comparison was
+            //    vacuous". Those two lead to opposite actions — chase a colleague,
+            //    or check the service-account's permissions — and silence is not
+            //    evidence for either.
+            console.log(`\n  Compared against ${existingEmails.length} Firebase Auth `
+                      + `${existingEmails.length === 1 ? 'account' : 'accounts'} in ${cred.projectId}.`);
+            if (existingEmails.length === 0) {
+                warn('The project reports ZERO auth accounts, yet members resolved above. That is '
+                   + 'contradictory — the key may lack permission to list users. Treat the near-match '
+                   + 'check below as having produced no information.');
+            }
+
+            for (const member of unresolved) {
+                const suggestions = suggestMatches(member.email, existingEmails);
+                const lines = suggestionReport(member, suggestions);
+                if (lines.length > 0) {
+                    lines.forEach((line) => console.log(line));
+                } else {
+                    // Said out loud, because it IS the finding: the address is not a
+                    // typo, so this person really has never signed in.
+                    console.log(`   No existing account resembles ${member.displayName} `
+                              + `<${member.email}> — so this is a genuine registration, not a `
+                              + 'wrong address in the manifest.');
+                }
+            }
+
+            if (LIST_ACCOUNTS) {
+                console.log(`\n  Every account in ${cred.projectId}, because --list-accounts was passed:`);
+                [...existingEmails].sort().forEach((email) => console.log(`     · ${email}`));
+            } else if (unresolved.length > 0) {
+                console.log('\n   Re-run with --list-accounts to see every address that has signed in.');
+            }
         }
     }
     console.log(`  ${EXCLUDED.length} excluded by decision:`);

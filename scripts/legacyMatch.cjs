@@ -28,6 +28,15 @@
  * the FIRST space, so a three-word name slugged differently again. One person can
  * therefore own documents under `ying_xian`, `yingxian` and `ying-xian`.
  *
+ * ⚠️ A FOURTH FORM WAS FOUND IN PRODUCTION, and it was not in any of the three
+ *    code paths above: the first real migration dry run reported
+ *    `archive_2025/ying xian` — a raw display name, space and all, used verbatim as
+ *    a document id. So the list above is a record of what was READ IN THE SOURCE,
+ *    not a complete census of what is in the database. That is the argument for
+ *    normalising aggressively rather than enumerating the known forms: an
+ *    enumeration would have missed this one and silently dropped a year of one
+ *    clinician's project history.
+ *
  * Stripping everything that is not a letter or a digit collapses all of them onto
  * one key. It is deliberately aggressive: the cost of over-matching here is nil
  * (two ids that normalise the same in one ten-person department ARE the same
