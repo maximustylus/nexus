@@ -46,18 +46,42 @@
  * you from a path you type by hand.
  */
 
-const admin = require('firebase-admin');
+/**
+ * ⚠️ SUBPATH IMPORTS, NOT THE `admin.firestore()` NAMESPACE, AND THAT IS LOAD-BEARING.
+ *
+ * This script died in the owner's hands with `TypeError: admin.firestore is not a
+ * function` at the line that opened the database — before it had read anything,
+ * which is the one good thing about it.
+ *
+ * The cause: `npm install firebase-admin` with no version now resolves to **v14**,
+ * and v14 removed the service namespaces from the root export. `require('firebase-admin')`
+ * in v14 returns app lifecycle only — `initializeApp`, `getApp`, `getApps`,
+ * `deleteApp`, `cert`, `applicationDefault`, `refreshToken` and the error types.
+ * `admin.firestore` and `admin.auth` are both `undefined`. `admin.initializeApp()`
+ * on the line above still succeeds, so the failure lands one line later and looks
+ * like a broken script rather than a wrong dependency.
+ *
+ * `firebase-admin/firestore` and `firebase-admin/auth` have existed since v10 and
+ * work identically on v13 and v14, so importing this way means the person running
+ * a one-shot migration against live clinical data does not also have to get a
+ * version pin right. `functions/package.json` pins ^13.6.0; this file is run by
+ * hand from the repo root, where nothing pins anything.
+ */
+const { initializeApp } = require('firebase-admin/app');
+const { getFirestore, FieldValue } = require('firebase-admin/firestore');
+const { getAuth } = require('firebase-admin/auth');
 const { TEAM_ONE, MEMBERS, EXCLUDED, LEGACY_DIRECTORY_SIZE } = require('./team-one-manifest.cjs');
 // The decision "whose record is this?" lives in its own module so it can be tested
 // without a service-account key — see `scripts/legacyMatch.test.mjs`. Logic that can
 // only be exercised by pointing it at production is logic nobody checks.
 const { buildLegacyIndex, classifyLegacyDoc } = require('./legacyMatch.cjs');
+const { reconcile } = require('./reconcile.cjs');
 
 const WRITE = process.argv.includes('--write');
 const TEAM = TEAM_ONE.teamId;
 
-admin.initializeApp();
-const db = admin.firestore();
+initializeApp();
+const db = getFirestore();
 
 // ── Reporting ────────────────────────────────────────────────────────────────
 // Everything this script would do goes through one of these, so the dry run and
@@ -96,7 +120,7 @@ async function main() {
     const resolved = [];
     for (const member of MEMBERS) {
         try {
-            const user = await admin.auth().getUserByEmail(member.email);
+            const user = await getAuth().getUserByEmail(member.email);
             resolved.push({ ...member, uid: user.uid, emailVerified: user.emailVerified });
             const flag = user.emailVerified ? '' : '   (email NOT verified)';
             console.log(`  ✓ ${member.displayName.padEnd(12)} ${member.email.padEnd(46)} ${user.uid}${flag}`);
@@ -109,11 +133,16 @@ async function main() {
         }
     }
 
-    // THE RECONCILIATION. Ten people were in the old directory. If these numbers
-    // stop adding up, somebody edited one list and not the other.
-    console.log(`\n  ${resolved.length} of ${MEMBERS.length} members resolved · `
-              + `${EXCLUDED.length} excluded by decision · `
-              + `${MEMBERS.length + EXCLUDED.length} of ${LEGACY_DIRECTORY_SIZE} accounted for`);
+    // THE RECONCILIATION — the line the owner reads to decide whether to type
+    // `--write`. Its wording is deliberate and tested; see `scripts/reconcile.cjs`.
+    console.log('');
+    reconcile({
+        resolvedCount: resolved.length,
+        memberCount:   MEMBERS.length,
+        excludedCount: EXCLUDED.length,
+        legacySize:    LEGACY_DIRECTORY_SIZE,
+    }).lines.forEach((line) => console.log(`  ${line}`));
+    console.log(`  ${EXCLUDED.length} excluded by decision:`);
     EXCLUDED.forEach((person) => console.log(`  — excluded: ${person.displayName.padEnd(12)} (${person.was})`));
 
     if (resolved.length === 0) {
@@ -162,7 +191,7 @@ async function main() {
         await write(db.doc(`users/${member.uid}`), {
             displayName: member.displayName,
             email: member.email.toLowerCase(),
-            teamIds: admin.firestore.FieldValue.arrayUnion(TEAM),
+            teamIds: FieldValue.arrayUnion(TEAM),
         }, 'user teamIds');
     }
 

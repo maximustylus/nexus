@@ -36,6 +36,38 @@ it is entirely within your control: make it short, and make it quiet.
 | ☐ | **Tell Evelyn, Ashik and Mini.** They lose access the moment the deploy lands — see *Who loses access* below. Better heard from you than from the screen. |
 | ☐ | **Pick a quiet moment.** Not mid-week, not while somebody is arranging cover. The live roster belongs to five clinicians. |
 | ☐ | **Service account key** downloaded (Console → Project settings → Service accounts → Generate new private key), stored **outside the repo**. |
+| ☐ | **`firebase-admin` installed where the script can find it** — see Step 0. It is not a dependency of the app, only of this script. |
+
+---
+
+## Step 0 — the one dependency
+
+`scripts/migrate-to-teams.cjs` needs `firebase-admin`. The app does not, so the root
+`package.json` does not list it, and the script cannot run until you put it somewhere
+Node can resolve.
+
+**Install it outside the repo**, so the working tree stays clean:
+
+```
+mkdir -p ~/nexus-migrate-deps && cd ~/nexus-migrate-deps
+npm init -y >/dev/null && npm install firebase-admin
+```
+
+Then prefix every command below with `NODE_PATH=~/nexus-migrate-deps/node_modules`.
+
+**Why not just `npm install firebase-admin` in the repo?** It works, but it rewrites
+`package.json` and `package-lock.json`, and `git checkout main` then refuses to
+switch branches — *"Your local changes to the following files would be overwritten
+by checkout"*. If you have already done it, `git checkout -- package.json
+package-lock.json` undoes it; `node_modules` is untracked, so the module stays
+installed and you can drop the `NODE_PATH` prefix.
+
+**Any version works.** The script imports `firebase-admin/firestore` and
+`firebase-admin/auth` — the subpath form, which behaves the same on v13 and v14.
+An earlier version of the script used `admin.firestore()`, which v14 removed from
+the root export, and it died with `TypeError: admin.firestore is not a function` on
+the line that opened the database. That is fixed; the note is here so a future
+version bump does not look like a broken script.
 
 ---
 
@@ -44,6 +76,7 @@ it is entirely within your control: make it short, and make it quiet.
 Writes nothing. This is the default; `--write` is the only thing that changes it.
 
 ```
+NODE_PATH=~/nexus-migrate-deps/node_modules \
 GOOGLE_APPLICATION_CREDENTIALS=~/path/to/key.json \
   node scripts/migrate-to-teams.cjs
 ```
@@ -51,8 +84,12 @@ GOOGLE_APPLICATION_CREDENTIALS=~/path/to/key.json \
 **Read the output before going further.** Four things to check:
 
 1. **The reconciliation line** should read
-   `7 of 7 members resolved · 3 excluded by decision · 10 of 10 accounted for`.
-   If the first number is lower, somebody has no Firebase Auth account.
+   `✓ 7 of 7 members resolved to a Firebase Auth account.`
+   Anything else starts with `❌` and names who is missing. It used to print a
+   third clause — *"10 of 10 accounted for"* — built from manifest constants, which
+   appeared even on a run where nothing resolved at all; it is now a separate
+   `MANIFEST INCONSISTENT` warning that stays silent unless the manifest itself has
+   drifted. See `scripts/reconcile.cjs` and its tests.
 2. **`NO AUTH ACCOUNT` errors.** ⚠️ Benny's address carries a trailing dot in its local
    part (`benny.loo.k.g.@singhealth.com.sg`), which is not a valid RFC 5321 address —
    Firebase Auth may never have created it. If he is missing, he registers once and you
@@ -66,6 +103,7 @@ GOOGLE_APPLICATION_CREDENTIALS=~/path/to/key.json \
 ## Step 2 — the migration
 
 ```
+NODE_PATH=~/nexus-migrate-deps/node_modules \
 GOOGLE_APPLICATION_CREDENTIALS=~/path/to/key.json \
   node scripts/migrate-to-teams.cjs --write
 ```
