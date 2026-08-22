@@ -134,6 +134,63 @@ export const matchesFemale = buildMatcher(['female', 'perempuan', '女', 'பெ
 export const matchesMale = buildMatcher(['male', 'lelaki', '男', 'ஆண்']);
 
 /**
+ * ==============================================================================
+ * FALLS AND FUNCTION — 60+ only
+ * ==============================================================================
+ *
+ * A Regional Health System reviewer's point: for an older adult being considered
+ * for an Active Ageing Centre, falls history and fear of falling matter more than
+ * a weekly minutes figure. PAVS alone can route a 75-year-old to "150 minutes a
+ * week" without ever asking whether they have fallen.
+ *
+ * ⚠️ ORDER MATTERS AND IS NOT INTERCHANGEABLE. "No falls" CONTAINS the word
+ *    "fall", so a naive matcher reads the safest answer as the riskiest one. The
+ *    negative is therefore tested FIRST and returns immediately.
+ *
+ * `avoidsActivity` is kept separate from the count because fear of falling is its
+ * own clinical signal: somebody who has fallen once and now avoids the stairs is
+ * at higher risk than somebody who fell once and carried on, and the intervention
+ * is different.
+ */
+const matchesNoFalls = buildMatcher(['no falls', 'none', 'no']);
+const matchesTwoOrMore = buildMatcher(['two or more', 'two', 'three', 'more than one', '2+']);
+const matchesAvoidance = buildMatcher(['avoid', 'afraid', 'scared', 'stopped']);
+
+/**
+ * @returns {{falls: 0|1|2, avoidsActivity: boolean, fallsRisk: boolean, asked: boolean}}
+ *   `falls: 2` means "two or more". `asked: false` means the question was not put
+ *   to this person — they are under 60, or their language has no translation for
+ *   it yet — and MUST NOT be read as "no falls".
+ */
+const parseFallsAnswer = (answer) => {
+    const text = String(answer ?? '').trim();
+    if (text === '') return { falls: 0, avoidsActivity: false, fallsRisk: false, asked: false };
+
+    const avoidsActivity = matchesAvoidance(text);
+    // ⚠️ The negative first — see the note above.
+    if (matchesNoFalls(text) && !avoidsActivity) {
+        return { falls: 0, avoidsActivity: false, fallsRisk: false, asked: true };
+    }
+    const falls = matchesTwoOrMore(text) ? 2 : 1;
+    return { falls, avoidsActivity, fallsRisk: true, asked: true };
+};
+
+/**
+ * Healthier SG enrolment. `null` for "not sure" AND for not asked — both mean the
+ * portal does not know, and neither may be read as "not enrolled".
+ */
+const matchesEnrolledYes = buildMatcher(['yes', 'enrolled', 'i am enrolled']);
+const matchesEnrolledNo = buildMatcher(['no', 'not enrolled']);
+
+const parseHealthierSg = (answer) => {
+    const text = String(answer ?? '').trim();
+    if (text === '') return null;
+    if (matchesEnrolledNo(text)) return false;     // "No, not enrolled" — tested first,
+    if (matchesEnrolledYes(text)) return true;     // because it contains "enrolled" too
+    return null;                                    // "I am not sure"
+};
+
+/**
  * Whether the "have you done this before?" answer means NO.
  *
  * ⚠️ NOT A SUBSTRING TEST, AND THAT IS THE WHOLE POINT. The previous version ran
@@ -146,6 +203,8 @@ export const matchesMale = buildMatcher(['male', 'lelaki', '男', 'ஆண்']);
  */
 const NEGATIVE_WORDS = ['no', 'none', 'nope', 'nil', 'tidak', 'tiada', '没', '无', '不', 'இல்லை'];
 const matchesNegative = buildMatcher(NEGATIVE_WORDS);
+
+export { parseFallsAnswer, parseHealthierSg };
 
 export const isNoPreviousId = (answer) => {
     const value = String(answer || '').trim();

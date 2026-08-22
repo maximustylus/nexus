@@ -189,3 +189,31 @@ describe('caregiver strain routes to carer services', () => {
         });
     });
 });
+
+describe('falls risk outranks activity for the 60+ cohort', () => {
+    it('offers falls prevention to somebody who has fallen', () => {
+        const ids = servicesForSector('73', { age: '60+', fallsRisk: true }).services.map((s) => s.id);
+        expect(ids).toContain('fallsPrevention');
+    });
+
+    /**
+     * The reviewer's exact case: PAVS alone would route a 75-year-old to "150
+     * minutes a week" without ever asking whether they had fallen.
+     */
+    it('puts falls prevention ahead of the generic activity route', () => {
+        const ids = servicesForSector('73', { age: '60+', fallsRisk: true }).services.map((s) => s.id);
+        expect(ids.indexOf('fallsPrevention')).toBeLessThan(ids.indexOf('activesg'));
+    });
+
+    it('does not offer it to somebody who reported no falls', () => {
+        const ids = servicesForSector('73', { age: '60+', fallsRisk: false }).services.map((s) => s.id);
+        expect(ids).not.toContain('fallsPrevention');
+    });
+
+    it('works in every region', () => {
+        ['64', '46', '82', '56', '01'].forEach((sector) => {
+            expect(servicesForSector(sector, { age: '60+', fallsRisk: true }).services.map((s) => s.id))
+                .toContain('fallsPrevention');
+        });
+    });
+});

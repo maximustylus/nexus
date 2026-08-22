@@ -152,6 +152,14 @@ export const SERVICE_KINDS = Object.freeze({
         finderLabel: 'Check what you qualify for (CHAS)',
         national: true,
     },
+    fallsPrevention: {
+        id: 'fallsPrevention',
+        label: 'Falls prevention & functional strength',
+        blurb: 'Balance and strength programmes for older adults, and a home safety assessment where one is needed. Falls are preventable and a first fall is the strongest predictor of a second.',
+        finder: 'https://www.healthhub.sg/live-healthy/falls-prevention',
+        finderLabel: 'Falls prevention (HealthHub)',
+        national: true,
+    },
     caregiverSupport: {
         id: 'caregiverSupport',
         label: 'Caregiver support',
@@ -192,6 +200,16 @@ export const servicesForSector = (sectorInput, flags = {}) => {
     if (flags.symptomFlag || flags.medFlag) add(SERVICE_KINDS.healthierSg);
     if (flags.sdohPsychological || flags.psychoFlag) add(SERVICE_KINDS.mentalWellness);
 
+    /**
+     * ⚠️ FALLS OUTRANK ACTIVITY FOR THIS COHORT, which is the reviewer's whole
+     *    point. Somebody 60+ who has fallen needs balance and strength work and a
+     *    look at their home before they need a weekly minutes target — and PAVS
+     *    alone would have routed them to "150 minutes a week" without ever asking.
+     *    Fear of falling counts even without a second fall: avoiding the stairs is
+     *    itself the deconditioning that causes the next one.
+     */
+    if (flags.fallsRisk) add(SERVICE_KINDS.fallsPrevention);
+
     if (flags.age === '60+') {
         add(SERVICE_KINDS.activeAgeing);
         if (flags.sdohSocial) { add(SERVICE_KINDS.careline); add(SERVICE_KINDS.silverGeneration); }
@@ -213,6 +231,10 @@ export const servicesForSector = (sectorInput, flags = {}) => {
 
     // Everybody gets a way to be more active and a way into primary care.
     add(SERVICE_KINDS.activesg);
+    // ⚠️ `healthierSgEnrolled === false` is NOT the same as `null`. Someone who
+    //    said "not sure", or was never asked, must not be told to enrol as though
+    //    they had said no — but everybody still gets the route, because it is the
+    //    anchor the rest of the plan hangs off.
     add(SERVICE_KINDS.healthierSg);
 
     return {

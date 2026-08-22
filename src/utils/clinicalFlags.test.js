@@ -15,6 +15,7 @@ import {
     matchesSocialIsolation, matchesPsychologicalDistress, matchesCaregiverStrain,
     matchesFoodInsecurity,
     matchesFemale, matchesMale, isNoPreviousId,
+    parseFallsAnswer, parseHealthierSg,
 } from './clinicalFlags';
 
 describe('⚠️ the false positives that routed people to the wrong tier', () => {
@@ -233,5 +234,78 @@ describe('caregiver strain — its own domain since the chip was split', () => {
     it('catches the words a person types rather than taps', () => {
         expect(matchesCaregiverStrain('I am a caregiver for my mother')).toBe(true);
         expect(matchesCaregiverStrain('caring duties')).toBe(false);   // no bare stem match
+    });
+});
+
+describe('falls & function — 60+ only', () => {
+    /**
+     * ⚠️ "No falls" CONTAINS the word "fall". A naive matcher reads the safest
+     *    answer as the riskiest one, and routes somebody with no falls into a falls
+     *    prevention programme — while eroding trust in every other answer the tool
+     *    gives them.
+     */
+    it('reads "No falls" as no falls', () => {
+        expect(parseFallsAnswer('No falls')).toEqual(
+            { falls: 0, avoidsActivity: false, fallsRisk: false, asked: true });
+    });
+
+    it.each([
+        ['One fall', 1, false],
+        ['Two or more falls', 2, false],
+        ['A fall, and I now avoid some activities', 1, true],
+    ])('reads %j as %i fall(s), avoidance=%s', (answer, falls, avoids) => {
+        const r = parseFallsAnswer(answer);
+        expect(r.falls).toBe(falls);
+        expect(r.avoidsActivity).toBe(avoids);
+        expect(r.fallsRisk).toBe(true);
+    });
+
+    /**
+     * ⚠️ NOT ASKED IS NOT "NO FALLS". Under-60s and speakers of a language without
+     *    the translation never see this question. Recording them as having no falls
+     *    would be inventing a clinical finding, and would make the population data
+     *    read as though the whole cohort had been screened.
+     */
+    it('marks an unasked question as unasked, not as no falls', () => {
+        [undefined, null, '', '   '].forEach((answer) => {
+            const r = parseFallsAnswer(answer);
+            expect(r.asked).toBe(false);
+            expect(r.fallsRisk).toBe(false);
+        });
+    });
+
+    it('treats fear of falling as risk even in free text', () => {
+        expect(parseFallsAnswer('I slipped once and now I avoid the stairs').fallsRisk).toBe(true);
+        expect(parseFallsAnswer('I slipped once and now I avoid the stairs').avoidsActivity).toBe(true);
+    });
+
+    it('does not throw on junk', () => {
+        [42, {}, []].forEach((j) => expect(() => parseFallsAnswer(j)).not.toThrow());
+    });
+});
+
+describe('Healthier SG enrolment', () => {
+    it('reads a clear yes and a clear no', () => {
+        expect(parseHealthierSg('Yes, I am enrolled')).toBe(true);
+        expect(parseHealthierSg('No, not enrolled')).toBe(false);
+    });
+
+    /**
+     * ⚠️ "No, not enrolled" CONTAINS "enrolled". The negative must be tested first,
+     *    or the tool records somebody as enrolled when they said the opposite —
+     *    and then withholds the enrolment route they most need.
+     */
+    it('does not read "No, not enrolled" as enrolled', () => {
+        expect(parseHealthierSg('No, not enrolled')).not.toBe(true);
+    });
+
+    /**
+     * `null` for "not sure" AND for not asked. Neither may become `false`: telling
+     * somebody to enrol when they already have is a small annoyance, but recording
+     * an unknown as "not enrolled" corrupts the population figure the RHS would
+     * plan from.
+     */
+    it.each(['I am not sure', '', null, undefined])('returns null for %j', (answer) => {
+        expect(parseHealthierSg(answer)).toBeNull();
     });
 });

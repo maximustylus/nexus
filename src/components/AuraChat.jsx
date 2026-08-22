@@ -6,6 +6,7 @@ import { ChevronLeft, Send, Sun, Moon, ExternalLink, CheckCircle, BrainCircuit }
 import { getFunctions, httpsCallable } from 'firebase/functions';
 import { readTheme, writeTheme } from '../utils/theme';
 import { toSector } from '../utils/singapore/postalSectors';
+import { nextActiveStep, activeStepCount, activeStepPosition } from '../utils/chatSteps';
 // ⚠️ Word-bounded matchers, not raw substring regexes. `/low/` used to fire inside
 // "slowly", "follow" and "allow", flagging psychological distress on somebody
 // saying they felt fine. See `src/utils/clinicalFlags.js`.
@@ -13,7 +14,7 @@ import {
   matchesSymptom, matchesCondition, matchesFinancialBarrier, matchesSocialIsolation,
   matchesPsychologicalDistress, matchesCaregiverStrain, matchesFoodInsecurity,
   matchesFemale, matchesMale,
-  isNoPreviousId,
+  isNoPreviousId, parseFallsAnswer, parseHealthierSg,
 } from '../utils/clinicalFlags';
 import { readLanguage, applyDocumentLanguage } from '../utils/language';
 import { getSessionId, saveProgress, loadProgress, clearProgress } from '../utils/assessmentSession';
@@ -56,6 +57,37 @@ const DOMAIN_CONFIG = [
   { key: 'housing_type', badge: '🏢 Housing Environment',        group: 'admin'    }, // 10 
   { key: 'postal_code',  badge: '📍 Resource Mapping',           group: 'admin'    }, // 11
   { key: 'previous_id',  badge: '🔗 NEXUS Record Linkage',       group: 'admin'    }, // 12
+
+  /*
+    ⚠️ APPENDED, NOT INSERTED. `prompts`, `quickReplies` and `reflections` are
+    parallel arrays in four language dictionaries. Inserting a step in the middle
+    means renumbering twelve arrays by hand, which is exactly how a question goes
+    missing in one language and nobody notices for months. New steps go on the end
+    and `when` decides whether they are asked.
+
+    Both are gated by `src/utils/chatSteps.js`: a step with no prompt in the active
+    language is SKIPPED, so these appear in English only until the other three are
+    translated (`CD10`). A question somebody cannot read produces a WRONG answer,
+    not a missing one — it still feeds the risk score.
+  */
+  {
+    key: 'falls', badge: '\u{1F9B5} Falls & Function (60+)', group: 'clinical', // 13
+    /**
+     * 60+ only. A Regional Health System reviewer's point: for somebody being
+     * considered for an Active Ageing Centre, falls history matters more than a
+     * weekly minutes figure — PAVS alone can route a 75-year-old to "150 minutes a
+     * week" without ever asking whether they have fallen. Asking everybody would be
+     * noise, and every unnecessary question costs completions in the population
+     * least likely to finish.
+     */
+    when: (data) => /60\s*\+/.test(String(data?.demographics ?? '')),
+  },
+  {
+    key: 'healthier_sg', badge: '\u{1FA7A} Healthier SG', group: 'admin', // 14
+    // Asked of everyone. The portal references Healthier SG throughout and cannot
+    // currently tell whether the person is enrolled — which changes almost every
+    // recommendation it makes.
+  },
 ];
 
 const TOTAL_STEPS = DOMAIN_CONFIG.length; // 13
@@ -251,7 +283,9 @@ const DICTIONARY = {
       /* 9  ethnicity       */ 'What is your ethnic group? This helps us understand the diverse communities we serve.',
       /* 10 housing_type    */ 'What type of housing do you live in? (e.g. HDB 3-Room, Condo)',
       /* 11 postal_code     */ 'What are the first two digits of your postal code? This lets me map the nearest resources to you.',
-      /* 12 previous_id     */ 'Last question — do you have a previous NEXUS Assessment ID? If yes, paste it below so I can link your records. If not, just select No.',
+      /* 12 previous_id     */ 'Do you have a previous NEXUS Assessment ID? If yes, paste it below so I can link your records. If not, just select No.',
+      /* 13 falls           */ 'Two quick questions about steadiness. In the past 12 months, have you had a fall — including a slip or trip where you ended up on the ground?',
+      /* 14 healthier_sg    */ 'Last one — are you enrolled with a Healthier SG GP? It changes which programmes you can be referred to.',
     ],
 
     reflections: [
@@ -326,6 +360,8 @@ const DICTIONARY = {
       */
       ['Other / Type my own'],
       /* 12 previous_id    */ ['No previous ID'],
+      /* 13 falls           */ ['No falls', 'One fall', 'Two or more falls', 'A fall, and I now avoid some activities'],
+      /* 14 healthier_sg    */ ['Yes, I am enrolled', 'No, not enrolled', 'I am not sure'],
     ],
   },
 
@@ -598,6 +634,13 @@ const parseClinicalData = (raw) => {
   // Its own domain as well as a distress signal — see `matchesCaregiverStrain`.
   const caregiverStrain   = matchesCaregiverStrain(wellStr);
 
+  // Falls & function — asked of the 60+ cohort only, so `asked: false` here means
+  // "not applicable or not translated", NEVER "no falls".
+  const falls = parseFallsAnswer(raw.falls);
+  // `null` for both "not sure" and "not asked" — the portal does not know, and
+  // that must not be read as "not enrolled".
+  const healthierSgEnrolled = parseHealthierSg(raw.healthier_sg);
+
   // Demographics
   const demoStr = (raw.demographics || '').toLowerCase();
   let gender = 'Unknown';
@@ -638,6 +681,9 @@ const parseClinicalData = (raw) => {
     symptomFlag, medFlag,
     sdohFinancial, sdohSocial, sdohPsychological, sdohFoodInsecure,
     caregiverStrain,
+    fallsCount: falls.falls, fallsRisk: falls.fallsRisk,
+    fearOfFalling: falls.avoidsActivity, fallsAsked: falls.asked,
+    healthierSgEnrolled,
     gender, age, ethnicity, housingType, postalSector, previousId,
     psychoFlag: sdohPsychological,
   };
@@ -834,9 +880,12 @@ const AuraChatbot = () => {
     setIsTyping(true);
 
     const staticAck = langData.reflections[currentStep]?.(text) ?? '';
-    const nextStep  = currentStep + 1;
+    // ⚠️ NOT `currentStep + 1`. Steps are skipped when they do not apply to this
+    //    person (the falls branch is 60+ only) or when the active language has no
+    //    prompt for them — see `src/utils/chatSteps.js`.
+    const nextStep  = nextActiveStep(DOMAIN_CONFIG, currentStep, langData.prompts, updatedData);
 
-    if (nextStep < TOTAL_STEPS) {
+    if (nextStep !== -1) {
       const nextPromptRaw = langData.prompts[nextStep];
       const nextPrompt    = typeof nextPromptRaw === 'function' ? nextPromptRaw(updatedData) : nextPromptRaw;
       const staticText    = (staticAck ? staticAck + ' ' : '') + nextPrompt;
@@ -1003,7 +1052,16 @@ const AuraChatbot = () => {
       </header>
 
       {/* ── PROGRESS BAR ── */}
-      <ProgressBar currentStep={currentStep} total={TOTAL_STEPS} langData={langData} />
+      {/*
+        Counted from the steps this person will actually be asked, so the bar does
+        not promise questions that are skipped. It changes once — when age is given
+        and the 60+ branch opens or does not.
+      */}
+      <ProgressBar
+        currentStep={activeStepPosition(DOMAIN_CONFIG, currentStep, langData.prompts, collectedData) - 1}
+        total={activeStepCount(DOMAIN_CONFIG, langData.prompts, collectedData)}
+        langData={langData}
+      />
 
       {/* ── CHAT AREA ── */}
       <div className="flex-1 overflow-y-auto px-4 py-4 space-y-4">
