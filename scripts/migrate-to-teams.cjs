@@ -25,9 +25,16 @@
  *
  * 2. DRY RUN IS THE DEFAULT. Writing requires `--write`, typed deliberately.
  *
- * 3. IT IS IDEMPOTENT. Every write is a `set(..., {merge: true})` or an
- *    `arrayUnion`, so running it twice produces the same state as running it once.
- *    A half-finished run is recovered by running it again, not by hand-repair.
+ * 3. IT IS IDEMPOTENT, BY REFUSING TO OVERWRITE. A destination that already
+ *    exists is left alone and reported, so a second run writes only what the first
+ *    did not. A half-finished run is recovered by running it again.
+ *
+ *    ⚠️ This used to say "every write is a merge, so running it twice produces the
+ *       same state as running it once". That was false. `merge: true` replaces any
+ *       field it is given — maps survive because their keys are separate field
+ *       paths, arrays do NOT — so a re-run after go-live would have replaced a
+ *       live `logs` array with the stale legacy one, losing every wellbeing
+ *       check-in written in between. See the note on `write()`.
  *
  * 4. IT REPORTS WHAT IT COULD NOT DO. Anything unmatched — a legacy document whose
  *    id belongs to nobody in the manifest, an address with no auth account — is
@@ -74,7 +81,7 @@ const { TEAM_ONE, MEMBERS, EXCLUDED, LEGACY_DIRECTORY_SIZE } = require('./team-o
 // The decision "whose record is this?" lives in its own module so it can be tested
 // without a service-account key — see `scripts/legacyMatch.test.mjs`. Logic that can
 // only be exercised by pointing it at production is logic nobody checks.
-const { buildLegacyIndex, classifyLegacyDoc } = require('./legacyMatch.cjs');
+const { buildLegacyIndex, classifyLegacyDoc, normalise } = require('./legacyMatch.cjs');
 const { reconcile } = require('./reconcile.cjs');
 const { classifyAuthFailure, environmentReport } = require('./authFailure.cjs');
 const { describeCredentialFile } = require('./credential.cjs');
@@ -83,6 +90,13 @@ const { suggestMatches, suggestionReport } = require('./emailMatch.cjs');
 const WRITE = process.argv.includes('--write');
 /** Prints every address with an account. Read-only; safe to combine with a dry run. */
 const LIST_ACCOUNTS = process.argv.includes('--list-accounts');
+/**
+ * Overwrites destinations that already exist. ⚠️ NOT a repair tool — see the note
+ * on `write()`. Use it only to replace a document you have confirmed is a
+ * half-written artefact of a failed run, never to "refresh" one the live app has
+ * touched, because a legacy array will replace a live one wholesale.
+ */
+const FORCE_OVERWRITE = process.argv.includes('--force-overwrite');
 const TEAM = TEAM_ONE.teamId;
 
 initializeApp();
@@ -93,16 +107,83 @@ const db = getFirestore();
 // the real run print exactly the same lines. A dry run that describes a different
 // plan from the one that executes is worse than no dry run at all.
 const planned = [];
+const skipped = [];
 const warnings = [];
 const errors = [];
 
 const plan = (what, path) => { planned.push({ what, path }); console.log(`  · ${what.padEnd(28)} ${path}`); };
+/**
+ * A destination that already exists. NOT an error and NOT a warning — on a second
+ * run it is the expected outcome for every document, and reporting it as a problem
+ * would train a reader to ignore the lines where a real problem appears.
+ */
+const skip = (what, path) => { skipped.push({ what, path }); console.log(`  = ${what.padEnd(28)} ${path}  (exists — left alone)`); };
 const warn = (message) => { warnings.push(message); console.log(`  ⚠️  ${message}`); };
 const fail = (message) => { errors.push(message); console.log(`  ❌ ${message}`); };
 const head = (title) => console.log(`\n── ${title} ${'─'.repeat(Math.max(0, 72 - title.length))}`);
 
-/** Every write in this file funnels through here, so `--write` is checked once. */
+/**
+ * Every write in this file funnels through here, so `--write` is checked once.
+ *
+ * ⚠️ IT REFUSES TO OVERWRITE A DESTINATION THAT ALREADY EXISTS, AND THAT IS WHAT
+ *    MAKES RE-RUNNING SAFE. The original used `set(data, { merge: true })` on the
+ *    strength of the header's claim that "every write is a merge, so running it
+ *    twice produces the same state as running it once". That claim was false, and
+ *    the way it was false destroys clinical data.
+ *
+ *    `merge: true` does not deep-merge. The Firestore SDK's own definition of it
+ *    is "only replace the values specified in its data argument; fields omitted
+ *    from the call remain untouched" — so a field that IS sent is REPLACED. Maps
+ *    survive because their nested keys are separate field paths; ARRAYS do not,
+ *    because Firestore field paths cannot index into an array. An array is one
+ *    leaf value, replaced whole.
+ *
+ *    The team's wellbeing document is exactly that shape. `AuraPulseBot.jsx:435`
+ *    appends check-ins with `{ logs: arrayUnion(logData) }`. So:
+ *
+ *      1. migrate, merge, go live
+ *      2. over the next week a clinician logs three check-ins — `logs` now holds
+ *         the legacy entries plus three
+ *      3. a colleague finally registers, and the operator re-runs the migration
+ *         because it says it is idempotent and safe
+ *      4. the LEGACY `logs` array — which never had those three — replaces the
+ *         live one. Three wellbeing check-ins are gone, with no error and no
+ *         warning, from the collection this file calls "the most sensitive".
+ *
+ *    The same applies to the roster's day arrays and to project rows.
+ *
+ *    So: a destination that already exists is LEFT ALONE and reported. Either a
+ *    previous run wrote it — in which case the legacy copy adds nothing — or the
+ *    live app has written it since, in which case the legacy copy is stale and
+ *    overwriting it is the bug above. `--force-overwrite` exists for the one case
+ *    where a genuinely half-written document must be replaced, and it says so.
+ *
+ *    `arrayUnion` writes are different and stay merges: a union genuinely is
+ *    idempotent, and `users/{uid}` may exist for reasons that have nothing to do
+ *    with this team. Those go through `union()` below.
+ */
 const write = async (ref, data, what) => {
+    if (!FORCE_OVERWRITE) {
+        // Costs one read per document. On a department-sized migration that is a
+        // few hundred reads to remove a silent-data-loss path — the cheapest
+        // insurance in this file.
+        const existing = await ref.get();
+        if (existing.exists) {
+            skip(what, ref.path);
+            return;
+        }
+    }
+    plan(what, ref.path);
+    if (WRITE) await ref.set(data, { merge: true });
+};
+
+/**
+ * For writes that are genuinely idempotent because every field is a union or a
+ * scalar the migration owns. `users/{uid}` is the only one: `teamIds` is an
+ * `arrayUnion`, which adds without replacing, and the display name and email are
+ * the migration's own facts about the person.
+ */
+const union = async (ref, data, what) => {
     plan(what, ref.path);
     if (WRITE) await ref.set(data, { merge: true });
 };
@@ -253,7 +334,24 @@ async function main() {
     }
 
     const byLegacy = buildLegacyIndex(resolved);
-    const uidByName = new Map(resolved.map((member) => [member.displayName, member.uid]));
+    /**
+     * ⚠️ NORMALISED, BECAUSE EVERY OTHER LOOKUP IN THIS FILE IS.
+     *
+     * This used to key on the raw `displayName` and be read with
+     * `uidByName.get(data.targetStaff)` — exact string equality. Sections 4 to 7
+     * go through `legacyMatch`, which strips everything that is not a letter or a
+     * digit precisely because the app produced several spellings of one name; the
+     * dry run proved it by finding `archive_2025/ying xian` alongside
+     * `archive_2025/ying_xian`.
+     *
+     * Swaps and notifications were the one place that did not, so a pending
+     * coverage request stored as `'ying xian'` or `'Ying  Xian'` would fail to
+     * match, be dropped, and be reported as targeting somebody "who is not a
+     * member" — about a member. On swaps that is the worse direction: an unanswered
+     * cover request is a shift nobody is holding.
+     */
+    const uidByName = new Map(resolved.map((member) => [normalise(member.displayName), member.uid]));
+    const uidFor = (name) => uidByName.get(normalise(name));
 
     // ── 2. The team and its memberships ───────────────────────────────────────
     head('2. Team and memberships');
@@ -286,7 +384,7 @@ async function main() {
 
         // ⚠️ arrayUnion, NEVER a plain set. Somebody may already belong to another
         //    team; overwriting `teamIds` would silently drop that membership.
-        await write(db.doc(`users/${member.uid}`), {
+        await union(db.doc(`users/${member.uid}`), {
             displayName: member.displayName,
             email: member.email.toLowerCase(),
             teamIds: FieldValue.arrayUnion(TEAM),
@@ -309,6 +407,18 @@ async function main() {
     // each legacy document to a member, reports the ones it cannot place, and says
     // explicitly when a document belongs to somebody deliberately excluded — so the
     // count reconciles instead of leaving a reader wondering.
+    /**
+     * Document ids that are NOT people and must not be run through the person
+     * matcher. `wellbeing_history/_anonymous_logs` is the Ghost Protocol store: it
+     * is copied deliberately a few lines below section 4, but because it reached
+     * `copyPerPerson` first it normalised to `anonymouslogs`, matched nobody, and
+     * printed "matches nobody in the manifest — NOT copied" about the one document
+     * on the page that WAS about to be copied. It also skewed the per-collection
+     * count, which then under-reported by one on the most sensitive collection in
+     * the project.
+     */
+    const NOT_A_PERSON = new Set(['_anonymous_logs']);
+
     const copyPerPerson = async (sourcePath, targetFor, label) => {
         const snap = await db.collection(sourcePath).get();
         if (snap.empty) { warn(`${sourcePath} is empty or absent.`); return; }
@@ -316,7 +426,9 @@ async function main() {
         let copied = 0;
         /** destination path → the first source id that claimed it, for collision reporting. */
         const destinations = new Map();
+        let notPeople = 0;
         for (const docSnap of snap.docs) {
+            if (NOT_A_PERSON.has(docSnap.id)) { notPeople += 1; continue; }
             const verdict = classifyLegacyDoc(docSnap.id, byLegacy, EXCLUDED, unresolved);
             if (verdict.kind === 'member') {
                 const target = targetFor(verdict.member);
@@ -353,7 +465,10 @@ async function main() {
                    + 'Check whether this is a former colleague or a mis-slugged id.');
             }
         }
-        console.log(`  ${copied} of ${snap.size} documents in ${sourcePath} placed`);
+        // The denominator excludes documents that were never about a person, so the
+        // ratio means what a reader takes it to mean.
+        console.log(`  ${copied} of ${snap.size - notPeople} person documents in ${sourcePath} placed`
+                  + (notPeople > 0 ? `  (+${notPeople} handled separately)` : ''));
     };
 
     head('4. Wellbeing  (the most sensitive collection)');
@@ -422,13 +537,43 @@ async function main() {
     // These carry DISPLAY NAMES in their fields, and the new app routes by uid. The
     // migration backfills the uid alongside the name it already has; the name stays
     // because the roster mutator still matches the roster's own day arrays on it.
-    head('9. Swaps, feed and notifications  (uid backfill)');
+    /**
+     * ⚠️ THIS COLLECTION WAS MISSED ENTIRELY, AND NOTHING SAID SO.
+     *
+     * `monthly_workload` has a declared destination in the new tree
+     * (`src/utils/teamPaths.js:38` — "teams/{teamId}/workload/{period} was
+     * monthly_workload"), a legacy path helper (`:348`) and a live writer
+     * (`AuraPulseBot.jsx`, the DATA_ENTRY mode that logs a period's figures). The
+     * migration read none of it and mentioned none of it, so a clean dry run with
+     * zero errors was consistent with leaving every workload record behind — and
+     * the deployed app reads only `teams/…`, so it would simply show nothing.
+     *
+     * A migration that silently skips a whole collection is indistinguishable from
+     * one that worked, which is the failure this file's fourth safety property
+     * exists to prevent. It applies to the file itself, not only to documents.
+     */
+    head('9. Monthly workload (was monthly_workload)');
+    const workloadSnap = await db.collection('monthly_workload').get();
+    if (workloadSnap.empty) {
+        warn('monthly_workload is empty or absent.');
+    } else {
+        for (const docSnap of workloadSnap.docs) {
+            await write(
+                db.doc(`teams/${TEAM}/workload/${docSnap.id}`),
+                docSnap.data(),
+                `workload ${docSnap.id}`,
+            );
+        }
+        console.log(`  ${workloadSnap.size} period ${workloadSnap.size === 1 ? 'document' : 'documents'} in monthly_workload`);
+    }
+
+    head('10. Swaps, feed and notifications  (uid backfill)');
 
     const swapSnap = await db.collection('shift_swaps').get();
     for (const docSnap of swapSnap.docs) {
         const data = docSnap.data();
-        const targetUid = uidByName.get(data.targetStaff);
-        const requestedUid = uidByName.get(data.requestedBy);
+        const targetUid = uidFor(data.targetStaff);
+        const requestedUid = uidFor(data.requestedBy);
         if (!targetUid) {
             warn(`shift_swaps/${docSnap.id} targets "${data.targetStaff}", who is not a member — NOT copied. `
                + 'A swap nobody can answer is worse than no swap.');
@@ -455,7 +600,7 @@ async function main() {
     const noteSnap = await db.collection('notifications').get();
     for (const docSnap of noteSnap.docs) {
         const data = docSnap.data();
-        const recipientUid = uidByName.get(data.recipient);
+        const recipientUid = uidFor(data.recipient);
         if (!recipientUid) {
             warn(`notifications/${docSnap.id} is for "${data.recipient}", who is not a member — NOT copied.`);
             continue;
@@ -470,6 +615,10 @@ async function main() {
 function summary() {
     console.log(`\n${'='.repeat(78)}`);
     console.log(`  ${planned.length} documents ${WRITE ? 'WRITTEN' : 'would be written'}`);
+    if (skipped.length > 0) {
+        console.log(`  ${skipped.length} left alone because the destination already exists`
+                  + (FORCE_OVERWRITE ? '' : '  (this is the expected result of a second run)'));
+    }
     console.log(`  ${warnings.length} warnings · ${errors.length} errors`);
     if (errors.length > 0) {
         console.log('\n  ERRORS — read these before doing anything else:');
@@ -484,14 +633,34 @@ function summary() {
         console.log('\n  NEXT: merge the branch to `main`. Not before now — the deploy reads teams/…');
     }
     console.log('='.repeat(78));
-    return errors.length === 0 ? 0 : 1;
+
+    // ⚠️ THE EXIT CODE DISTINGUISHES "SOMETHING WENT WRONG" FROM "SOMEBODY HAS NOT
+    //    REGISTERED YET". Those are not the same and must not share a status.
+    //
+    //    Every unresolved member goes through `fail()`, so a run in which all reads
+    //    and all writes succeeded — the roster, wellbeing, loads, projects,
+    //    archives, pulse, attendance, reports, swaps and the feed all copied — still
+    //    exited 1 purely because a colleague has not signed in. The script's own
+    //    closing line says "NEXT: merge the branch to main" on that same run, so the
+    //    exit code contradicted the instruction directly above it.
+    //
+    //    A missing registration is expected, named, and fixed by re-running. It is
+    //    reported, and it does not fail the run. Anything else does.
+    const blocking = errors.filter((message) => !/^NO AUTH ACCOUNT/.test(message));
+    if (blocking.length === 0 && errors.length > 0) {
+        console.log(`  Exit 0: the only errors above are ${errors.length} unregistered `
+                  + `${errors.length === 1 ? 'colleague' : 'colleagues'}, which re-running fixes once`);
+        console.log('  they sign in. Nothing failed.');
+    }
+    return blocking.length === 0 ? 0 : 1;
 }
 
 main()
     .then((code) => process.exit(code))
     .catch((error) => {
         console.error('\n❌ The migration threw and stopped. Nothing after this point ran.');
-        console.error('   Because every write is a merge and every array is a union, re-running is safe.');
+        console.error('   Re-running is safe: a destination that already exists is left alone,');
+        console.error('   so a second run writes only what this one did not.');
         console.error(error);
         process.exit(1);
     });

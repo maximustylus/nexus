@@ -117,8 +117,18 @@ GOOGLE_APPLICATION_CREDENTIALS=~/path/to/key.json \
 **It copies and never moves.** Not one pre-migration document is modified or deleted.
 `system_data/roster_2026` is left byte-identical.
 
-**It is idempotent.** Every write is a merge or an array union, so if it fails halfway,
-the fix is to run it again — not to repair anything by hand.
+**It is idempotent, by refusing to overwrite.** A destination that already exists is
+left alone and reported with `=`, so a second run writes only what the first did not.
+If it fails halfway, run it again.
+
+⚠️ **This changed, and the old behaviour could lose data.** It used to
+`set(…, {merge: true})` over whatever was there, on the reasoning that a merge is
+idempotent. It is not: `merge` replaces any field it is given, and while maps survive
+(their keys are separate field paths) **arrays do not**. The team's wellbeing document
+is an array — `AuraPulseBot` appends check-ins to `logs`. So migrating, going live, and
+then re-running once a colleague finally registers would have replaced the live `logs`
+with the stale legacy one and destroyed every check-in written in between, silently.
+Re-running is now safe in the way this file always claimed it was.
 
 ---
 
