@@ -15,6 +15,7 @@ import { getSessionId, saveResult, loadResult } from '../utils/assessmentSession
 import { clusterForSector } from '../utils/singapore/communityServices';
 import { sectorInfo } from '../utils/singapore/postalSectors';
 import HandoverSlip from './HandoverSlip';
+import { SURFACE, SURFACE_INSET, HERO_PANEL, CARD, PANEL, LIFT, LIFT_LG, R, RISE } from '../utils/glass';
 
 // ─── DICTIONARY ───────────────────────────────────────────────────────────────
 const DICTIONARY = {
@@ -370,7 +371,7 @@ const PavsPanel = ({ data, t }) => {
   const barColour = tier === 'active' ? 'bg-emerald-500' : tier === 'meets' ? 'bg-teal-500' : 'bg-amber-400';
 
   return (
-    <div className="p-6 rounded-2xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800">
+    <div className={`p-6 ${PANEL}`}>
       <div className="flex items-center gap-2 mb-5">
         <Activity size={15} className="text-teal-600 dark:text-teal-400" />
         <h2 className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest">{t.pavsTitle}</h2>
@@ -381,7 +382,7 @@ const PavsPanel = ({ data, t }) => {
           { value: data.pavsDays    ?? '–',  label: t.pavsDays },
           { value: data.pavsDays === 0 ? 0 : (data.pavsMinutes ?? '–'), label: t.pavsMins },
         ].map(({ value, label }, i) => (
-          <div key={i} className="text-center py-3 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700">
+          <div key={i} className={`text-center py-3 ${R.panel} ${SURFACE}`}>
             <p className="text-2xl font-black text-slate-900 dark:text-white leading-none">{value}</p>
             <p className="text-[10px] text-slate-400 dark:text-slate-500 mt-1 font-medium">{label}</p>
           </div>
@@ -432,7 +433,7 @@ const PavsPanel = ({ data, t }) => {
  *    alternative on the table was continuing to show nothing.
  */
 const MedicalDisclaimer = () => (
-  <div className="rounded-2xl border border-rose-200 dark:border-rose-900 bg-rose-50 dark:bg-rose-950/30 p-4">
+  <div className={`${R.panel} ${LIFT} border border-rose-200/80 dark:border-rose-900/70 bg-rose-50/80 dark:bg-rose-950/40 backdrop-blur-md p-5`}>
     <p className="text-[10px] font-black text-rose-700 dark:text-rose-300 uppercase tracking-widest mb-2">
       Important Medical Disclaimer
     </p>
@@ -459,7 +460,7 @@ const MedicalDisclaimer = () => (
  * before either pathway starts; this remains as the full statement.
  */
 const DataGovernance = () => (
-  <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/60 p-4">
+  <div className={`${PANEL} p-5`}>
     <p className="text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest mb-2">
       Data Governance and Privacy
     </p>
@@ -482,7 +483,7 @@ const DataGovernance = () => (
 const PrimaryActionBanner = ({ ctaTier, t, lang }) => {
   const config = CTA_BANNER[ctaTier] || CTA_BANNER.START;
   return (
-    <div className={`p-5 rounded-2xl border ${config.bg}`}>
+    <div className={`p-5 ${R.panel} ${LIFT} border backdrop-blur-md ${config.bg}`}>
       <div className="flex items-center gap-2 mb-3">
         <Target size={14} className="text-current opacity-70" />
         <p className={`text-xs font-bold uppercase tracking-widest ${config.text}`}>{t.primaryAction}</p>
@@ -514,7 +515,7 @@ const SdohFlags = ({ data, t, previousSessionId }) => {
   return (
     <div className="space-y-2.5">
       {flags.map((f, i) => (
-        <div key={i} className="flex items-start gap-3 py-3 px-4 bg-white dark:bg-slate-900 rounded-xl border border-slate-100 dark:border-slate-800">
+        <div key={i} className={`flex items-start gap-3 py-3 px-4 ${SURFACE} ${R.panel}`}>
           {f.icon}
           <div>
             {f.header && <p className={`text-xs font-bold mb-0.5 ${f.headerCls}`}>{f.header}</p>}
@@ -531,9 +532,9 @@ const ResourceCard = ({ resource, lang, baseUrl, onClick }) => {
   const content = resource[lang] || resource.en;
   return (
     <button onClick={onClick}
-      className="flex flex-col sm:flex-row sm:items-center justify-between p-5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-2xl hover:border-teal-400/60 dark:hover:border-teal-500/40 hover:shadow-lg transition-all text-left group w-full gap-4">
+      className={`flex flex-col sm:flex-row sm:items-center justify-between p-5 ${CARD} hover:border-teal-400/70 dark:hover:border-teal-400/40 motion-safe:hover:-translate-y-0.5 ${RISE} text-left group w-full gap-4`}>
       <div className="flex items-center gap-4 flex-1">
-        <div className="w-14 h-14 shrink-0 bg-slate-50 dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 flex items-center justify-center overflow-hidden shadow-sm">
+        <div className={`w-14 h-14 shrink-0 ${SURFACE_INSET} ${R.panel} flex items-center justify-center overflow-hidden`}>
           <img src={`${baseUrl}${resource.logo}`} alt="" crossOrigin="anonymous"
             className="w-full h-full object-cover"
             onError={(e) => { e.target.style.display = 'none'; e.target.parentElement.innerHTML = '<span class="text-[9px] font-black text-slate-400 text-center px-1 leading-tight">LOGO</span>'; }} />
@@ -792,6 +793,19 @@ export default function ResultPage() {
 
   return (
     <div className="min-h-screen w-full bg-stone-50 dark:bg-slate-950 transition-colors duration-700 flex flex-col items-center py-12 px-4 md:px-6 relative overflow-x-hidden font-sans">
+      {/*
+        Ambient wash. Glass needs something behind it or the blur has nothing to
+        do and the surfaces read as flat translucent boxes. Tinted to the tier so
+        the page carries the result's colour without putting text on it — the
+        mistake the hero used to make.
+
+        `pointer-events-none` and `aria-hidden` because this is decoration: it must
+        never intercept a tap or be announced.
+      */}
+      <div aria-hidden="true" className="pointer-events-none fixed inset-0 overflow-hidden">
+        <div className={`absolute -top-40 left-1/2 -translate-x-1/2 w-[42rem] h-[42rem] rounded-full blur-[120px] opacity-25 dark:opacity-20 bg-gradient-to-br ${th.gradient}`} />
+        <div className="absolute -bottom-52 -right-32 w-[36rem] h-[36rem] rounded-full blur-[110px] opacity-20 dark:opacity-10 bg-gradient-to-br from-teal-300 to-sky-400" />
+      </div>
 
       {/* ══════════════════════════════════════════════════════════════════════
           HIDDEN PDF TEMPLATES (off-screen, identical wrapper structure)
@@ -1038,11 +1052,11 @@ export default function ResultPage() {
             </div>
 
             <button onClick={handleShare}
-              className="flex items-center gap-2 px-4 py-2 bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 font-bold text-xs uppercase tracking-widest rounded-full border border-slate-200 dark:border-slate-700 shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all">
+              className={`flex items-center gap-2 px-4 py-2.5 ${SURFACE} ${R.chip} ${LIFT} text-slate-600 dark:text-slate-300 font-bold text-xs uppercase tracking-widest motion-safe:hover:-translate-y-0.5 ${RISE}`}>
               <Share2 size={13} /> {t.share}
             </button>
             <button onClick={handleDownloadPDF}
-              className="flex items-center gap-2 px-4 py-2 bg-teal-600 text-white font-bold text-xs uppercase tracking-widest rounded-full shadow-sm hover:bg-teal-700 hover:-translate-y-0.5 transition-all">
+              className={`flex items-center gap-2 px-4 py-2.5 bg-teal-600/95 backdrop-blur-md text-white font-bold text-xs uppercase tracking-widest ${R.chip} ${LIFT} hover:bg-teal-700 motion-safe:hover:-translate-y-0.5 ${RISE}`}>
               <Download size={13} /> {t.download}
             </button>
             {/*
@@ -1056,32 +1070,48 @@ export default function ResultPage() {
               rasterises the page through html2canvas.
             */}
             <button onClick={handlePrintSlip}
-              className="flex items-center gap-2 px-4 py-2 bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 font-bold text-xs uppercase tracking-widest rounded-full border border-slate-200 dark:border-slate-700 shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all">
+              className={`flex items-center gap-2 px-4 py-2.5 ${SURFACE} ${R.chip} ${LIFT} text-slate-600 dark:text-slate-300 font-bold text-xs uppercase tracking-widest motion-safe:hover:-translate-y-0.5 ${RISE}`}>
               <Printer size={13} /> Print summary
             </button>
           </div>
         </div>
 
         {/* Card */}
-        <div className="bg-white dark:bg-[#111827] rounded-3xl shadow-xl border border-slate-200 dark:border-slate-800 overflow-hidden">
+        <div className={`${SURFACE} ${R.hero} ${LIFT_LG} overflow-hidden`}>
 
-          {/* Risk hero header */}
-          <div className={`px-8 py-10 bg-gradient-to-br ${th.gradient} text-center relative overflow-hidden flex flex-col items-center`}>
-            <div className="absolute top-0 right-0 w-48 h-48 bg-white/10 rounded-full blur-2xl -mr-12 -mt-12 pointer-events-none" />
-            <div className="absolute bottom-0 left-0 w-36 h-36 bg-black/10 rounded-full blur-xl -ml-8 -mb-8 pointer-events-none" />
-            <div className="relative z-10 flex flex-col items-center">
+          {/*
+            ⚠️ THE TIER LABEL NOW SITS ON A DARK FROSTED PANEL, AND THAT IS A
+               LEGIBILITY FIX RATHER THAN A STYLE CHOICE.
+
+               It used to be white text on `bg-white/20` over the gradient. Measured:
+               1.51:1 on amber — the single most important sentence on the page, the
+               person's own result, effectively unreadable in daylight. White
+               directly on the gradient was 1.67:1 (amber) and 1.92:1 (green). AA
+               for normal text is 4.5:1.
+
+               `ON_COLOR` is 55% slate-900, the lowest opacity that clears 4.5:1 on
+               all three tiers while still letting the tier colour read through the
+               blur — amber, the worst case, lands at 5.79:1.
+               `src/utils/contrast.test.js` re-measures it on every run.
+          */}
+          <div className={`px-8 py-12 bg-gradient-to-br ${th.gradient} text-center relative overflow-hidden flex flex-col items-center`}>
+            {/* Specular highlights — decorative only, no text sits on them. */}
+            <div className="absolute -top-16 -right-12 w-64 h-64 bg-white/25 rounded-full blur-3xl pointer-events-none" />
+            <div className="absolute -bottom-14 -left-10 w-48 h-48 bg-slate-900/20 rounded-full blur-2xl pointer-events-none" />
+
+            <div className={`relative z-10 flex flex-col items-center px-8 py-7 ${HERO_PANEL} ${LIFT_LG} max-w-md w-full`}>
               {th.icon}
-              <p className="text-xs font-bold text-white/80 uppercase tracking-[0.2em] mb-2">{t.title}</p>
-              <div className="px-8 py-3 bg-white/20 rounded-2xl backdrop-blur-md border border-white/30 text-2xl md:text-3xl font-black text-white shadow-lg">
+              <p className="text-[11px] font-bold text-white/90 uppercase tracking-[0.22em] mb-3">{t.title}</p>
+              <p className="text-2xl md:text-3xl font-black text-white leading-tight">
                 {tierLabel}
-              </div>
+              </p>
             </div>
           </div>
 
           {/* Body */}
           <div className="p-6 md:p-8 space-y-6">
 
-            <div className={`p-5 rounded-2xl border ${th.bgCard}`}>
+            <div className={`p-5 ${R.panel} border ${th.bgCard}`}>
               <p className={`text-xs font-bold uppercase tracking-widest mb-2 ${th.titleColor}`}>AURA Smart Analysis</p>
               <p className="text-sm md:text-base text-slate-700 dark:text-slate-300 leading-relaxed font-medium">{tierDesc}</p>
             </div>

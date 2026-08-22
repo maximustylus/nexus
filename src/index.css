@@ -63,12 +63,31 @@ body {
 .handover-slip { display: none; }
 
 @media print {
-  /* Everything that is not the slip goes. */
-  body > * { display: none !important; }
+  /*
+    ⚠️ `visibility`, NOT `display: none` — AND THAT IS A BUG FIX, NOT A PREFERENCE.
+
+    This rule was `body > * { display: none }`, which hides `#root`. The slip is a
+    DESCENDANT of `#root`, and a descendant of a `display: none` element is not
+    rendered no matter what its own `display` says — so `.handover-slip { display:
+    block !important }` could not revive it. Printing produced a BLANK PAGE, and
+    the tests for the slip all checked what it SAYS rather than whether it reaches
+    paper, so nothing caught it.
+
+    `visibility: hidden` is different: it is inherited but CAN be overridden on a
+    descendant, which is the whole reason this is the standard print-one-element
+    pattern. `src/utils/printCss.test.js` now asserts the distinction.
+  */
+  body * { visibility: hidden !important; }
+  .handover-slip, .handover-slip * { visibility: visible !important; }
 
   .handover-slip {
     display: block !important;
-    position: static;
+    /* Lifted out of the page flow so it starts at the top of the sheet rather
+       than wherever the hidden layout left a gap. */
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
     /* Paper is white whatever the viewer's theme is. Dark mode on a printer is
        both unreadable and expensive. */
     background: #fff;
@@ -79,9 +98,6 @@ body {
     padding: 0;
     max-width: 100%;
   }
-
-  /* The slip is portable, so it must not depend on the host page's tree. */
-  .handover-slip, .handover-slip * { visibility: visible; }
 
   @page { margin: 14mm; }
 

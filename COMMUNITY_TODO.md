@@ -239,9 +239,30 @@ the public actually keeps.
 
 | # | Item | Detail | Tier | Status |
 |---|---|---|---|---|
-| 6.1 | The result screen | Traffic-light hero, PAVS panel, primary action banner, SDOH flags, resource cards. Glass surfaces over the tier colour, consistent corner radius, real depth rather than flat borders. | Fable-supervised | `OPEN` |
+| 6.1 | The result screen | **`DONE`** — `src/utils/glass.js` is the surface vocabulary; the hero, cards, panels, flag rows, resource cards and controls all use it. ⚠️ The tier label moved onto a dark frosted panel because the old treatment measured **1.51:1** on amber — see below. | Fable-supervised | `DONE` |
 | 6.2 | The downloaded PDF | Currently a `html2canvas` raster of a hidden template with its own hardcoded inline styles — a **second, divergent design** that no change to the screen ever reaches. It should follow the same system. | Fable-supervised | `OPEN` |
 | 6.3 | The share output | `selectCTA`-driven share text today. Should carry the same visual identity where the surface allows one. | Opus-alone | `OPEN` |
+
+**⚠️ What the restyle found, and it was not cosmetic.** `src/utils/contrast.js`
+composites each surface over the tier behind it and measures it. The old screen:
+
+| Pair | Ratio | |
+|---|---|---|
+| The tier chip (`bg-white/20`) over amber | **1.51 : 1** | the person's own result, effectively unreadable in daylight |
+| White directly on amber-400 | 1.67 : 1 | |
+| White directly on emerald-400 | 1.92 : 1 | |
+| White directly on rose-500 | 3.67 : 1 | large text only |
+
+AA for normal text is 4.5:1. `ON_COLOR` is 55% slate-900 — the **lowest** opacity
+that clears 4.5:1 on all three tiers while still letting the colour read through
+(amber, the worst, lands at 5.79:1). `contrast.test.js` re-measures on every run,
+so a lighter glass fails `npm test` and names the tier.
+
+**⚠️ And the print slip never printed.** `@media print` said
+`body > * { display: none }`, which hides `#root` — and the slip is a *descendant*
+of `#root`, so `display: block !important` could not revive it. Printing produced a
+blank page. The slip's 19 tests all checked what it *says*, not whether it could
+reach paper. Fixed to the `visibility` pattern, guarded by `printCss.test.js`.
 
 **⚠️ Three constraints that are not negotiable, because they are fixes already
 shipped on this branch and a restyle is exactly how they get undone:**
