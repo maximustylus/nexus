@@ -51,7 +51,7 @@ never measured activity — live in it.
 | `DONE`, evidenced | 13 | `CP1` `CP2` `CP3` `CP5` `CP6` `CP9` `CP12` `CP13` `CP14` `CP15` `CP17` `CP18` `CP19` |
 | `OPEN`, mine | 3 | `CP7` `CP8` `CP16` |
 | `OPEN`, translation | 1 | `CP10` — merged into `CD10`, below |
-| `OPEN`, **owner's decision** | 3 | `CD4` `CD10` `CD11` |
+| `OPEN`, **owner's decision** | 4 | `CD4` `CD10` `CD11` `CD12` (design) |
 
 **`CP13` is fixed.** The portal wrote a health profile to a database while showing
 the person no disclaimer and no privacy notice on screen — both rendered off-screen
@@ -230,7 +230,44 @@ human on the other end, which de-identification forecloses — belongs with `CD5
 
 ---
 
-## P5 — Decide whether the data is for anything · `CD5`
+## P6 — Result page revamp · `CD12` · **owner's design direction** · risk: low
+
+The traffic-light result screen and everything it exports should follow the house
+style: **liquid glass, rounded containers and boxes, clean and modern**. Recorded
+here rather than done on the spot because it touches the one screen a member of
+the public actually keeps.
+
+| # | Item | Detail | Tier | Status |
+|---|---|---|---|---|
+| 6.1 | The result screen | Traffic-light hero, PAVS panel, primary action banner, SDOH flags, resource cards. Glass surfaces over the tier colour, consistent corner radius, real depth rather than flat borders. | Fable-supervised | `OPEN` |
+| 6.2 | The downloaded PDF | Currently a `html2canvas` raster of a hidden template with its own hardcoded inline styles — a **second, divergent design** that no change to the screen ever reaches. It should follow the same system. | Fable-supervised | `OPEN` |
+| 6.3 | The share output | `selectCTA`-driven share text today. Should carry the same visual identity where the surface allows one. | Opus-alone | `OPEN` |
+
+**⚠️ Three constraints that are not negotiable, because they are fixes already
+shipped on this branch and a restyle is exactly how they get undone:**
+
+1. **The medical disclaimer and the privacy notice must stay ON SCREEN** (`CP13`).
+   They spent the project's whole life rendered at `top: -10000px`, visible only
+   inside a PDF most people never downloaded. A redesign that tucks them back into
+   an accordion, a modal or a "details" drawer re-creates that defect with better
+   styling.
+2. **Glass must not eat contrast.** Translucent surfaces over a coloured hero are
+   where text contrast quietly fails, and this page tells people about their own
+   health in four languages, on cheap phones, in bright light. Every text/background
+   pair needs to hold up — the tier colours are already saturated.
+3. **The print stylesheet stays plain** (`P3e.6`). `@media print` deliberately
+   strips gradients, glass and dark mode: a handover slip goes to a centre's office
+   printer, and blur effects render as grey mud and empty a cartridge. The screen
+   and the paper are two different designs on purpose.
+
+**Worth folding in while the file is open:** `6.2` is the natural moment to retire
+the `html2canvas` raster. It produces a picture of text — unselectable,
+unsearchable, invisible to a screen reader — and it is why the PDF template had to
+carry a duplicate set of styles at all.
+
+---
+
+## P5 — What the data is for · `CD5` · **SETTLED & SHIPPED**
 
 Every screening is written and read by nothing (`CP5`). Two honest options, and the
 current state is the worse of both — the cost and risk of holding health data about the
@@ -238,8 +275,8 @@ public, with none of the benefit.
 
 | # | Item | Detail | Tier | Status |
 |---|---|---|---|---|
-| 5.1 | Use it, or stop collecting it | **(a)** Build the analysis that justifies collection, and the privacy notice can then say what it is for. **(b)** Keep only what the result needs — `race` and `housing` are collected and read by nothing. (b) is cheaper and I would do it first. | **OWNER** | `OPEN` |
-| 5.2 | Move the notice to the front | Whichever of the above: a short screen *before* the first question, with a way to decline and still get the result. Today the claim appears on the result page, after the data is written. | Fable-supervised | `OPEN` |
+| 5.1 | Use it, or stop collecting it | **Settled: use it, anonymously.** `community_insights/latest` is a nightly Admin-SDK rollup of counts — region, sector and month — with small-cell suppression. ⚠️ `community_assessments` stays `read: if false` for every client: reopening it "just for the dashboard" is the `CP5` defect returning with a chart attached. | Opus-alone | `DONE` |
+| 5.2 | Move the notice to the front | **`DONE`** — `PathwaySelection` carries it before either pathway starts (`CP13`). | Whichever of the above: a short screen *before* the first question, with a way to decline and still get the result. Today the claim appears on the result page, after the data is written. | Fable-supervised | `OPEN` |
 
 ---
 

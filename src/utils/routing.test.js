@@ -34,7 +34,8 @@ const declaredPaths = () => {
 
 // APPROVALS_PATH is a constant rather than a literal; its value does not affect
 // wildcard ranking, so it is represented by a stand-in with the same shape.
-const routes = () => declaredPaths().map((p) => ({ path: p === 'APPROVALS_PATH' ? '/admin/teams' : p }));
+const STANDIN = { APPROVALS_PATH: '/admin/teams', INSIGHTS_PATH: '/admin/community' };
+const routes = () => declaredPaths().map((p) => ({ path: STANDIN[p] ?? p }));
 
 const matched = (pathname) => {
     const found = matchRoutes(routes(), pathname);
@@ -50,6 +51,7 @@ describe('the catch-all does not shadow a real route', () => {
         ['/individuals/chat', '/individuals/chat'],
         ['/individuals/result', '/individuals/result'],
         ['/admin/teams', '/admin/teams'],
+        ['/admin/community', '/admin/community'],
     ])('%s still resolves to itself', (pathname, expected) => {
         expect(matched(pathname)).toBe(expected);
     });

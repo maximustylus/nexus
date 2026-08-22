@@ -57,6 +57,7 @@ import {
 } from './utils/teamPaths';
 import { APP_VERSION_LABEL } from './version';
 import NotFound from './components/NotFound';
+import CommunityInsightsPanel from './components/CommunityInsightsPanel';
 
 // ==========================================
 // CONFIGURATION & CONSTANTS
@@ -90,6 +91,8 @@ const NO_AUTH_FACTS = Object.freeze({ email: null, emailVerified: null, teamIds:
 // drift apart — two string literals that must match is exactly how a page ends up
 // unreachable behind its own gate.
 const APPROVALS_PATH = '/admin/teams';
+/** The population rollup. Counts only — see `CommunityInsightsPanel`. */
+const INSIGHTS_PATH = '/admin/community';
 
 // The year the app treats as "now". Named because it was the string '2026' compared
 // inline in two places, and because `dataYear` is otherwise just a value the year
@@ -780,6 +783,15 @@ export default function App() {
           so the obscurity is convenience, not security.
         */}
         <Route path={APPROVALS_PATH} element={user ? <LeadRequestsPanel /> : <WelcomeScreen />} />
+
+        {/*
+          Reachable by URL rather than from a nav item, like the approval queue
+          above and for the same reason: it is read occasionally, not lived in.
+          `firestore.rules` allows `community_insights` to any signed-in user and
+          denies `community_assessments` to everybody, so the obscurity is
+          convenience and the rule is the control.
+        */}
+        <Route path={INSIGHTS_PATH} element={user ? <CommunityInsightsPanel /> : <WelcomeScreen />} />
 
         <Route path="*" element={<NotFound />} />
 

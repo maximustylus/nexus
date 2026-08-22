@@ -10,6 +10,8 @@ const { onCall, HttpsError } = require('firebase-functions/v2/https');
 const logger = require('firebase-functions/logger');
 const { onSchedule } = require('firebase-functions/v2/scheduler');
 const retention = require('./retention.cjs');
+const insightsLib = require('./insights.cjs');
+const sectorRegions = require('./sectorRegions.cjs');
 const { getFirestore } = require('firebase-admin/firestore');
 const { getMessaging } = require('firebase-admin/messaging');
 
@@ -940,6 +942,70 @@ exports.expireCommunityAssessments = onSchedule({
         note: undated > 0
             ? 'Records with no usable createdAt were NOT deleted — investigate, they may be a write bug'
             : undefined,
+    });
+});
+
+// =============================================================================
+// SCHEDULED: buildCommunityInsights — the population view, without the records
+// =============================================================================
+//
+// The portal has written an assessment for every member of the public who
+// completed one, and nothing has ever read a single one. A Regional Health System
+// reviewer named the cost: "you are already collecting the data and reading none
+// of it… that is what justifies my budget line." `CD5` settled that the data
+// stays, with a 24-month life; this is what makes keeping it defensible.
+//
+// ⚠️ IT DOES NOT OPEN `community_assessments`. The obvious build — let staff query
+//    the collection — is the defect this project already fixed. `CP5` found
+//    `allow read: if isSignedIn()` there, meaning every signed-in staff member
+//    could read the public's health records, and closed it to `if false`. A
+//    dashboard that reopens it undoes that for the sake of a chart.
+//
+//    So the rows stay unreadable by every client, permanently. This runs on the
+//    Admin SDK, counts, and writes COUNTS ONLY to `community_insights/latest`.
+//    Nothing downstream can reconstruct a respondent because nothing downstream
+//    ever sees one.
+//
+// ⚠️ AND IT SUPPRESSES SMALL CELLS. "De-identified" and "not identifying" are
+//    different claims, and small areas are where they come apart: a postal sector
+//    with three respondents, one of whom reported food insecurity and is 60+, is
+//    identifiable to anybody who knows the neighbourhood. Singapore's sectors can
+//    be a handful of blocks. The thresholds and the reasoning are in
+//    `./insights.cjs`, which is unit-tested in `npm test`.
+exports.buildCommunityInsights = onSchedule({
+    // Nightly, after the retention sweep at 03:20 so the rollup reflects the
+    // records that actually remain rather than ones about to be deleted.
+    schedule: '50 3 * * *',
+    timeZone: 'Asia/Singapore',
+    timeoutSeconds: 540,
+}, async () => {
+    const db = getFirestore();
+
+    // A read cap, not a page: if the collection ever outgrows this the rollup
+    // would silently describe a subset, so the shortfall is logged and surfaced in
+    // the document rather than left to look like a quiet month.
+    const LIMIT = 20000;
+    const snap = await db.collection('community_assessments').limit(LIMIT).get();
+    const records = snap.docs.map((doc) => doc.data());
+    const truncated = snap.size >= LIMIT;
+
+    const insights = insightsLib.buildInsights(records, sectorRegions.regionForSector);
+
+    await db.doc('community_insights/latest').set({
+        ...insights,
+        generatedAt: new Date().toISOString(),
+        recordsRead: snap.size,
+        // ⚠️ Surfaced, not hidden. A truncated rollup that looks complete is worse
+        //    than no rollup: it would be planned from.
+        truncated,
+    });
+
+    logger.info('[INSIGHTS] rollup written', {
+        recordsRead: snap.size,
+        truncated,
+        publishedSectors: Object.keys(insights.sectors).length,
+        suppressedSectors: insights.suppression.suppressedSectorCount,
+        suppressedRespondents: insights.suppression.suppressedRespondents,
     });
 });
 
