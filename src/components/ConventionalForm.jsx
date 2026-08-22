@@ -59,6 +59,7 @@ import { readTheme, writeTheme } from '../utils/theme';
 import { readLanguage, writeLanguage, applyDocumentLanguage } from '../utils/language';
 import { getSessionId, saveProgress, loadProgress, clearProgress } from '../utils/assessmentSession';
 import { toSector, isValidSector } from '../utils/singapore/postalSectors';
+import { parseFallsAnswer, parseHealthierSg } from '../utils/clinicalFlags';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // OPTION TABLES — values match AuraChatbot quick-reply strings exactly
@@ -112,6 +113,27 @@ const SOCIAL_OPTIONS = [
 ];
 
 // FIX 6: restored em dash in en display label for last option
+/*
+  ⚠️ ENGLISH-ONLY, LIKE THE CHAT'S VERSION OF THE SAME TWO QUESTIONS, and shown to
+  everybody rather than skipped for other languages. That asymmetry with the chat
+  is deliberate and it is the lesser evil here: the FORM renders every option as a
+  visible row with its own `en`/`ms`/`zh`/`ta` labels, so a missing translation
+  would render an empty row rather than an English one. Falling back to `en` keeps
+  the question answerable. Tracked as `CD10` — see `TRANSLATION-BRIEF.md`.
+*/
+const FALLS_OPTIONS = [
+  { value: 'No falls',           en: 'No falls',           ms: 'No falls',           zh: 'No falls',           ta: 'No falls' },
+  { value: 'One fall',           en: 'One fall',           ms: 'One fall',           zh: 'One fall',           ta: 'One fall' },
+  { value: 'Two or more falls',  en: 'Two or more falls',  ms: 'Two or more falls',  zh: 'Two or more falls',  ta: 'Two or more falls' },
+  { value: 'A fall, and I now avoid some activities', en: 'A fall, and I now avoid some activities', ms: 'A fall, and I now avoid some activities', zh: 'A fall, and I now avoid some activities', ta: 'A fall, and I now avoid some activities' },
+];
+
+const HEALTHIER_SG_OPTIONS = [
+  { value: 'Yes, I am enrolled', en: 'Yes, I am enrolled', ms: 'Yes, I am enrolled', zh: 'Yes, I am enrolled', ta: 'Yes, I am enrolled' },
+  { value: 'No, not enrolled',   en: 'No, not enrolled',   ms: 'No, not enrolled',   zh: 'No, not enrolled',   ta: 'No, not enrolled' },
+  { value: 'I am not sure',      en: 'I am not sure',      ms: 'I am not sure',      zh: 'I am not sure',      ta: 'I am not sure' },
+];
+
 const WELLBEING_OPTIONS = [
   { value: 'Feeling good overall',                           en: 'Feeling good overall',                             ms: 'Perasaan baik secara keseluruhannya',        zh: '整体感觉不错',            ta: 'ஒட்டுமொத்தமாக நல்லாக உணர்கிறேன்'        },
   { value: 'Some stress but managing',                       en: 'Some stress, but managing',                        ms: 'Ada sedikit tekanan tapi boleh kawal',       zh: '有些压力但能应对',        ta: 'சில மன அழுத்தம் ஆனால் சமாளிக்கிறேன்'    },
@@ -199,6 +221,13 @@ const deriveFlags = (f) => {
   const sdohSocial        = SOCIAL_FLAG_VALS.has(f.social);
   const sdohPsychological = PSYCHO_FLAG_VALS.has(f.wellbeing);
   const caregiverStrain   = CAREGIVER_FLAG_VALS.has(f.wellbeing);
+
+  // ⚠️ THE SAME PARSERS THE CHAT USES, not a second implementation. Two pathways
+  //    deriving one flag two ways is `CP9` — a comment claiming they were
+  //    identical while they were not — and it is why `parseFallsAnswer` lives in
+  //    `clinicalFlags.js` rather than in either component.
+  const fallsParsed       = parseFallsAnswer(f.falls);
+  const healthierSgEnrolled = parseHealthierSg(f.healthierSg);
   const sdohFoodInsecure  = f.foodInsecure === true;
   const sdohHousing       = f.housing === 'HDB 1-2 Room';
 
@@ -209,8 +238,19 @@ const deriveFlags = (f) => {
     pavsScore, pavsDays, pavsMinutes, strengthDays,
     medFlag, symptomFlag,
     sdohFinancial, sdohSocial, sdohPsychological, caregiverStrain,
+    fallsCount: fallsParsed.falls, fallsRisk: fallsParsed.fallsRisk,
+    fearOfFalling: fallsParsed.avoidsActivity, fallsAsked: fallsParsed.asked,
+    healthierSgEnrolled,
     psychoFlag: sdohPsychological,
     sdohFoodInsecure, sdohHousing,
+    // ⚠️ PARITY WITH THE CHAT. These three were derived here but returned under
+    //    different names, or computed in `handleSubmit` instead — so the two
+    //    pathways handed different shapes to the same scorer, and
+    //    `pathwayParity.test.js` could not see they agreed. `postalSector` in
+    //    particular was computed twice, in two places, from two expressions.
+    ethnicity: f.race || 'Unknown',
+    housingType: f.housing || 'Unknown',
+    postalSector: toSector(f.postalCode),
     age, gender,
     previousId: f.previousId?.trim().toUpperCase() || null,
   };
@@ -608,6 +648,7 @@ export default function ConventionalForm() {
     barriers: [], social: '', foodInsecure: null, incomeAdequacy: '', housing: '',
     aware: null, referred: null, rating: '', trust: '3', improve: '',
     ageGroup: '', gender: '', race: '', postalCode: '', previousId: '',
+    falls: '', healthierSg: '',
   };
   // Spread over the empty shape rather than used directly: a saved object from an
   // older build may be missing a key this one reads, and `f.medical.includes(...)`
@@ -693,6 +734,11 @@ export default function ConventionalForm() {
       //    both through and they were stored as locations. `isValidSector` tests
       //    against the real list of 81.
       if (!isValidSector(f.postalCode)) return 'postalCode';
+      // ⚠️ REQUIRED ONLY WHEN SHOWN. `parseFallsAnswer` reports an empty answer as
+      //    `asked: false`, which is correct for an under-60 who never saw the
+      //    question — but for a 60+ respondent who skipped it, "not asked" would be
+      //    a lie about whether the cohort was screened.
+      if (f.ageGroup === '60+' && !f.falls) return 'falls';
     }
     return null;
   };
@@ -711,7 +757,9 @@ export default function ConventionalForm() {
       //    the first two digits and only checked the LENGTH, so '99' or '74' —
       //    neither of which is a Singapore sector — went into the record as though
       //    they were places, and `|| '00'` turned a blank into one too.
-      const sector  = toSector(f.postalCode);
+      // One derivation, from `deriveFlags`. This used to recompute it here, so the
+      // record and the flags could in principle disagree about where somebody was.
+      const sector  = flags.postalSector;
 
       await recordTelemetry(sector, {
         sessionId, action: 'conventional_form_v4', language: lang,
@@ -961,6 +1009,37 @@ export default function ConventionalForm() {
                 className={inputCls} placeholder="e.g. 73" />
               <Note text={t.postalHint} />
             </div>
+            {/*
+              ⚠️ 60+ ONLY, MATCHING THE CHAT'S `when` PREDICATE. For an older adult
+              being considered for an Active Ageing Centre, falls history matters
+              more than a weekly minutes figure — and asking a 24-year-old is noise.
+              The condition reads `f.ageGroup` directly because the form knows the
+              answer already; the chat uses `chatSteps.js` because it has to decide
+              mid-conversation.
+            */}
+            {f.ageGroup === '60+' && (
+              <div className="md:col-span-2 pt-2 border-t border-slate-100 dark:border-slate-800">
+                <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-2">
+                  In the past 12 months, have you had a fall — including a slip or trip where you ended up on the ground?<Req />
+                </label>
+                <select value={f.falls} onChange={e => set('falls', e.target.value)} className={selCls}>
+                  <option value="">{t.sel}</option>
+                  {FALLS_OPTIONS.map(o => <option key={o.value} value={o.value}>{o[lang] || o.en}</option>)}
+                </select>
+              </div>
+            )}
+
+            <div className="md:col-span-2">
+              <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-2">
+                Are you enrolled with a Healthier SG GP?
+                <span className="text-slate-400 font-normal text-xs ml-1">({t.optional})</span>
+              </label>
+              <select value={f.healthierSg} onChange={e => set('healthierSg', e.target.value)} className={selCls}>
+                <option value="">{t.sel}</option>
+                {HEALTHIER_SG_OPTIONS.map(o => <option key={o.value} value={o.value}>{o[lang] || o.en}</option>)}
+              </select>
+            </div>
+
             <div className="md:col-span-2 pt-2 border-t border-slate-100 dark:border-slate-800">
               <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-2">
                 {t.prevIdQ} <span className="text-slate-400 font-normal text-xs ml-1">({t.optional})</span>

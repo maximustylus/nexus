@@ -658,6 +658,14 @@ const parseClinicalData = (raw) => {
   // NEW: Ethnicity & Housing Type
   const ethnicity = raw.ethnicity || 'Unknown';
   const housingType = raw.housing_type || 'Unknown';
+  /**
+   * ⚠️ THE FORM DERIVED THIS AND THE CHAT DID NOT — and nothing consumed it in
+   *    either. The evidence page tells the public that housing is used as a social
+   *    risk proxy ("1–2 Room HDB"), so it was a claim with no mechanism behind it,
+   *    the same shape as the retention notice before `expireCommunityAssessments`.
+   *    Now derived in both pathways and routed in `communityServices.js`.
+   */
+  const sdohHousing = /1-2 room|1–2 room/i.test(housingType);
 
   // Location
   // ⚠️ A REAL SECTOR OR `null` — NEVER '00'. `toSector` validates against the 81
@@ -680,7 +688,7 @@ const parseClinicalData = (raw) => {
     pavsScore, pavsDays, pavsMinutes, strengthDays,
     symptomFlag, medFlag,
     sdohFinancial, sdohSocial, sdohPsychological, sdohFoodInsecure,
-    caregiverStrain,
+    caregiverStrain, sdohHousing,
     fallsCount: falls.falls, fallsRisk: falls.fallsRisk,
     fearOfFalling: falls.avoidsActivity, fallsAsked: falls.asked,
     healthierSgEnrolled,

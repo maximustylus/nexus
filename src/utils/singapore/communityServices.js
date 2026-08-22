@@ -228,6 +228,14 @@ export const servicesForSector = (sectorInput, flags = {}) => {
 
     if (flags.sdohFinancial)    add(SERVICE_KINDS.financialSupport);
     if (flags.sdohFoodInsecure) add(SERVICE_KINDS.socialSupport);
+    /**
+     * ⚠️ THIS MAKES AN EXISTING CLAIM TRUE. The evidence page tells the public that
+     *    housing type is used as a social-risk proxy — 1–2 room HDB — and until now
+     *    nothing consumed the flag: the form computed it and discarded it, and the
+     *    chat did not compute it at all. A Social Service Office is the right route
+     *    for the same reason food insecurity goes there.
+     */
+    if (flags.sdohHousing) add(SERVICE_KINDS.socialSupport);
 
     // Everybody gets a way to be more active and a way into primary care.
     add(SERVICE_KINDS.activesg);
