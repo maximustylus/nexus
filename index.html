@@ -2,7 +2,20 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    <!--
+      The `lang` above is a starting value, not a statement of fact.
+      `src/utils/language.js` rewrites it whenever a visitor picks a language: this
+      portal serves English, Bahasa Melayu, 中文 and தமிழ், and a permanently
+      English `lang` tells every screen reader to pronounce all four as English.
+    -->
+    <!--
+      `user-scalable=no` and `maximum-scale=1.0` were removed. They disabled
+      pinch-zoom across the whole site, including the public health screening,
+      which is built for a population that explicitly includes elderly users —
+      the people most likely to need to zoom. iOS has ignored the directive since
+      Safari 10 anyway, so it only ever restricted Android.
+    -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     
     <title>NEXUS Smart Dashboard</title>
     <meta name="description" content="Smart and Interactive Dashboard for Individuals and Professionals" />

@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 // ADDED MISSING ICONS
 import { Globe2, ChevronRight, ChevronLeft, Sun, Moon } from 'lucide-react';
+import { writeLanguage } from '../utils/language';
 
 const LANGUAGES = [
   { code: 'en', label: 'English', greeting: 'Welcome', color: 'indigo' },
@@ -50,7 +51,7 @@ export default function LanguageGate() {
   }, []);
 
   const handleSelect = (code) => {
-    localStorage.setItem('nexus_language', code);
+    writeLanguage(code);
     navigate('/individuals/pathway');
   };
 

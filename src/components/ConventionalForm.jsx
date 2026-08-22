@@ -56,6 +56,7 @@ import {
   Users, MapPin, Send, Sun, Moon, Brain, Home, Info, Zap, Globe,
 } from 'lucide-react';
 import { readTheme, writeTheme } from '../utils/theme';
+import { readLanguage, writeLanguage, applyDocumentLanguage } from '../utils/language';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // OPTION TABLES — values match AuraChatbot quick-reply strings exactly
@@ -615,7 +616,9 @@ export default function ConventionalForm() {
   }, [isDark]);
 
   useEffect(() => {
-    const sl = localStorage.getItem('nexus_language');
+    // Applied on every screen, not only where the choice is made: these routes are
+    // reachable by direct URL, so a visitor can land here without passing the gate.
+    const sl = applyDocumentLanguage(readLanguage());
     if (sl && D[sl]) setLang(sl);
     setTimeout(() => setReady(true), 80);
   }, []);
@@ -630,7 +633,7 @@ export default function ConventionalForm() {
   // FIX 3: language switcher persists to localStorage
   const switchLang = (code) => {
     setLang(code);
-    localStorage.setItem('nexus_language', code);
+    writeLanguage(code);
   };
 
   const t = D[lang] || D.en;

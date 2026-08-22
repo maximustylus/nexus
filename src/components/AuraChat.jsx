@@ -5,6 +5,7 @@ import { calculateRiskScore } from '../utils/scoring';
 import { ChevronLeft, Send, Sun, Moon, ExternalLink, CheckCircle, BrainCircuit } from 'lucide-react';
 import { getFunctions, httpsCallable } from 'firebase/functions';
 import { readTheme, writeTheme } from '../utils/theme';
+import { readLanguage, applyDocumentLanguage } from '../utils/language';
 
 // ── Cloud Function — same pattern as AuraPulseBot.jsx ────────────────────────
 // Gemini API key is secured in Firebase Cloud Functions (never client-side)
@@ -682,7 +683,7 @@ const AuraChatbot = () => {
   const chatEndRef                  = useRef(null);
   const inputRef                    = useRef(null);
 
-  const [lang]      = useState(() => localStorage.getItem('nexus_language') || 'en');
+  const [lang]      = useState(() => applyDocumentLanguage(readLanguage()));
   const langData    = DICTIONARY[lang] || DICTIONARY.en;
   const [sessionId] = useState(() => 'NX-' + Math.random().toString(36).substr(2, 9).toUpperCase());
 

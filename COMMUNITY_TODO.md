@@ -48,14 +48,15 @@ never measured activity — live in it.
 
 | | Count | Ids |
 |---|---|---|
-| `DONE`, evidenced | 5 | `CP1` `CP2` `CP3` `CP5` `CP9` + theme half of `CP12` |
-| `OPEN`, mine | 10 | `CP6` `CP7` `CP8` `CP10` `CP12` `CP13` `CP14` `CP15` `CP16` `CP17` |
+| `DONE`, evidenced | 7 | `CP1` `CP2` `CP3` `CP5` `CP9` `CP13` `CP17` + theme half of `CP12` |
+| `OPEN`, mine | 8 | `CP6` `CP7` `CP8` `CP10` `CP12` `CP14` `CP15` `CP16` |
 | `OPEN`, **owner's decision** | 3 | `CD4` `CD10` `CD11` |
 
-**`CP13` is the one to read first.** A public health screening tool that writes a
-health profile to a database shows the person no disclaimer and no privacy notice
-at all on screen — both are rendered off-screen, inside a PDF template most people
-never download.
+**`CP13` is fixed.** The portal wrote a health profile to a database while showing
+the person no disclaimer and no privacy notice on screen — both rendered off-screen
+inside a PDF template most people never download. Both are now on the page, and a
+collection notice appears *before* either pathway starts rather than after the
+record is written. Both are still English-only, which is `CD10` and is yours.
 
 ---
 
@@ -122,11 +123,11 @@ what a member of the public sees. **`CP16` corrects `CP8` above.**
 
 | # | Item | Detail | Tier | Status | Evidence |
 |---|---|---|---|---|---|
-| 3b.1 | **No disclaimer and no privacy notice on screen** | `CP13`. Both the *"Important Medical Disclaimer"* (`ResultPage.jsx:746`) and the full data-governance text (`:782`) sit **four to five divs deep inside the off-screen PDF template** opened at `:636` with `position:absolute; top:-10000px`. Neither renders on the visible page. On screen the form pathway offers one half-sentence, on step 4 of 4, after the health questions are already answered (`ConventionalForm.jsx:253`). **The chat pathway offers nothing at all** — `grep -ci "de-identified\|privacy\|consent\|we collect" AuraChat.jsx` returns `0`, and it writes age band, gender, ethnicity, housing, postal sector and four health flags. | Fable-supervised | `OPEN` | verified: div depth 5 at `:782`, 0 grep matches in `AuraChat.jsx` |
+| 3b.1 | **No disclaimer and no privacy notice on screen** | `CP13`. Both the *"Important Medical Disclaimer"* (`ResultPage.jsx:746`) and the full data-governance text (`:782`) sit **four to five divs deep inside the off-screen PDF template** opened at `:636` with `position:absolute; top:-10000px`. Neither renders on the visible page. On screen the form pathway offers one half-sentence, on step 4 of 4, after the health questions are already answered (`ConventionalForm.jsx:253`). **The chat pathway offers nothing at all** — `grep -ci "de-identified\|privacy\|consent\|we collect" AuraChat.jsx` returns `0`, and it writes age band, gender, ethnicity, housing, postal sector and four health flags. | Fable-supervised | `DONE` | `MedicalDisclaimer` + `DataGovernance` render on the visible page; `PathwaySelection` carries a collection notice **before** either pathway starts. English only — `CD10`. |
 | 3b.2 | **"Green" tells people below the guidelines that they meet them** | `CP14`. `greenDesc` is *"You meet the physical activity guidelines."* The tier comes from the **risk score**, not from PAVS: `getRiskTier` returns Green for 0–1. Someone at 100 min/week who strength-trains twice a week scores exactly 1 → Green → told they meet guidelines, **on the same screen where `getPavsTier(100)` renders `below`**. | Opus-alone | `OPEN` | runnable case: `pavsScore 100, strengthDays 2 → score 1 → Green` |
 | 3b.3 | **Chat flags are unanchored substring regex** | `CP15`. `AuraChat.jsx:516-530` tests raw free text. `/low/` is unanchored, so *"I walk slowly but I feel great"*, *"I follow a routine"* and *"I allow myself rest days"* all flag as **psychological distress** and route to the WELLBEING tier. It is also negation-blind: *"I do not get chest pain"* sets `symptomFlag` and triggers URGENT. Both directions over-triage, which is the safe way to be wrong — but it is wrong, and it is the tier ladder's input. | Opus-alone | `OPEN` | tested against the live regexes |
 | 3b.4 | **The seeded resource collection reaches nobody** — ⚠️ **corrects `CP8`** | `CP16`. `scripts/firestore_seed.cjs` writes 22 records to `resources`. Its only reader is `publicTriageChat`, which **has no callers** (`CP6`). What the public actually sees is a *second, unrelated* registry of 16 entries hardcoded in JSX at `ResultPage.jsx:191-208` — different ids, different URLs, nothing derives one from the other. So `CP8`'s freshness finding was about a collection with no reader; the freshness problem that matters is the hardcoded one, which has no `lastVerified` field at all. | Opus-alone | `OPEN` | `grep -rn "'resources'" src/` → only `teamPaths.js:120` (roster-side) |
-| 3b.5 | **The page is not usable by the people it targets** | `CP17`. `index.html:5` sets `maximum-scale=1.0, user-scalable=no` — **pinch-zoom is disabled portal-wide** on a tool explicitly built for elderly users. `index.html:2` is `<html lang="en">` and never changes, so a screen reader announces Malay, Chinese and Tamil content as English. | Opus-alone | `OPEN` | both lines read directly |
+| 3b.5 | **The page is not usable by the people it targets** | `CP17`. `index.html:5` sets `maximum-scale=1.0, user-scalable=no` — **pinch-zoom is disabled portal-wide** on a tool explicitly built for elderly users. `index.html:2` is `<html lang="en">` and never changes, so a screen reader announces Malay, Chinese and Tamil content as English. | Opus-alone | `DONE` | `user-scalable=no` removed; `src/utils/language.js` sets `<html lang>` on every screen · 16 tests |
 
 **The audit returned 70 further findings** — clinical safety, reliability, correctness
 and the resource registry — at `/tmp/…/tasks/wem72mlov.output`. They are not
@@ -169,7 +170,6 @@ In order. `P0` first because it is the only item on this page whose blast radius
 larger than one respondent.
 
 ```
-CP13  disclaimer + privacy notice ON SCREEN  ─ smallest change, largest exposure
 P0.1  public callable + own prompt          ─ then P0.2, which depends on it
 P0.3  App Check + rate limit
 P0.4  content validation

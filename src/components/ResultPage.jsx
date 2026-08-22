@@ -10,6 +10,7 @@ import { jsPDF } from 'jspdf';
 import html2canvas from 'html2canvas';
 import { recordTelemetry } from '../utils/telemetry';
 import { readTheme, writeTheme } from '../utils/theme';
+import { readLanguage, writeLanguage, applyDocumentLanguage } from '../utils/language';
 
 // ─── DICTIONARY ───────────────────────────────────────────────────────────────
 const DICTIONARY = {
@@ -375,6 +376,69 @@ const PavsPanel = ({ data, t }) => {
 };
 
 // ─── PRIMARY ACTION BANNER ────────────────────────────────────────────────────
+/**
+ * ⚠️ THE MEDICAL DISCLAIMER, ON THE SCREEN THE PUBLIC ACTUALLY LOOKS AT.
+ *
+ * This text already existed and was already reviewed — but only inside the
+ * off-screen PDF template further down this file, which lives at
+ * `position:absolute; top:-10000px`. It rendered for `html2canvas` and for nobody
+ * else. A person who read their risk band, their PAVS figure and a Primary Action
+ * telling them to start exercising, and did not download the PDF, saw no
+ * disclaimer at any point.
+ *
+ * The wording below is copied VERBATIM from that template rather than rewritten:
+ * it is the author's own, it is clinically careful, and a paraphrase would be a
+ * new clinical claim that nobody has reviewed.
+ *
+ * ⚠️ ENGLISH ONLY, KNOWINGLY. Every other string on this page comes from
+ *    `DICTIONARY[lang]`; this one has no `ms`/`zh`/`ta` because translating a
+ *    medical disclaimer is not a paraphrase job and is not mine to do. Tracked as
+ *    `CD10` in COMMUNITY_TODO.md alongside the urgent CTA copy, which has the same
+ *    problem. Showing it in English is strictly better than not showing it — the
+ *    alternative on the table was continuing to show nothing.
+ */
+const MedicalDisclaimer = () => (
+  <div className="rounded-2xl border border-rose-200 dark:border-rose-900 bg-rose-50 dark:bg-rose-950/30 p-4">
+    <p className="text-[10px] font-black text-rose-700 dark:text-rose-300 uppercase tracking-widest mb-2">
+      Important Medical Disclaimer
+    </p>
+    <p className="text-xs text-rose-900 dark:text-rose-100 leading-relaxed">
+      This NEXUS AURA report is an initial community health navigation tool and{' '}
+      <strong>does not constitute medical advice, diagnosis, or a treatment plan</strong>. The
+      physical activity recommendations are generated for educational and community navigation
+      purposes only. Always consult a qualified healthcare professional or your Healthier SG GP
+      before making significant changes to your lifestyle, diet, or exercise routine. If you are
+      experiencing chest pain, dizziness, or any acute symptoms, please seek immediate medical
+      attention.
+    </p>
+  </div>
+);
+
+/**
+ * The data-governance text, likewise lifted verbatim from the PDF template and
+ * likewise invisible until now. It is accurate as of the telemetry fix (`CP3`,
+ * commit 301bb5a) which removed `clientReference: navigator.userAgent` — before
+ * that commit this paragraph was false about the record being written beside it.
+ *
+ * It still appears AFTER the assessment is submitted, which is the wrong end of
+ * the flow for a collection notice. `PathwaySelection` now carries a short notice
+ * before either pathway starts; this remains as the full statement.
+ */
+const DataGovernance = () => (
+  <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/60 p-4">
+    <p className="text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest mb-2">
+      Data Governance and Privacy
+    </p>
+    <p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed">
+      All data collected through the NEXUS AURA system is de-identified at the point of capture.
+      Postal sector data is used solely for geographic resource mapping and is not linked to any
+      identifiable personal information. This assessment does not collect, store, or transmit
+      NRIC, name, contact, or financial account information. Aggregated, anonymised data may be
+      used to improve community health programming across Singapore.
+    </p>
+  </div>
+);
+
 const PrimaryActionBanner = ({ ctaTier, t, lang }) => {
   const config = CTA_BANNER[ctaTier] || CTA_BANNER.START;
   return (
@@ -517,12 +581,13 @@ export default function ResultPage() {
 
   const switchLang = (code) => {
     setLang(code);
-    localStorage.setItem('nexus_language', code);
+    writeLanguage(code);
   };
 
   useEffect(() => {
     if (!hasState) return;
-    const stored = localStorage.getItem('nexus_language');
+    // See the note in ConventionalForm: direct-URL entry means every screen applies it.
+    const stored = applyDocumentLanguage(readLanguage());
     if (stored && DICTIONARY[stored]) setLang(stored);
     setTimeout(() => {
       setSuggestedResources(generateActionPlan(riskTier, ctaTier, data, postalSector));
@@ -885,6 +950,10 @@ export default function ResultPage() {
 
             <PavsPanel data={data} t={t} />
             <PrimaryActionBanner ctaTier={ctaTier} t={t} lang={lang} />
+            {/* Directly beneath the instruction it qualifies. The URGENT tier tells
+                somebody with exertional chest pain to seek clearance; the caveat
+                belongs next to that, not at the bottom of a scroll. */}
+            <MedicalDisclaimer />
             <SdohFlags data={data} t={t} previousSessionId={previousSessionId} />
 
             <div className="pt-2">
@@ -897,6 +966,8 @@ export default function ResultPage() {
                 ))}
               </div>
             </div>
+
+            <DataGovernance />
 
             <div className="pt-4 border-t border-slate-100 dark:border-slate-800 flex justify-between items-center">
               <div className="flex items-center gap-3">
