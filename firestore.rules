@@ -571,17 +571,36 @@ service cloud.firestore {
 
     // ── Community screening telemetry ────────────────────────────────────────
     // Written by members of the public through the portal, with no account.
-    // `recordTelemetry` swallows its errors, so a rule that denied this would break
-    // the pathway silently — which is exactly what an earlier draft did by requiring
-    // membership.
+    // `recordTelemetry` swallows its errors, so a rule that denied the WRITE would
+    // break the pathway silently — which is exactly what an earlier draft did by
+    // requiring membership.
     //
-    // ⚠️ Read is TEAM-LESS and therefore has no natural owner. It is granted to any
-    //    signed-in user rather than to a team, because the analysis screen predates
-    //    teams and belongs to nobody in particular. That is a widening compared with
-    //    the previous `isMember()` and it is called out rather than buried: the data
-    //    is postal-sector-level and carries no identifiers.
+    // ⚠️ READ IS DENIED TO EVERYBODY, AND THIS CORRECTS AN EARLIER MISTAKE OF MINE.
+    //
+    //    A previous version of this block granted `read: if isSignedIn()` and
+    //    justified it as "the data is postal-sector-level and carries no
+    //    identifiers". Both halves of that were wrong.
+    //
+    //    WHAT IS ACTUALLY STORED, enumerated from the two call sites
+    //    (`ConventionalForm.jsx` handleSubmit, `AuraChat.jsx` concludeTriage) plus
+    //    `telemetry.js`: postal sector, age band, gender, RACE, housing type, income
+    //    adequacy, food insecurity, a psychological-distress flag, a chronic-condition
+    //    flag, a chest-pain-on-exertion flag — and `navigator.userAgent`.
+    //
+    //    Sector + age band + gender + race + housing type is a textbook quasi-identifier
+    //    set, and a full user-agent string is a fingerprinting vector. That is health
+    //    data about identifiable members of the public, not aggregate statistics.
+    //
+    //    AND NOTHING READS IT. Grepping `community_assessments` across `src/` and
+    //    `functions/` returns exactly one hit: the `addDoc` that writes it. The
+    //    "analysis screen" the old comment cited does not exist — I asserted a
+    //    consumer without checking for one, and then widened a rule to serve it.
+    //
+    //    So this is a write-only sink like `beta_feedback`. Analysis happens in the
+    //    console or through the Admin SDK, both of which bypass rules entirely, and
+    //    neither of which needs a client grant.
     match /community_assessments/{assessmentId} {
-      allow read: if isSignedIn();
+      allow read: if false;
       allow create: if request.resource.data.keys().hasAll(['createdAt', 'postalSector'])
                     && request.resource.data.createdAt == request.time
                     && request.resource.data.postalSector is string
