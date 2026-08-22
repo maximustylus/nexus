@@ -77,12 +77,17 @@ const buildLegacyIndex = (members) => {
  *   { kind: 'member',   member }  copy it
  *   { kind: 'excluded', person }  a person deliberately left out of the team.
  *                                 NOT an error, and must not be reported as one.
+ *   { kind: 'unresolved', member } IS in the team, has no Firebase Auth account
+ *                                 yet, so has no uid to file the document under.
+ *                                 Recoverable by that person registering and the
+ *                                 script re-running. Must NOT be reported as an
+ *                                 unrecognised id — see the note in the body.
  *   { kind: 'unknown' }           matches nobody. A former colleague, or a
  *                                 mis-slugged id. Must be PRINTED — a migration
  *                                 that quietly skips a document is
  *                                 indistinguishable from one that worked.
  */
-const classifyLegacyDoc = (docId, index, excluded) => {
+const classifyLegacyDoc = (docId, index, excluded, unresolved) => {
     const key = normalise(docId);
     const member = index.get(key);
     if (member) return { kind: 'member', member };
@@ -91,6 +96,19 @@ const classifyLegacyDoc = (docId, index, excluded) => {
         (p) => normalise(p.legacyId) === key || normalise(p.displayName) === key,
     );
     if (person) return { kind: 'excluded', person };
+
+    // ⚠️ A MANIFEST MEMBER WITH NO AUTH ACCOUNT IS NOT AN UNKNOWN DOCUMENT, and
+    //    conflating the two sent the owner to investigate the wrong thing. The
+    //    index is built from RESOLVED members, so somebody who is in the team but
+    //    has not registered is absent from it and used to fall through to
+    //    `unknown` — printing "matches nobody in the manifest … check whether this
+    //    is a former colleague or a mis-slugged id" about a current colleague who
+    //    simply has not signed in yet. The document is not lost and nothing needs
+    //    investigating: they register, the script re-runs, and it lands.
+    const waiting = (unresolved || []).find(
+        (p) => normalise(p.legacyId) === key || normalise(p.displayName) === key,
+    );
+    if (waiting) return { kind: 'unresolved', member: waiting };
 
     return { kind: 'unknown' };
 };

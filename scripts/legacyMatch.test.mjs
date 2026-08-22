@@ -142,3 +142,48 @@ describe('the real manifest', () => {
         });
     });
 });
+
+describe('the unresolved kind — in the team, but not registered yet', () => {
+    /**
+     * ⚠️ THE BUG THIS WAS ADDED FOR. `buildLegacyIndex` is built from RESOLVED
+     *    members, so somebody in the manifest who has no Firebase Auth account is
+     *    absent from it. Their documents used to fall through to `unknown` and
+     *    print "matches nobody in the manifest — check whether this is a former
+     *    colleague or a mis-slugged id" about a current colleague with a year of
+     *    clinical records. The owner's first real dry run printed that six times,
+     *    for two people who are in his team.
+     */
+    const resolvedOnly = withUids.filter((m) => m.legacyId !== 'brandon');
+    const waiting = [MEMBERS.find((m) => m.legacyId === 'brandon')];
+    const index = buildLegacyIndex(resolvedOnly);
+
+    it('separates a member awaiting registration from an unrecognised id', () => {
+        const verdict = classifyLegacyDoc('brandon', index, EXCLUDED, waiting);
+        expect(verdict.kind).toBe('unresolved');
+        expect(verdict.member.displayName).toBe('Brandon');
+    });
+
+    it('still reports a genuinely unknown id as unknown', () => {
+        expect(classifyLegacyDoc('someone_who_left', index, EXCLUDED, waiting))
+            .toEqual({ kind: 'unknown' });
+    });
+
+    it('matches on the display name as well as the legacy id', () => {
+        expect(classifyLegacyDoc('Brandon', index, EXCLUDED, waiting).kind).toBe('unresolved');
+    });
+
+    /**
+     * ORDER MATTERS: excluded is checked before unresolved. Somebody deliberately
+     * left out of the team must never be reported as merely awaiting a
+     * registration, which would read as an invitation to chase them.
+     */
+    it('prefers "excluded" over "unresolved" when a person is in both lists', () => {
+        const evelyn = EXCLUDED.find((p) => p.legacyId === 'evelyn');
+        expect(classifyLegacyDoc('evelyn', index, EXCLUDED, [evelyn]).kind).toBe('excluded');
+    });
+
+    it('is unchanged when no unresolved list is passed at all', () => {
+        expect(classifyLegacyDoc('brandon', index, EXCLUDED)).toEqual({ kind: 'unknown' });
+        expect(classifyLegacyDoc('brandon', index, EXCLUDED, [])).toEqual({ kind: 'unknown' });
+    });
+});

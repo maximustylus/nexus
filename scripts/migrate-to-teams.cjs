@@ -78,6 +78,7 @@ const { buildLegacyIndex, classifyLegacyDoc } = require('./legacyMatch.cjs');
 const { reconcile } = require('./reconcile.cjs');
 const { classifyAuthFailure, environmentReport } = require('./authFailure.cjs');
 const { describeCredentialFile } = require('./credential.cjs');
+const { suggestMatches, suggestionReport } = require('./emailMatch.cjs');
 
 const WRITE = process.argv.includes('--write');
 const TEAM = TEAM_ONE.teamId;
@@ -142,6 +143,10 @@ async function main() {
     //    clinician had no access.
     head('1. Resolving accounts');
     const resolved = [];
+    // Members the manifest names who have no Firebase Auth account. Kept because
+    // their legacy documents must be reported as WAITING ON A REGISTRATION, not as
+    // unrecognised ids — see `classifyLegacyDoc`.
+    const unresolved = [];
     for (const member of MEMBERS) {
         try {
             const user = await getAuth().getUserByEmail(member.email);
@@ -158,6 +163,7 @@ async function main() {
             //    to register. See `scripts/authFailure.cjs`.
             const classified = classifyAuthFailure(error);
             if (classified.kind === 'no-account') {
+                unresolved.push(member);
                 fail(`NO AUTH ACCOUNT for ${member.displayName} <${member.email}> — skipped. `
                    + 'They must register once, then re-run this script; it is idempotent.');
                 continue;
@@ -178,6 +184,26 @@ async function main() {
         excludedCount: EXCLUDED.length,
         legacySize:    LEGACY_DIRECTORY_SIZE,
     }).lines.forEach((line) => console.log(`  ${line}`));
+
+    // ⚠️ "THEY MUST REGISTER" IS A GUESS, AND OFTEN THE WRONG ONE. A person with a
+    //    year of clinical records did not fail to sign in; far more likely the
+    //    manifest holds an address they never registered with. Offer what exists
+    //    and let a human decide — nothing here is ever auto-selected, because
+    //    picking for them files a wellbeing history under a colleague.
+    if (unresolved.length > 0) {
+        let existingEmails = [];
+        try {
+            const page = await getAuth().listUsers(1000);
+            existingEmails = page.users.map((u) => u.email).filter(Boolean);
+        } catch (error) {
+            warn(`Could not list existing accounts to suggest near matches — ${error.code || error.message}. `
+               + 'The resolution above is unaffected.');
+        }
+        for (const member of unresolved) {
+            suggestionReport(member, suggestMatches(member.email, existingEmails))
+                .forEach((line) => console.log(line));
+        }
+    }
     console.log(`  ${EXCLUDED.length} excluded by decision:`);
     EXCLUDED.forEach((person) => console.log(`  — excluded: ${person.displayName.padEnd(12)} (${person.was})`));
 
@@ -252,11 +278,36 @@ async function main() {
         if (snap.empty) { warn(`${sourcePath} is empty or absent.`); return; }
 
         let copied = 0;
+        /** destination path → the first source id that claimed it, for collision reporting. */
+        const destinations = new Map();
         for (const docSnap of snap.docs) {
-            const verdict = classifyLegacyDoc(docSnap.id, byLegacy, EXCLUDED);
+            const verdict = classifyLegacyDoc(docSnap.id, byLegacy, EXCLUDED, unresolved);
             if (verdict.kind === 'member') {
-                await write(db.doc(targetFor(verdict.member)), docSnap.data(), label);
+                const target = targetFor(verdict.member);
+                // ⚠️ TWO SOURCE DOCUMENTS LANDING ON ONE DESTINATION IS SILENT DATA
+                //    MERGING. The old app slugged one person's name three ways, so
+                //    `ying_xian` and `yingxian` are separate documents that both
+                //    resolve to the same uid — which is exactly what the matching is
+                //    for, but the second `set(merge: true)` overwrites any field the
+                //    first also had, last write wins, with nothing on screen. The
+                //    merge is still the right outcome; being told it happened is the
+                //    part that was missing.
+                const earlier = destinations.get(target);
+                if (earlier) {
+                    warn(`${sourcePath}/${docSnap.id} and ${sourcePath}/${earlier} BOTH belong to `
+                       + `${verdict.member.displayName} and merge into one document. Later fields win `
+                       + 'where they overlap. Both originals are untouched — compare them if the '
+                       + 'result looks wrong.');
+                } else {
+                    destinations.set(target, docSnap.id);
+                }
+                await write(db.doc(target), docSnap.data(), label);
                 copied += 1;
+            } else if (verdict.kind === 'unresolved') {
+                warn(`${sourcePath}/${docSnap.id} belongs to ${verdict.member.displayName}, who is in `
+                   + 'the team but has no Firebase Auth account yet — NOT copied. This is the same '
+                   + 'registration listed under ERRORS above, not a separate problem. It lands on '
+                   + 'the next run once they register.');
             } else if (verdict.kind === 'excluded') {
                 warn(`${sourcePath}/${docSnap.id} belongs to ${verdict.person.displayName}, `
                    + 'excluded from team #1 — NOT copied. The original is untouched and can be '
