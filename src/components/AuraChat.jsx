@@ -4,6 +4,7 @@ import { recordTelemetry } from '../utils/telemetry';
 import { calculateRiskScore } from '../utils/scoring';
 import { ChevronLeft, Send, Sun, Moon, ExternalLink, CheckCircle, BrainCircuit } from 'lucide-react';
 import { getFunctions, httpsCallable } from 'firebase/functions';
+import { readTheme, writeTheme } from '../utils/theme';
 
 // ── Cloud Function — same pattern as AuraPulseBot.jsx ────────────────────────
 // Gemini API key is secured in Firebase Cloud Functions (never client-side)
@@ -671,7 +672,7 @@ const DomainBadge = ({ step }) => {
 const AuraChatbot = () => {
   const [isDark, setIsDark] = useState(() => {
     try {
-      const s = localStorage.getItem('nexus-theme');
+      const s = readTheme();
       const dark = s === 'dark' || (!s && window.matchMedia('(prefers-color-scheme: dark)').matches);
       document.documentElement.classList.toggle('dark', dark); 
       return dark;
@@ -700,7 +701,7 @@ const AuraChatbot = () => {
     const next = !isDark;
     setIsDark(next);
     document.documentElement.classList.toggle('dark', next);
-    localStorage.setItem('nexus-theme', next ? 'dark' : 'light');
+    writeTheme(next);
   };
 
   useEffect(() => {

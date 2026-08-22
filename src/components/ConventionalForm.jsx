@@ -6,6 +6,10 @@
  * FIX 1 — Theme key: nexus_theme → nexus-theme (hyphen)
  *   Was using underscore; AuraChatbot uses hyphen. Dark mode was never
  *   shared between components.
+ *   SUPERSEDED — that swap was applied here, to AuraChat and to ResultPage,
+ *   but not to App.jsx, WelcomeScreen, LanguageGate or PathwaySelection, so it
+ *   split the setting along the pathway gate instead of unifying it. All three
+ *   now go through `src/utils/theme.js`. See that file.
  *
  * FIX 2 — PavsLive guard: (!days && !mins) → (!days || !mins)
  *   '0 days' is a truthy string. Previous guard let the banner render
@@ -51,6 +55,7 @@ import {
   ChevronLeft, ChevronRight, Activity, ShieldAlert,
   Users, MapPin, Send, Sun, Moon, Brain, Home, Info, Zap, Globe,
 } from 'lucide-react';
+import { readTheme, writeTheme } from '../utils/theme';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // OPTION TABLES — values match AuraChatbot quick-reply strings exactly
@@ -572,7 +577,7 @@ export default function ConventionalForm() {
   // are active on frame 0, preventing the light-flash on navigation.
   const [isDark, setIsDark] = useState(() => {
     try {
-      const s = localStorage.getItem('nexus-theme');
+      const s = readTheme();
       const dark = s === 'dark' || (!s && window.matchMedia('(prefers-color-scheme: dark)').matches);
       document.documentElement.classList.toggle('dark', dark); // ← before first paint
       return dark;
@@ -619,7 +624,7 @@ export default function ConventionalForm() {
     const n = !isDark;
     setIsDark(n);
     document.documentElement.classList.toggle('dark', n);
-    localStorage.setItem('nexus-theme', n ? 'dark' : 'light'); // FIX 1
+    writeTheme(n);
   };
 
   // FIX 3: language switcher persists to localStorage

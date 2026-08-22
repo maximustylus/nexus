@@ -9,6 +9,7 @@ import {
 import { jsPDF } from 'jspdf';
 import html2canvas from 'html2canvas';
 import { recordTelemetry } from '../utils/telemetry';
+import { readTheme, writeTheme } from '../utils/theme';
 
 // ─── DICTIONARY ───────────────────────────────────────────────────────────────
 const DICTIONARY = {
@@ -215,6 +216,22 @@ const CTA_BANNER = {
   FREE_FIRST: { emoji: '🆓', bg: 'bg-emerald-50 dark:bg-emerald-950/40 border-emerald-200 dark:border-emerald-800', label: 'bg-emerald-600', text: 'text-emerald-800 dark:text-emerald-200', action: { en: 'Register for Start2Move — a completely free 6-session beginner programme via the Healthy 365 app.', ms: 'Daftar untuk Start2Move — program pemula 6 sesi percuma melalui aplikasi Healthy 365.', zh: '注册 Start2Move — 通过 Healthy 365 应用程序免费参加的 6 节初学者课程。', ta: 'Start2Move-க்கு பதிவு செய்யவும் — Healthy 365 ஆப் மூலம் முற்றிலும் இலவச 6-அமர்வு தொடக்க திட்டம்.' }, url: 'https://www.healthhub.sg/programmes/letsmoveit/start2move', urlLabel: { en: 'Register via Healthy 365', ms: 'Daftar via Healthy 365', zh: '通过 Healthy 365 注册', ta: 'Healthy 365 மூலம் பதிவு செய்க' } },
   START:     { emoji: '🚀', bg: 'bg-teal-50 dark:bg-teal-950/40 border-teal-200 dark:border-teal-800',        label: 'bg-teal-600',    text: 'text-teal-800 dark:text-teal-200',     action: { en: 'Download the Healthy 365 app and search "Start2Move" to register for the free 6-session beginner programme.', ms: 'Muat turun aplikasi Healthy 365 dan cari "Start2Move" untuk mendaftar program pemula 6 sesi percuma.', zh: '下载 Healthy 365 应用程序并搜索"Start2Move"以注册免费的 6 节初学者课程。', ta: 'Healthy 365 ஆப்பை பதிவிறக்கம் செய்து இலவச 6-அமர்வு தொடக்க திட்டத்திற்கு பதிவு செய்ய "Start2Move" ஐ தேடவும்.' }, url: 'https://www.healthhub.sg/programmes/letsmoveit/start2move', urlLabel: { en: 'Register via Healthy 365', ms: 'Daftar via Healthy 365', zh: '通过 Healthy 365 注册', ta: 'Healthy 365 மூலம் பதிவு செய்க' } },
   LEVEL_UP:  { emoji: '💪', bg: 'bg-teal-50 dark:bg-teal-950/40 border-teal-200 dark:border-teal-800',        label: 'bg-teal-600',    text: 'text-teal-800 dark:text-teal-200',     action: { en: 'Book a Strength 2.0 or Balance & Muscular Fitness session at your nearest Active Health Lab, from SGD 6.', ms: 'Tempah sesi Kekuatan 2.0 atau Keseimbangan di Makmal Active Health terdekat, dari SGD 6.', zh: '在最近的 Active Health 实验室预约力量 2.0 或平衡与肌肉健身课程，SGD 6 起。', ta: 'உங்களுக்கு அருகிலுள்ள Active Health ஆய்வகத்தில் வலிமை 2.0 அல்லது தசை உடற்பயிற்சி அமர்வை பதிவு செய்யவும், SGD 6 முதல்.' }, url: 'https://www.myactivesg.com/active-health', urlLabel: { en: 'Book at activesg.gov.sg', ms: 'Tempah di activesg.gov.sg', zh: '在 activesg.gov.sg 预约', ta: 'activesg.gov.sg இல் பதிவு செய்க' } },
+  /*
+    SOCIAL_CARE — the isolation tier. `AuraChat.selectCTA` returns this SECOND,
+    behind only chest pain, for a resident aged 60+ who reports being isolated.
+    It had no entry here, so `CTA_BANNER[ctaTier] || CTA_BANNER.START` quietly
+    served "download the Healthy 365 app" to the group least able to act on it,
+    and the CareLine referral vanished with no error. See
+    `src/utils/ctaTierParity.test.js`.
+
+    ⚠️ EVERY STRING BELOW IS COMPOSED FROM COPY ALREADY REVIEWED IN THIS FILE —
+       the four `desc` translations of `ALL_RESOURCES.singhealth_careline` above
+       — plus the number `6340 7054`, which is taken verbatim from the same
+       content author's `CTA.senior_isolated.resources` in `AuraChat.jsx`. No
+       clinical advice here was machine-translated. If the wording needs to
+       change, change it against the CareLine service page, not by paraphrase.
+  */
+  SOCIAL_CARE: { emoji: '📞', bg: 'bg-teal-50 dark:bg-teal-950/40 border-teal-200 dark:border-teal-800', label: 'bg-teal-600', text: 'text-teal-800 dark:text-teal-200', action: { en: 'Call SingHealth CareLine on 6340 7054 — a free round-the-clock tele-befriending and social support service for seniors.', ms: 'Hubungi SingHealth CareLine di 6340 7054 — perkhidmatan tele-rakan 24/7 untuk warga emas.', zh: '致电 SingHealth CareLine：6340 7054 — 为老年人提供全天候电话交友服务。', ta: 'SingHealth CareLine — 6340 7054 ஐ அழைக்கவும் — முதியோர்களுக்கான 24/7 தொலைபேசி நட்பு சேவை.' }, url: 'https://www.singhealth.com.sg/community-care/careline', urlLabel: { en: 'About CareLine', ms: 'Tentang CareLine', zh: '关于 CareLine', ta: 'CareLine பற்றி' } },
   ADVANCED:  { emoji: '⚡', bg: 'bg-emerald-50 dark:bg-emerald-950/40 border-emerald-200 dark:border-emerald-800', label: 'bg-emerald-600', text: 'text-emerald-800 dark:text-emerald-200', action: { en: 'Try the free HIIT Workout Library on HealthHub, or book a Perform 2.0 session at your nearest Active Health Lab.', ms: 'Cuba senaman HIIT percuma di HealthHub, atau tempah sesi Perform 2.0 di Makmal Active Health terdekat.', zh: '尝试 HealthHub 上免费的 HIIT 锻炼库，或在最近的 Active Health 实验室预约 Perform 2.0 课程。', ta: 'HealthHub-இல் இலவச HIIT உடற்பயிற்சிகளை முயற்சிக்கவும் அல்லது Perform 2.0 அமர்வை பதிவு செய்யவும்.' }, url: 'https://www.healthhub.sg/programmes/letsmoveit', urlLabel: { en: 'HealthHub Move It', ms: 'HealthHub Move It', zh: 'HealthHub Move It', ta: 'HealthHub Move It' } },
 };
 
@@ -238,6 +255,10 @@ const generateActionPlan = (riskTier, ctaTier, data, postalSector) => {
     URGENT:     [ALL_RESOURCES.healthier_sg, ALL_RESOURCES.active_health],
     CLINICAL:   [ALL_RESOURCES.active_health, ALL_RESOURCES.healthier_sg],
     COMMUNITY:  [ALL_RESOURCES.aic_aac, ALL_RESOURCES.pa_courses],
+    // See the SOCIAL_CARE note on CTA_BANNER. CareLine leads because the tier
+    // fires on isolation, not on inactivity — a walk-in centre asks the person
+    // to leave the house, which is the barrier being reported.
+    SOCIAL_CARE: [ALL_RESOURCES.singhealth_careline, ALL_RESOURCES.aic_aac, ALL_RESOURCES.touch_community],
     WELLBEING:  [ALL_RESOURCES.mental_wellness, ALL_RESOURCES.touch_community],
     FREE_FIRST: [ALL_RESOURCES.start2move, ALL_RESOURCES.financial_chas, ALL_RESOURCES.pa_courses],
     START:      [ALL_RESOURCES.start2move, ALL_RESOURCES.pa_courses],
@@ -457,7 +478,7 @@ export default function ResultPage() {
   const [suggestedResources, setSuggestedResources] = useState([]);
   const [isDark, setIsDark] = useState(() => {
     try {
-      const s = localStorage.getItem('nexus-theme');
+      const s = readTheme();
       if (s === 'dark') return true;
       if (s === 'light') return false;
       return window.matchMedia('(prefers-color-scheme: dark)').matches;
@@ -491,7 +512,7 @@ export default function ResultPage() {
     const next = !isDark;
     setIsDark(next);
     document.documentElement.classList.toggle('dark', next);
-    localStorage.setItem('nexus-theme', next ? 'dark' : 'light');
+    writeTheme(next);
   };
 
   const switchLang = (code) => {
