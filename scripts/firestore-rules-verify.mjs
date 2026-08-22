@@ -36,7 +36,7 @@
 // the migration copies rather than moves, so those documents still exist and a
 // stale path left in the app must not keep working.
 //
-// LAST RUN: 2026-08-21 against the Firestore emulator — 91 passed, 0 failed.
+// LAST RUN: 2026-08-21 against the Firestore emulator — 95 passed, 0 failed.
 //
 // -----------------------------------------------------------------------------
 // TRAPS PAID FOR ONCE, RECORDED SO THEY ARE NOT PAID FOR TWICE
@@ -419,8 +419,24 @@ await check('the public CAN submit screening telemetry (the live pathway)',
     assertSucceeds(addDoc(collection(anon, 'community_assessments'), telemetry())));
 await check('a missing postalSector is refused',
     assertFails(addDoc(collection(anon, 'community_assessments'), { createdAt: serverTimestamp() })));
+/**
+ * ⚠️ A WRITE-ONLY SINK, AND THE READ IS DENIED TO EVERYBODY — including a lead, and
+ *    including a super-admin. These records carry postal sector, age band, gender,
+ *    race, housing type, income adequacy, food insecurity and a chest-pain flag, and
+ *    NOTHING in the app reads them back. An earlier version of this suite asserted
+ *    "a directory member CAN read submissions (analysis)", which certified a grant
+ *    that served a screen that does not exist.
+ */
 await check('the public CANNOT read submissions back',
     assertFails(getDocs(collection(anon, 'community_assessments'))));
+await check('a signed-in member cannot read them either',
+    assertFails(getDocs(collection(as(BRANDON), 'community_assessments'))));
+await check('not even a lead can read them',
+    assertFails(getDocs(collection(as(ALIF), 'community_assessments'))));
+await check('nobody can read one back by id',
+    assertFails(getDoc(doc(as(ALIF), 'community_assessments/anything'))));
+await check('and nobody can edit a submission after the fact',
+    assertFails(updateDoc(doc(as(ALIF), 'community_assessments/anything'), { score: 0 })));
 
 // ═════════════════════════════════════════════════════════════════════════════
 // 9. THE PRE-MIGRATION COLLECTIONS ARE UNREACHABLE
