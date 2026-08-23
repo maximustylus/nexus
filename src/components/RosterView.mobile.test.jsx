@@ -746,21 +746,34 @@ describe('live mode: the responsive work stopped at the branch', () => {
         ctx.isDemo = false;
     });
 
-    it('leaves the live wizard panel the narrow, unpadded, non-scrolling dialog it was', () => {
+    /**
+     * ⚠️ THIS TEST WAS THE INVERSE OF ITSELF, AND THE INVERSION IS THE POINT.
+     *
+     *    It asserted that live mode's wizard stayed `max-w-lg`, unpadded and
+     *    NON-SCROLLING — correct while that panel held two textareas, and the whole
+     *    reason this section was called "the responsive work stopped at the branch".
+     *
+     *    `R3` removed the branch: live mode now renders the same tables the sandbox
+     *    does. Keeping the narrow non-scrolling panel would have crammed two tables
+     *    and a band editor into it and pushed Generate off the bottom of a box that
+     *    cannot scroll to reach it — a wizard nobody could finish. So the mobile
+     *    treatment applies in both modes, which is what it always meant: it followed
+     *    the tables, not the sandbox.
+     */
+    it('gives the live wizard the same scrolling, full-bleed panel the tables need', () => {
         render(<RosterView user={VISITOR} />);
         openConfigure();
 
-        const box = document.getElementById('roster-staff-pool').closest('.rounded-2xl');
-        expect(box.className).toBe(
-            'bg-white dark:bg-slate-800 w-full rounded-2xl shadow-2xl p-6 border border-slate-200 dark:border-slate-700 animate-in zoom-in-95 max-w-lg',
-        );
-        expect(wizard().className).toBe(
-            'fixed inset-0 bg-slate-900/60 backdrop-blur-md flex items-center justify-center z-[100] p-4',
-        );
-        // No sticky footer, no full-bleed, no safe-area padding: live mode is four
-        // clinicians on a desktop and its wizard is pinned elsewhere byte-for-byte.
+        const box = screen.getByRole('button', { name: /^generate roster$/i })
+            .closest('.overflow-y-auto');
+        expect(box, 'the live wizard panel cannot scroll to its own Generate button').toBeTruthy();
+        expect(box.className).toContain('max-w-3xl');
+        expect(box.className).toContain('sm:max-h-[90vh]');
+
+        // The two decisions stay reachable on a phone rather than sitting below a
+        // page of tables.
         expect(screen.getByRole('button', { name: /^generate roster$/i }).parentElement.className)
-            .toBe('flex gap-2');
+            .toContain('sticky');
     });
 
     it('leaves the two shared run fields exactly as they were in live mode', () => {

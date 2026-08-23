@@ -1213,7 +1213,21 @@ const StaffRowDetail = ({ row, index, departmentMaxPerDay, onChange }) => {
  * exactly the reason the task table's is: it is not an answer to "what will be
  * generated", so it cannot diverge from one.
  */
-export const StaffTable = ({ rows, errors, onChange, onAdd, onRemove, workingDays = 0, departmentMaxPerDay = ROSTER_V2_DEFAULTS.maxConcurrentPerDay }) => {
+/**
+ * ⚠️ `readOnly` IS THE LIVE MODE, AND IT IS NOT A LESSER VERSION OF THE TABLE.
+ *
+ * In the sandbox the staff are TYPED, because there is no team to read. In a real
+ * department they ARE the team — the member list maintained in the TEAM tab, where
+ * adding somebody checks that their account exists and their address is on an
+ * allowlisted domain. A second, editable copy here would let a roster master type
+ * a name belonging to nobody and roster them, which is the display-name keying the
+ * whole multi-team rebuild removed.
+ *
+ * So live mode shows the same rows, in the same table, and does not let them be
+ * edited HERE. Each attribute is editable where it belongs, and the note under the
+ * table says where.
+ */
+export const StaffTable = ({ rows, errors, onChange, onAdd, onRemove, readOnly = false, workingDays = 0, departmentMaxPerDay = ROSTER_V2_DEFAULTS.maxConcurrentPerDay }) => {
     const [expandedRows, setExpandedRows] = useState(() => new Set());
 
     const toggleExpanded = (id) =>
@@ -1353,16 +1367,23 @@ export const StaffTable = ({ rows, errors, onChange, onAdd, onRemove, workingDay
                                             controls for one action, which is how the two start
                                             disagreeing about whether the row can be removed. */}
                                         <Cell className="py-1 align-top">
-                                            <button
-                                                type="button"
-                                                aria-label={`Remove staff row ${index + 1}`}
-                                                title="Remove this person"
-                                                onClick={() => onRemove(row.id)}
-                                                disabled={rows.length <= 1}
-                                                className={`${ICON_BUTTON} disabled:opacity-30 disabled:cursor-not-allowed`}
-                                            >
-                                                <Trash2 size={13} />
-                                            </button>
+                                            {/* Nothing to remove in live mode: somebody leaves the
+                                                roster by leaving the TEAM, which is a Cloud Function
+                                                that also removes their membership. A delete here
+                                                would take them out of one week and leave them in the
+                                                department. */}
+                                            {!readOnly && (
+                                                <button
+                                                    type="button"
+                                                    aria-label={`Remove staff row ${index + 1}`}
+                                                    title="Remove this person"
+                                                    onClick={() => onRemove(row.id)}
+                                                    disabled={rows.length <= 1}
+                                                    className={`${ICON_BUTTON} disabled:opacity-30 disabled:cursor-not-allowed`}
+                                                >
+                                                    <Trash2 size={13} />
+                                                </button>
+                                            )}
                                         </Cell>
                                     </tr>
                                     {open && (
@@ -1381,9 +1402,27 @@ export const StaffTable = ({ rows, errors, onChange, onAdd, onRemove, workingDay
                 </table>
             </div>
 
-            <button type="button" onClick={onAdd} className={ADD_ROW}>
-                <Plus size={12} /> Add row
-            </button>
+            {readOnly ? (
+                /**
+                 * ⚠️ SAYS WHERE EACH FIELD IS CHANGED, RATHER THAN JUST BEING GREYED
+                 *    OUT. A disabled table with no explanation reads as a broken
+                 *    feature; the fields are all editable, just not from here, and a
+                 *    roster master who cannot find out where will type a name into
+                 *    something else.
+                 */
+                <p className="mt-1.5 text-[10px] text-slate-500 dark:text-slate-400 leading-relaxed">
+                    <span className="font-bold">These are your team.</span>{' '}
+                    Add or remove people in <span className="font-bold">Admin → Team</span>.
+                    Each person sets their own <span className="font-bold">grade</span> and{' '}
+                    <span className="font-bold">profession</span> on their profile — grades are
+                    private to them and to you. Leave dates and part-time hours come from their
+                    membership.
+                </p>
+            ) : (
+                <button type="button" onClick={onAdd} className={ADD_ROW}>
+                    <Plus size={12} /> Add row
+                </button>
+            )}
 
             <p className="mt-1.5 text-[10px] text-slate-500 dark:text-slate-400 leading-relaxed">
                 Leave a grade as <span className="font-bold">Not recorded</span> and AURA will keep that
@@ -2348,6 +2387,9 @@ const RosterDemoWizardTables = ({
     onRulesChange,
     staffRows,
     staffErrors,
+    // Live mode: the staff ARE the team, so the table shows them and does not let
+    // them be edited here. See `StaffTable`.
+    staffReadOnly = false,
     onStaffChange,
     onStaffAdd,
     onStaffRemove,
@@ -2397,6 +2439,7 @@ const RosterDemoWizardTables = ({
             onChange={onStaffChange}
             onAdd={onStaffAdd}
             onRemove={onStaffRemove}
+            readOnly={staffReadOnly}
             // Derived here rather than passed in from `RosterView`: it is a fact
             // about the task rows two controls below, and computing it where both
             // tables are already in scope keeps one definition of "the

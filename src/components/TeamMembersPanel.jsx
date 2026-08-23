@@ -38,6 +38,7 @@ import {
     UserPlus, Trash2, Loader2, AlertCircle, CheckCircle2, Users, ShieldCheck, Eye, Stethoscope,
 } from 'lucide-react';
 import { useTeam } from '../context/TeamContext';
+import { professionLabel } from '../utils/memberProfile';
 import { useNexus } from '../context/NexusContext';
 
 // Pinned region, as at every other call site (`AuraChat.jsx`, `FeedsView.jsx`,
@@ -339,6 +340,30 @@ const TeamMembersPanel = () => {
                                 <p className="text-[10px] text-slate-500 uppercase tracking-widest font-black mt-0.5">
                                     {member.role || 'staff'}
                                     {member.rostered === false ? ' · not rostered' : ''}
+                                </p>
+                                {/*
+                                  * ⚠️ GRADE IS DELIBERATELY NOT HERE, AND IT WAS.
+                                  *
+                                  *    An earlier version printed "AH15 · principal"
+                                  *    beside each name so a lead could spot a wrong
+                                  *    self-set grade. It came out for two reasons.
+                                  *    The smaller one is cost: grades are now separate
+                                  *    documents, so rendering them here is one extra
+                                  *    read per member on a screen that does not need
+                                  *    them. The real one is that this component also
+                                  *    renders read-only for a NON-lead — every rule
+                                  *    that guards this data would still hold, but the
+                                  *    component would be one prop away from showing a
+                                  *    column it must never show.
+                                  *
+                                  *    A lead sees every grade in the Configure staff
+                                  *    table, which is the moment a wrong one actually
+                                  *    matters, and can correct it there.
+                                  */}
+                                <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-1 truncate">
+                                    {member.profession
+                                        ? (professionLabel(member.profession) || member.profession)
+                                        : <span className="italic text-slate-400">no profession set</span>}
                                 </p>
                             </div>
 

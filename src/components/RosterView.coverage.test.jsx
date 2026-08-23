@@ -197,8 +197,43 @@ let rosterWritesLand;
 /** The registered listeners, so a test can deliver a later snapshot or an error. */
 let rosterListener;
 let coverageListener;
+// The department's saved configuration (`R1`). Held so the routing above has
+// somewhere to put it; this file is about coverage requests, so it stays absent.
+let _settingsListener;
 /** Every Firestore operation, in order: the read-back discipline is an ORDER claim. */
 let callLog;
+
+/**
+ * The swap sequence, with the department's GRADE READS taken out.
+ *
+ * ⚠️ WHY THEY ARE EXCLUDED RATHER THAN LEFT IN. `callLog` asserts an ORDER — read,
+ *    write, read BACK, and only then approve — which is the discipline this whole
+ *    file exists to pin. `R4` moved live generation onto `generateRosterV2`, which
+ *    needs every rostered person's grade, so `RosterView` now issues one `getDoc`
+ *    per member AT MOUNT. Those are not part of the swap sequence and would
+ *    otherwise prepend four unrelated entries to every expectation here.
+ *
+ * ⚠️ AND WHY THAT DOES NOT WEAKEN THE CLAIM. Filtering them out silently WOULD —
+ *    a stray grade read in the middle of the swap sequence would vanish. So
+ *    `expectGradeReadsAtMountOnly` below asserts separately that every one of them
+ *    happens before the sequence starts, which is the property the exclusion
+ *    depends on.
+ */
+const swapSequence = () => callLog.filter((entry) => !entry.includes('/grades/'));
+
+/**
+ * Every grade read happened at mount, none during the swap.
+ *
+ * Expressed as "the last grade read comes before the first roster operation"
+ * rather than as a count, so it stays true for a department of any size.
+ */
+const expectGradeReadsAtMountOnly = () => {
+    const lastGrade = callLog.map((e) => e.includes('/grades/')).lastIndexOf(true);
+    const firstRoster = callLog.findIndex((e) => !e.includes('/grades/'));
+    if (lastGrade === -1) return;
+    expect(firstRoster === -1 || lastGrade < firstRoster,
+        `a grade was read DURING the swap sequence: ${JSON.stringify(callLog)}`).toBe(true);
+};
 
 const clone = (value) => JSON.parse(JSON.stringify(value));
 
@@ -239,16 +274,35 @@ beforeEach(() => {
     query.mockImplementation((ref, ...constraints) => ({ __mock: 'query', ref, constraints }));
     where.mockImplementation((field, op, value) => ({ __mock: 'where', field, op, value }));
 
-    // One listener mock, two subscriptions: the roster document and the coverage
-    // query. Routed on the ref shape rather than on call order, so a future
-    // reordering of the effects cannot silently swap them.
+    /**
+     * One listener mock, THREE subscriptions now: the roster document, the coverage
+     * query, and the department's saved configuration (`R1`).
+     *
+     * ⚠️ ROUTED ON THE REF'S PATH, NOT ITS SHAPE, AND THE DIFFERENCE IS A REAL BUG
+     *    THIS CAUGHT. It used to be `__mock === 'query' ? coverage : roster` — a
+     *    shape test — which was written to survive the effects being reordered, and
+     *    did. What it could not survive was a SECOND `doc()` listener: the settings
+     *    subscription fell into the `else`, overwrote `rosterListener`, and every
+     *    later `rosterListener.onNext(...)` in this file pushed a roster snapshot
+     *    into the settings handler. The calendar simply never updated, and the
+     *    failure read as "the covered shift is missing" rather than as "the test is
+     *    talking to the wrong listener".
+     *
+     *    A path is what actually distinguishes these three, so a fourth listener
+     *    added later lands in `other` and is ignored rather than impersonating one
+     *    of them.
+     */
     onSnapshot.mockImplementation((target, onNext, onError) => {
+        const path = target && typeof target.path === 'string' ? target.path : '';
         if (target && target.__mock === 'query') {
             coverageListener = { onNext, onError };
             onNext(querySnapshot());
-        } else {
+        } else if (path === ROSTER_PATH) {
             rosterListener = { onNext, onError };
             if (rosterExists) onNext({ exists: () => true, data: () => clone(rosterDoc) });
+        } else if (path.endsWith('/settings/roster')) {
+            _settingsListener = { onNext, onError };
+            onNext({ exists: () => false, data: () => undefined });
         }
         return () => {};
     });
@@ -379,7 +433,8 @@ describe('accepting runs the verified sequence and only then reports success', (
 
         // THE ORDER IS THE GUARANTEE (M9 + A-RC4): the ledger is flipped only after
         // the roster has been written AND read back.
-        expect(callLog).toEqual([
+        expectGradeReadsAtMountOnly();
+        expect(swapSequence()).toEqual([
             `getDoc:${ROSTER_PATH}`,
             `updateDoc:${ROSTER_PATH}`,
             `getDoc:${ROSTER_PATH}`,
@@ -474,7 +529,8 @@ describe('accepting runs the verified sequence and only then reports success', (
         });
 
         await waitFor(() => expect(swapPatches()).toHaveLength(1));
-        expect(callLog).toEqual([
+        expectGradeReadsAtMountOnly();
+        expect(swapSequence()).toEqual([
             `getDoc:${ROSTER_PATH}`,
             `updateDoc:${ROSTER_PATH}`,
             `getDoc:${ROSTER_PATH}`,
@@ -491,14 +547,30 @@ describe('accepting runs the verified sequence and only then reports success', (
             },
         ];
 
-        // Hold the first roster read open, so the accept really is mid-flight.
+        /**
+         * Hold the first ROSTER read open, so the accept really is mid-flight.
+         *
+         * ⚠️ IT MUST MATCH ON THE PATH, AND IT USED TO MATCH ON BEING FIRST.
+         *    `mockImplementationOnce` intercepted whichever `getDoc` happened
+         *    first, which was the roster read until `R4` — live generation now
+         *    reads one GRADE per member at mount, so "first" became a grade and
+         *    this held the wrong promise open. The symptom was the Cover button
+         *    never rendering, which reads as a missing feature rather than as a
+         *    test aiming at the wrong call.
+         */
         let releaseRead;
-        getDoc.mockImplementationOnce((ref) => {
-            callLog.push(`getDoc:${ref.path}`);
-            return new Promise((resolve) => {
-                releaseRead = () =>
-                    resolve({ exists: () => rosterExists, data: () => clone(rosterDoc) });
-            });
+        const realGetDoc = getDoc.getMockImplementation();
+        let heldRosterRead = false;
+        getDoc.mockImplementation((ref) => {
+            if (!heldRosterRead && ref.path === ROSTER_PATH) {
+                heldRosterRead = true;
+                callLog.push(`getDoc:${ref.path}`);
+                return new Promise((resolve) => {
+                    releaseRead = () =>
+                        resolve({ exists: () => rosterExists, data: () => clone(rosterDoc) });
+                });
+            }
+            return realGetDoc(ref);
         });
 
         render(<RosterView user={DERLINDER} />);
@@ -513,7 +585,8 @@ describe('accepting runs the verified sequence and only then reports success', (
         expect(screen.getByText(/checking the roster/i)).toBeTruthy();
         // A press on the other one while locked does nothing at all.
         fireEvent.click(coverButton('NC', 'Fadzlynn'));
-        expect(callLog).toEqual([`getDoc:${ROSTER_PATH}`]);
+        expectGradeReadsAtMountOnly();
+        expect(swapSequence()).toEqual([`getDoc:${ROSTER_PATH}`]);
 
         await act(async () => {
             releaseRead();
@@ -576,7 +649,8 @@ describe('a swap that cannot be applied leaves the request PENDING and says so',
         );
         // NO write of any kind: not the roster, not the ledger.
         expect(updateDoc).not.toHaveBeenCalled();
-        expect(callLog).toEqual([`getDoc:${ROSTER_PATH}`]);
+        expectGradeReadsAtMountOnly();
+        expect(swapSequence()).toEqual([`getDoc:${ROSTER_PATH}`]);
         // The request is still here, still answerable, and says it was not applied.
         expect(requestCard()).not.toBeNull();
         expect(within(requestCard()).getByText(/still waiting/i)).toBeTruthy();
@@ -598,7 +672,8 @@ describe('a swap that cannot be applied leaves the request PENDING and says so',
         );
         // The roster write was attempted and the read-back happened; the LEDGER was
         // never touched. This is A-RC4: the write is not the evidence.
-        expect(callLog).toEqual([
+        expectGradeReadsAtMountOnly();
+        expect(swapSequence()).toEqual([
             `getDoc:${ROSTER_PATH}`,
             `updateDoc:${ROSTER_PATH}`,
             `getDoc:${ROSTER_PATH}`,
@@ -637,7 +712,8 @@ describe('a swap that cannot be applied leaves the request PENDING and says so',
         // It does not claim the roster is unchanged either: the write may or may not
         // have landed, and AURA says exactly that.
         expect(screen.getAllByText(/does not know whether the roster changed/i).length).toBe(2);
-        expect(callLog).toEqual([`getDoc:${ROSTER_PATH}`, `updateDoc:${ROSTER_PATH}`]);
+        expectGradeReadsAtMountOnly();
+        expect(swapSequence()).toEqual([`getDoc:${ROSTER_PATH}`, `updateDoc:${ROSTER_PATH}`]);
         expect(swapPatches()).toEqual([]);
         expect(requestCard()).not.toBeNull();
     });
@@ -670,7 +746,8 @@ describe('a swap that cannot be applied leaves the request PENDING and says so',
         expect(screen.queryByText(/Cover not applied/i)).toBeNull();
         // The roster really did change, and the ledger really was not flipped.
         expect(rosterDoc[DATE_KEY][0].lead).toBe('Derlinder');
-        expect(callLog).toEqual([
+        expectGradeReadsAtMountOnly();
+        expect(swapSequence()).toEqual([
             `getDoc:${ROSTER_PATH}`,
             `updateDoc:${ROSTER_PATH}`,
             `getDoc:${ROSTER_PATH}`,
@@ -683,7 +760,7 @@ describe('a swap that cannot be applied leaves the request PENDING and says so',
         render(<RosterView user={DERLINDER} />);
 
         fireEvent.click(coverButton());
-        await waitFor(() => expect(callLog).toHaveLength(3));
+        await waitFor(() => expect(swapSequence()).toHaveLength(3));
 
         // Second attempt, this time with a write that lands.
         rosterWritesLand = true;
@@ -711,7 +788,8 @@ describe('declining does not touch the roster document', () => {
             patch: { status: 'DENIED' },
         });
         // The roster was neither read nor written on this path.
-        expect(callLog).toEqual([`updateDoc:${SWAPS_PATH}/swap-1`]);
+        expectGradeReadsAtMountOnly();
+        expect(swapSequence()).toEqual([`updateDoc:${SWAPS_PATH}/swap-1`]);
         expect(rosterPatches()).toEqual([]);
         expect(rosterDoc).toEqual(MODERN_ROSTER());
 

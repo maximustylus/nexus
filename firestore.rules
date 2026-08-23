@@ -205,22 +205,109 @@ service cloud.firestore {
         // carrying no duties, is exactly this screen's job.
         allow update: if isLead(teamId)
                       && changedKeys().hasOnly([
-                           'displayName', 'grade', 'fte', 'skills',
-                           'unavailable', 'role', 'rostered', 'title'
+                           'displayName', 'fte', 'skills',
+                           'unavailable', 'role', 'rostered', 'title', 'profession'
                          ]);
 
-        // A member maintains their OWN availability and skills without needing a
-        // lead — but cannot touch `role` or `rostered`, which would be granting
-        // themselves powers or duties.
+        /**
+         * A member maintains their OWN attributes without needing a lead. They
+         * cannot touch `role` or `rostered` — those grant powers and duties — and
+         * they cannot touch `displayName`, because a name is how every other screen
+         * identifies them to colleagues.
+         *
+         * ⚠️ `grade` IS DELIBERATELY ABSENT FROM BOTH LISTS ABOVE, AND IT WAS IN
+         *    THEM. It is now `teams/{teamId}/grades/{uid}` — see the block below.
+         *    A rule cannot grant `get` on a document while withholding a field, and
+         *    this document is readable by every member of the team, so a grade
+         *    stored here is a grade every colleague can read. Pay grade is the most
+         *    sensitive thing somebody volunteers about themselves short of the
+         *    wellbeing log, and "the roster needs it" does not extend to "the team
+         *    may browse it".
+         *
+         * `profession` stays, and the difference is not arbitrary: a profession is
+         * on somebody's badge and grants nothing, and a rehab team needs to see it
+         * has three physiotherapists and one occupational therapist.
+         */
         allow update: if isSelf(memberUid)
                       && isMember(teamId)
-                      && changedKeys().hasOnly(['skills', 'unavailable', 'title']);
+                      && changedKeys().hasOnly(['skills', 'unavailable', 'title', 'profession']);
 
         // ⚠️ REMOVING SOMEBODY IS A CLOUD FUNCTION, NOT A DELETE. The membership
         //    document is only half of it: `users/{uid}.teamIds` has to lose the team
         //    in the same breath, or the person keeps a team in their switcher that
         //    they can no longer read and every listener fails permission-denied.
         //    Rules cannot write two documents, so they permit neither.
+        allow delete: if false;
+      }
+
+      // ── Pay grade: the roster needs it, colleagues do not ──────────────────
+      //
+      // ⚠️ THIS COLLECTION EXISTS BECAUSE FIRESTORE RULES CANNOT HIDE A FIELD.
+      //    Grade was a field on the membership document, which every member of the
+      //    team can read — so every colleague could read it. There is no
+      //    field-level read permission, so the only way for the roster to know a
+      //    grade while a teammate does not is for it to be a separate document.
+      //
+      // WHO MAY READ, AND WHY EACH ONE:
+      //   · the person      — it is theirs, and they set it
+      //   · a lead          — `generateRosterV2` runs in the lead's browser and
+      //                       `bandOfGrade` decides who may lead a shift, so a lead
+      //                       who cannot read grades cannot roster at all. A lead is
+      //                       also the person's manager, who knows it anyway.
+      //   · nobody else     — including other leads' teams, by the usual scoping
+      //
+      // ⚠️ `list` IS DENIED EVEN TO A LEAD, AND `get` IS NOT ENOUGH ON ITS OWN for
+      //    what the roster does — it reads one document per member, by uid, from
+      //    the member list it already has. Allowing `list` would add nothing the
+      //    lead cannot already assemble and would make a single query return every
+      //    salary band in the department, which is exactly the artefact this split
+      //    exists to prevent.
+      match /grades/{memberUid} {
+        allow get: if isSelf(memberUid) || isLead(teamId);
+        allow list: if false;
+
+        // The person sets their own; a lead corrects it. Both are `write` rather
+        // than `update` because the document does not exist until somebody first
+        // chooses a grade — there is nothing to migrate and nothing to seed.
+        allow create, update: if isSelf(memberUid) || isLead(teamId);
+
+        // Clearing a grade is setting it to '', which is an update. A delete would
+        // leave the roster unable to distinguish "not set" from "never existed",
+        // and both already read as no band.
+        allow delete: if false;
+      }
+
+      // ── The department's roster CONFIGURATION ──────────────────────────────
+      //
+      // Tasks, band boundaries, hours policy, scheduling rules. NOT the roster and
+      // NOT the people — the staff pool is `members` and their grades are `grades`,
+      // and both stay where they are.
+      //
+      // READ BY THE WHOLE TEAM, deliberately. A staff member looking at a generated
+      // week should be able to see what "EFT" is, how long it takes and which days
+      // it runs — that is the department describing itself, not a secret. Band
+      // BOUNDARIES are here too, and they are not personal data: they say where
+      // this department draws its senior line, not who is on which side of it.
+      //
+      // WRITTEN BY A LEAD ONLY. It decides what every generated roster contains,
+      // so a staff member who could edit it could rewrite the department's duties.
+      match /settings/{settingId} {
+        allow get: if isMember(teamId);
+        // Nothing lists this collection: there is one document and its id is a
+        // constant, so a list would only ever be a way to discover documents
+        // somebody added by hand.
+        allow list: if false;
+
+        // `setDoc` on a document that does not exist yet is a create; on one that
+        // does it is an update. Configuring a department for the first time and
+        // changing it later are the same gesture, so both verbs, same condition.
+        allow create, update: if isLead(teamId);
+
+        // ⚠️ NO DELETE. An absent configuration and a blank one are different
+        //    states: absent means "never set up" and the wizard opens with
+        //    defaults, blank would mean a department whose Generate silently
+        //    produces nothing. Clearing tasks one at a time is an update, and it is
+        //    visible while it happens.
         allow delete: if false;
       }
 
