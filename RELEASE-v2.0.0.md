@@ -37,6 +37,9 @@ it is entirely within your control: make it short, and make it quiet.
 | ☐ | **Pick a quiet moment.** Not mid-week, not while somebody is arranging cover. The live roster belongs to five clinicians. |
 | ☐ | **Service account key** downloaded (Console → Project settings → Service accounts → Generate new private key), stored **outside the repo**. |
 | ☐ | **`firebase-admin` installed where the script can find it** — see Step 0. It is not a dependency of the app, only of this script. |
+| ☐ | **Export Firestore first.** Console → Firestore → Import/Export → Export, or `gcloud firestore export gs://…`. The migration copies rather than moves, so the legacy documents ARE the rollback — but an export costs minutes and covers the case the design does not: somebody using the app between the migration and the deploy. |
+| ☐ | **Capture the current rules.** Console → Firestore → Rules → History; save the deployed text somewhere outside the repo. Rolling back the bundle without rolling back the rules leaves the old app locked out of its own paths. |
+| ☐ | **Note the current hosting release** (Console → Hosting → Release history). Rollback is one click from that list, and finding it under pressure is not the moment to learn where it lives. |
 
 ---
 
@@ -72,6 +75,14 @@ version bump does not look like a broken script.
 ---
 
 ## Step 1 — the dry run
+
+> **Two checks now run in CI that did not exist when this was written.**
+> `scripts/migrate-to-teams.test.mjs` drives this script against a fake Firestore and
+> asserts the three properties this whole runbook rests on — it copies rather than
+> moves, it is idempotent, and it refuses to overwrite. `npm run stress:teams` fuzzes
+> the team-id derivation and the approval decision. Both are green on the release
+> candidate; neither replaces reading the dry-run output below, because neither can
+> know which seven people are supposed to be in the team.
 
 Writes nothing. This is the default; `--write` is the only thing that changes it.
 
@@ -134,11 +145,60 @@ Re-running is now safe in the way this file always claimed it was.
 
 ## Step 3 — the merge
 
+⚠️ **THERE ARE TWO BRANCHES IN v2.0, AND THEY SHOULD LAND AS ONE DEPLOY.** This
+section originally described the roster branch alone, because the community portal
+rebuild did not exist when it was written. Merging them separately means two
+deploys, two windows, and a period where the public portal is live with `CP1` —
+the risk score that never measured physical activity — still in it.
+
+The community branch is a descendant of an older point on the roster branch, so it
+does not yet contain the migration fixes. Bring them together on the community
+branch first, verify once, then merge that:
+
 ```
-git checkout main
+# 1. the roster work into the community branch
+git checkout claude/nexus-community-portal
 git merge claude/nexus-aura-rostering-session-duo1q5
+npm test && npm run lint && npm run build
+
+# 2. the combined result to main — this is the deploy
+git checkout main
+git merge claude/nexus-community-portal
 git push origin main
 ```
+
+### The one conflict, and its resolution
+
+⚠️ **The first merge conflicts on `package.json`, in exactly one place.** Both
+branches added an npm script to the same block, so git sees two insertions sharing
+one anchor line. It is not a disagreement — **both entries must survive**:
+
+```
+<<<<<<< HEAD
+    "stress:community": "vite-node scripts/community-stress.mjs",
+    "test:watch": "vitest"
+=======
+    "test:watch": "vitest",
+    "stress:teams": "vite-node scripts/teams-stress.mjs"
+>>>>>>> claude/nexus-aura-rostering-session-duo1q5
+```
+
+Resolve to all three lines, minding the trailing commas:
+
+```json
+    "stress:community": "vite-node scripts/community-stress.mjs",
+    "stress:teams": "vite-node scripts/teams-stress.mjs",
+    "test:watch": "vitest"
+```
+
+Then `git add package.json && git commit`. Nothing else conflicts, and the second
+merge — the combined branch into `main` — is a clean fast-forward.
+
+*(This section originally claimed both merges were conflict-free. That was written
+from having rehearsed community → `main` and roster → `main`, never roster →
+community, which is the direction that actually collides. Rehearsing it is what
+found this, and moving the script to a different line in the block does not help:
+JSON's trailing comma means any insertion at either end rewrites its neighbour.)*
 
 CI runs `npm test`, `npm run lint`, builds, then deploys functions, **firestore rules**
 and hosting. The rules deploy is part of this step — that is what seals the old paths.
@@ -197,9 +257,12 @@ short and quiet.
 
 Stated here so it is not discovered on the day:
 
-- **`D11`** — generation is synchronous; ~23s for 100 staff over a year. Per-team
-  partitioning keeps most departments comfortable, but a large one rostering a year
-  ahead will still freeze the tab.
+- **`D11`** — generation is synchronous. Re-measured by `npm run stress` on the
+  release candidate: **17s for 100 staff over 52 weeks, 35s for 200**. (This section
+  previously said ~23s, from an earlier run on different hardware; the shape of the
+  problem is unchanged.) Per-team partitioning keeps most departments at 20–40 people
+  where it is comfortable — it does not make that number smaller, and a large
+  department rostering a year ahead will still freeze the tab.
 - **Removing a member** cannot be done from the app yet. It needs a Cloud Function,
   because the membership document and `users.teamIds` must change together.
 - **The roster still stores display names** in its day arrays. Team scoping removed the

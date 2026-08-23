@@ -29,6 +29,10 @@ files were byte-identical to `HEAD`. Those `DONE` markers were false and are rem
 > | What the owner still has to decide | [ROSTER_HANDOFF.md](ROSTER_HANDOFF.md) §5, ids `Q1`–`Q8` and `Q10`–`Q12` — **there is no `Q9`** |
 > | What to build next | **§Current queue** at the foot of this file |
 >
+> **[IDS.md](IDS.md) is the legend for every prefix in the document set** — `P`, `Q`,
+> `A`–`E`, `A-RC`, `M`, `CP`, `CD`, `T`. The banner below is the detail for the one
+> letter that means three things.
+>
 > ### ⚠️ `D` MEANS THREE DIFFERENT THINGS IN THIS FILE. Read this before following any id.
 >
 > This is the worst id collision in the document set, and it is worse here than anywhere else:
