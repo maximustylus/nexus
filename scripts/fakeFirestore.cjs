@@ -70,6 +70,15 @@ class FakeFirestore {
             path,
             id: path.split('/').pop(),
             async get() { store.reads.push(path); return store._snapshot(path); },
+            /** Subcollections beneath this document — the Admin SDK exposes this on a doc ref. */
+            async listCollections() {
+                store.reads.push(`${path}/**`);
+                const prefix = `${path}/`;
+                const names = new Set([...store.docs.keys()]
+                    .filter((k) => k.startsWith(prefix) && k.slice(prefix.length).split('/').length === 2)
+                    .map((k) => k.slice(prefix.length).split('/')[0]));
+                return [...names].map((id) => ({ id, path: `${path}/${id}`, ...store.collection(`${path}/${id}`) }));
+            },
             async set(data, options) {
                 const merge = !!(options && options.merge);
                 const existing = store.docs.get(path);
