@@ -321,3 +321,84 @@ describe('⚠️ a re-run must not undo what people have changed since — T2', 
         expect(store.docs.get('users/uid-0').email).toBe(MEMBERS[0].email.toLowerCase());
     });
 });
+
+/**
+ * ==============================================================================
+ * TWO SOURCE DOCUMENTS, ONE DESTINATION — T17
+ * ==============================================================================
+ *
+ * The old app slugged one person's name several ways, so `cep_team/ying_xian` and
+ * `cep_team/ying xian` are separate documents that both resolve to the same uid.
+ * That is exactly what the uid matching is FOR, and it is also the one case where
+ * it loses data: only one of them can occupy the destination.
+ *
+ * ⚠️ WHY THIS SUITE EXISTS AT ALL. The warning for this case said "merge into one
+ *    document, later fields win" — and that stopped being true without the
+ *    sentence changing. It described `set(data, { merge: true })` called twice.
+ *    `write()` now reads the destination first and SKIPS when it exists, so the
+ *    second source is not written at all and the first wins whole.
+ *
+ *    Nothing caught the drift because nothing asserted the behaviour, only the
+ *    prose. It was found on the real cutover (2026-08-23) by reading the write
+ *    output against the dry-run output and noticing they disagreed.
+ *
+ *    The difference decides what an operator does next. Under a merge you compare
+ *    overlapping fields. Under a skip you check whether the DISCARDED document
+ *    held something the kept one does not — and copy it by hand.
+ * ==============================================================================
+ */
+describe('⚠️ two legacy documents for one person — T17', () => {
+    /** Both slugs resolve to Ying Xian, who is `uid-` whatever the manifest says. */
+    const twoSlugs = () => {
+        const yx = MEMBERS.findIndex((m) => m.displayName === 'Ying Xian');
+        const seed = seedLegacy();
+        seed['cep_team/ying_xian'] = { name: 'Ying Xian', projects: ['kept-project'], onlyInFirst: true };
+        seed['cep_team/ying xian'] = { name: 'Ying Xian', projects: ['discarded-project'], onlyInSecond: true };
+        return { seed, uid: `uid-${yx}` };
+    };
+
+    it('copies exactly one of them and says which', async () => {
+        const { seed } = twoSlugs();
+        const { output } = await run(new FakeFirestore(seed), []);
+        expect(output).toMatch(/BOTH belong to Ying Xian/);
+        expect(output).toMatch(/NOT copied/);
+    });
+
+    /**
+     * THE ASSERTION THE OLD WORDING WOULD HAVE FAILED. A merge would leave BOTH
+     * `onlyInFirst` and `onlyInSecond` on the destination. A skip leaves only the
+     * first document's fields — which is what actually happens, and what an
+     * operator has to be told so they know to go looking.
+     */
+    it('does NOT merge them — the second document\'s fields are absent', async () => {
+        const { seed, uid } = twoSlugs();
+        const store = new FakeFirestore(seed);
+        await run(store, ['--write']);
+
+        const landed = store.docs.get(`teams/${TEAM}/projects/2026/staff/${uid}`);
+        expect(landed, 'nothing was written for Ying Xian at all').toBeTruthy();
+        expect(landed.onlyInFirst, 'the first document was not the one kept').toBe(true);
+        expect(landed.onlyInSecond,
+            'the second document was MERGED in — the warning says it is discarded, so one of them is lying')
+            .toBeUndefined();
+    });
+
+    it('leaves both originals untouched, which is what makes the manual repair possible', async () => {
+        const { seed } = twoSlugs();
+        const store = new FakeFirestore(seed);
+        await run(store, ['--write']);
+        expect(store.docs.get('cep_team/ying_xian').onlyInFirst).toBe(true);
+        expect(store.docs.get('cep_team/ying xian').onlyInSecond).toBe(true);
+    });
+
+    /**
+     * The wording is asserted as well as the behaviour, because the failure this
+     * suite exists to prevent was a TRUE mechanism described by a FALSE sentence.
+     */
+    it('the warning does not claim a merge that does not happen', async () => {
+        const { seed } = twoSlugs();
+        const { output } = await run(new FakeFirestore(seed), []);
+        expect(output, 'the warning still describes the old merge behaviour')
+            .not.toMatch(/merge into one document|[Ll]ater fields win/);
+    });
+});

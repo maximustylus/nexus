@@ -484,20 +484,38 @@ async function main() {
             const verdict = classifyLegacyDoc(docSnap.id, byLegacy, EXCLUDED, unresolved);
             if (verdict.kind === 'member') {
                 const target = targetFor(verdict.member);
-                // ⚠️ TWO SOURCE DOCUMENTS LANDING ON ONE DESTINATION IS SILENT DATA
-                //    MERGING. The old app slugged one person's name three ways, so
-                //    `ying_xian` and `yingxian` are separate documents that both
-                //    resolve to the same uid — which is exactly what the matching is
-                //    for, but the second `set(merge: true)` overwrites any field the
-                //    first also had, last write wins, with nothing on screen. The
-                //    merge is still the right outcome; being told it happened is the
-                //    part that was missing.
+                /**
+                 * ⚠️ TWO SOURCE DOCUMENTS LANDING ON ONE DESTINATION. The old app
+                 *    slugged one person's name several ways, so `ying_xian` and
+                 *    `ying xian` are separate documents that both resolve to the same
+                 *    uid — which is exactly what the uid matching is FOR, and also the
+                 *    one case where it loses data.
+                 *
+                 * ⚠️ THIS WARNING USED TO SAY "MERGE INTO ONE DOCUMENT, LATER FIELDS
+                 *    WIN", AND THAT STOPPED BEING TRUE WITHOUT THE SENTENCE CHANGING.
+                 *    It described `set(data, { merge: true })` called twice. `write()`
+                 *    now reads the destination first and calls `skip()` when it
+                 *    exists, so the SECOND document is not written at all: the first
+                 *    source wins whole, and any field present only in the second is
+                 *    simply absent from the result.
+                 *
+                 *    The difference decides what an operator goes and checks. Under a
+                 *    merge you compare the overlapping fields. Under a skip you check
+                 *    whether the discarded document held anything the kept one does
+                 *    not — a whole project, a whole year — and copy it across by hand.
+                 *    Observed on the real cutover, 2026-08-23, on Ying Xian's
+                 *    `archive_2025` pair.
+                 *
+                 * Neither behaviour destroys anything: both originals are untouched,
+                 * which is what makes the manual repair possible at all.
+                 */
                 const earlier = destinations.get(target);
                 if (earlier) {
                     warn(`${sourcePath}/${docSnap.id} and ${sourcePath}/${earlier} BOTH belong to `
-                       + `${verdict.member.displayName} and merge into one document. Later fields win `
-                       + 'where they overlap. Both originals are untouched — compare them if the '
-                       + 'result looks wrong.');
+                       + `${verdict.member.displayName}. Only ONE can be copied, and `
+                       + `${sourcePath}/${earlier} got there first — this one is NOT copied and its `
+                       + 'fields do not appear in the result. Both originals are untouched: open '
+                       + 'them side by side and hand-copy anything the kept one is missing.');
                 } else {
                     destinations.set(target, docSnap.id);
                 }
