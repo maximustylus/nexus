@@ -19,8 +19,16 @@ jobs:
       - name: Lint Frontend
         run: npm run lint
 
+      # `VITE_APPCHECK_SITE_KEY` is the CLIENT half of `CP7`. Absent, the App Check
+      # block in `src/firebase.js` does nothing and the app behaves exactly as it
+      # does today — which is what makes shipping it before anybody registers a key
+      # safe. A site key is NOT a secret (it is served to every browser), so it is a
+      # repository VARIABLE rather than a secret; an unset variable is an empty
+      # string, which is falsy, which is the inert path.
       - name: Build Frontend
         run: npm run build
+        env:
+          VITE_APPCHECK_SITE_KEY: '${{ vars.VITE_APPCHECK_SITE_KEY }}'
 
       - name: Install Backend Dependencies
         working-directory: ./functions
@@ -44,6 +52,34 @@ jobs:
       # is the one with no error callback (`App.jsx`), so a missing index shows the
       # bell as permanently empty, with no banner and nothing in the UI to explain
       # it. An empty bell is indistinguishable from having no notifications.
+
+      # ⚠️ THE FUNCTION'S ENVIRONMENT, WRITTEN HERE RATHER THAN COMMITTED. Firebase
+      # reads `functions/.env` at deploy time, so this is the supported way to give
+      # a v2 function a variable — and writing it from repository settings is what
+      # keeps `RATE_LIMIT_SALT` out of the repository. A salt that lives in git is
+      # not a salt: the counter ids in `rate_limits` are hashes of caller addresses,
+      # and the IPv4 space is small enough that anybody holding both the salt and
+      # the database can enumerate it.
+      #
+      # Both are optional and both fail SAFE when unset:
+      #   ENFORCE_APP_CHECK  unset -> App Check observed and logged, never enforced.
+      #                      Do not set this until the logs say attested traffic is
+      #                      ~100%; setting it early takes the public screening
+      #                      offline nationally. See COMMUNITY_TODO.md.
+      #   RATE_LIMIT_SALT    unset -> a built-in salt. The rate limit still works;
+      #                      the stored tokens are obfuscated rather than
+      #                      irreversible.
+      - name: Write function environment
+        working-directory: ./functions
+        run: |
+          : > .env
+          if [ -n "${ENFORCE_APP_CHECK}" ]; then echo "ENFORCE_APP_CHECK=${ENFORCE_APP_CHECK}" >> .env; fi
+          if [ -n "${RATE_LIMIT_SALT}" ]; then echo "RATE_LIMIT_SALT=${RATE_LIMIT_SALT}" >> .env; fi
+          echo "functions/.env written with $(wc -l < .env) variable(s)"
+        env:
+          ENFORCE_APP_CHECK: '${{ vars.ENFORCE_APP_CHECK }}'
+          RATE_LIMIT_SALT: '${{ secrets.RATE_LIMIT_SALT }}'
+
       - name: Deploy Backend (Functions) and Firestore Rules
         uses: w9jds/firebase-action@master
         with:

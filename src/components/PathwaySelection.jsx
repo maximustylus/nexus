@@ -2,6 +2,8 @@ import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 // ADDED SUN AND MOON ICONS
 import { MessageSquare, FileText, ChevronLeft, BrainCircuit, Sun, Moon } from 'lucide-react';
+import { readLanguage, applyDocumentLanguage } from '../utils/language';
+import { getSessionId } from '../utils/assessmentSession';
 
 const DICTIONARY = {
   en: {
@@ -46,7 +48,8 @@ export default function PathwaySelection() {
   const navigate = useNavigate();
   const [lang, setLang] = useState('en');
   const [animate, setAnimate] = useState(false);
-  const [sessionId] = useState(() => 'nx-' + Math.random().toString(36).substr(2, 9));
+  // One id per assessment, shared by every screen — see `src/utils/assessmentSession.js`.
+  const [sessionId] = useState(getSessionId);
 
   // ADDED MISSING THEME STATE
   const [isDark, setIsDark] = useState(false);
@@ -78,7 +81,8 @@ export default function PathwaySelection() {
   };
 
   useEffect(() => {
-    const storedLang = localStorage.getItem('nexus_language');
+    // See the note in ConventionalForm: direct-URL entry means every screen applies it.
+    const storedLang = applyDocumentLanguage(readLanguage());
     if (storedLang && DICTIONARY[storedLang]) {
       setLang(storedLang);
     }
@@ -172,6 +176,44 @@ export default function PathwaySelection() {
             </p>
           </button>
 
+        </div>
+
+        {/*
+          ⚠️ THE COLLECTION NOTICE, BEFORE ANYTHING IS COLLECTED.
+
+          This screen is the last point common to both pathways and the last moment
+          before the first health question. Until now the portal said nothing here:
+          the full data-governance statement existed only inside the off-screen PDF
+          on the RESULT page — after the record had already been written — and the
+          chat pathway carried no privacy text at any point, while writing age band,
+          gender, ethnicity, housing type, postal sector and four health flags.
+
+          The wording is a plain-language reduction of that same statement, and it
+          is accurate as of the telemetry fix (`CP3`, 301bb5a) which removed the
+          user-agent string. Before that commit no honest version of this paragraph
+          could have been written.
+
+          ⚠️ ENGLISH ONLY, KNOWINGLY — every other string on this screen comes from
+             `DICTIONARY[lang]`. A privacy notice a person cannot read is not a
+             notice, so this is a gap, not a finish. Tracked as `CD10`.
+
+          This is a NOTICE, not consent: there is no control here to decline and
+          still get a result, because building one is a product decision rather
+          than a defect fix. `CD5` in COMMUNITY_TODO.md is where that is decided.
+        */}
+        <div className="mt-8 mx-auto max-w-3xl rounded-2xl border border-slate-200 dark:border-slate-800 bg-white/70 dark:bg-slate-900/60 backdrop-blur-sm px-5 py-4">
+          <p className="text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest mb-2">
+            Before you begin
+          </p>
+          <p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed">
+            This assessment records your answers — including age band, gender, ethnic group,
+            housing type and the first two digits of your postal code — so that community health
+            programmes can be planned for the areas that need them. It is{' '}
+            <strong>de-identified at the point of capture</strong>: it does not collect or store
+            your name, NRIC, contact details or financial information, and your postal sector is
+            used only to map you to nearby services. Records are deleted automatically after{' '}
+            <strong>24 months</strong>. You will get your result either way.
+          </p>
         </div>
       </div>
 

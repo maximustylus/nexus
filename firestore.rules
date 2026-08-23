@@ -638,6 +638,25 @@ service cloud.firestore {
     //    So this is a write-only sink like `beta_feedback`. Analysis happens in the
     //    console or through the Admin SDK, both of which bypass rules entirely, and
     //    neither of which needs a client grant.
+    /**
+     * The population rollup — COUNTS ONLY, never a record.
+     *
+     * ⚠️ THIS EXISTS SO THAT `community_assessments` BELOW CAN STAY CLOSED. `CP5`
+     *    found that collection readable by every signed-in staff member and shut
+     *    it to `if false`; a dashboard reading rows would undo that. Instead a
+     *    scheduled Admin-SDK function aggregates, applies small-cell suppression,
+     *    and writes here — so a reader sees how many people in a sector reported
+     *    food insecurity, and can never see which.
+     *
+     * ⚠️ WRITE IS DENIED TO EVERY CLIENT. The Admin SDK bypasses these rules, which
+     *    is exactly why the deny must be absolute: a client that could write here
+     *    could publish any figure it liked to a page a health system plans from.
+     */
+    match /community_insights/{period} {
+      allow read: if isSignedIn();
+      allow write: if false;
+    }
+
     match /community_assessments/{assessmentId} {
       allow read: if false;
       allow create: if request.resource.data.keys().hasAll(['createdAt', 'postalSector'])
@@ -664,6 +683,22 @@ service cloud.firestore {
     //   `smart_database/{id}`
     //       AURA's append-only audit sink. Left global and unruled on purpose; it is
     //       never read back and its documents carry their own author.
+    //
+    //   `rate_limits/{scope__key__window}`
+    //       The `CP7` counters behind `communityAck`, the one endpoint the public
+    //       can reach. Written and read ONLY by that function on the Admin SDK.
+    //
+    //       ⚠️ THE DENIAL IS THE WHOLE MECHANISM. A counter a client can write is
+    //          not a counter: any caller could reset their own bucket to zero and
+    //          the ceiling would be decorative. It is not readable either — the
+    //          documents are per-caller and time-boxed, so `list` on this collection
+    //          would say roughly how many distinct people used the public health
+    //          screening in the last hour. Default-deny gives both, which is why
+    //          this appears here as a named omission rather than as a rule.
+    //
+    //          The caller key inside each id is HASHED, not an address — see the
+    //          note in `functions/rateLimit.js`, including the honest limit of that
+    //          without `RATE_LIMIT_SALT` set.
     //
     //   `system_data/*`, `shift_swaps`, `wellbeing_history`, `staff_loads`,
     //   `cep_team`, `feed_posts`, `notifications`, `monthly_workload`, `archive_*`

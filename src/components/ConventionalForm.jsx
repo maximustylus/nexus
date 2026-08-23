@@ -56,6 +56,10 @@ import {
   Users, MapPin, Send, Sun, Moon, Brain, Home, Info, Zap, Globe,
 } from 'lucide-react';
 import { readTheme, writeTheme } from '../utils/theme';
+import { readLanguage, writeLanguage, applyDocumentLanguage } from '../utils/language';
+import { getSessionId, saveProgress, loadProgress, clearProgress } from '../utils/assessmentSession';
+import { toSector, isValidSector } from '../utils/singapore/postalSectors';
+import { parseFallsAnswer, parseHealthierSg, parseAgeBand, isSixtyPlus } from '../utils/clinicalFlags';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // OPTION TABLES — values match AuraChatbot quick-reply strings exactly
@@ -109,11 +113,37 @@ const SOCIAL_OPTIONS = [
 ];
 
 // FIX 6: restored em dash in en display label for last option
+/*
+  ⚠️ ENGLISH-ONLY, LIKE THE CHAT'S VERSION OF THE SAME TWO QUESTIONS, and shown to
+  everybody rather than skipped for other languages. That asymmetry with the chat
+  is deliberate and it is the lesser evil here: the FORM renders every option as a
+  visible row with its own `en`/`ms`/`zh`/`ta` labels, so a missing translation
+  would render an empty row rather than an English one. Falling back to `en` keeps
+  the question answerable. Tracked as `CD10` — see `TRANSLATION-BRIEF.md`.
+*/
+const FALLS_OPTIONS = [
+  { value: 'No falls',           en: 'No falls',           ms: 'No falls',           zh: 'No falls',           ta: 'No falls' },
+  { value: 'One fall',           en: 'One fall',           ms: 'One fall',           zh: 'One fall',           ta: 'One fall' },
+  { value: 'Two or more falls',  en: 'Two or more falls',  ms: 'Two or more falls',  zh: 'Two or more falls',  ta: 'Two or more falls' },
+  { value: 'A fall, and I now avoid some activities', en: 'A fall, and I now avoid some activities', ms: 'A fall, and I now avoid some activities', zh: 'A fall, and I now avoid some activities', ta: 'A fall, and I now avoid some activities' },
+];
+
+const HEALTHIER_SG_OPTIONS = [
+  { value: 'Yes, I am enrolled', en: 'Yes, I am enrolled', ms: 'Yes, I am enrolled', zh: 'Yes, I am enrolled', ta: 'Yes, I am enrolled' },
+  { value: 'No, not enrolled',   en: 'No, not enrolled',   ms: 'No, not enrolled',   zh: 'No, not enrolled',   ta: 'No, not enrolled' },
+  { value: 'I am not sure',      en: 'I am not sure',      ms: 'I am not sure',      zh: 'I am not sure',      ta: 'I am not sure' },
+];
+
 const WELLBEING_OPTIONS = [
   { value: 'Feeling good overall',                           en: 'Feeling good overall',                             ms: 'Perasaan baik secara keseluruhannya',        zh: '整体感觉不错',            ta: 'ஒட்டுமொத்தமாக நல்லாக உணர்கிறேன்'        },
   { value: 'Some stress but managing',                       en: 'Some stress, but managing',                        ms: 'Ada sedikit tekanan tapi boleh kawal',       zh: '有些压力但能应对',        ta: 'சில மன அழுத்தம் ஆனால் சமாளிக்கிறேன்'    },
   { value: 'Feeling quite stressed or low',                  en: 'Feeling quite stressed or low in mood',            ms: 'Rasa sangat tertekan atau sedih',            zh: '感到很压抑或情绪低落',    ta: 'மிகவும் மன அழுத்தம் அல்லது மனச்சோர்வு'  },
-  { value: 'Overwhelmed — caregiving or financial pressure', en: 'Overwhelmed — caregiving or financial pressure',   ms: 'Terbeban — penjagaan atau tekanan kewangan', zh: '不知所措 — 照顾或经济压力', ta: 'அதிக சுமை — பராமரிப்பு அல்லது நிதி அழுத்தம்' },
+  // ⚠️ SPLIT FROM ONE CHIP INTO TWO. Caregiver strain and financial strain lead to
+  //    completely different places, and merging them hid the unpaid family carer —
+  //    the highest-value entry point in social prescribing. Both halves use each
+  //    language's own existing wording; nothing was newly translated.
+  { value: 'Overwhelmed — caregiving',         en: 'Overwhelmed — caregiving',         ms: 'Terbeban — penjagaan',        zh: '不知所措 — 照顾',     ta: 'அதிக சுமை — பராமரிப்பு' },
+  { value: 'Overwhelmed — financial pressure', en: 'Overwhelmed — financial pressure', ms: 'Terbeban — tekanan kewangan', zh: '不知所措 — 经济压力', ta: 'அதிக சுமை — நிதி அழுத்தம்' },
 ];
 
 const INCOME_OPTIONS = [
@@ -159,7 +189,9 @@ const MED_FLAG_VALUES     = new Set(['High blood pressure', 'Prediabetes or diab
 const SYMPTOM_FLAG_VALUE  = 'Dizziness or chest pain when active';
 const FINANCIAL_BARR_VALS = new Set(['Too expensive', 'Too far away']);
 const SOCIAL_FLAG_VALS    = new Set(['I mostly manage on my own', 'I feel quite isolated']);
-const PSYCHO_FLAG_VALS    = new Set(['Some stress but managing', 'Feeling quite stressed or low', 'Overwhelmed — caregiving or financial pressure']);
+const PSYCHO_FLAG_VALS    = new Set(['Some stress but managing', 'Feeling quite stressed or low', 'Overwhelmed — caregiving', 'Overwhelmed — financial pressure']);
+/** Caregiver strain is its own route, and also counts as psychological distress. */
+const CAREGIVER_FLAG_VALS = new Set(['Overwhelmed — caregiving']);
 
 // Identical to AuraChatbot selectCTA()
 const selectCTA = ({ symptomFlag, medFlag, age, sdohPsychological, sdohFinancial, sdohSocial, pavsScore }) => {
@@ -188,18 +220,40 @@ const deriveFlags = (f) => {
   const sdohFinancial     = f.barriers.some(v => FINANCIAL_BARR_VALS.has(v)) || f.incomeAdequacy === 'Inadequate';
   const sdohSocial        = SOCIAL_FLAG_VALS.has(f.social);
   const sdohPsychological = PSYCHO_FLAG_VALS.has(f.wellbeing);
+  const caregiverStrain   = CAREGIVER_FLAG_VALS.has(f.wellbeing);
+
+  // ⚠️ THE SAME PARSERS THE CHAT USES, not a second implementation. Two pathways
+  //    deriving one flag two ways is `CP9` — a comment claiming they were
+  //    identical while they were not — and it is why `parseFallsAnswer` lives in
+  //    `clinicalFlags.js` rather than in either component.
+  const fallsParsed       = parseFallsAnswer(f.falls);
+  const healthierSgEnrolled = parseHealthierSg(f.healthierSg);
   const sdohFoodInsecure  = f.foodInsecure === true;
   const sdohHousing       = f.housing === 'HDB 1-2 Room';
 
-  const age    = f.ageGroup === '60+' ? '60+' : f.ageGroup === '41-60' ? '41-60' : f.ageGroup === '21-40' ? '21-40' : 'Unknown';
+  // The same parser the chat uses. The form's values are a controlled select, so
+  // this is identical in behaviour — it is here so there is one age parser rather
+  // than two, which is the `CP9` lesson applied before it becomes a divergence.
+  const age    = parseAgeBand(f.ageGroup);
   const gender = f.gender || 'Unknown';
 
   return {
     pavsScore, pavsDays, pavsMinutes, strengthDays,
     medFlag, symptomFlag,
-    sdohFinancial, sdohSocial, sdohPsychological,
+    sdohFinancial, sdohSocial, sdohPsychological, caregiverStrain,
+    fallsCount: fallsParsed.falls, fallsRisk: fallsParsed.fallsRisk,
+    fearOfFalling: fallsParsed.avoidsActivity, fallsAsked: fallsParsed.asked,
+    healthierSgEnrolled,
     psychoFlag: sdohPsychological,
     sdohFoodInsecure, sdohHousing,
+    // ⚠️ PARITY WITH THE CHAT. These three were derived here but returned under
+    //    different names, or computed in `handleSubmit` instead — so the two
+    //    pathways handed different shapes to the same scorer, and
+    //    `pathwayParity.test.js` could not see they agreed. `postalSector` in
+    //    particular was computed twice, in two places, from two expressions.
+    ethnicity: f.race || 'Unknown',
+    housingType: f.housing || 'Unknown',
+    postalSector: toSector(f.postalCode),
     age, gender,
     previousId: f.previousId?.trim().toUpperCase() || null,
   };
@@ -570,7 +624,13 @@ const LANGS = [
 export default function ConventionalForm() {
   const navigate    = useNavigate();
   const [lang,      setLang]    = useState('en');
-  const [step,      setStep]    = useState(0);
+  /**
+   * ⚠️ RESTORED FROM sessionStorage, NOT RESET TO ZERO. Four steps of answers
+   *    lived only in component state, so a refresh — or a rotation that triggered
+   *    one, or iOS reclaiming a backgrounded tab — sent the person back to the
+   *    first question with nothing kept. See `src/utils/assessmentSession.js`.
+   */
+  const [step,      setStep]    = useState(() => loadProgress('form')?.step ?? 0);
   const [ready,     setReady]   = useState(false);
   // Lazy init — reads localStorage SYNCHRONOUSLY before first render.
   // Sets classList.dark inside the initialiser so Tailwind dark: utilities
@@ -584,14 +644,23 @@ export default function ConventionalForm() {
     } catch { return false; }
   });
   const [busy,      setBusy]    = useState(false);
-  const [sessionId] = useState(() => 'NX-' + Math.random().toString(36).substr(2, 9).toUpperCase());
+  const [sessionId] = useState(getSessionId);
 
-  const [f, setF] = useState({
+  const EMPTY_ANSWERS = {
     pavsDays: '', pavsMins: '', strength: '', medical: [], wellbeing: '',
     barriers: [], social: '', foodInsecure: null, incomeAdequacy: '', housing: '',
     aware: null, referred: null, rating: '', trust: '3', improve: '',
     ageGroup: '', gender: '', race: '', postalCode: '', previousId: '',
-  });
+    falls: '', healthierSg: '',
+  };
+  // Spread over the empty shape rather than used directly: a saved object from an
+  // older build may be missing a key this one reads, and `f.medical.includes(...)`
+  // on an absent array throws during render.
+  const [f, setF] = useState(() => ({ ...EMPTY_ANSWERS, ...(loadProgress('form')?.answers ?? {}) }));
+
+  // Mirrored on every change. Cheap — one small JSON write per tap — and it is
+  // what makes the restore above possible.
+  useEffect(() => { saveProgress('form', { answers: f, step }); }, [f, step]);
 
   const set    = useCallback((k, v) => setF(p => ({ ...p, [k]: v })), []);
   const togArr = useCallback((k, v) => setF(p => ({ ...p, [k]: p[k].includes(v) ? p[k].filter(x => x !== v) : [...p[k], v] })), []);
@@ -615,7 +684,9 @@ export default function ConventionalForm() {
   }, [isDark]);
 
   useEffect(() => {
-    const sl = localStorage.getItem('nexus_language');
+    // Applied on every screen, not only where the choice is made: these routes are
+    // reachable by direct URL, so a visitor can land here without passing the gate.
+    const sl = applyDocumentLanguage(readLanguage());
     if (sl && D[sl]) setLang(sl);
     setTimeout(() => setReady(true), 80);
   }, []);
@@ -630,7 +701,7 @@ export default function ConventionalForm() {
   // FIX 3: language switcher persists to localStorage
   const switchLang = (code) => {
     setLang(code);
-    localStorage.setItem('nexus_language', code);
+    writeLanguage(code);
   };
 
   const t = D[lang] || D.en;
@@ -661,7 +732,16 @@ export default function ConventionalForm() {
       if (!f.ageGroup)               return 'ageGroup';
       if (!f.gender)                 return 'gender';
       if (!f.race)                   return 'race';
-      if (f.postalCode.length !== 2) return 'postalCode';
+      // ⚠️ VALIDATES THE SECTOR, NOT THE LENGTH. `'99'` and `'74'` are two
+      //    characters and neither is a Singapore postal sector; the old check let
+      //    both through and they were stored as locations. `isValidSector` tests
+      //    against the real list of 81.
+      if (!isValidSector(f.postalCode)) return 'postalCode';
+      // ⚠️ REQUIRED ONLY WHEN SHOWN. `parseFallsAnswer` reports an empty answer as
+      //    `asked: false`, which is correct for an under-60 who never saw the
+      //    question — but for a 60+ respondent who skipped it, "not asked" would be
+      //    a lie about whether the cohort was screened.
+      if (isSixtyPlus(f.ageGroup) && !f.falls) return 'falls';
     }
     return null;
   };
@@ -676,7 +756,13 @@ export default function ConventionalForm() {
       const flags   = deriveFlags(f);
       const ctaTier = selectCTA(flags);
       const score   = calculateRiskScore(flags);
-      const sector  = f.postalCode || '00';
+      // ⚠️ VALIDATED, AND `null` WHEN IT IS NOT A REAL SECTOR. The form asks for
+      //    the first two digits and only checked the LENGTH, so '99' or '74' —
+      //    neither of which is a Singapore sector — went into the record as though
+      //    they were places, and `|| '00'` turned a blank into one too.
+      // One derivation, from `deriveFlags`. This used to recompute it here, so the
+      // record and the flags could in principle disagree about where somebody was.
+      const sector  = flags.postalSector;
 
       await recordTelemetry(sector, {
         sessionId, action: 'conventional_form_v4', language: lang,
@@ -686,6 +772,9 @@ export default function ConventionalForm() {
         demographics: { age: f.ageGroup, gender: f.gender, race: f.race, sector },
       });
 
+      // The answers have become a result; the in-progress copy is no longer the
+      // live one and keeping it would resume a completed assessment.
+      clearProgress();
       navigate('/individuals/result', {
         state: { score, data: flags, postalSector: sector, sessionId, previousSessionId: flags.previousId, ctaTier },
       });
@@ -923,6 +1012,37 @@ export default function ConventionalForm() {
                 className={inputCls} placeholder="e.g. 73" />
               <Note text={t.postalHint} />
             </div>
+            {/*
+              ⚠️ 60+ ONLY, MATCHING THE CHAT'S `when` PREDICATE. For an older adult
+              being considered for an Active Ageing Centre, falls history matters
+              more than a weekly minutes figure — and asking a 24-year-old is noise.
+              The condition reads `f.ageGroup` directly because the form knows the
+              answer already; the chat uses `chatSteps.js` because it has to decide
+              mid-conversation.
+            */}
+            {isSixtyPlus(f.ageGroup) && (
+              <div className="md:col-span-2 pt-2 border-t border-slate-100 dark:border-slate-800">
+                <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-2">
+                  In the past 12 months, have you had a fall — including a slip or trip where you ended up on the ground?<Req />
+                </label>
+                <select value={f.falls} onChange={e => set('falls', e.target.value)} className={selCls}>
+                  <option value="">{t.sel}</option>
+                  {FALLS_OPTIONS.map(o => <option key={o.value} value={o.value}>{o[lang] || o.en}</option>)}
+                </select>
+              </div>
+            )}
+
+            <div className="md:col-span-2">
+              <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-2">
+                Are you enrolled with a Healthier SG GP?
+                <span className="text-slate-400 font-normal text-xs ml-1">({t.optional})</span>
+              </label>
+              <select value={f.healthierSg} onChange={e => set('healthierSg', e.target.value)} className={selCls}>
+                <option value="">{t.sel}</option>
+                {HEALTHIER_SG_OPTIONS.map(o => <option key={o.value} value={o.value}>{o[lang] || o.en}</option>)}
+              </select>
+            </div>
+
             <div className="md:col-span-2 pt-2 border-t border-slate-100 dark:border-slate-800">
               <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-2">
                 {t.prevIdQ} <span className="text-slate-400 font-normal text-xs ml-1">({t.optional})</span>

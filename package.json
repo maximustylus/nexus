@@ -11,6 +11,7 @@
     "test": "vitest run",
     "stress": "node scripts/roster-stress.mjs",
     "stress:teams": "vite-node scripts/teams-stress.mjs",
+    "stress:community": "vite-node scripts/community-stress.mjs",
     "test:watch": "vitest"
   },
   "dependencies": {

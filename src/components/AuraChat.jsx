@@ -5,37 +5,42 @@ import { calculateRiskScore } from '../utils/scoring';
 import { ChevronLeft, Send, Sun, Moon, ExternalLink, CheckCircle, BrainCircuit } from 'lucide-react';
 import { getFunctions, httpsCallable } from 'firebase/functions';
 import { readTheme, writeTheme } from '../utils/theme';
+import { toSector } from '../utils/singapore/postalSectors';
+import { nextActiveStep, activeStepCount, activeStepPosition } from '../utils/chatSteps';
+// ⚠️ Word-bounded matchers, not raw substring regexes. `/low/` used to fire inside
+// "slowly", "follow" and "allow", flagging psychological distress on somebody
+// saying they felt fine. See `src/utils/clinicalFlags.js`.
+import {
+  matchesSymptom, matchesCondition, matchesFinancialBarrier, matchesSocialIsolation,
+  matchesPsychologicalDistress, matchesCaregiverStrain, matchesFoodInsecurity,
+  isSixtyPlus, parseAgeBand,
+  matchesFemale, matchesMale,
+  isNoPreviousId, parseFallsAnswer, parseHealthierSg,
+} from '../utils/clinicalFlags';
+import { readLanguage, applyDocumentLanguage } from '../utils/language';
+import { getSessionId, saveProgress, loadProgress, clearProgress } from '../utils/assessmentSession';
 
 // ── Cloud Function — same pattern as AuraPulseBot.jsx ────────────────────────
 // Gemini API key is secured in Firebase Cloud Functions (never client-side)
 const functions = getFunctions(undefined, 'us-central1');
-const secureChatWithAura = httpsCallable(functions, 'chatWithAura');
+// The community pathway's OWN endpoint. It was `chatWithAura`, which is the staff
+// assistant's callable — see the note at the call site.
+const communityAck = httpsCallable(functions, 'communityAck');
 
 // ── Well Well persona system prompt for community health triage ───────────────
 // Used as the `prompt` param passed to the Cloud Function, same as personas
 // in AuraPulseBot. Well Well uses Motivational Interviewing (OARS) and is
 // calibrated for Singapore community members, not clinical staff.
-const WELL_WELL_PROMPT =
-  'You are Well Well, a warm and professionally trained community health navigator ' +
-  "within Singapore's NEXUS health programme. You use Motivational Interviewing (MI) " +
-  'techniques — specifically OARS: Open questions, Affirmations, Reflective listening, and Summaries.\n\n' +
-  'You are currently guiding a community member through the NEXUS structured health assessment. ' +
-  'After each answer, you will receive the question domain, the user\'s answer, and all prior ' +
-  'answers collected so far. Your job is to write a brief, natural acknowledgement ' +
-  '(1\u20132 sentences, under 40 words) that:\n' +
-  '- Reflects what the person actually said — specific, never generic\n' +
-  '- Uses an affirming, non-judgmental MI tone\n' +
-  '- Matches emotional register: warm and encouraging for positive behaviours, compassionate ' +
-  'and non-alarming for health concerns, calm and matter-of-fact for neutral answers\n' +
-  '- Naturally bridges to the next question (which will follow automatically — do NOT write the next question yourself)\n\n' +
-  'Hard rules:\n' +
-  '- NEVER say "Great!", "Wonderful!", "Awesome!" — these feel hollow\n' +
-  '- NEVER say "on those active days" or similar if the person answered 0 days of exercise\n' +
-  '- NEVER minimise a health concern (e.g. chest pain, isolation, food insecurity) with cheerful filler\n' +
-  '- NEVER use clinical jargon — speak plainly, as a trusted health coach would\n' +
-  '- Do NOT repeat the question back to the person\n' +
-  '- Do NOT mention AURA, Well Well, NEXUS, or any system names\n' +
-  '- Respond in English unless the person\'s answer is clearly in Malay, Chinese, or Tamil — then mirror their language';
+// ⚠️ `WELL_WELL_PROMPT` USED TO LIVE HERE, AND THAT WAS THE PROBLEM.
+//
+// The community persona was a client constant, shipped to every browser and sent
+// back to the server on every turn as `prompt`. A system prompt the caller supplies
+// is a system prompt the caller can replace — and the endpoint it was sent to,
+// `chatWithAura`, accepted up to 8,000 characters of it without authentication.
+//
+// It now lives in `functions/index.js` beside `communityAck`, which takes no
+// caller-supplied prompt at all. Nothing here needs it: this component sends the
+// domain, the answer and the prior answers, and receives one sentence back.
 
 // ─── DOMAIN CONFIGURATION ─────────────────────────────────────────────────────
 // Each step declares its clinical domain for badge display and progress colouring.
@@ -53,6 +58,41 @@ const DOMAIN_CONFIG = [
   { key: 'housing_type', badge: '🏢 Housing Environment',        group: 'admin'    }, // 10 
   { key: 'postal_code',  badge: '📍 Resource Mapping',           group: 'admin'    }, // 11
   { key: 'previous_id',  badge: '🔗 NEXUS Record Linkage',       group: 'admin'    }, // 12
+
+  /*
+    ⚠️ APPENDED, NOT INSERTED. `prompts`, `quickReplies` and `reflections` are
+    parallel arrays in four language dictionaries. Inserting a step in the middle
+    means renumbering twelve arrays by hand, which is exactly how a question goes
+    missing in one language and nobody notices for months. New steps go on the end
+    and `when` decides whether they are asked.
+
+    Both are gated by `src/utils/chatSteps.js`: a step with no prompt in the active
+    language is SKIPPED, so these appear in English only until the other three are
+    translated (`CD10`). A question somebody cannot read produces a WRONG answer,
+    not a missing one — it still feeds the risk score.
+  */
+  {
+    key: 'falls', badge: '\u{1F9B5} Falls & Function (60+)', group: 'clinical', // 13
+    /**
+     * 60+ only. A Regional Health System reviewer's point: for somebody being
+     * considered for an Active Ageing Centre, falls history matters more than a
+     * weekly minutes figure — PAVS alone can route a 75-year-old to "150 minutes a
+     * week" without ever asking whether they have fallen. Asking everybody would be
+     * noise, and every unnecessary question costs completions in the population
+     * least likely to finish.
+     */
+    // ⚠️ `isSixtyPlus`, NOT a substring test for "60+". The gate used to be
+    //    `/60\s*\+/` over the raw answer, which only ever matched the CHIP text —
+    //    somebody who typed "72" or "I am 65 years old" was silently never asked.
+    //    See `parseAgeBand` in `clinicalFlags.js`; `CP26`.
+    when: (data) => isSixtyPlus(data?.demographics),
+  },
+  {
+    key: 'healthier_sg', badge: '\u{1FA7A} Healthier SG', group: 'admin', // 14
+    // Asked of everyone. The portal references Healthier SG throughout and cannot
+    // currently tell whether the person is enrolled — which changes almost every
+    // recommendation it makes.
+  },
 ];
 
 const TOTAL_STEPS = DOMAIN_CONFIG.length; // 13
@@ -248,7 +288,9 @@ const DICTIONARY = {
       /* 9  ethnicity       */ 'What is your ethnic group? This helps us understand the diverse communities we serve.',
       /* 10 housing_type    */ 'What type of housing do you live in? (e.g. HDB 3-Room, Condo)',
       /* 11 postal_code     */ 'What are the first two digits of your postal code? This lets me map the nearest resources to you.',
-      /* 12 previous_id     */ 'Last question — do you have a previous NEXUS Assessment ID? If yes, paste it below so I can link your records. If not, just select No.',
+      /* 12 previous_id     */ 'Do you have a previous NEXUS Assessment ID? If yes, paste it below so I can link your records. If not, just select No.',
+      /* 13 falls           */ 'Two quick questions about steadiness. In the past 12 months, have you had a fall — including a slip or trip where you ended up on the ground?',
+      /* 14 healthier_sg    */ 'Last one — are you enrolled with a Healthier SG GP? It changes which programmes you can be referred to.',
     ],
 
     reflections: [
@@ -292,12 +334,39 @@ const DICTIONARY = {
       /* 4 barriers        */ ['Lack of time', 'Too expensive', 'Too far away', 'I prefer hospitals over community', 'Unsure what is available', 'No barriers for me'],
       /* 5 social          */ ['I have several people I can rely on', 'I have one or two close people', 'I mostly manage on my own', 'I feel quite isolated'],
       /* 6 food_insecurity */ ['Yes, this has happened', 'No, I have always had enough'],
-      /* 7 wellbeing       */ ['Feeling good overall', 'Some stress but managing', 'Feeling quite stressed or low', 'Overwhelmed — caregiving or financial pressure'],
+      /*
+        ⚠️ CAREGIVER STRAIN AND FINANCIAL STRAIN ARE TWO DIFFERENT REFERRALS, and
+        they used to share one chip: "Overwhelmed — caregiving or financial
+        pressure". A Regional Health System reviewer put it plainly — the unpaid
+        family carer who has not yet identified as one is the highest-value entry
+        point in social prescribing, and merging the two made that person
+        invisible to the tool.
+
+        Both halves are split from each language's OWN existing wording, on the
+        connector already in the sentence ("or" / "atau" / "或" / "அல்லது"). No new
+        clinical copy was translated — see `CD10`.
+      */
+      /* 7 wellbeing       */ ['Feeling good overall', 'Some stress but managing', 'Feeling quite stressed or low', 'Overwhelmed — caregiving', 'Overwhelmed — financial pressure'],
       /* 8 demographics    */ ['Male, 21–40', 'Female, 21–40', 'Male, 41–60', 'Female, 41–60', 'Male, 60+', 'Female, 60+'],
       /* 9 ethnicity       */ ['Chinese', 'Malay', 'Indian', 'Eurasian', 'Others', 'Prefer not to say'],
       /* 10 housing_type   */ ['HDB 1-2 Room', 'HDB 3 Room', 'HDB 4 Room', 'HDB 5 Room / Exec', 'Condo / Private', 'Landed'],
-      /* 11 postal_code    */ ['North (e.g. 73, 75)', 'East (e.g. 46, 52)', 'West (e.g. 60, 64)', 'North-East (e.g. 53, 82)', 'Central/South (e.g. 01–33)', 'Other / Type my own'],
+      /* 11 postal_code    */ 
+      /*
+        ⚠️ NO EXAMPLE DIGITS IN THESE CHIPS, AND THAT IS THE WHOLE POINT.
+        This row used to read 'North (e.g. 73, 75)', 'East (e.g. 46, 52)' and so on.
+        `parseClinicalData` took the first two digits it found in the answer — which
+        for a TAPPED CHIP is the label — so every respondent who tapped North was
+        recorded as sector 73, East as 46, West as 60. The geographic data collected
+        'for population-level resource planning' was four constants, and it also chose
+        which health cluster's services the person was shown.
+        The question already asks for the digits. Only the 'type my own' chip remains,
+        in each language's existing wording; anything unreadable is now `null`, not a
+        place. See `src/utils/singapore/postalSectors.js`.
+      */
+      ['Other / Type my own'],
       /* 12 previous_id    */ ['No previous ID'],
+      /* 13 falls           */ ['No falls', 'One fall', 'Two or more falls', 'A fall, and I now avoid some activities'],
+      /* 14 healthier_sg    */ ['Yes, I am enrolled', 'No, not enrolled', 'I am not sure'],
     ],
   },
 
@@ -352,11 +421,24 @@ const DICTIONARY = {
       ['Kekurangan masa', 'Terlalu mahal', 'Terlalu jauh', 'Lebih suka hospital', 'Tidak pasti apa yang ada', 'Tiada halangan'],
       ['Ada beberapa orang yang boleh saya hubungi', 'Ada satu atau dua orang rapat', 'Saya mostly uruskan sendiri', 'Saya rasa agak keseorangan'],
       ['Ya, ini pernah berlaku', 'Tidak, saya sentiasa ada makanan yang cukup'],
-      ['Perasaan baik secara keseluruhannya', 'Ada sedikit tekanan tapi boleh kawal', 'Rasa sangat tertekan atau sedih', 'Terbeban — tanggungjawab penjagaan atau tekanan kewangan'],
+      ['Perasaan baik secara keseluruhannya', 'Ada sedikit tekanan tapi boleh kawal', 'Rasa sangat tertekan atau sedih', 'Terbeban — tanggungjawab penjagaan', 'Terbeban — tekanan kewangan'],
       ['Lelaki, 21–40', 'Perempuan, 21–40', 'Lelaki, 41–60', 'Perempuan, 41–60', 'Lelaki, 60+', 'Perempuan, 60+'],
       ['Cina', 'Melayu', 'India', 'Eurasian', 'Lain-lain', 'Tidak mahu beritahu'],
       ['HDB 1-2 Bilik', 'HDB 3 Bilik', 'HDB 4 Bilik', 'HDB 5 Bilik / Eksekutif', 'Kondo / Pangsapuri', 'Landed'],
-      ['Utara (cth. 73, 75)', 'Timur (cth. 46, 52)', 'Barat (cth. 60, 64)', 'Timur Laut (cth. 53, 82)', 'Tengah/Selatan (cth. 01–33)', 'Lain-lain / Taip sendiri'],
+      
+      /*
+        ⚠️ NO EXAMPLE DIGITS IN THESE CHIPS, AND THAT IS THE WHOLE POINT.
+        This row used to read 'North (e.g. 73, 75)', 'East (e.g. 46, 52)' and so on.
+        `parseClinicalData` took the first two digits it found in the answer — which
+        for a TAPPED CHIP is the label — so every respondent who tapped North was
+        recorded as sector 73, East as 46, West as 60. The geographic data collected
+        'for population-level resource planning' was four constants, and it also chose
+        which health cluster's services the person was shown.
+        The question already asks for the digits. Only the 'type my own' chip remains,
+        in each language's existing wording; anything unreadable is now `null`, not a
+        place. See `src/utils/singapore/postalSectors.js`.
+      */
+      ['Lain-lain / Taip sendiri'],
       ['Tiada ID'],
     ],
   },
@@ -412,11 +494,24 @@ const DICTIONARY = {
       ['没时间', '太贵了', '太远了', '更喜欢去医院', '不确定有哪些资源', '没有障碍'],
       ['有几个可以依靠的人', '有一两个亲近的人', '大多数情况自己处理', '感到相当孤立'],
       ['是的', '没有，我一直都有足够的食物'],
-      ['整体感觉不错', '有些压力但能应对', '感到很压抑或情绪低落', '感到不知所措 — 照顾或经济压力'],
+      ['整体感觉不错', '有些压力但能应对', '感到很压抑或情绪低落', '感到不知所措 — 照顾', '感到不知所措 — 经济压力'],
       ['男, 21–40', '女, 21–40', '男, 41–60', '女, 41–60', '男, 60+', '女, 60+'],
       ['华人', '马来人', '印度人', '欧亚裔', '其他', '不愿透露'],
       ['HDB 1-2 房式', 'HDB 3 房式', 'HDB 4 房式', 'HDB 5 房式 / 执行组屋', '私人公寓', '有地住宅'],
-      ['北部 (如 73, 75)', '东部 (如 46, 52)', '西部 (如 60, 64)', '东北部 (如 53, 82)', '中南部 (如 01–33)', '其他 / 手动输入'],
+      
+      /*
+        ⚠️ NO EXAMPLE DIGITS IN THESE CHIPS, AND THAT IS THE WHOLE POINT.
+        This row used to read 'North (e.g. 73, 75)', 'East (e.g. 46, 52)' and so on.
+        `parseClinicalData` took the first two digits it found in the answer — which
+        for a TAPPED CHIP is the label — so every respondent who tapped North was
+        recorded as sector 73, East as 46, West as 60. The geographic data collected
+        'for population-level resource planning' was four constants, and it also chose
+        which health cluster's services the person was shown.
+        The question already asks for the digits. Only the 'type my own' chip remains,
+        in each language's existing wording; anything unreadable is now `null`, not a
+        place. See `src/utils/singapore/postalSectors.js`.
+      */
+      ['其他 / 手动输入'],
       ['没有之前的 ID'],
     ],
   },
@@ -472,11 +567,24 @@ const DICTIONARY = {
       ['நேரமின்மை', 'மிகவும் விலை அதிகம்', 'மிகவும் தூரம்', 'மருத்துவமனைகளை விரும்புகிறேன்', 'என்ன கிடைக்கும் என்று தெரியாது', 'தடைகள் இல்லை'],
       ['பல நம்பகமான நபர்கள் உள்ளனர்', 'ஒன்று அல்லது இரண்டு நெருங்கிய நபர்கள்', 'பெரும்பாலும் சுயமாக சமாளிக்கிறேன்', 'மிகவும் தனிமையாக உணர்கிறேன்'],
       ['ஆம், இது நடந்துள்ளது', 'இல்லை, என்னிடம் எப்போதும் போதுமான உணவு இருந்தது'],
-      ['ஒட்டுமொத்தமாக நல்லாக உணர்கிறேன்', 'சில மன அழுத்தம் ஆனால் சமாளிக்கிறேன்', 'மிகவும் மன அழுத்தம் அல்லது மனச்சோர்வு', 'அதிக சுமை — பராமரிப்பு அல்லது நிதி அழுத்தம்'],
+      ['ஒட்டுமொத்தமாக நல்லாக உணர்கிறேன்', 'சில மன அழுத்தம் ஆனால் சமாளிக்கிறேன்', 'மிகவும் மன அழுத்தம் அல்லது மனச்சோர்வு', 'அதிக சுமை — பராமரிப்பு', 'அதிக சுமை — நிதி அழுத்தம்'],
       ['ஆண், 21–40', 'பெண், 21–40', 'ஆண், 41–60', 'பெண், 41–60', 'ஆண், 60+', 'பெண், 60+'],
       ['சீனர்', 'மலாய்', 'இந்தியர்', 'யுரேஷியன்', 'மற்றவை', 'கூற விரும்பவில்லை'],
       ['HDB 1-2 அறை', 'HDB 3 அறை', 'HDB 4 அறை', 'HDB 5 அறை / எக்ஸிகியூட்டிவ்', 'காண்டோ / தனியார் அபார்ட்மெண்ட்', 'நிலம் உள்ள வீடு'],
-      ['வடக்கு (எ.கா. 73, 75)', 'கிழக்கு (எ.கா. 46, 52)', 'மேற்கு (எ.கா. 60, 64)', 'வடகிழக்கு (எ.கா. 53, 82)', 'மத்திய/தெற்கு (எ.கா. 01–33)', 'மற்றவை / தட்டச்சு செய்கிறேன்'],
+      
+      /*
+        ⚠️ NO EXAMPLE DIGITS IN THESE CHIPS, AND THAT IS THE WHOLE POINT.
+        This row used to read 'North (e.g. 73, 75)', 'East (e.g. 46, 52)' and so on.
+        `parseClinicalData` took the first two digits it found in the answer — which
+        for a TAPPED CHIP is the label — so every respondent who tapped North was
+        recorded as sector 73, East as 46, West as 60. The geographic data collected
+        'for population-level resource planning' was four constants, and it also chose
+        which health cluster's services the person was shown.
+        The question already asks for the digits. Only the 'type my own' chip remains,
+        in each language's existing wording; anything unreadable is now `null`, not a
+        place. See `src/utils/singapore/postalSectors.js`.
+      */
+      ['மற்றவை / தட்டச்சு செய்கிறேன்'],
       ['முந்தைய ID இல்லை'],
     ],
   },
@@ -514,53 +622,82 @@ const parseClinicalData = (raw) => {
 
   // Medical safety
   const medStr      = (raw.medical || '').toLowerCase();
-  const symptomFlag = /(dizziness|chest pain|pening|dada|头晕|胸痛|தலைச்சுற்றல்|நெஞ்சு வலி)/.test(medStr);
-  const medFlag     = /(blood pressure|prediabetes|diabetes|heart|darah tinggi|高血压|糖尿病|心脏|உயர் இரத்த|நீரிழிவு|இதய)/.test(medStr);
+  const symptomFlag = matchesSymptom(medStr);
+  const medFlag     = matchesCondition(medStr);
 
   // SDOH — Financial
   const barrStr      = (raw.barriers || '').toLowerCase();
-  const sdohFinancial = /(expensive|cost|afford|mahal|kos|贵|செலவு|too far|jauh|太远)/.test(barrStr);
+  const sdohFinancial = matchesFinancialBarrier(barrStr);
 
   // SDOH — Social 
   const socialStr    = (raw.social || '').toLowerCase();
-  const sdohSocial   = /(isolated|alone|on my own|keseorangan|孤立|தனிமை)/.test(socialStr);
+  const sdohSocial   = matchesSocialIsolation(socialStr);
 
   // SDOH — Psychological 
   const wellStr      = (raw.wellbeing || '').toLowerCase();
-  const sdohPsychological = /(stressed|stress|low|overwhelmed|tertekan|murung|terbeban|压抑|不知所措|மன அழுத்தம்|மனச்சோர்வு|அதிக சுமை)/.test(wellStr);
+  const sdohPsychological = matchesPsychologicalDistress(wellStr);
+  // Its own domain as well as a distress signal — see `matchesCaregiverStrain`.
+  const caregiverStrain   = matchesCaregiverStrain(wellStr);
+
+  // Falls & function — asked of the 60+ cohort only, so `asked: false` here means
+  // "not applicable or not translated", NEVER "no falls".
+  const falls = parseFallsAnswer(raw.falls);
+  // `null` for both "not sure" and "not asked" — the portal does not know, and
+  // that must not be read as "not enrolled".
+  const healthierSgEnrolled = parseHealthierSg(raw.healthier_sg);
 
   // Demographics
   const demoStr = (raw.demographics || '').toLowerCase();
   let gender = 'Unknown';
-  if (/(female|perempuan|女|பெண்)/.test(demoStr))        gender = 'Female';
-  else if (/(male|lelaki|男|ஆண்)/.test(demoStr))          gender = 'Male';
+  // Female is tested first because `male` is a substring of `female`; the
+  // matchers are word-bounded now, but the order is load-bearing for the
+  // non-Latin terms and is kept deliberately.
+  if (matchesFemale(demoStr))       gender = 'Female';
+  else if (matchesMale(demoStr))    gender = 'Male';
 
-  let age = 'Unknown';
-  if (demoStr.includes('60+'))                             age = '60+';
-  else if (demoStr.includes('41'))                         age = '41-60';
-  else if (demoStr.includes('21'))                         age = '21-40';
+  // ⚠️ ONE PARSER, SHARED WITH THE FALLS GATE AND THE FORM. This was three
+  //    `includes` calls that only recognised the chip text, so a typed age became
+  //    `Unknown` — losing the falls screen AND both 60+ CTA tiers, since
+  //    `selectCTA` branches on this value.
+  const age = parseAgeBand(demoStr);
 
   // NEW: Ethnicity & Housing Type
   const ethnicity = raw.ethnicity || 'Unknown';
   const housingType = raw.housing_type || 'Unknown';
+  /**
+   * ⚠️ THE FORM DERIVED THIS AND THE CHAT DID NOT — and nothing consumed it in
+   *    either. The evidence page tells the public that housing is used as a social
+   *    risk proxy ("1–2 Room HDB"), so it was a claim with no mechanism behind it,
+   *    the same shape as the retention notice before `expireCommunityAssessments`.
+   *    Now derived in both pathways and routed in `communityServices.js`.
+   */
+  const sdohHousing = /1-2 room|1–2 room/i.test(housingType);
 
   // Location
-  const locStr       = (raw.postal_code || '');
-  const sectorMatch  = locStr.match(/\d{2}/);
-  const postalSector = sectorMatch ? sectorMatch[0] : '00';
+  // ⚠️ A REAL SECTOR OR `null` — NEVER '00'. `toSector` validates against the 81
+  //    live Singapore sectors and rejects anything that is not a postal code, so a
+  //    chip label, a typo or a refusal all come back as `null` and stay unknown all
+  //    the way to the result. The old code produced the string '00', which is not a
+  //    sector, and the cluster lookup resolved it to one particular cluster as
+  //    though it were a place.
+  const postalSector = toSector(raw.postal_code);
 
   // Continuity
   const foodStr        = (raw.food_insecurity || '').toLowerCase();
-  const sdohFoodInsecure = /(yes|ya|是|ஆம்)/.test(foodStr);
+  const sdohFoodInsecure = matchesFoodInsecurity(foodStr);
 
   const prevStr    = (raw.previous_id || '');
-  const isNoId     = /(no|none|tidak|tiada|没|无|不|இல்லை)/i.test(prevStr) || prevStr.trim() === '';
+  const isNoId     = isNoPreviousId(prevStr);
   const previousId = isNoId ? null : prevStr.trim().toUpperCase();
 
   return {
     pavsScore, pavsDays, pavsMinutes, strengthDays,
     symptomFlag, medFlag,
     sdohFinancial, sdohSocial, sdohPsychological, sdohFoodInsecure,
+    caregiverStrain, sdohHousing,
+    fallsCount: falls.falls, fallsRisk: falls.fallsRisk,
+    fearOfFalling: falls.avoidsActivity, fallsAsked: falls.asked,
+    healthierSgEnrolled,
     gender, age, ethnicity, housingType, postalSector, previousId,
     psychoFlag: sdohPsychological,
   };
@@ -682,16 +819,35 @@ const AuraChatbot = () => {
   const chatEndRef                  = useRef(null);
   const inputRef                    = useRef(null);
 
-  const [lang]      = useState(() => localStorage.getItem('nexus_language') || 'en');
+  const [lang]      = useState(() => applyDocumentLanguage(readLanguage()));
   const langData    = DICTIONARY[lang] || DICTIONARY.en;
-  const [sessionId] = useState(() => 'NX-' + Math.random().toString(36).substr(2, 9).toUpperCase());
+  const [sessionId] = useState(getSessionId);
 
-  const [currentStep,   setCurrentStep]   = useState(0);
-  const [messages,      setMessages]      = useState([]);
+  /**
+   * ⚠️ RESTORED, NOT RESET. A thirteen-question conversation lived only here, so a
+   *    refresh, a rotation that triggered one, or iOS reclaiming a backgrounded
+   *    tab started the person again at question one — after they had already
+   *    answered questions about chest pain, food insecurity and their mental
+   *    health. See `src/utils/assessmentSession.js`.
+   *
+   *    `messages` is restored too, not just the answers: resuming into an empty
+   *    transcript at question nine would read as a different, broken product.
+   */
+  const saved = loadProgress('chat');
+  const [currentStep,   setCurrentStep]   = useState(() => saved?.currentStep ?? 0);
+  const [messages,      setMessages]      = useState(() => saved?.messages ?? []);
   const [userInput,     setUserInput]     = useState('');
   const [isTyping,      setIsTyping]      = useState(false);
-  const [collectedData, setCollectedData] = useState({});
+  const [collectedData, setCollectedData] = useState(() => saved?.collectedData ?? {});
   const [isComplete,    setIsComplete]    = useState(false);
+
+  // Mirrored on every turn, so the next load can resume mid-conversation.
+  // `isComplete` is deliberately NOT saved: a finished assessment is restored from
+  // the result store on `/individuals/result`, and resuming a completed chat into
+  // a screen with no result would be a dead end.
+  useEffect(() => {
+    if (!isComplete) saveProgress('chat', { currentStep, messages, collectedData });
+  }, [currentStep, messages, collectedData, isComplete]);
 
   useEffect(() => {
     document.documentElement.classList.toggle('dark', isDark);
@@ -738,9 +894,12 @@ const AuraChatbot = () => {
     setIsTyping(true);
 
     const staticAck = langData.reflections[currentStep]?.(text) ?? '';
-    const nextStep  = currentStep + 1;
+    // ⚠️ NOT `currentStep + 1`. Steps are skipped when they do not apply to this
+    //    person (the falls branch is 60+ only) or when the active language has no
+    //    prompt for them — see `src/utils/chatSteps.js`.
+    const nextStep  = nextActiveStep(DOMAIN_CONFIG, currentStep, langData.prompts, updatedData);
 
-    if (nextStep < TOTAL_STEPS) {
+    if (nextStep !== -1) {
       const nextPromptRaw = langData.prompts[nextStep];
       const nextPrompt    = typeof nextPromptRaw === 'function' ? nextPromptRaw(updatedData) : nextPromptRaw;
       const staticText    = (staticAck ? staticAck + ' ' : '') + nextPrompt;
@@ -750,29 +909,42 @@ const AuraChatbot = () => {
       setMessages(prev => [...prev, { sender: 'bot', text: staticText, step: nextStep, _id: msgId }]);
       setIsTyping(false);
 
-      const historySnap = messages
-        .filter(m => !m.isGreeting)
-        .map(m => ({ role: m.sender === 'bot' ? 'model' : 'user', parts: [{ text: m.text }] }));
-
-      const answersSoFar = Object.entries(updatedData)
-        .map(function(e) { return '  ' + e[0] + ': ' + e[1]; }).join('\n');
-      const contextPrompt = [
-        WELL_WELL_PROMPT,
-        'Assessment domain: ' + stepKey + ' (step ' + (currentStep + 1) + ' of ' + TOTAL_STEPS + ')',
-        'User just answered: "' + text + '"',
-        'Answers so far:\n' + answersSoFar,
-      ].join('\n');
-
+      // ⚠️ WHAT THIS SENDS, AND WHAT IT DELIBERATELY NO LONGER SENDS.
+      //
+      // This used to call `chatWithAura` — the same callable as the internal staff
+      // assistant, unauthenticated, whose system prompt names KKH/SingHealth and
+      // prints the internal Firestore schema. It shipped `WELL_WELL_PROMPT` to the
+      // browser and passed all 1,718 characters back on every turn as a
+      // caller-supplied `CONTEXT/OVERRIDE`, which meant anybody could replace it.
+      //
+      // The persona now lives on the server (`functions/index.js`, `communityAck`)
+      // and there is no `prompt` field to override. Two more things are gone:
+      //
+      //   `history`  — the whole transcript was sent alongside the answers, which
+      //                duplicated `priorAnswers` for a one-sentence acknowledgement
+      //                and re-sent the person's full health profile to Google twice
+      //                per turn. Only the answers go now, and only known domains.
+      //   `role`     — went into the model context verbatim from an unauthenticated
+      //                caller, defaulting to 'Staff'.
+      //
+      // What the reply does is unchanged and worth restating: it rewrites the text
+      // of the acknowledgement already on screen. `parseClinicalData`,
+      // `calculateRiskScore` and `selectCTA` never see it.
       var upgradeExpired = false;
       var upgradeTimer   = setTimeout(function() { upgradeExpired = true; }, AI_UPGRADE_WINDOW_MS);
 
-      secureChatWithAura({
-        userText: text, history: historySnap,
-        role: 'Community Member — Well Well', prompt: contextPrompt, isDemo: false,
+      communityAck({
+        domain: stepKey,
+        answer: text,
+        priorAnswers: updatedData,
+        language: lang,
       }).then(function(result) {
         clearTimeout(upgradeTimer);
-        if (upgradeExpired) return; 
+        if (upgradeExpired) return;
 
+        // `communityAck` returns plain text — the server prompt asks for a sentence,
+        // not JSON. The fence-strip and the brace-scan stay as tolerance for a model
+        // that wraps it anyway; they are no longer the expected path.
         var raw      = (result.data && result.data.text) ? result.data.text : '';
         var stripped = raw.replace(/```json|```/g, '').trim();
         var isErr    = !stripped || /fallback|missing.api|api.key|error|unauthorized|unavailable/i.test(stripped);
@@ -783,8 +955,8 @@ const AuraChatbot = () => {
           var s = stripped.indexOf('{'); var e = stripped.lastIndexOf('}') + 1;
           if (s !== -1 && e > s) { var p = JSON.parse(stripped.substring(s, e)); aiAck = (p.reply || '').trim(); }
         } catch(ex) {
-          // Ignored on purpose: a non-JSON reply is expected here. `aiAck` stays
-          // empty and the raw stripped text is used as the acknowledgement below.
+          // Ignored on purpose: plain text is now the expected shape. `aiAck` stays
+          // empty and the stripped text is used as the acknowledgement below.
         }
         if (!aiAck) aiAck = stripped;
         if (!aiAck) return;
@@ -810,6 +982,9 @@ const AuraChatbot = () => {
   };
 
   const concludeTriage = async (finalData) => {
+    // The conversation has become a result; the in-progress copy is no longer the
+    // live one and keeping it would resume a completed assessment.
+    clearProgress();
     const parsed    = parseClinicalData(finalData);
     const riskScore = calculateRiskScore(parsed);
     const ctaData   = selectCTA(parsed);
@@ -891,7 +1066,16 @@ const AuraChatbot = () => {
       </header>
 
       {/* ── PROGRESS BAR ── */}
-      <ProgressBar currentStep={currentStep} total={TOTAL_STEPS} langData={langData} />
+      {/*
+        Counted from the steps this person will actually be asked, so the bar does
+        not promise questions that are skipped. It changes once — when age is given
+        and the 60+ branch opens or does not.
+      */}
+      <ProgressBar
+        currentStep={activeStepPosition(DOMAIN_CONFIG, currentStep, langData.prompts, collectedData) - 1}
+        total={activeStepCount(DOMAIN_CONFIG, langData.prompts, collectedData)}
+        langData={langData}
+      />
 
       {/* ── CHAT AREA ── */}
       <div className="flex-1 overflow-y-auto px-4 py-4 space-y-4">

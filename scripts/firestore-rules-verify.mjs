@@ -438,6 +438,30 @@ await check('nobody can read one back by id',
 await check('and nobody can edit a submission after the fact',
     assertFails(updateDoc(doc(as(ALIF), 'community_assessments/anything'), { score: 0 })));
 
+/*
+ * ── COMMUNITY INSIGHTS — the rollup that exists so the above can stay closed ──
+ *
+ * ⚠️ THE PAIR OF ASSERTIONS BELOW IS THE WHOLE DESIGN. Staff get a population view
+ *    WITHOUT the collection above ever opening: a scheduled Admin-SDK function
+ *    counts, suppresses small cells, and writes one document here. If a future
+ *    change makes `community_assessments` readable "just for the dashboard", the
+ *    assertions above fail — and if it makes `community_insights` writable by a
+ *    client, the ones below do. A client that could write here could publish any
+ *    figure it liked to a page a health system plans from.
+ */
+await check('a signed-in member CAN read the population rollup',
+    assertSucceeds(getDoc(doc(as(BRANDON), 'community_insights/latest'))));
+await check('a lead can read it too',
+    assertSucceeds(getDoc(doc(as(ALIF), 'community_insights/latest'))));
+await check('the public CANNOT read the rollup',
+    assertFails(getDoc(doc(anon, 'community_insights/latest'))));
+await check('NOBODY can write the rollup — only the Admin SDK, which bypasses rules',
+    assertFails(setDoc(doc(as(ALIF), 'community_insights/latest'), { national: { respondents: 0 } })));
+await check('not even by update',
+    assertFails(updateDoc(doc(as(ALIF), 'community_insights/latest'), { national: { respondents: 9999 } })));
+await check('and the public certainly cannot write it',
+    assertFails(setDoc(doc(anon, 'community_insights/latest'), { national: { respondents: 0 } })));
+
 // ═════════════════════════════════════════════════════════════════════════════
 // 9. THE PRE-MIGRATION COLLECTIONS ARE UNREACHABLE
 // ═════════════════════════════════════════════════════════════════════════════

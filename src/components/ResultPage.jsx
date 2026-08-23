@@ -4,12 +4,18 @@ import {
   Download, Share2, ArrowLeft, ExternalLink,
   ShieldAlert, Activity, CheckCircle2, Loader2,
   TrendingUp, Sun, Moon, Zap, Users, Brain,
-  DollarSign, Target, Globe,
+  DollarSign, Target, Globe, Printer,
 } from 'lucide-react';
 import { jsPDF } from 'jspdf';
 import html2canvas from 'html2canvas';
 import { recordTelemetry } from '../utils/telemetry';
 import { readTheme, writeTheme } from '../utils/theme';
+import { readLanguage, writeLanguage, applyDocumentLanguage } from '../utils/language';
+import { getSessionId, saveResult, loadResult } from '../utils/assessmentSession';
+import { clusterForSector } from '../utils/singapore/communityServices';
+import { sectorInfo } from '../utils/singapore/postalSectors';
+import HandoverSlip from './HandoverSlip';
+import { SURFACE, SURFACE_INSET, HERO_PANEL, CARD, PANEL, LIFT, LIFT_LG, R, RISE } from '../utils/glass';
 
 // ─── DICTIONARY ───────────────────────────────────────────────────────────────
 const DICTIONARY = {
@@ -236,12 +242,34 @@ const CTA_BANNER = {
 };
 
 // ─── HELPERS ──────────────────────────────────────────────────────────────────
-const getRegionalHealthSystem = (sector) => {
-  const s = parseInt(sector, 10);
-  if (isNaN(s)) return 'NHG';
-  if (s >= 58 && s <= 71) return 'NUHS';
-  if ((s >= 1 && s <= 27) || (s >= 31 && s <= 52) || s === 81) return 'SingHealth';
-  return 'NHG';
+/**
+ * ⚠️ REPLACED BY THE NATIONAL LOOKUP. This used to be a range check over
+ *    `parseInt(sector)`, and it had two faults that mattered outside the north:
+ *
+ *      - `parseInt('00')` is 0, which failed every range and fell through to the
+ *        final `return 'NHG'`. So "I would rather not say" — and every chat
+ *        respondent, whose sector was fabricated from a chip label — was assigned
+ *        a health cluster as though it were a place.
+ *      - The ranges were contiguous numbers, not the real sector list. `74` is not
+ *        a Singapore sector at all and still resolved to a cluster.
+ *
+ *    `clusterForSector` returns `null` for anything that is not one of the 81 live
+ *    sectors, and the caller renders that as unknown rather than as a default.
+ */
+const getRegionalHealthSystem = (sector) => clusterForSector(sector);
+
+/**
+ * How a location is written on screen and in the PDF.
+ *
+ * ⚠️ AN UNKNOWN LOCATION SAYS SO. It used to print `Sector 00` — a sector that
+ *    does not exist — for anybody who declined, mistyped, or came through the chat
+ *    at all. Naming the district when it IS known is the other half: it lets a
+ *    person see at a glance that the portal placed them correctly, which is the
+ *    only check available to them.
+ */
+const describeSector = (sector) => {
+  const info = sectorInfo(sector);
+  return info ? `${info.locality} (Sector ${info.sector}, District ${info.district})` : 'Not provided';
 };
 
 const getRiskTier  = (n) => n >= 5 ? 'Red' : n >= 2 ? 'Amber' : 'Green';
@@ -271,9 +299,12 @@ const generateActionPlan = (riskTier, ctaTier, data, postalSector) => {
   else if (riskTier === 'Amber')         plan.push(ALL_RESOURCES.start2move, ALL_RESOURCES.pa_courses);
   else                                   plan.push(ALL_RESOURCES.activesg_gym, ALL_RESOURCES.pa_courses);
 
-  if (rhs === 'SingHealth') plan.push(ALL_RESOURCES.singhealth_healthup);
-  else if (rhs === 'NUHS')  plan.push(ALL_RESOURCES.nuhs_chp);
-  else                      plan.push(ALL_RESOURCES.nhg_coaches);
+  // ⚠️ NO CLUSTER MEANS NO CLUSTER RESOURCE. An unknown sector used to fall
+  //    through to one particular cluster's page; now it simply contributes
+  //    nothing, and the nationally-available resources below still apply.
+  if (rhs === 'SingHealth')      plan.push(ALL_RESOURCES.singhealth_healthup);
+  else if (rhs === 'NUHS')       plan.push(ALL_RESOURCES.nuhs_chp);
+  else if (rhs === 'NHG')        plan.push(ALL_RESOURCES.nhg_coaches);
 
   const hasPsycho = data.psychoFlag || data.sdohPsychological;
   if (hasPsycho)          plan.push(ALL_RESOURCES.mental_wellness);
@@ -304,7 +335,12 @@ const PdfHeader = ({ baseUrl, subtitle, t, formattedDate, activeSessionId, previ
       <div><strong style={{ color: 'white' }}>{t.date}:</strong> {formattedDate}</div>
       <div><strong style={{ color: 'white' }}>{t.assessmentId}:</strong> {activeSessionId}</div>
       {previousSessionId && <div><strong style={{ color: 'white' }}>{t.prevId}:</strong> {previousSessionId}</div>}
-      <div><strong style={{ color: 'white' }}>{t.postalSector}:</strong> Sector {postalSector}</div>
+      {/*
+        Shows the DISTRICT NAME when the sector is known, so a person can see the
+        portal understood where they live — and says so plainly when it did not,
+        rather than printing "Sector --" or a fabricated "Sector 00".
+      */}
+      <div><strong style={{ color: 'white' }}>{t.postalSector}:</strong> {describeSector(postalSector)}</div>
     </div>
   </div>
 );
@@ -335,7 +371,7 @@ const PavsPanel = ({ data, t }) => {
   const barColour = tier === 'active' ? 'bg-emerald-500' : tier === 'meets' ? 'bg-teal-500' : 'bg-amber-400';
 
   return (
-    <div className="p-6 rounded-2xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800">
+    <div className={`p-6 ${PANEL}`}>
       <div className="flex items-center gap-2 mb-5">
         <Activity size={15} className="text-teal-600 dark:text-teal-400" />
         <h2 className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest">{t.pavsTitle}</h2>
@@ -346,7 +382,7 @@ const PavsPanel = ({ data, t }) => {
           { value: data.pavsDays    ?? '–',  label: t.pavsDays },
           { value: data.pavsDays === 0 ? 0 : (data.pavsMinutes ?? '–'), label: t.pavsMins },
         ].map(({ value, label }, i) => (
-          <div key={i} className="text-center py-3 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700">
+          <div key={i} className={`text-center py-3 ${R.panel} ${SURFACE}`}>
             <p className="text-2xl font-black text-slate-900 dark:text-white leading-none">{value}</p>
             <p className="text-[10px] text-slate-400 dark:text-slate-500 mt-1 font-medium">{label}</p>
           </div>
@@ -375,10 +411,79 @@ const PavsPanel = ({ data, t }) => {
 };
 
 // ─── PRIMARY ACTION BANNER ────────────────────────────────────────────────────
+/**
+ * ⚠️ THE MEDICAL DISCLAIMER, ON THE SCREEN THE PUBLIC ACTUALLY LOOKS AT.
+ *
+ * This text already existed and was already reviewed — but only inside the
+ * off-screen PDF template further down this file, which lives at
+ * `position:absolute; top:-10000px`. It rendered for `html2canvas` and for nobody
+ * else. A person who read their risk band, their PAVS figure and a Primary Action
+ * telling them to start exercising, and did not download the PDF, saw no
+ * disclaimer at any point.
+ *
+ * The wording below is copied VERBATIM from that template rather than rewritten:
+ * it is the author's own, it is clinically careful, and a paraphrase would be a
+ * new clinical claim that nobody has reviewed.
+ *
+ * ⚠️ ENGLISH ONLY, KNOWINGLY. Every other string on this page comes from
+ *    `DICTIONARY[lang]`; this one has no `ms`/`zh`/`ta` because translating a
+ *    medical disclaimer is not a paraphrase job and is not mine to do. Tracked as
+ *    `CD10` in COMMUNITY_TODO.md alongside the urgent CTA copy, which has the same
+ *    problem. Showing it in English is strictly better than not showing it — the
+ *    alternative on the table was continuing to show nothing.
+ */
+const MedicalDisclaimer = () => (
+  <div className={`${R.panel} ${LIFT} border border-rose-200/80 dark:border-rose-900/70 bg-rose-50/80 dark:bg-rose-950/40 backdrop-blur-md p-5`}>
+    <p className="text-[10px] font-black text-rose-700 dark:text-rose-300 uppercase tracking-widest mb-2">
+      Important Medical Disclaimer
+    </p>
+    <p className="text-xs text-rose-900 dark:text-rose-100 leading-relaxed">
+      This NEXUS AURA report is an initial community health navigation tool and{' '}
+      <strong>does not constitute medical advice, diagnosis, or a treatment plan</strong>. The
+      physical activity recommendations are generated for educational and community navigation
+      purposes only. Always consult a qualified healthcare professional or your Healthier SG GP
+      before making significant changes to your lifestyle, diet, or exercise routine. If you are
+      experiencing chest pain, dizziness, or any acute symptoms, please seek immediate medical
+      attention.
+    </p>
+  </div>
+);
+
+/**
+ * The data-governance text, likewise lifted verbatim from the PDF template and
+ * likewise invisible until now. It is accurate as of the telemetry fix (`CP3`,
+ * commit 301bb5a) which removed `clientReference: navigator.userAgent` — before
+ * that commit this paragraph was false about the record being written beside it.
+ *
+ * It still appears AFTER the assessment is submitted, which is the wrong end of
+ * the flow for a collection notice. `PathwaySelection` now carries a short notice
+ * before either pathway starts; this remains as the full statement.
+ */
+const DataGovernance = () => (
+  <div className={`${PANEL} p-5`}>
+    <p className="text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest mb-2">
+      Data Governance and Privacy
+    </p>
+    <p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed">
+      All data collected through the NEXUS AURA system is de-identified at the point of capture.
+      Postal sector data is used solely for geographic resource mapping and is not linked to any
+      identifiable personal information. This assessment does not collect, store, or transmit
+      NRIC, name, contact, or financial account information. Aggregated, anonymised data may be
+      used to improve community health programming across Singapore.
+    </p>
+    <p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed mt-3">
+      <strong>How long it is kept:</strong> assessment records are deleted automatically{' '}
+      <strong>24 months</strong> after they are created. Nothing is kept beyond that, and there is
+      no account to close — the record cannot be traced back to you, which is also why it cannot
+      be retrieved or amended on request.
+    </p>
+  </div>
+);
+
 const PrimaryActionBanner = ({ ctaTier, t, lang }) => {
   const config = CTA_BANNER[ctaTier] || CTA_BANNER.START;
   return (
-    <div className={`p-5 rounded-2xl border ${config.bg}`}>
+    <div className={`p-5 ${R.panel} ${LIFT} border backdrop-blur-md ${config.bg}`}>
       <div className="flex items-center gap-2 mb-3">
         <Target size={14} className="text-current opacity-70" />
         <p className={`text-xs font-bold uppercase tracking-widest ${config.text}`}>{t.primaryAction}</p>
@@ -410,7 +515,7 @@ const SdohFlags = ({ data, t, previousSessionId }) => {
   return (
     <div className="space-y-2.5">
       {flags.map((f, i) => (
-        <div key={i} className="flex items-start gap-3 py-3 px-4 bg-white dark:bg-slate-900 rounded-xl border border-slate-100 dark:border-slate-800">
+        <div key={i} className={`flex items-start gap-3 py-3 px-4 ${SURFACE} ${R.panel}`}>
           {f.icon}
           <div>
             {f.header && <p className={`text-xs font-bold mb-0.5 ${f.headerCls}`}>{f.header}</p>}
@@ -427,9 +532,9 @@ const ResourceCard = ({ resource, lang, baseUrl, onClick }) => {
   const content = resource[lang] || resource.en;
   return (
     <button onClick={onClick}
-      className="flex flex-col sm:flex-row sm:items-center justify-between p-5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-2xl hover:border-teal-400/60 dark:hover:border-teal-500/40 hover:shadow-lg transition-all text-left group w-full gap-4">
+      className={`flex flex-col sm:flex-row sm:items-center justify-between p-5 ${CARD} hover:border-teal-400/70 dark:hover:border-teal-400/40 motion-safe:hover:-translate-y-0.5 ${RISE} text-left group w-full gap-4`}>
       <div className="flex items-center gap-4 flex-1">
-        <div className="w-14 h-14 shrink-0 bg-slate-50 dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 flex items-center justify-center overflow-hidden shadow-sm">
+        <div className={`w-14 h-14 shrink-0 ${SURFACE_INSET} ${R.panel} flex items-center justify-center overflow-hidden`}>
           <img src={`${baseUrl}${resource.logo}`} alt="" crossOrigin="anonymous"
             className="w-full h-full object-cover"
             onError={(e) => { e.target.style.display = 'none'; e.target.parentElement.innerHTML = '<span class="text-[9px] font-black text-slate-400 text-center px-1 leading-tight">LOGO</span>'; }} />
@@ -488,17 +593,41 @@ export default function ResultPage() {
   const printRef  = useRef(null);
   const printRef2 = useRef(null);
 
-  const hasState = location.state?.score != null;
+  /**
+   * ⚠️ A FINISHED ASSESSMENT USED TO DIE ON RELOAD. The result arrived only as
+   *    react-router navigation state, which does not survive a page load, and the
+   *    effect below redirects to the pathway picker when it is absent. So a
+   *    refresh, a rotation that triggered one, iOS reclaiming a backgrounded tab,
+   *    or tapping a resource link and pressing back, all erased thirteen questions
+   *    and a completed risk assessment — with no warning and no way back.
+   *
+   *    The result is now mirrored into `sessionStorage` on arrival and restored
+   *    here when the router has nothing. `useState` with an initialiser, not an
+   *    effect: the restore must happen BEFORE the redirect effect runs, or the
+   *    person is bounced on the first render regardless.
+   */
+  const [restored] = useState(() => (location.state?.score != null ? null : loadResult()));
+  const resultState = location.state?.score != null ? location.state : restored;
+  const hasState = resultState?.score != null;
+
+  // Mirror it as soon as it arrives, so the NEXT load can restore it.
+  useEffect(() => {
+    if (location.state?.score != null) saveResult(location.state);
+  }, [location.state]);
 
   useEffect(() => {
     if (!hasState) navigate('/individuals/pathway', { replace: true });
   }, [hasState, navigate]);
 
-  const safe = location.state || { score: 0, data: {}, postalSector: '00' };
+  // `null`, not '00' — an absent result has no location, and '00' is not a sector.
+  const safe = resultState || { score: 0, data: {}, postalSector: null };
   const { score, data, postalSector, sessionId, previousSessionId, ctaTier } = safe;
 
   const riskTier        = getRiskTier(score);
-  const activeSessionId = sessionId || ('NX-' + Math.random().toString(36).substr(2, 9).toUpperCase());
+  // The id the record was written under, not a fresh one. This used to mint a
+  // fourth id when router state was missing, so the value printed on the result —
+  // and on the downloaded PDF — matched nothing in Firestore.
+  const activeSessionId = sessionId || getSessionId();
   const formattedDate   = new Date().toLocaleDateString('en-GB');
   const nexusUrl        = 'https://for.sg/nexus';
   const qrCodeUrl       = `https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent(nexusUrl)}`;
@@ -517,12 +646,13 @@ export default function ResultPage() {
 
   const switchLang = (code) => {
     setLang(code);
-    localStorage.setItem('nexus_language', code);
+    writeLanguage(code);
   };
 
   useEffect(() => {
     if (!hasState) return;
-    const stored = localStorage.getItem('nexus_language');
+    // See the note in ConventionalForm: direct-URL entry means every screen applies it.
+    const stored = applyDocumentLanguage(readLanguage());
     if (stored && DICTIONARY[stored]) setLang(stored);
     setTimeout(() => {
       setSuggestedResources(generateActionPlan(riskTier, ctaTier, data, postalSector));
@@ -542,9 +672,43 @@ export default function ResultPage() {
   };
   const th        = themeMap[riskTier] || themeMap.Green;
   const tierLabel = riskTier === 'Red' ? t.red : riskTier === 'Amber' ? t.amber : t.green;
-  const tierDesc  = riskTier === 'Red' ? t.redDesc : riskTier === 'Amber' ? t.amberDesc : t.greenDesc;
+  /**
+   * ⚠️ `greenDesc` MAKES A CLAIM ABOUT ACTIVITY THAT THE GREEN TIER DOES NOT
+   *    MEASURE. It reads "You meet the physical activity guidelines", but the tier
+   *    comes from `getRiskTier(score)` — the weighted RISK score — while meeting
+   *    the guidelines is a fact about `pavsScore`, which is a different number.
+   *
+   *    They come apart in a case that is not exotic. Someone doing 100 min/week,
+   *    below the 150 guideline, who strength-trains twice a week and has no
+   *    clinical or SDOH flags, scores exactly 1: the single activity-deficit point
+   *    and nothing else. `getRiskTier(1)` is Green. So the page told them they
+   *    meet the guidelines directly above a PAVS panel rendering `below` — two
+   *    contradictory statements about the same person, on one screen.
+   *
+   *    The fix uses copy that already exists and is already translated into all
+   *    four languages: when the tier is Green but the figure is below target, the
+   *    description is `pavsBelowDesc`, which states the real position and cites
+   *    SPAG. Nothing here was newly translated — see `CD10`.
+   */
+  const meetsActivityTarget = getPavsTier(Number(data?.pavsScore) || 0) !== 'below';
+  const tierDesc  = riskTier === 'Red'   ? t.redDesc
+                  : riskTier === 'Amber' ? t.amberDesc
+                  : meetsActivityTarget  ? t.greenDesc
+                                         : t.pavsBelowDesc;
 
   // ── PDF GENERATION ─────────────────────────────────────────────────────────
+  /**
+   * Prints the one-page slip. Telemetry is recorded the same way the download and
+   * share are, so a printed handover is not invisible in the usage data — it is
+   * the output for the population least likely to be counted otherwise.
+   */
+  const handlePrintSlip = () => {
+    recordTelemetry(postalSector, {
+      event: 'print_handover_slip', sessionId: activeSessionId, ctaTier,
+    });
+    window.print();
+  };
+
   const handleDownloadPDF = async () => {
     if (!printRef.current || !printRef2.current) return;
     recordTelemetry(postalSector, { action: 'download_pdf', score, language: lang, ctaTier });
@@ -629,6 +793,19 @@ export default function ResultPage() {
 
   return (
     <div className="min-h-screen w-full bg-stone-50 dark:bg-slate-950 transition-colors duration-700 flex flex-col items-center py-12 px-4 md:px-6 relative overflow-x-hidden font-sans">
+      {/*
+        Ambient wash. Glass needs something behind it or the blur has nothing to
+        do and the surfaces read as flat translucent boxes. Tinted to the tier so
+        the page carries the result's colour without putting text on it — the
+        mistake the hero used to make.
+
+        `pointer-events-none` and `aria-hidden` because this is decoration: it must
+        never intercept a tap or be announced.
+      */}
+      <div aria-hidden="true" className="pointer-events-none fixed inset-0 overflow-hidden">
+        <div className={`absolute -top-40 left-1/2 -translate-x-1/2 w-[42rem] h-[42rem] rounded-full blur-[120px] opacity-25 dark:opacity-20 bg-gradient-to-br ${th.gradient}`} />
+        <div className="absolute -bottom-52 -right-32 w-[36rem] h-[36rem] rounded-full blur-[110px] opacity-20 dark:opacity-10 bg-gradient-to-br from-teal-300 to-sky-400" />
+      </div>
 
       {/* ══════════════════════════════════════════════════════════════════════
           HIDDEN PDF TEMPLATES (off-screen, identical wrapper structure)
@@ -756,14 +933,40 @@ export default function ResultPage() {
                 Academic and Evidence Grounding
               </div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                {/*
+                  ⚠️ THIS BLOCK USED TO CLAIM MORE INSTRUMENT THAN IS ADMINISTERED,
+                     and it was handed to the public with a reliability coefficient
+                     attached. Five of the seven rows overstated:
+
+                       - "PHQ-2 aligned" beside ONE question. PHQ-2 is two items.
+                       - "Lubben Social Network Scale (LSNS-6) … alpha 0.80–0.89"
+                         beside ONE question. LSNS-6 is six items, and a published
+                         scale's reliability does not transfer to a single item
+                         lifted out of it.
+                       - "validated 2-question instrument" for food insecurity,
+                         beside ONE question.
+                       - "3-level validated screen" for income — the FORM asks it;
+                         the CHAT has no income question at all and infers financial
+                         strain from reported access barriers. Both pathways printed
+                         this identical page.
+                       - "1–2 Room HDB RENTAL" — the portal asks flat type and never
+                         asks tenure.
+
+                     A brief screen is a legitimate design choice and the right one
+                     here: one honest question beats six abandoned ones. Citing a
+                     validated multi-item scale beside a single item is a different
+                     thing, and it is the sort of page that stops a pilot at a
+                     research office. Every row below now says what is actually
+                     asked, and names the source as what it was adapted FROM.
+                */}
                 {[
-                  ['Physical Activity', 'ACSM Physical Activity Vital Sign (PAVS) — validated 2-question screening tool.'],
-                  ['National Targets', 'Sport Singapore Physical Activity Guidelines (SPAG) — 150–300 mins/week moderate-intensity aerobic activity.'],
-                  ['Psychological Wellbeing', 'BioPsychoSocial Risk Screener II (BPS-RS II), Domain P22 — PHQ-2 aligned, 2-week timeframe.'],
-                  ['Social Isolation', 'Lubben Social Network Scale (LSNS-6) — validated for community-dwelling adults in Singapore (alpha 0.80–0.89).'],
-                  ['Food Insecurity', 'Lien Centre for Social Innovation Food Insufficiency Screen — validated 2-question instrument.'],
-                  ['Financial Adequacy', 'Duke-NUS Medical School Perceived Income Adequacy Scale — 3-level validated screen.'],
-                  ['Housing Risk', 'BPS-RS II Housing Schema — 1–2 Room HDB rental as geographic social risk indicator.'],
+                  ['Physical Activity', 'ACSM Physical Activity Vital Sign (PAVS) — administered as published: 2 questions (days per week, minutes per session).'],
+                  ['National Targets', 'Sport Singapore Physical Activity Guidelines (SPAG) — 150–300 mins/week moderate-intensity aerobic activity. A reference target, not an instrument.'],
+                  ['Psychological Wellbeing', 'SINGLE-ITEM screen adapted from BPS-RS II Domain P22 (PHQ-2 aligned, 2-week timeframe). One item, not the two-item PHQ-2, and not separately validated in this form.'],
+                  ['Social Isolation', 'SINGLE-ITEM screen adapted from the Lubben Social Network Scale (LSNS-6). One item, not the six-item scale; LSNS-6\u2019s published reliability does not transfer to it.'],
+                  ['Food Insecurity', 'SINGLE-ITEM screen adapted from the Lien Centre for Social Innovation Food Insufficiency Screen (2 items).'],
+                  ['Financial Adequacy', 'Self-guided pathway: 3-level screen adapted from the Duke-NUS Perceived Income Adequacy Scale. Chat pathway: NOT asked — inferred from reported access barriers.'],
+                  ['Housing Risk', 'Self-reported HDB flat type, used as a social-risk proxy. Flat type is asked; tenure (rented or owned) is not.'],
                 ].map(([label, text], i) => (
                   <div key={i} style={{ display: 'flex', gap: 10, paddingBottom: 5, borderBottom: i < 7 ? '1px solid #f1f5f9' : 'none' }}>
                     <div style={{ fontWeight: 800, fontSize: 9, color: '#0d9488', minWidth: 110, paddingTop: 1, textTransform: 'uppercase', letterSpacing: 0.5, flexShrink: 0 }}>{label}</div>
@@ -849,42 +1052,76 @@ export default function ResultPage() {
             </div>
 
             <button onClick={handleShare}
-              className="flex items-center gap-2 px-4 py-2 bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 font-bold text-xs uppercase tracking-widest rounded-full border border-slate-200 dark:border-slate-700 shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all">
+              className={`flex items-center gap-2 px-4 py-2.5 ${SURFACE} ${R.chip} ${LIFT} text-slate-600 dark:text-slate-300 font-bold text-xs uppercase tracking-widest motion-safe:hover:-translate-y-0.5 ${RISE}`}>
               <Share2 size={13} /> {t.share}
             </button>
             <button onClick={handleDownloadPDF}
-              className="flex items-center gap-2 px-4 py-2 bg-teal-600 text-white font-bold text-xs uppercase tracking-widest rounded-full shadow-sm hover:bg-teal-700 hover:-translate-y-0.5 transition-all">
+              className={`flex items-center gap-2 px-4 py-2.5 bg-teal-600/95 backdrop-blur-md text-white font-bold text-xs uppercase tracking-widest ${R.chip} ${LIFT} hover:bg-teal-700 motion-safe:hover:-translate-y-0.5 ${RISE}`}>
               <Download size={13} /> {t.download}
+            </button>
+            {/*
+              ⚠️ English-only, deliberately, like the disclaimer beside it — the
+              printed slip is English and a translated button leading to an English
+              page would be the worse half-measure. Tracked as `CD10`.
+
+              `window.print()` rather than another jsPDF export: it reaches a real
+              printer, the "Save as PDF" in every browser's print dialogue, and a
+              screen reader, because the slip stays TEXT. The download above
+              rasterises the page through html2canvas.
+            */}
+            <button onClick={handlePrintSlip}
+              className={`flex items-center gap-2 px-4 py-2.5 ${SURFACE} ${R.chip} ${LIFT} text-slate-600 dark:text-slate-300 font-bold text-xs uppercase tracking-widest motion-safe:hover:-translate-y-0.5 ${RISE}`}>
+              <Printer size={13} /> Print summary
             </button>
           </div>
         </div>
 
         {/* Card */}
-        <div className="bg-white dark:bg-[#111827] rounded-3xl shadow-xl border border-slate-200 dark:border-slate-800 overflow-hidden">
+        <div className={`${SURFACE} ${R.hero} ${LIFT_LG} overflow-hidden`}>
 
-          {/* Risk hero header */}
-          <div className={`px-8 py-10 bg-gradient-to-br ${th.gradient} text-center relative overflow-hidden flex flex-col items-center`}>
-            <div className="absolute top-0 right-0 w-48 h-48 bg-white/10 rounded-full blur-2xl -mr-12 -mt-12 pointer-events-none" />
-            <div className="absolute bottom-0 left-0 w-36 h-36 bg-black/10 rounded-full blur-xl -ml-8 -mb-8 pointer-events-none" />
-            <div className="relative z-10 flex flex-col items-center">
+          {/*
+            ⚠️ THE TIER LABEL NOW SITS ON A DARK FROSTED PANEL, AND THAT IS A
+               LEGIBILITY FIX RATHER THAN A STYLE CHOICE.
+
+               It used to be white text on `bg-white/20` over the gradient. Measured:
+               1.51:1 on amber — the single most important sentence on the page, the
+               person's own result, effectively unreadable in daylight. White
+               directly on the gradient was 1.67:1 (amber) and 1.92:1 (green). AA
+               for normal text is 4.5:1.
+
+               `ON_COLOR` is 55% slate-900, the lowest opacity that clears 4.5:1 on
+               all three tiers while still letting the tier colour read through the
+               blur — amber, the worst case, lands at 5.79:1.
+               `src/utils/contrast.test.js` re-measures it on every run.
+          */}
+          <div className={`px-8 py-12 bg-gradient-to-br ${th.gradient} text-center relative overflow-hidden flex flex-col items-center`}>
+            {/* Specular highlights — decorative only, no text sits on them. */}
+            <div className="absolute -top-16 -right-12 w-64 h-64 bg-white/25 rounded-full blur-3xl pointer-events-none" />
+            <div className="absolute -bottom-14 -left-10 w-48 h-48 bg-slate-900/20 rounded-full blur-2xl pointer-events-none" />
+
+            <div className={`relative z-10 flex flex-col items-center px-8 py-7 ${HERO_PANEL} ${LIFT_LG} max-w-md w-full`}>
               {th.icon}
-              <p className="text-xs font-bold text-white/80 uppercase tracking-[0.2em] mb-2">{t.title}</p>
-              <div className="px-8 py-3 bg-white/20 rounded-2xl backdrop-blur-md border border-white/30 text-2xl md:text-3xl font-black text-white shadow-lg">
+              <p className="text-[11px] font-bold text-white/90 uppercase tracking-[0.22em] mb-3">{t.title}</p>
+              <p className="text-2xl md:text-3xl font-black text-white leading-tight">
                 {tierLabel}
-              </div>
+              </p>
             </div>
           </div>
 
           {/* Body */}
           <div className="p-6 md:p-8 space-y-6">
 
-            <div className={`p-5 rounded-2xl border ${th.bgCard}`}>
+            <div className={`p-5 ${R.panel} border ${th.bgCard}`}>
               <p className={`text-xs font-bold uppercase tracking-widest mb-2 ${th.titleColor}`}>AURA Smart Analysis</p>
               <p className="text-sm md:text-base text-slate-700 dark:text-slate-300 leading-relaxed font-medium">{tierDesc}</p>
             </div>
 
             <PavsPanel data={data} t={t} />
             <PrimaryActionBanner ctaTier={ctaTier} t={t} lang={lang} />
+            {/* Directly beneath the instruction it qualifies. The URGENT tier tells
+                somebody with exertional chest pain to seek clearance; the caveat
+                belongs next to that, not at the bottom of a scroll. */}
+            <MedicalDisclaimer />
             <SdohFlags data={data} t={t} previousSessionId={previousSessionId} />
 
             <div className="pt-2">
@@ -897,6 +1134,19 @@ export default function ResultPage() {
                 ))}
               </div>
             </div>
+
+            <DataGovernance />
+
+            {/*
+              Invisible on screen; the only thing on paper. See the print rules in
+              `src/index.css` and the note in `HandoverSlip.jsx` about why it leads
+              with "this is not a referral".
+            */}
+            <HandoverSlip
+              score={score} riskTier={riskTier} data={data}
+              postalSector={postalSector} sessionId={activeSessionId}
+              formattedDate={formattedDate}
+            />
 
             <div className="pt-4 border-t border-slate-100 dark:border-slate-800 flex justify-between items-center">
               <div className="flex items-center gap-3">

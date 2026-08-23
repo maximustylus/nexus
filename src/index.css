@@ -43,3 +43,107 @@ body {
   display: flex;
   flex-direction: column;
 }
+
+/* =============================================================================
+   HANDOVER SLIP — print only
+   =============================================================================
+
+   ⚠️ THE SLIP IS INVISIBLE ON SCREEN AND IS THE ONLY THING ON PAPER. A Regional
+      Health System reviewer asked for a one-page output for somebody who leaves
+      without a phone; printing the result PAGE would produce four or five pages of
+      cards, gradients and dark-mode backgrounds that no centre would accept and
+      that would empty a printer cartridge.
+
+      `window.print()` is used rather than another jsPDF export because it reaches
+      a real printer, the "Save as PDF" in every browser's print dialogue, AND a
+      screen reader — the existing download rasterises the page through
+      html2canvas, so it is a picture of text rather than text.
+*/
+
+.handover-slip { display: none; }
+
+@media print {
+  /*
+    ⚠️ `display: none` ON THE SLIP'S SIBLINGS — WHICH IS SAFE ONLY BECAUSE THE
+       SLIP IS PORTALLED OUT OF `#root`. Read this before touching either half.
+
+    THE ORIGINAL BUG. The rule was `body > * { display: none }` while the slip was
+    still rendered inside the result page. `#root` was hidden, the slip was a
+    DESCENDANT of `#root`, and a descendant of a `display: none` element is not
+    rendered whatever its own `display` says — so `.handover-slip { display: block
+    !important }` could not revive it. Printing produced a BLANK PAGE, and every
+    one of the slip's tests checked what it SAYS rather than whether it reaches
+    paper, so nothing caught it.
+
+    THE FIRST FIX, AND WHY IT WAS NOT ENOUGH. Switching to `visibility: hidden`
+    put the slip on paper, because visibility is inherited but overridable on a
+    descendant. Screenshotting it in headless Chromium under print emulation
+    showed what that still left wrong:
+
+      · the slip landed 237px down and 62px in, because `position: absolute` is
+        resolved against the result page's `relative` glass card;
+      · that card also carries `transform` and `backdrop-filter`, each of which
+        establishes a containing block for an absolutely positioned descendant —
+        `backdrop-filter` even for `position: fixed` — so no positioning value on
+        the slip could escape it;
+      · `visibility: hidden` boxes STILL OCCUPY LAYOUT. The document stayed
+        7591px tall and "Save as PDF" produced EIGHT pages: the slip, then seven
+        blank.
+
+    THE FIX. `HandoverSlip.jsx` portals the slip to `document.body`, so it has no
+    ancestor but `<body>`. `display: none` on its siblings then collapses the
+    layout instead of merely hiding it — one page of paper, no positioning games,
+    no blank sheets. `src/utils/printCss.test.js` asserts that the portal and this
+    rule stay in step; neither is safe without the other.
+  */
+  body > *:not(.handover-slip) { display: none !important; }
+
+  .handover-slip {
+    display: block !important;
+    width: 100%;
+    /* Paper is white whatever the viewer's theme is. Dark mode on a printer is
+       both unreadable and expensive. */
+    background: #fff;
+    color: #000;
+    font-family: Georgia, 'Times New Roman', serif;
+    font-size: 11pt;
+    line-height: 1.5;
+    padding: 0;
+    max-width: 100%;
+  }
+
+  @page { margin: 14mm; }
+
+  .slip-head {
+    display: flex; justify-content: space-between; align-items: flex-start;
+    border-bottom: 2pt solid #000; padding-bottom: 6pt; margin-bottom: 10pt;
+  }
+  .slip-title { font-size: 16pt; font-weight: 700; margin: 0; }
+  .slip-sub   { font-size: 9pt; margin: 2pt 0 0; }
+  .slip-meta  { font-size: 9pt; text-align: right; }
+
+  /* ⚠️ The strongest visual weight on the page belongs to the sentence saying
+     this is not a referral — see the note in HandoverSlip.jsx. */
+  .slip-notice {
+    border: 1.5pt solid #000; padding: 7pt 9pt; margin: 0 0 10pt;
+    font-size: 10pt; background: #f2f2f2;
+  }
+
+  .slip-row       { display: flex; gap: 10pt; padding: 4pt 0; border-bottom: 0.5pt solid #999; }
+  .slip-row-label { min-width: 90pt; font-weight: 700; font-size: 9pt; text-transform: uppercase; letter-spacing: 0.5pt; }
+  .slip-row-value { flex: 1; }
+
+  .slip-h2       { font-size: 11pt; font-weight: 700; margin: 12pt 0 5pt; text-transform: uppercase; letter-spacing: 0.5pt; }
+  .slip-list     { margin: 0; padding-left: 14pt; }
+  .slip-list li  { margin-bottom: 5pt; }
+  /* URLs are printed in full: on paper a link is only useful if it can be typed. */
+  .slip-url      { font-size: 8.5pt; word-break: break-all; }
+
+  .slip-foot {
+    margin-top: 12pt; padding-top: 6pt; border-top: 1pt solid #000; font-size: 8.5pt;
+  }
+  .slip-foot p { margin: 0 0 4pt; }
+
+  /* Keep it to one page where the content allows. */
+  .slip-services, .slip-body { page-break-inside: avoid; }
+}

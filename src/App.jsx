@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 // `useLocation` is intentionally not imported here: App's only use of it was a
 // dead `isPublicPathway` flag. `<Routes>` subscribes to the location itself.
-import { Routes, Route, useLocation } from 'react-router-dom';
+import { Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { getMessaging, onMessage } from "firebase/messaging";
 
 // FIREBASE
@@ -56,6 +56,8 @@ import {
     attendancePath,
 } from './utils/teamPaths';
 import { APP_VERSION_LABEL } from './version';
+import NotFound from './components/NotFound';
+import CommunityInsightsPanel from './components/CommunityInsightsPanel';
 
 // ==========================================
 // CONFIGURATION & CONSTANTS
@@ -89,6 +91,8 @@ const NO_AUTH_FACTS = Object.freeze({ email: null, emailVerified: null, teamIds:
 // drift apart — two string literals that must match is exactly how a page ends up
 // unreachable behind its own gate.
 const APPROVALS_PATH = '/admin/teams';
+/** The population rollup. Counts only — see `CommunityInsightsPanel`. */
+const INSIGHTS_PATH = '/admin/community';
 
 // The year the app treats as "now". Named because it was the string '2026' compared
 // inline in two places, and because `dataYear` is otherwise just a value the year
@@ -832,11 +836,28 @@ export default function App() {
   return (
     <>
       <Routes>
+        {/*
+          ⚠️ THE SECTION ROOT IS A REAL URL TO EVERYBODY EXCEPT THE ROUTER. Only
+          `/individuals/*` was routed, so `/individuals` — the address somebody
+          reaches by trimming the URL, or by typing what they were told out loud —
+          fell through to the 404. The not-found page recovers well, but sending a
+          member of the public to it from the most obvious address for this service
+          is a defect, not a design.
+        */}
+        <Route path="/individuals" element={<Navigate to="/individuals/pathway" replace />} />
         <Route path="/individuals/language" element={<LanguageGate />} />
         <Route path="/individuals/pathway" element={<PathwaySelection />} />
         <Route path="/individuals/form" element={<ConventionalForm />} />
         <Route path="/individuals/chat" element={<AuraChat />} />
         <Route path="/individuals/result" element={<ResultPage />} />
+
+        {/*
+          The catch-all. It must stay LAST — react-router picks the best match, but
+          keeping the order explicit stops a future edit from shadowing a real route.
+          Without it, `firebase.json`'s `** → /index.html` rewrite meant a mistyped
+          URL loaded the app and rendered nothing at all: a blank page rather than a
+          404. See `src/components/NotFound.jsx`.
+        */}
 
         {/*
           The approval queue. Reachable by typing the URL rather than from a nav
@@ -846,6 +867,17 @@ export default function App() {
           so the obscurity is convenience, not security.
         */}
         <Route path={APPROVALS_PATH} element={user ? <LeadRequestsPanel /> : <WelcomeScreen />} />
+
+        {/*
+          Reachable by URL rather than from a nav item, like the approval queue
+          above and for the same reason: it is read occasionally, not lived in.
+          `firestore.rules` allows `community_insights` to any signed-in user and
+          denies `community_assessments` to everybody, so the obscurity is
+          convenience and the rule is the control.
+        */}
+        <Route path={INSIGHTS_PATH} element={user ? <CommunityInsightsPanel /> : <WelcomeScreen />} />
+
+        <Route path="*" element={<NotFound />} />
 
         <Route path="/" element={
           (!user && !isDemo) ? (
