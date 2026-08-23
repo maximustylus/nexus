@@ -246,6 +246,32 @@ In this order, because each depends on the last:
 4. **The burnout monitor lists your team** and nobody else's.
 5. **`/admin/teams`** loads the approval queue. Empty is correct.
 6. **Ask a colleague to sign in.** They should see the same roster.
+7. **Open the admin panel → TEAM.** The tab is new, and it only appears for a lead.
+   You should see the five members of team #1, with a remove button beside three of
+   them — not beside yourself (you are the lead the team was created for) and not
+   beside anyone who is the only lead.
+8. **Add somebody, end to end.** Type a colleague's work address. If they have not
+   registered you get a sentence saying so, which is the expected answer rather than
+   a failure — ask them to register, then add them. When it works, ask them to
+   refresh: they should go from the waiting screen straight into the roster.
+
+---
+
+## Step 5 — the second team, which is the actual proof
+
+Team #1 is migrated data. It does not prove the path a real department will take, so
+walk that path once before the email goes out:
+
+1. Register a second account on an allowlisted domain and **declare as a lead** for a
+   department that does not exist yet.
+2. **Approve it** from `/admin/teams`.
+3. Sign in as that lead. **Add one person** through the TEAM tab.
+4. Sign in as that person. They see **their own department's roster and nothing of
+   team #1's** — no roster, no wellbeing, no feed, no members.
+
+Step 4 is the assertion that matters, and it is the one `firestore.rules`' 95
+emulator checks already make. Doing it by hand once is what confirms the deployed
+bundle and the deployed rules are the ones those checks describe.
 
 ---
 
@@ -259,7 +285,10 @@ see *"nobody has added you to a team yet"*. They will see no roster, no wellbein
 and no feed. **Today they can read all three.**
 
 **Their records are not deleted.** Nothing is: the migration copies. If any of them
-should be invited back, their history is still there to attach.
+should be added back, their history is still there to attach — and *adding them back
+is now a thing you can do*: the admin panel's TEAM tab takes their work address and
+puts them in the team, with no deploy and no edit to any source file. Before v2.0
+that sentence would have been aspirational; `inviteMember` is what makes it true.
 
 ---
 

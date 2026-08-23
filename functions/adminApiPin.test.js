@@ -18,26 +18,38 @@
  *   initializeApp, refreshToken.
  *
  * `scripts/migrate-to-teams.cjs` hit this in production hands and was converted to
- * subpath imports. `functions/index.js` still uses the v13 namespace form at three
- * call sites and is safe ONLY because `functions/package.json` pins `^13.6.0`,
- * which npm will never satisfy with a 14.x.
+ * subpath imports. `functions/index.js` carried the same debt at THREE call sites
+ * and was safe only because `functions/package.json` pins `^13.6.0`.
  *
- * ⚠️ WHY A TEST RATHER THAN A FIX. On v14 `functions/index.js` does not fail
- *    loudly — it fails QUIETLY, and the quiet failure is worse than a crash:
+ * ── THE DEBT IS NOW PAID, AND THIS TEST IS WHAT COLLECTED IT ─────────────────
  *
- *      functions/index.js:1047   var record = await admin.auth().getUser(requestUid);
+ * The membership functions (`inviteMember`, `removeMember`) were written using the
+ * v13 namespace form, because that was the form the rest of the file used. This
+ * test failed the commit — "New v13-only firebase-admin calls were added" — which
+ * is precisely the job it was written for. Converting the new sites meant adding
+ * `require('firebase-admin/auth')` and pulling `FieldValue` off the firestore
+ * subpath, at which point converting the OLD three was three one-line edits with
+ * the imports already in place, so they were converted too. `functions/index.js`
+ * now has zero namespace uses, verified by loading the real bundle against the
+ * installed firebase-admin.
  *
- *    `admin.auth` is undefined, so this throws `TypeError`. It sits inside a `try`
- *    whose `catch` only warns and leaves the record null, so execution CONTINUES,
- *    the approval path concludes the account does not exist, and a real colleague
- *    applying to lead a team is told their account does not exist. Nothing crashes.
- *    Nothing is red in CI. The deploy succeeds and all functions register.
+ * ⚠️ THE PIN STAYS AT ^13 ANYWAY. Nothing in this change needs v14, the cutover is
+ *    imminent, and "we could move it now" is not a reason to move it now. What the
+ *    conversion buys is that moving it later stops being dangerous.
  *
- *    Converting those call sites is a two-line-per-site change, but it is
- *    deploy-path code and the multi-team cutover is imminent, so it is deliberately
- *    NOT being made under time pressure. This test holds the invariant that keeps
- *    the current code correct, and fails the moment somebody bumps the pin without
- *    doing the conversion — which is the only way this can actually bite.
+ * ── WHAT THE QUIET FAILURE WAS, kept because it is why this file exists ──────
+ *
+ * On v14, `admin.auth` is undefined, so
+ *
+ *      var record = await admin.auth().getUser(requestUid);
+ *
+ * throws `TypeError` — inside a `try` whose `catch` only warns and leaves the
+ * record null. Execution CONTINUES, the approval path concludes the account does
+ * not exist, and a real colleague applying to lead a team is told their account
+ * does not exist. Nothing crashes, nothing is red in CI, the deploy succeeds and
+ * all functions register. That is the failure mode this test exists to make
+ * impossible, and it stays in place: it now guards ZERO uses, so it fails the
+ * moment somebody reintroduces one.
  */
 
 import { describe, it, expect } from 'vitest';
@@ -105,17 +117,18 @@ describe('firebase-admin version pin', () => {
 
 describe('the call sites this pin is protecting', () => {
     /**
-     * Recorded as a measurement rather than asserted as a fixed number: this is
-     * documentation of the debt, and its job is to change when somebody pays it
-     * down. `toBeLessThanOrEqual` fails only if the debt GROWS.
+     * WAS `toBeLessThanOrEqual(3)` — a measurement of the debt rather than a fixed
+     * number, so that paying it down would not fail the suite. It has been paid, so
+     * the assertion tightens to zero: a ceiling of three would now let three new
+     * namespace calls in silently, which is the thing this file is about.
      */
-    it('has not grown since it was measured at three', () => {
+    it('is now zero, and does not grow again', () => {
         const uses = NAMESPACE_USES(read('index.js'));
         expect(
             uses.length,
             `New v13-only firebase-admin calls were added: ${uses.map((u) => `:${u.line}`).join(', ')}. `
             + 'Use the subpath imports for new code — the file already does at index.js:12-13.',
-        ).toBeLessThanOrEqual(3);
+        ).toBe(0);
     });
 
     it('does not exist in teamApproval.js, which takes its dependencies as arguments', () => {

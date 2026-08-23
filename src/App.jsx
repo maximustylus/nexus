@@ -205,7 +205,7 @@ export default function App() {
   const { pathname } = useLocation();
   // WHOSE data every effect below reads. The provider is mounted in `main.jsx`,
   // above this component — see `TeamGate` for why.
-  const { teamId, members } = useTeam();
+  const { teamId, members, isLead } = useTeam();
   const [teamData, setTeamData] = useState([]); 
   const [staffLoads, setStaffLoads] = useState({});
   const [attendanceData, setAttendanceData] = useState({}); 
@@ -436,8 +436,26 @@ export default function App() {
   const activeTeamData = isDemo ? MOCK_TEAM_DATA : teamData;
   const activeStaffLoads = isDemo ? MOCK_STAFF_LOADS : staffLoads;
   
+  /**
+   * ⚠️ A SIXTH HARDCODED COPY OF THE TEAM, and the last one that mattered for
+   *    launch. Two email addresses in an array decided who could open the admin
+   *    panel — which is where roster configuration, the clinical-load table and now
+   *    the member list live. A lead whose team was approved this morning is in
+   *    neither address, so they could not reach the screen where they add their own
+   *    staff. `inviteMember` existing would not have helped: there was no door to
+   *    the room it lives in.
+   *
+   *    `isLead` comes from the membership DOCUMENT — `teams/{id}/members/{uid}.role`
+   *    — so onboarding a department's lead is now data, exactly like onboarding
+   *    anybody else. The two addresses stay because they are the owner's and the
+   *    roster master's on the LEGACY directory, and the migration has not run yet;
+   *    they become redundant the moment it does.
+   */
   const ADMIN_EMAILS = ['muhammad.alif@kkh.com.sg', 'siti.nur.anisah.nh@kkh.com.sg'];
-  const hasAdminAccess = isDemo || (user?.email && ADMIN_EMAILS.includes(user.email.toLowerCase())) || user?.role === 'admin';
+  const hasAdminAccess = isDemo
+    || isLead
+    || (user?.email && ADMIN_EMAILS.includes(user.email.toLowerCase()))
+    || user?.role === 'admin';
 
   const unreadCount = notifications.filter(n => !n.read).length;
 

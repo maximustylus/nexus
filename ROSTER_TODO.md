@@ -362,6 +362,74 @@ real `TeamContext` returns a module-level frozen `INERT` outside a provider and 
 
 ---
 
+## P11 — The launch blocker: a team could never grow past its lead · `T13`–`T16` · 2026-08-23 · **FIXED**
+
+`approveLeadRequest` creates a team with exactly one person in it. There was no
+second step. `firestore.rules` denies `create` and `delete` on
+`teams/{teamId}/members/{uid}` outright, and its own comments defer both to "a Cloud
+Function" — which had not been written. **A department approved on launch day could
+never add anybody, and the rules file described a path that did not exist.**
+
+> **Why this was the blocker rather than a gap.** Vincent's email reaches AHP
+> managers, supervisors and roster masters at once. A manager declares as lead, the
+> owner approves, they open NEXUS — and find a roster with one name in it and no way
+> to add the other nineteen. Nothing errors. The system simply has no second step.
+
+| id | what was missing | fix | evidence |
+|---|---|---|---|
+| `T13` | **No `inviteMember`.** The rules deferred membership creation to a function that did not exist. | `functions/teamMembership.js` (the decision) + `exports.inviteMember` (the wiring). By EMAIL, because a lead knows their colleague's address and nobody knows anybody's Firebase uid; the server resolves one to the other, which is also where it establishes the account is real. | `functions/teamMembership.test.js` — 69 tests. `npm run stress:teams` section E. |
+| `T14` | **No `removeMember`.** A lead who can add but not remove is half a feature, and the rules refuse a plain `delete` because a membership is only half a join — `users/{uid}.teamIds` has to lose the team in the same breath or every listener that person opens fails permission-denied, silently, forever. | `exports.removeMember`, both writes in one batch. Refuses two removals outright: the lead the team was created for, and the last remaining lead. | The 108-combination removal matrix in section E. |
+| `T15` | **No screen.** `TEAM_DIRECTORY` in `src/utils/index.js`, `directory()` and `directoryNames()` in the rules, and a five-name exclusion list in `AdminPanel.jsx` were how somebody got onboarded — editing source, editing rules, redeploying. | `src/components/TeamMembersPanel.jsx`, a TEAM tab in `AdminPanel`. | `src/components/TeamMembersPanel.test.jsx` — 21 tests. |
+| `T16` | **A sixth hardcoded copy of the team, and the one that mattered.** `hasAdminAccess` in `App.jsx` was two email addresses in an array. A lead whose team was approved that morning is in neither, so they could not open the admin panel — `inviteMember` existing would not have helped, because there was no door to the room it lives in. **The rules already assumed otherwise**: every write that panel makes is `allow … if isLead(teamId)`. | `hasAdminAccess` now includes `isLead`, read from the membership document. | The rules block at `firestore.rules:335–381`, which was already lead-scoped. |
+
+**Two defects the spec suite found in the new module before it shipped**, both of
+which the module had passing on a casual read:
+
+- `Number(undefined)` is `NaN`, and every comparison with `NaN` is false — so
+  `Number(leadCount) <= 1` let an UNKNOWN lead count through the guard that exists
+  to stop a team losing its last administrator. Unknown is the case that refusal is
+  *for*.
+- An explicit `allowedDomains: null` reached `allowedDomains.length` while composing
+  the refusal message and threw. The gate had already decided to refuse; it then
+  crashed on its way to saying so, which surfaces as an internal error rather than
+  as a clear no.
+
+**A third the harness found in itself, recorded because the flag was wrong and
+saying so is the point.** Section E first reported two "hostile addresses admitted"
+(`a@kkh.com.sg.`, and one with a trailing newline) and one "role outside the three
+accepted" (`undefined`). All three are correct behaviour: a trailing dot is the
+fully-qualified form of the same domain, a trailing newline is what a paste from
+Outlook leaves, and an omitted role defaulting to the least-privileged one is right.
+The harness now prints them as an expected-admit group, so a change that stops
+canonicalising them shows as a number that moved rather than being deleted from
+sight.
+
+**`functions/index.js` now has zero firebase-admin v13 namespace calls.** The new
+handlers were written using `admin.firestore.FieldValue` and `admin.auth()` — the
+form the rest of the file used — and `functions/adminApiPin.test.js` failed the
+commit, which is exactly the job it was written for. Converting the new sites meant
+adding the `firebase-admin/auth` subpath import, at which point the three
+pre-existing sites were three one-line edits with the import already in place. The
+pin stays at `^13`: nothing here needs v14, and the conversion's value is that
+moving the pin later stops being dangerous.
+
+### What was deliberately NOT built, so the scope is a decision rather than an oversight
+
+**There are no pending invitations.** A lead may only add somebody who has ALREADY
+REGISTERED; an address with no NEXUS account is refused with a sentence naming the
+fix, not stored for later. A `team_invites` collection consumed at registration is
+better UX and is the obvious next step — it adds a collection, a rules block, a
+consumption path inside registration and a race between two leads inviting the same
+address, to the one change that was blocking launch.
+
+The ordering it forces is survivable **because of P10**: somebody who registers
+before their lead is ready lands on a holding screen that explains the wait and
+offers the sandbox, not a broken app. `assertInvitable` returns a `no-account`
+REASON CODE as well as a sentence, so adding pending invitations later is a change
+at the call site and not a change to this contract.
+
+---
+
 ## Current queue — *updated 2026-08-17, and this is the live part of the file*
 
 Everything above is the closed P0–P8 remediation. This is what is actually next, ordered. The

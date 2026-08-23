@@ -24,6 +24,7 @@ import { createRequire } from 'node:module';
 
 const require = createRequire(import.meta.url);
 const { isSuperAdmin, assertApprovable, buildApprovalWrites, slugTeamId } = require('../functions/teamApproval.js');
+const { assertInvitable, buildInviteWrites, assertRemovable, INVITE_REASONS, REMOVE_REASONS } = require('../functions/teamMembership.js');
 
 const findings = [];
 const flag = (id, what, detail) => findings.push({ id, what, detail });
@@ -223,6 +224,201 @@ if (collision.collision !== true || duplicate.collision !== false) {
 if (!collision.message.includes('Respiratory Therapy at KKH')) {
     flag('S8', 'the-team-exists-message-does-not-name-the-team-that-exists', collision.message);
 }
+
+H('E. MEMBERSHIP - how a team grows, and the team nobody can administer');
+
+/*
+ * Approval decides who gets a team. This decides who gets INTO one, which is the
+ * same question asked about clinical data 27 more times per department. It could
+ * not be asked at all until `inviteMember` existed: `firestore.rules` denies
+ * membership `create` and `delete` to every client and deferred both to a Cloud
+ * Function that had not been written, so an approved team could never grow.
+ */
+
+const TEAM = 'kkh-respiratory-therapy';
+const LEAD_MEMBERSHIP = { uid: 'leadUid0000000000000000000aa', role: 'lead' };
+const DOMAINS = ['kkh.com.sg', 'singhealth.com.sg'];
+const REAL = { uid: 'newUid00000000000000000000bb', email: 'brandon@kkh.com.sg', emailVerified: true };
+
+const invitable = (over = {}) => assertInvitable({
+    teamId: TEAM, callerMembership: LEAD_MEMBERSHIP, invitee: REAL,
+    role: 'staff', existingMembership: null, allowedDomains: DOMAINS, ...over,
+});
+
+// ── E1. Nobody but a lead of THIS team ───────────────────────────────────────
+//
+// A caller with no membership document is somebody who passed a teamId they are
+// not in. Admitting them would let any signed-in user in the cluster place
+// anybody inside any department — and every rule downstream trusts that document.
+const CALLERS = [
+    null, undefined, {}, { role: '' }, { role: 'staff' }, { role: 'viewer' },
+    { role: 'LEAD' }, { role: 'admin' }, { role: 'superadmin' }, { role: ['lead'] },
+    { role: { toString: () => 'lead' } }, { rostered: true },
+];
+const admittedCallers = CALLERS.filter((c) => invitable({ callerMembership: c }).ok);
+console.log(`  ${CALLERS.length} non-lead callers - ${admittedCallers.length} admitted`);
+if (admittedCallers.length) flag('M1', 'a-non-lead-was-allowed-to-add-a-member',
+    admittedCallers.map((c) => JSON.stringify(c)).join(', '));
+
+// ── E2. The domain gate, which is the login gate applied to people who are ADDED
+//
+// Rules can read config/domains but cannot read the INVITEE's email — only the
+// caller's — so without this check the gate would apply to people who sign
+// themselves up and be skipped entirely for people a lead adds.
+const HOSTILE_EMAILS = [
+    '', ' ', null, undefined, 0, [], {},
+    'brandon', 'brandon@', '@kkh.com.sg', 'a@b@kkh.com.sg', 'a@kkh.com.sg@evil.example',
+    'a@gmail.com', 'a@mail.kkh.com.sg', 'a@kkh.com.sg.attacker.example', 'a@KKH.COM.SG.evil',
+    'a@localhost', 'a@-kkh.com.sg', 'a@kkh-.com.sg', 'a@kkh..com.sg',
+    'a@xn--kkh-tla.com.sg', 'a@\u212akkh.com.sg', 'a@kkh.com.sg\u0000',
+];
+const admittedEmails = HOSTILE_EMAILS.filter((email) => invitable({ invitee: { ...REAL, email } }).ok);
+console.log(`  ${HOSTILE_EMAILS.length} hostile addresses - ${admittedEmails.length} admitted`);
+if (admittedEmails.length) flag('M2', 'a-hostile-address-passed-the-domain-gate',
+    admittedEmails.map((e) => JSON.stringify(e)).join(', '));
+
+/*
+ * ⚠️ SEPARATED FROM THE LIST ABOVE AFTER THE HARNESS FLAGGED THEM AND THE FLAG WAS
+ *    WRONG. `a@kkh.com.sg.` and an address with a trailing newline are ADMITTED,
+ *    and that is correct rather than a hole: a trailing dot is the fully-qualified
+ *    form of the same domain, and a trailing newline is what a paste from Outlook
+ *    leaves behind. `normaliseDomain` strips both deliberately, the client copy
+ *    strips them identically (section C's drift guard covers it), and refusing
+ *    them would reject a real colleague's real address for a typographical reason
+ *    they cannot see.
+ *
+ *    They stay in the harness as an EXPECTED-ADMIT group rather than being deleted,
+ *    so a future change that stops canonicalising them shows up here as a number
+ *    that moved.
+ */
+const CANONICAL_ADMITS = ['a@kkh.com.sg.', 'a@kkh.com.sg\n', '  a@KKH.com.sg  '];
+const wronglyRefused = CANONICAL_ADMITS.filter((email) => !invitable({ invitee: { ...REAL, email } }).ok);
+console.log(`  ${CANONICAL_ADMITS.length} addresses that should canonicalise to an allowed domain - ${wronglyRefused.length} refused`);
+if (wronglyRefused.length) flag('M12', 'a-real-address-was-refused-over-canonicalisation',
+    wronglyRefused.map((e) => JSON.stringify(e)).join(', '));
+
+// ⚠️ AN UNREADABLE ALLOWLIST ADMITS NOBODY - the OPPOSITE of the client hook,
+//    and both are right. The login screen falls back to a built-in list because it
+//    still has to let existing users in. This function is what stands between a
+//    lead and placing an arbitrary address in a team.
+const BAD_LISTS = [[], null, undefined, '', 'kkh.com.sg', {}, ['*'], ['*.com.sg'], [''], [null]];
+const openedLists = BAD_LISTS.filter((allowedDomains) => invitable({ allowedDomains }).ok);
+console.log(`  ${BAD_LISTS.length} unusable allowlists - ${openedLists.length} admitted anybody`);
+if (openedLists.length) flag('M3', 'an-unusable-allowlist-opened-the-gate',
+    openedLists.map((l) => JSON.stringify(l)).join(', '));
+
+// ── E3. Role escalation through the request body ─────────────────────────────
+/*
+ * `undefined` is NOT in this list, and leaving it out is the finding rather than an
+ * omission: the harness flagged it as "a role outside the three was accepted" and
+ * the flag was wrong. `assertInvitable`'s default parameter turns `undefined` into
+ * `'staff'`, which is what the handler does with a missing field too. An absent
+ * role meaning the least-privileged one is the correct reading; the escalation
+ * risk is a role that is PRESENT and wrong, which is everything below.
+ */
+const HOSTILE_ROLES = ['admin', 'superadmin', 'owner', 'LEAD', 'Lead', '', null, 0,
+    ['lead'], { role: 'lead' }, 'lead ', ' lead', 'staff\u0000'];
+const acceptedRoles = HOSTILE_ROLES.filter((role) => invitable({ role }).ok);
+console.log(`  ${HOSTILE_ROLES.length} hostile roles - ${acceptedRoles.length} accepted`);
+if (acceptedRoles.length) flag('M4', 'a-role-outside-the-three-was-accepted',
+    acceptedRoles.map((r) => JSON.stringify(r)).join(', '));
+
+const omittedRole = invitable({ role: undefined });
+console.log(`  an omitted role defaults to the least privileged: ok=${omittedRole.ok}`);
+if (!omittedRole.ok) flag('M13', 'an-omitted-role-is-refused-rather-than-defaulting-to-staff',
+    JSON.stringify(omittedRole));
+
+// ── E4. Nothing from the request body reaches a written document ─────────────
+const smuggledMember = buildInviteWrites({
+    teamId: TEAM,
+    invitee: { ...REAL, admin: true, teamIds: ['other-team'], role: 'lead' },
+    displayName: 'x'.repeat(5000),
+    role: 'staff', rostered: true, invitedBy: 'LEADuid', now: 'NOW',
+});
+const memberKeys = Object.keys(smuggledMember.member.data);
+const leakedMemberKeys = memberKeys.filter((k) => ['admin', 'teamIds', 'status', 'extra'].includes(k));
+console.log(`  request-body smuggling: ${leakedMemberKeys.length ? leakedMemberKeys.join(', ') : 'nothing reached a written document'}`);
+if (leakedMemberKeys.length) flag('M5', 'a-field-from-the-request-body-was-written', leakedMemberKeys.join(', '));
+console.log(`  a 5000-character name is stored at: ${smuggledMember.member.data.displayName.length}`);
+if (smuggledMember.member.data.displayName.length > 200) flag('M6',
+    'a-name-from-the-request-is-written-with-no-length-cap',
+    `${smuggledMember.member.data.displayName.length} - it is rendered in the roster header and the swap picker`);
+
+// ⚠️ THE USER DOCUMENT MUST GAIN A TEAM, NEVER BE HANDED A LIST. A `teamIds` key
+//    here would OVERWRITE the array and drop every other team the person belongs
+//    to - the exact failure multi-team membership exists to support.
+if ('teamIds' in smuggledMember.user.data) flag('M7',
+    'the-invite-writes-teamIds-directly-instead-of-a-union', JSON.stringify(smuggledMember.user.data));
+console.log(`  the user document gains: ${JSON.stringify(smuggledMember.user.data.addTeamIds)} (union, not overwrite)`);
+
+// ── E5. The invariant: a team must never end up with nobody who can administer it
+//
+// EXHAUSTIVE over the four things that decide it, because the first version of the
+// guard compared `caller !== target` and would have passed half of this matrix.
+// There is no repair path inside the app for a team with no lead - every screen
+// that could fix it requires one - so the owner would edit Firestore by hand.
+let orphanable = 0;
+let matrix = 0;
+for (const isOwner of [true, false]) {
+    for (const targetRole of ['lead', 'staff', 'viewer']) {
+        for (const leadCount of [0, 1, 2, 3, undefined, null, NaN, '2', -1]) {
+            for (const selfRemoval of [true, false]) {
+                matrix += 1;
+                const targetUid = selfRemoval ? LEAD_MEMBERSHIP.uid : 'otherUid00000000000000000cc';
+                const verdict = assertRemovable({
+                    teamId: TEAM,
+                    team: { leadUid: isOwner ? targetUid : 'someone-else-entirely' },
+                    callerUid: LEAD_MEMBERSHIP.uid,
+                    callerMembership: LEAD_MEMBERSHIP,
+                    targetUid,
+                    targetMembership: { role: targetRole },
+                    leadCount,
+                });
+                // The removal would leave zero leads if the target is a lead and the
+                // count of leads was one or fewer - including "we could not tell".
+                const countKnown = Number.isFinite(Number(leadCount));
+                const wouldOrphan = targetRole === 'lead' && (!countKnown || Number(leadCount) <= 1);
+                if (verdict.ok && (wouldOrphan || isOwner)) {
+                    orphanable += 1;
+                    flag('M8', 'a-removal-that-leaves-a-team-with-no-lead-was-allowed',
+                        `owner=${isOwner} targetRole=${targetRole} leadCount=${JSON.stringify(leadCount)} self=${selfRemoval}`);
+                }
+            }
+        }
+    }
+}
+console.log(`  ${matrix} removal combinations - ${orphanable} would have left a team with no lead`);
+
+// ── E6. Idempotence: doing it twice is the state the lead asked for ──────────
+const twice = invitable({ existingMembership: { displayName: 'Brandon', role: 'staff' } });
+const gone = assertRemovable({
+    teamId: TEAM, team: { leadUid: 'x' }, callerUid: LEAD_MEMBERSHIP.uid,
+    callerMembership: LEAD_MEMBERSHIP, targetUid: 'ghost000000000000000000000dd',
+    targetMembership: null, leadCount: 2,
+});
+console.log(`  adding an existing member -> ok=${twice.ok} alreadyMember=${twice.alreadyMember}`);
+console.log(`  removing somebody already gone -> ok=${gone.ok} alreadyGone=${gone.alreadyGone}`);
+if (!twice.ok || !twice.alreadyMember) flag('M9', 'adding-an-existing-member-is-an-error-rather-than-a-no-op',
+    JSON.stringify(twice));
+if (!gone.ok || !gone.alreadyGone) flag('M10', 'removing-an-absent-member-is-an-error-rather-than-a-no-op',
+    JSON.stringify(gone));
+
+// ── E7. Every refusal names a reason code, not only a sentence ───────────────
+//
+// The codes are what a future pending-invitation path branches on, and what the
+// UI uses to tell "they have not registered" from "that domain is not allowed".
+const REFUSALS = [
+    invitable({ callerMembership: null }),
+    invitable({ invitee: { ...REAL, email: 'a@gmail.com' } }),
+    invitable({ invitee: { ...REAL, uid: null } }),
+    invitable({ invitee: { ...REAL, emailVerified: false } }),
+    invitable({ role: 'admin' }),
+];
+const KNOWN_REASONS = new Set(Object.values(INVITE_REASONS).concat(Object.values(REMOVE_REASONS)));
+const unnamed = REFUSALS.filter((r) => !KNOWN_REASONS.has(r.reason) || !r.message);
+console.log(`  ${REFUSALS.length} refusals - ${unnamed.length} without a reason code or a sentence`);
+if (unnamed.length) flag('M11', 'a-refusal-has-no-reason-code-or-no-sentence',
+    JSON.stringify(unnamed.map((r) => r.reason)));
 
 H('SUMMARY');
 /*

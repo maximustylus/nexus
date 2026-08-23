@@ -4,7 +4,7 @@ import {
   updateDoc, doc, arrayUnion, arrayRemove, getDoc, setDoc, writeBatch, getDocs, collection 
 } from 'firebase/firestore';
 import { 
-  LayoutList, X, Save, Briefcase, Activity, Calendar 
+  LayoutList, X, Save, Briefcase, Activity, Calendar, Users 
 } from 'lucide-react';
 
 // Components
@@ -15,6 +15,7 @@ import AdminWellbeingPanel from './AdminWellbeingPanel';
 import { STATUS_OPTIONS, DOMAIN_LIST } from '../utils';
 import { useTeam } from '../context/TeamContext';
 import { projectsStaffPath, projectStaffPath, loadPath, loadsPath, attendancePath } from '../utils/teamPaths';
+import TeamMembersPanel from './TeamMembersPanel';
 import { MOCK_STAFF_NAMES } from '../data/mockData'; 
 import { useNexus } from '../context/NexusContext';
 import { APP_VERSION_LABEL } from '../version';   
@@ -27,10 +28,21 @@ const MONTH_LABELS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'S
 // thing still making a year special here.
 const CURRENT_LOAD_YEAR = '2026';
 
+/**
+ * The subtitle each tab puts in the header. A map rather than the nested ternary
+ * this replaced, which said "Wellbeing Ops" for every tab that was not OPERATIONS —
+ * so the TEAM tab would have been mislabelled from the moment it was added.
+ */
+const TAB_LABELS = {
+    OPERATIONS: 'Workload Ops',
+    WELLBEING: 'Wellbeing Ops',
+    TEAM: 'Team Members',
+};
+
 const AdminPanel = ({ teamData, staffLoads, user }) => {
     // --- CONTEXT ---
     const { isDemo } = useNexus(); 
-    const { teamId, members } = useTeam();
+    const { teamId, members, isLead } = useTeam();
 
     // --- DYNAMIC STAFF LIST SWITCHER ---
     const activeStaffList = isDemo
@@ -382,7 +394,7 @@ const saveLoads = async () => {
                 <div className="mb-4 md:mb-0">
                     <h2 className="text-2xl font-black tracking-tight uppercase">Admin Control Center</h2>
                     <p className="text-xs text-slate-400 font-mono uppercase mt-1">
-                        System Database {APP_VERSION_LABEL} • {activeTab === 'OPERATIONS' ? 'Workload Ops' : 'Wellbeing Ops'}
+                        System Database {APP_VERSION_LABEL} • {TAB_LABELS[activeTab] || 'Ops'}
                     </p>
                 </div>
                 
@@ -399,6 +411,24 @@ const saveLoads = async () => {
                     >
                         <Activity size={14} /> Wellbeing
                     </button>
+                    {/*
+                      * THE TAB THAT REPLACED `TEAM_DIRECTORY`. Shown only to a lead,
+                      * because only a lead can act on it — but the hiding is
+                      * PRESENTATION. `readTeamContext` re-reads the caller's
+                      * membership on every call and refuses anybody who is not a lead
+                      * of that team; that refusal is the control.
+                      *
+                      * Hidden in the sandbox too: the demo team is not a real team, so
+                      * a member list for it would be a form that can only ever fail.
+                      */}
+                    {isLead && !isDemo && (
+                        <button
+                            onClick={() => setActiveTab('TEAM')}
+                            className={`flex items-center gap-2 px-6 py-2.5 rounded-lg text-xs font-bold uppercase transition-all ${activeTab === 'TEAM' ? 'bg-indigo-600 text-white shadow-lg' : 'text-slate-400 hover:text-white'}`}
+                        >
+                            <Users size={14} /> Team
+                        </button>
+                    )}
                 </div>
             </div>
 
@@ -697,6 +727,15 @@ const saveLoads = async () => {
             {/* TAB 2: WELLBEING                          */}
             {/* ========================================= */}
             {activeTab === 'WELLBEING' && <AdminWellbeingPanel />}
+
+            {/* ========================================= */}
+            {/* TAB 3: TEAM — add and remove your own people */}
+            {/* ========================================= */}
+            {activeTab === 'TEAM' && isLead && !isDemo && (
+                <div className="animate-in fade-in rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900">
+                    <TeamMembersPanel />
+                </div>
+            )}
         </div>
     );
 };

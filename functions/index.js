@@ -9,8 +9,16 @@
 const { onCall, HttpsError } = require('firebase-functions/v2/https');
 const logger = require('firebase-functions/logger');
 const { onSchedule } = require('firebase-functions/v2/scheduler');
-const { getFirestore } = require('firebase-admin/firestore');
+const { getFirestore, FieldValue } = require('firebase-admin/firestore');
 const { getMessaging } = require('firebase-admin/messaging');
+// ⚠️ SUBPATH IMPORTS, NOT `admin.auth` / `admin.firestore`. firebase-admin v14
+// removed the service namespaces from the root export, and on v14 the namespace
+// form fails QUIETLY: `admin.auth` is undefined, the TypeError lands in a `catch`
+// that only warns, and a real colleague is reported as having no account with
+// nothing red anywhere. `functions/adminApiPin.test.js` holds that line — it caught
+// the membership functions below reaching for the old form, which is what these two
+// imports are here to prevent.
+const { getAuth } = require('firebase-admin/auth');
 
 const admin = require('firebase-admin');
 admin.initializeApp();
@@ -640,7 +648,7 @@ exports.processFeedPost = onCall({ secrets: ['GEMINI_API_KEY'] }, async (request
         } else {
             postUpdateData.author = authorName || 'Anonymous Staff';
             postUpdateData.role = authorRole || 'Staff';
-            postUpdateData.timestamp = admin.firestore.FieldValue.serverTimestamp();
+            postUpdateData.timestamp = FieldValue.serverTimestamp();
             postUpdateData.likes = 0;
             postUpdateData.comments = 0;
             postUpdateData.isDemo = !!isDemo;
@@ -1044,7 +1052,7 @@ exports.approveLeadRequest = onCall({ cors: true }, async (request) => {
     var authUser = null;
     if (leadRequest) {
         try {
-            var record = await admin.auth().getUser(requestUid);
+            var record = await getAuth().getUser(requestUid);
             authUser = { uid: record.uid, email: record.email, emailVerified: record.emailVerified };
         } catch (error) {
             logger.warn('[TEAMS] no auth account for ' + requestUid, error);
@@ -1108,7 +1116,7 @@ exports.approveLeadRequest = onCall({ cors: true }, async (request) => {
             email: writes.user.data.email,
             // A UNION, never an overwrite: somebody can lead one team and be staff in
             // another, and an overwrite here would silently drop the other membership.
-            teamIds: admin.firestore.FieldValue.arrayUnion.apply(null, writes.user.data.addTeamIds),
+            teamIds: FieldValue.arrayUnion.apply(null, writes.user.data.addTeamIds),
         },
         { merge: true },
     );
@@ -1154,4 +1162,272 @@ exports.declineLeadRequest = onCall({ cors: true }, async (request) => {
     await db.doc(write.path.join('/')).set(write.data, { merge: true });
     logger.info('[TEAMS] declined ' + requestUid + ' by ' + caller.uid);
     return { success: true };
+});
+
+// ==============================================================================
+// TEAM MEMBERSHIP — HOW A TEAM GROWS PAST ITS LEAD
+// ==============================================================================
+//
+// `approveLeadRequest` above creates a team with exactly ONE person in it. These two
+// calls are the second step, and until they existed there was none: `firestore.rules`
+// denies `create` and `delete` on `teams/{teamId}/members/{uid}` and its comments
+// defer both to "a Cloud Function" that had not been written. A department approved
+// yesterday could never add anybody. That was the single defect standing between
+// v2.0 and a cluster-wide launch.
+//
+// Three facts a security rule cannot establish are checked here, and each one is a
+// way somebody could otherwise reach a department's clinical records:
+//
+//   1. THAT THE ACCOUNT IS REAL. Rules cannot read Firebase Auth. A lead permitted
+//      to create a membership for an arbitrary uid could invent one, register it,
+//      and sign in as a member of a team nobody put them in.
+//   2. THAT THE ADDRESS IS ON AN ALLOWLISTED DOMAIN. Rules can read `config/domains`
+//      but not the INVITEE's email — only the caller's — so the login gate would
+//      apply to people who sign themselves up and not to people who are added.
+//   3. TWO DOCUMENTS AT ONCE. A membership is half a join; `users/{uid}.teamIds` is
+//      the other half. Rules cannot write two documents, so they permit neither.
+//
+// As above, the decision logic lives in a pure module — `./teamMembership.js`,
+// 69 tests in `npm test` — and what is left here is wiring.
+
+var teamMembership = require('./teamMembership');
+
+var DOMAINS_DOC = 'config/domains';
+var TEAM_ID_SHAPE = /^[a-z0-9]+(-[a-z0-9]+)*$/;
+
+/**
+ * Establishes the caller, the team, and the caller's membership OF THAT TEAM.
+ *
+ * ⚠️ THE MEMBERSHIP IS READ, NEVER TAKEN FROM THE REQUEST. `request.data.role` would
+ *    be a claim by whoever called the function. This returns the document.
+ */
+async function readTeamContext(db, request) {
+    if (!request.auth || !request.auth.uid) {
+        throw new HttpsError('unauthenticated', 'Sign in first.');
+    }
+
+    var teamId = request.data && request.data.teamId;
+    if (typeof teamId !== 'string' || !TEAM_ID_SHAPE.test(teamId)) {
+        throw new HttpsError('invalid-argument', 'Which team?');
+    }
+
+    var callerUid = request.auth.uid;
+    var results = await Promise.all([
+        db.doc('teams/' + teamId).get(),
+        db.doc('teams/' + teamId + '/members/' + callerUid).get(),
+    ]);
+
+    var teamSnap = results[0];
+    var callerSnap = results[1];
+
+    // Deliberately the SAME message whether the team is absent or the caller is not
+    // in it. Distinguishing them would let anybody enumerate which team ids exist.
+    if (!teamSnap.exists || !callerSnap.exists) {
+        throw new HttpsError('permission-denied', 'You are not a lead of that team.');
+    }
+
+    return {
+        teamId: teamId,
+        callerUid: callerUid,
+        team: teamSnap.data(),
+        callerMembership: callerSnap.data(),
+    };
+}
+
+/**
+ * The login allowlist as the SERVER reads it.
+ *
+ * ⚠️ AN UNREADABLE `config/domains` YIELDS AN EMPTY LIST, AND AN EMPTY LIST ADMITS
+ *    NOBODY. The client hook falls back to a built-in list because a login screen
+ *    that cannot read its configuration still has to let existing users in; this
+ *    read has the opposite obligation. Refusing every invitation during a Firestore
+ *    outage is an inconvenience. Admitting every address during one is not.
+ */
+async function readAllowedDomains(db) {
+    try {
+        var snap = await db.doc(DOMAINS_DOC).get();
+        return teamMembership.parseDomainAllowlist(snap.exists ? snap.data() : null);
+    } catch (error) {
+        logger.error('[TEAMS] config/domains unreadable; admitting nobody.', error);
+        return [];
+    }
+}
+
+/**
+ * ADD SOMEBODY TO A TEAM — by email address, because a lead knows their colleague's
+ * address and does not know their Firebase uid.
+ *
+ * IDEMPOTENT, like approval and for the same reasons. Adding somebody who is already
+ * a member returns success and writes nothing: a double-clicked button and a co-lead
+ * who got there first are the same event, and both produced the state the lead
+ * wanted. Making that an error trains people to ignore errors.
+ *
+ * NO PENDING INVITATIONS IN v2.0 — see the scope note in `teamMembership.js`. An
+ * address with no NEXUS account is refused with a sentence naming the fix. That
+ * ordering is survivable only because `AccessGate` is no longer a dead end: somebody
+ * who registers before their lead is ready gets a holding screen that explains the
+ * wait and offers the sandbox.
+ */
+exports.inviteMember = onCall({ cors: true }, async (request) => {
+    var db = getFirestore();
+    var context = await readTeamContext(db, request);
+
+    var email = request.data && request.data.email;
+    if (typeof email !== 'string' || email.trim() === '') {
+        throw new HttpsError('invalid-argument', 'Which email address?');
+    }
+    email = email.trim().toLowerCase();
+
+    var role = (request.data && request.data.role) || 'staff';
+    var domains = await readAllowedDomains(db);
+
+    /**
+     * ⚠️ THE DOMAIN IS CHECKED BEFORE THE DIRECTORY IS QUERIED. `getUserByEmail`
+     *    answers whether an address has a NEXUS account, so calling it first would
+     *    turn this endpoint into an account-existence oracle for arbitrary addresses
+     *    — gmail, a competitor's domain, a specific person's private address —
+     *    available to any lead. Checking the allowlist first means the oracle only
+     *    ever answers about addresses the cluster already serves.
+     */
+    if (!teamMembership.isAllowedEmail(email, domains)) {
+        var refusal = teamMembership.assertInvitable({
+            teamId: context.teamId,
+            callerMembership: context.callerMembership,
+            invitee: { uid: null, email: email, emailVerified: false },
+            role: role,
+            allowedDomains: domains,
+        });
+        return { success: false, reason: refusal.reason, message: refusal.message };
+    }
+
+    var invitee = { uid: null, email: email, emailVerified: false };
+    try {
+        var record = await getAuth().getUserByEmail(email);
+        invitee = { uid: record.uid, email: record.email || email, emailVerified: record.emailVerified };
+    } catch (error) {
+        // `auth/user-not-found` is the ordinary case — they have not registered yet.
+        // Anything else is a real fault, and refusing is still the right answer:
+        // this function must not add somebody it could not verify.
+        if (!error || error.code !== 'auth/user-not-found') {
+            logger.error('[TEAMS] getUserByEmail failed for ' + email, error);
+        }
+    }
+
+    var existingSnap = invitee.uid
+        ? await db.doc('teams/' + context.teamId + '/members/' + invitee.uid).get()
+        : null;
+
+    var verdict = teamMembership.assertInvitable({
+        teamId: context.teamId,
+        callerMembership: context.callerMembership,
+        invitee: invitee,
+        role: role,
+        existingMembership: existingSnap && existingSnap.exists ? existingSnap.data() : null,
+        allowedDomains: domains,
+    });
+
+    if (!verdict.ok) {
+        // A REFUSAL IS NOT AN EXCEPTION. Every one of these is a sentence the lead
+        // needs to read and act on — register first, confirm your email, ask the
+        // owner to add your institution. `HttpsError` would reach the browser as a
+        // generic "internal" for several of them.
+        return { success: false, reason: verdict.reason, message: verdict.message };
+    }
+
+    if (verdict.alreadyMember) {
+        return { success: true, alreadyMember: true, uid: invitee.uid, message: verdict.message };
+    }
+
+    var writes = teamMembership.buildInviteWrites({
+        teamId: context.teamId,
+        invitee: invitee,
+        displayName: request.data && request.data.displayName,
+        role: role,
+        rostered: request.data ? request.data.rostered : true,
+        invitedBy: context.callerUid,
+        now: new Date().toISOString(),
+    });
+
+    var batch = db.batch();
+    batch.set(db.doc(writes.member.path.join('/')), writes.member.data);
+    batch.set(
+        db.doc(writes.user.path.join('/')),
+        {
+            displayName: writes.user.data.displayName,
+            email: writes.user.data.email,
+            // A UNION, never an overwrite — somebody may already be staff elsewhere.
+            teamIds: FieldValue.arrayUnion.apply(null, writes.user.data.addTeamIds),
+        },
+        { merge: true },
+    );
+    await batch.commit();
+
+    logger.info('[TEAMS] ' + context.callerUid + ' added ' + invitee.uid + ' to ' + context.teamId);
+    return { success: true, alreadyMember: false, uid: invitee.uid, role: role };
+});
+
+/**
+ * REMOVE SOMEBODY FROM A TEAM.
+ *
+ * ⚠️ THE HALF-REMOVAL IS THE FAILURE THIS EXISTS TO PREVENT. Deleting the membership
+ *    and leaving `users/{uid}.teamIds` intact gives that person a team in their
+ *    switcher that they can no longer read: every listener their app opens fails
+ *    permission-denied, silently, and the app looks broken rather than changed. Both
+ *    writes go in one batch.
+ *
+ * The lead count is READ, not inferred. A lead removing another lead is fine when
+ * there are three; a lead stepping down is fine when there are two. The only
+ * outcome that must not happen is the count reaching zero — a team nobody can
+ * administer, with no repair path inside the app.
+ */
+exports.removeMember = onCall({ cors: true }, async (request) => {
+    var db = getFirestore();
+    var context = await readTeamContext(db, request);
+
+    var targetUid = request.data && request.data.uid;
+    if (typeof targetUid !== 'string' || targetUid.trim() === '') {
+        throw new HttpsError('invalid-argument', 'Which member?');
+    }
+
+    var results = await Promise.all([
+        db.doc('teams/' + context.teamId + '/members/' + targetUid).get(),
+        db.collection('teams/' + context.teamId + '/members').where('role', '==', 'lead').get(),
+    ]);
+
+    var targetSnap = results[0];
+    var leadCount = results[1].size;
+
+    var verdict = teamMembership.assertRemovable({
+        teamId: context.teamId,
+        team: context.team,
+        callerUid: context.callerUid,
+        callerMembership: context.callerMembership,
+        targetUid: targetUid,
+        targetMembership: targetSnap.exists ? targetSnap.data() : null,
+        leadCount: leadCount,
+    });
+
+    if (!verdict.ok) {
+        return { success: false, reason: verdict.reason, message: verdict.message };
+    }
+
+    if (verdict.alreadyGone) {
+        return { success: true, alreadyGone: true, message: verdict.message };
+    }
+
+    var writes = teamMembership.buildRemoveWrites({ teamId: context.teamId, targetUid: targetUid });
+
+    var batch = db.batch();
+    batch.delete(db.doc(writes.member.path.join('/')));
+    batch.set(
+        db.doc(writes.user.path.join('/')),
+        {
+            teamIds: FieldValue.arrayRemove.apply(null, writes.user.data.removeTeamIds),
+        },
+        { merge: true },
+    );
+    await batch.commit();
+
+    logger.info('[TEAMS] ' + context.callerUid + ' removed ' + targetUid + ' from ' + context.teamId);
+    return { success: true, alreadyGone: false };
 });
