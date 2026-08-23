@@ -311,6 +311,37 @@ export default function App() {
           unsubNotifications = onSnapshot(q, (snapshot) => {
               const fetched = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
               setNotifications(fetched);
+          },
+          /*
+           * ⚠️ AN EMPTY BELL IS INDISTINGUISHABLE FROM HAVING NO NOTIFICATIONS, WHICH
+           *    IS WHY THIS CALLBACK EXISTS. This listener was the last one in the app
+           *    with no error handler — the roster and coverage listeners both gained
+           *    one from `M8`, and this one was missed.
+           *
+           *    The failure it hides is not hypothetical. The query is an equality
+           *    filter plus an `orderBy` on a different field, which needs a COMPOSITE
+           *    INDEX; v2 changed both the collection and the field it filters on, so
+           *    the index this project holds for the old query cannot serve it.
+           *    Without this, that is a bell that is permanently empty for everybody,
+           *    with nothing on screen and nothing in the ledger to say why.
+           *
+           *    `firestore.indexes.json` now ships the index and CI deploys it. This is
+           *    the belt to that braces: if the index is ever missing again, somebody
+           *    finds out from the console rather than from a colleague asking why
+           *    their coverage request was ignored.
+           */
+          (error) => {
+              console.error('🔔 Notification listener failed:', error.code, error.message);
+              if (error.code === 'failed-precondition') {
+                  console.error(
+                      '   This query needs a composite index that does not exist. Firestore '
+                      + 'usually includes a click-through link to create it in the message above. '
+                      + 'The index is declared in firestore.indexes.json and deployed by CI.',
+                  );
+              }
+              // Cleared rather than left stale: showing yesterday's notifications
+              // beside a broken listener is worse than showing none.
+              setNotifications([]);
           });
       }
 

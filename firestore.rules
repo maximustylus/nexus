@@ -569,6 +569,45 @@ service cloud.firestore {
       allow update, delete: if false;
     }
 
+    // ── AURA's audit sink ────────────────────────────────────────────────────
+    //
+    // ⚠️ THIS BLOCK WAS DROPPED FROM THE v2 REWRITE AND THE CLIENT STILL WRITES TO
+    //    IT. The rewrite's header called `smart_database` "left global and unruled
+    //    on purpose", which describes the INTENT correctly and produced the wrong
+    //    file: Firestore denies by default, so "unruled" is "denied", and the
+    //    shipped bundle writes here from the browser twice —
+    //    `AuraPulseBot.jsx:633` (DOCX export) and `:672` (save to Smart Database).
+    //
+    //    The currently deployed rules grant that create. Publishing the rewrite
+    //    without this block would have taken it away, and the failure is worse than
+    //    a broken button: both call sites catch the denial and tell the user
+    //    "Please check your connection", so every clinician would be told their
+    //    network is at fault while the export silently never lands.
+    //
+    //    Restored from `git show origin/main:firestore.rules`, with two changes
+    //    forced by the new model: `isMember()` took no argument under the old
+    //    single-team rules and now needs one, and there is no team id in this path —
+    //    so the gate is `isSignedIn()` plus the shape. That is not a loosening in
+    //    any meaningful sense: the collection is write-only to every client, is
+    //    never read back by the app, and the old `myName()` check compared against a
+    //    display name the person could edit anyway.
+    //
+    // Create-only means a `Date.now()` COLLISION — two documents minted in the same
+    // millisecond — is denied rather than silently overwriting the earlier one. For
+    // an audit sink that is the behaviour you want, and it is why `update` is not
+    // granted.
+    match /smart_database/{docId} {
+      allow read: if false;
+      allow create: if isSignedIn()
+                    && request.resource.data.keys().hasOnly([
+                         'timestamp', 'displayDate', 'author', 'role',
+                         'content', 'type', 'isDemo', 'silentlyLogged'
+                       ])
+                    && request.resource.data.content is string
+                    && request.resource.data.content.size() <= 100000;
+      allow update, delete: if false;
+    }
+
     // ── Community screening telemetry ────────────────────────────────────────
     // Written by members of the public through the portal, with no account.
     // `recordTelemetry` swallows its errors, so a rule that denied the WRITE would

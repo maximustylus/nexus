@@ -31,10 +31,23 @@ jobs:
       # NOT enough on its own: `--only functions` excludes rules, so the pipeline
       # would go green, the runbook would say "wired", and the authorization
       # boundary would be unchanged. Both halves or neither.
+      #
+      # ⚠️ `firestore:indexes` IS THE SAME LESSON, LEARNED A SECOND TIME. v2 changed
+      # the notification bell's query from `where('recipient','==',displayName)` on
+      # a root collection to `where('recipientUid','==',uid) + orderBy('timestamp')`
+      # on a team subcollection. That needs a composite index the project does not
+      # have, and until now this repository deployed no indexes at all — there was
+      # no `firestore.indexes.json` on any branch and no `indexes` key in
+      # `firebase.json`.
+      #
+      # The failure mode is why it is here rather than in a checklist: that listener
+      # is the one with no error callback (`App.jsx`), so a missing index shows the
+      # bell as permanently empty, with no banner and nothing in the UI to explain
+      # it. An empty bell is indistinguishable from having no notifications.
       - name: Deploy Backend (Functions) and Firestore Rules
         uses: w9jds/firebase-action@master
         with:
-          args: deploy --only functions,firestore:rules
+          args: deploy --only functions,firestore:rules,firestore:indexes
         env:
           GCP_SA_KEY: '${{ secrets.FIREBASE_SERVICE_ACCOUNT }}'
           PROJECT_ID: idc-app-e0c59

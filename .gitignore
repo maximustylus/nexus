@@ -78,3 +78,8 @@ serviceAccountKey.json
 
 # Build output (never commit — would dirty the tree and bloat deploys)
 dist/
+
+# Local pre-migration backups (scripts/backup-legacy.cjs). Clinical records and
+# wellbeing history — these must never be committed, and the script's own banner
+# says to delete them once the cutover has settled.
+nexus-backup-*.json

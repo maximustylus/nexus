@@ -1,0 +1,14 @@
+{
+  "indexes": [
+    {
+      "//": "THE NOTIFICATION BELL. `App.jsx` queries teams/{teamId}/notifications with where('recipientUid','==',uid) + orderBy('timestamp','desc'). An equality filter combined with an orderBy on a DIFFERENT field needs a composite index; Firestore cannot serve it from single-field indexes. The pre-v2 query was where('recipient','==',displayName) on the ROOT notifications collection, so whatever index this project holds for that one does not serve this one. Query scope is COLLECTION rather than COLLECTION_GROUP: a composite index is keyed by collection id, so this covers teams/{any}/notifications without granting cross-team queries.",
+      "collectionGroup": "notifications",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "recipientUid", "order": "ASCENDING" },
+        { "fieldPath": "timestamp", "order": "DESCENDING" }
+      ]
+    }
+  ],
+  "fieldOverrides": []
+}

@@ -37,7 +37,7 @@ it is entirely within your control: make it short, and make it quiet.
 | ☐ | **Pick a quiet moment.** Not mid-week, not while somebody is arranging cover. The live roster belongs to five clinicians. |
 | ☐ | **Service account key** downloaded (Console → Project settings → Service accounts → Generate new private key), stored **outside the repo**. |
 | ☐ | **`firebase-admin` installed where the script can find it** — see Step 0. It is not a dependency of the app, only of this script. |
-| ☐ | **Back up the pre-migration documents.** `node scripts/backup-legacy.cjs` — read only, same key as the migration, writes one JSON file next to you. It needs no Cloud Storage bucket, no `gcloud` and no extra IAM role, which a real Firestore export does. The migration copies rather than moves, so the legacy documents ARE the rollback; this covers the case the design does not — somebody using the app between the migration and the deploy. A proper export (`gcloud firestore export gs://…`) is still better if you have a bucket to hand. |
+| ☐ | **Back up the pre-migration documents — AFTER Step 0, and from your home folder.** `cd ~ && NODE_PATH=~/nexus-migrate-deps/node_modules GOOGLE_APPLICATION_CREDENTIALS=~/Downloads/nexus-key.json node ~/Documents/GitHub/nexus/scripts/backup-legacy.cjs`. It needs the same two variables the migration does, and Step 0 is what installs them — running it from this checklist row, above Step 0, dies with `Cannot find module 'firebase-admin/app'` before printing anything. `cd ~` matters too: the file is written to the current directory, and the repo folder is inside iCloud Drive and is not somewhere a file full of wellbeing logs should land. Read only, same key as the migration. It needs no Cloud Storage bucket, no `gcloud` and no extra IAM role, which a real Firestore export does. The migration copies rather than moves, so the legacy documents ARE the rollback; this covers the case the design does not — somebody using the app between the migration and the deploy. A proper export (`gcloud firestore export gs://…`) is still better if you have a bucket to hand. |
 | ☐ | **Capture the current rules.** Console → Firestore → Rules → History; save the deployed text somewhere outside the repo. Rolling back the bundle without rolling back the rules leaves the old app locked out of its own paths. |
 | ☐ | **Note the current hosting release** (Console → Hosting → Release history). Rollback is one click from that list, and finding it under pressure is not the moment to learn where it lives. |
 
@@ -155,6 +155,25 @@ The community branch is a descendant of an older point on the roster branch, so 
 does not yet contain the migration fixes. Bring them together on the community
 branch first, verify once, then merge that:
 
+⚠️ **DO NOT RE-RUN THE MIGRATION ONCE THIS STEP HAS BEGUN WITHOUT CHECKING WHICH
+SCRIPT YOU ARE HOLDING.** The first command below replaces
+`scripts/migrate-to-teams.cjs` in your working tree with the community branch's older
+copy — the one whose `write()` is an unconditional `set(data, { merge: true })`, from
+before `T1` was fixed. That version overwrites a destination the live app has since
+written, prints it as an ordinary plan line, and gives no warning. `main` has no
+migration script at all.
+
+One command tells them apart:
+
+```
+grep -c force-overwrite scripts/migrate-to-teams.cjs
+```
+
+**3 is the fixed script. 0 is the old one.** If a colleague registers mid-cutover and
+you need to re-run, do it from the roster branch — `git checkout
+claude/nexus-aura-rostering-session-duo1q5` — never from whatever happens to be
+checked out.
+
 ```
 # 1. the roster work into the community branch
 git checkout claude/nexus-community-portal
@@ -200,8 +219,20 @@ community, which is the direction that actually collides. Rehearsing it is what
 found this, and moving the script to a different line in the block does not help:
 JSON's trailing comma means any insertion at either end rewrites its neighbour.)*
 
-CI runs `npm test`, `npm run lint`, builds, then deploys functions, **firestore rules**
-and hosting. The rules deploy is part of this step — that is what seals the old paths.
+CI runs `npm test`, `npm run lint`, builds, then deploys functions, **firestore rules**,
+**firestore indexes** and hosting. The rules deploy is part of this step — that is what
+seals the old paths.
+
+⚠️ **DO NOT RUN `firebase deploy` ON YOUR MAC AT ANY POINT IN THIS CUTOVER.** A local
+`--only firestore:rules` from this checkout publishes the v2 rules on their own,
+immediately — and the v2 rules seal the collections the LIVE bundle still reads, so
+every clinician loses the roster, the feed and the wellbeing panel within seconds,
+with no deploy log to point at. `--only hosting` has its own version: `dist/` is
+gitignored, so it publishes whatever stale build happens to be on your disk. The
+design is that one `git push origin main` does all four in one ordered run. If you
+want to confirm the deploy can authenticate, look at the last green run of the
+workflow on GitHub — it uses a repository secret, not the key on your Mac, so nothing
+you do locally proves anything about it either way.
 
 ---
 
@@ -243,8 +274,21 @@ The rollback is real because the migration copies:
    roll back in Firebase Hosting's release history.
 
 The old app then reads the old documents as if nothing had happened. The `teams/…`
-documents the migration created are simply ignored; they cost storage and nothing else,
-and a second migration run will bring them back up to date whenever you retry.
+documents the migration created are simply ignored; they cost storage and nothing else.
+
+⚠️ **A SECOND MIGRATION RUN DOES NOT BRING THEM UP TO DATE.** This paragraph used to
+say it would, and that is the most dangerous sentence this file has contained.
+`write()` SKIPS any destination that already exists — that is the property that makes
+re-running safe, and it is the same property that makes a re-run useless as a refresh.
+Verified by driving the real script twice against a store mutated in between: the
+legacy change was not copied, and the skip line even reported the SOURCE's day count,
+so the output read as though the destination were current.
+
+**So anything a clinician writes to the LEGACY documents between the migration and a
+successful deploy is stranded**, and the same is true of anything written after a
+rollback. Do not reach for `--force-overwrite` to fix it: that replaces the
+destination wholesale and would delete whatever the new app has since written.
+Reconcile by hand in the console, or migrate again from a clean destination.
 
 **What is NOT recoverable this way:** anything written *through the new app* between the
 deploy and the rollback — a swap answered, a wellbeing log, a roster edit. Those land in
