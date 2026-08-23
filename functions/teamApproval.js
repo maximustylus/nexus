@@ -114,7 +114,78 @@ const LEAD_ROLES = ['lead', 'supervisor', 'administrator'];
  * a retried call, a rerun after a timeout — must land on the same team rather than
  * on a half-made second one. The caller turns this into a successful no-op.
  */
-const assertApprovable = ({ request, authUser, teamExists }) => {
+/**
+ * How much of a free-text field from a request is kept.
+ *
+ * ⚠️ THE DECLINE REASON WAS CAPPED AND NOTHING ELSE WAS, WHICH IS THE WRONG WAY
+ *    ROUND. `buildDeclineWrite` has always sliced its reason to 500 characters —
+ *    that field is written by the OWNER. The institution, department and display
+ *    name come from whoever registered, are written verbatim into the team
+ *    document, and are then rendered in the team switcher, the roster header and
+ *    every screen that names the department. Measured: a 5,000-character department
+ *    name was stored at 5,000 characters.
+ *
+ *    Firestore's 1MB document limit means this is not a denial of service. It is a
+ *    real name that no interface can lay out, in a document nobody edits afterwards,
+ *    and 120 characters is longer than any department in the cluster.
+ */
+const MAX_FIELD_CHARS = 120;
+
+/**
+ * The decline reason is the OWNER's prose explaining a decision to a colleague, not
+ * an identity field, so it keeps the longer allowance it has always had. Truncating
+ * an explanation at 120 characters would be a worse defect than the one being fixed.
+ */
+const MAX_REASON_CHARS = 500;
+
+const asText = (value, fallback = '', max = MAX_FIELD_CHARS) => {
+    const text = typeof value === 'string' ? value.trim().slice(0, max) : '';
+    return text === '' ? fallback : text;
+};
+
+/**
+ * The sentence an owner reads when the id a request slugs to is already taken.
+ *
+ * ⚠️ IT NAMES THE EXISTING TEAM, NOT THE REQUEST, AND THAT IS THE POINT. It used to
+ *    read "{request.department} at {request.institution} is already on NEXUS" — built
+ *    entirely from the NEW request, so it described a team that does not exist under
+ *    that name and left the owner nothing to check against.
+ *
+ *    That matters because of how ids are derived. The hyphen joining institution to
+ *    department is the same character used inside each half, so the boundary is not
+ *    recoverable: `KKH` + `Respiratory Therapy` and `KKH Respiratory` + `Therapy`
+ *    both slug to `kkh-respiratory-therapy`. Measured over 529 realistic pairs, that
+ *    shape is the only collision — but it means "this id is taken" has two very
+ *    different causes:
+ *
+ *      · a genuine duplicate — the same department asking twice. Invite them.
+ *      · a lead who put a word on the wrong side of the boundary. Their department
+ *        is real and new, and refusing it is wrong.
+ *
+ *    Only the owner can tell those apart, and only if they are shown what the
+ *    existing team actually is. So the message names it, names its id, and says
+ *    outright when the two descriptions differ — which is the collision case.
+ */
+const describeTaken = (request, existingTeam) => {
+    const asked = `${asText(request.department, '(no department)')} at ${asText(request.institution, '(no institution)')}`;
+    if (!existingTeam) {
+        return `${asked} already has a team on NEXUS. Ask its lead to invite this person `
+            + 'rather than creating a second copy.';
+    }
+    const held = `${asText(existingTeam.department, '(no department)')} at ${asText(existingTeam.institution, '(no institution)')}`;
+    const sameThing = held.toLowerCase() === asked.toLowerCase();
+    if (sameThing) {
+        return `${held} is already on NEXUS. Ask its lead to invite this person rather than `
+            + 'creating a second copy.';
+    }
+    return `That id is already held by a DIFFERENT department: the request is for ${asked}, `
+        + `and the existing team is ${held}. Both produce the same id, so one of them has a `
+        + 'word on the wrong side of the institution/department split. Check with the '
+        + 'requester before declining — if their department is genuinely new, the id has to '
+        + 'be resolved rather than the request refused.';
+};
+
+const assertApprovable = ({ request, authUser, teamExists, existingTeam = null }) => {
     if (!request) {
         return { ok: false, code: 'not-found', message: 'No such request.' };
     }
@@ -144,13 +215,26 @@ const assertApprovable = ({ request, authUser, teamExists }) => {
     if (!teamId) {
         return { ok: false, code: 'bad-team-id', message: 'The institution and department do not make a usable team name.' };
     }
-    if (teamExists) {
+    // `existingTeam` is authoritative when supplied; `teamExists` remains accepted so
+    // a caller that only knows the boolean still gets the right verdict, with a
+    // vaguer sentence.
+    const taken = existingTeam ? true : teamExists === true;
+    if (taken) {
+        const held = existingTeam
+            ? `${asText(existingTeam.department)} at ${asText(existingTeam.institution)}`
+            : null;
+        const asked = `${asText(request.department)} at ${asText(request.institution)}`;
         return {
             ok: false,
             code: 'team-exists',
-            message: `${request.department} at ${request.institution} is already on NEXUS. `
-                + 'Ask its lead to invite this person rather than creating a second copy.',
+            message: describeTaken(request, existingTeam),
             teamId,
+            // Machine-readable, so the super-admin screen can present the collision
+            // case differently from a plain duplicate rather than parsing prose.
+            collision: !!(held && held.toLowerCase() !== asked.toLowerCase()),
+            existingTeam: existingTeam
+                ? { institution: asText(existingTeam.institution), department: asText(existingTeam.department) }
+                : null,
         };
     }
 
@@ -161,10 +245,7 @@ const assertApprovable = ({ request, authUser, teamExists }) => {
 // 4. THE DOCUMENTS
 // ==============================================================================
 
-const asText = (value, fallback = '') => {
-    const text = typeof value === 'string' ? value.trim() : '';
-    return text === '' ? fallback : text;
-};
+
 
 /**
  * The exact writes an approval performs, returned as data so a test can assert them
@@ -258,13 +339,15 @@ const buildDeclineWrite = ({ requestUid, approverUid, reason, now }) => ({
     merge: true,
     data: {
         status: 'declined',
-        declineReason: asText(reason, 'No reason given.').slice(0, 500),
+        declineReason: asText(reason, 'No reason given.', MAX_REASON_CHARS),
         decidedBy: approverUid,
         decidedAt: now,
     },
 });
 
 module.exports = {
+    MAX_FIELD_CHARS,
+    MAX_REASON_CHARS,
     slugTeamId,
     isSuperAdmin,
     assertApprovable,

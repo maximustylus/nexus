@@ -252,29 +252,72 @@ describe('⚠️ it refuses to overwrite a destination that already exists', () 
     });
 
     /**
-     * ⚠️ `--force-overwrite` DOES NOT OVERWRITE. IT MERGES, AND THE RESULT IS A
-     *    ROSTER THAT NEVER EXISTED.
+     * ⚠️ THE REGRESSION TEST FOR `T1`. `--force-overwrite` used to MERGE, because
+     *    both branches of `write()` called `set(data, { merge: true })` and merge is
+     *    indistinguishable from replace on a destination that does not exist — which
+     *    is every write in a normal run.
      *
-     * `write()` always calls `set(data, { merge: true })`; the flag only decides
-     * whether the "does this already exist" read is honoured. A roster document is
-     * a MAP KEYED BY DATE, so merging unions the two: days present in both are
-     * replaced by the source, and days present only in the destination SURVIVE.
-     * What lands is a hybrid of the pre-migration roster and whatever somebody had
-     * already built — neither of the two rosters an operator believed they were
-     * choosing between.
+     *    A roster document is a MAP KEYED BY DATE. Merging unions the two: days in
+     *    both are replaced by the legacy copy, days present ONLY in the destination
+     *    survive. What landed was a hybrid roster that never existed, half
+     *    pre-migration and half whatever somebody had already built, and
+     *    indistinguishable from a real one.
      *
-     * The flag exists as a recovery path, which means it gets used under pressure,
-     * on live clinical data, by somebody who has already had one thing go wrong.
-     * Recorded here rather than fixed silently: whether it should delete-then-write
-     * or refuse outright is the owner's call, and this test pins the current
-     * behaviour so the answer is a deliberate change rather than a discovery.
+     *    An operator reaching for this flag is choosing between two documents. They
+     *    must get one of them.
      */
-    it('leaves days that exist ONLY in the destination in place — a hybrid roster', async () => {
-        store.docs.set(`teams/${TEAM}/rosters/2026`, { '2026-09-01': [{ task: 'REAL WORK' }] });
+    it('REPLACES the destination rather than merging into it', async () => {
+        store.docs.set(`teams/${TEAM}/rosters/2026`, {
+            '2026-09-01': [{ task: 'REAL WORK' }],
+            '2026-08-15': [{ task: 'ALSO REAL' }],
+        });
         await run(store, ['--write', '--force-overwrite']);
-        const merged = store.docs.get(`teams/${TEAM}/rosters/2026`);
-        expect(merged['2026-09-01'], 'the destination-only day survived a "force overwrite"').toBeDefined();
-        expect(merged['2026-08-15'], 'and the source day arrived beside it').toBeDefined();
-        expect(Object.keys(merged).sort()).toEqual(['2026-08-15', '2026-09-01']);
+        const after = store.docs.get(`teams/${TEAM}/rosters/2026`);
+        expect(after, 'the destination must equal the legacy copy, not a union of the two')
+            .toEqual(store.docs.get('system_data/roster_2026'));
+        expect(after['2026-09-01'], 'a destination-only day survived a "force overwrite"').toBeUndefined();
+    });
+
+    it('says which documents it is replacing, rather than reporting them as ordinary writes', async () => {
+        store.docs.set(`teams/${TEAM}/rosters/2026`, { '2026-09-01': [{ task: 'REAL WORK' }] });
+        const { output } = await run(store, ['--write', '--force-overwrite']);
+        expect(output).toMatch(/REPLACING the existing document/);
+    });
+});
+
+describe('⚠️ a re-run must not undo what people have changed since — T2', () => {
+    /**
+     * `users/{uid}` is the one destination written on EVERY run, because
+     * `teamIds: arrayUnion` has to be: somebody may already belong to another team
+     * and a plain overwrite would drop that membership.
+     *
+     * It also used to carry `displayName` and `email` on every run, on the reasoning
+     * that they are the migration's own facts about the person. They stop being that
+     * the moment the person edits their own profile — and this file's error path
+     * tells an operator "Re-running is safe", which is exactly what somebody does
+     * after a partial failure.
+     */
+    it('leaves a display name the person has changed since migrating', async () => {
+        await run(store, ['--write']);
+        const uid = 'users/uid-1';
+        store.docs.set(uid, { ...store.docs.get(uid), displayName: 'Renamed By The Person' });
+
+        await run(store, ['--write']);
+        expect(store.docs.get(uid).displayName,
+            'a re-run reverted the name to the manifest value').toBe('Renamed By The Person');
+    });
+
+    it('still adds the team on every run, because arrayUnion is the point', async () => {
+        store.docs.set('users/uid-1', { displayName: 'Existing Person', teamIds: ['some-other-team'] });
+        await run(store, ['--write']);
+        const teamIds = store.docs.get('users/uid-1').teamIds;
+        expect(teamIds, 'the existing membership was dropped').toContain('some-other-team');
+        expect(teamIds, 'the new team was not added').toContain(TEAM);
+    });
+
+    it('still fills in a name and email that are not there yet', async () => {
+        await run(store, ['--write']);
+        expect(store.docs.get('users/uid-0').displayName).toBe(MEMBERS[0].displayName);
+        expect(store.docs.get('users/uid-0').email).toBe(MEMBERS[0].email.toLowerCase());
     });
 });

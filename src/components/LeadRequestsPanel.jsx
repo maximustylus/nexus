@@ -33,11 +33,21 @@ import { ShieldCheck, Check, X, Loader2, Inbox, AlertCircle, RefreshCw, Building
 // stops being true quietly.
 const call = (name) => httpsCallable(getFunctions(undefined, 'us-central1'), name);
 
-/** Firebase wraps thrown HttpsErrors; the readable half is `message`. */
+/**
+ * Firebase wraps thrown HttpsErrors; the readable half is `message`.
+ *
+ * ⚠️ ONE CASE IS NOT A REFUSAL AND MUST NOT READ LIKE ONE. `team-exists` with
+ *    `collision` set means two DIFFERENT departments slug to the same team id — the
+ *    request may be for a real, new department that simply cannot have that id. The
+ *    owner has to decide, so the sentence is marked rather than shown as another
+ *    thing that went wrong. Everything else is left exactly as the server phrased it.
+ *
+ *    (The `detailCode` ternary this replaces returned the same string in both
+ *    branches, so the code it read was never used for anything.)
+ */
 const readError = (error) => {
-    const detailCode = error?.details?.code;
     const message = error?.message || 'Something went wrong.';
-    return detailCode ? `${message}` : message;
+    return error?.details?.collision ? `⚠️ Needs your decision — ${message}` : message;
 };
 
 const LeadRequestsPanel = () => {

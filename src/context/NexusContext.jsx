@@ -2,6 +2,7 @@ import React, { createContext, useContext, useState, useEffect } from 'react';
 import { getAuth, onAuthStateChanged } from 'firebase/auth';
 import { doc, getDoc } from 'firebase/firestore';
 import { db } from '../firebase'; // Ensure this points to your firebase config
+import { userPath } from '../utils/teamPaths';
 
 const NexusContext = createContext();
 
@@ -21,7 +22,7 @@ export const NexusProvider = ({ children }) => {
       if (authUser) {
         try {
           // Fetch the user's extended profile from Firestore
-          const userDocRef = doc(db, 'users', authUser.uid);
+          const userDocRef = doc(db, ...userPath(authUser.uid));
           const userDocSnap = await getDoc(userDocRef);
           
           let firestoreData = {};

@@ -240,7 +240,7 @@ export default function App() {
       if (u) {
         try {
           const initialProfile = checkAccess(u.email);
-          const userDocRef = doc(db, 'users', u.uid);
+          const userDocRef = doc(db, ...userPath(u.uid));
 
           // The two facts that decide whether this person sees the app or a holding
           // screen. `emailVerified` comes from the auth token rather than a document,

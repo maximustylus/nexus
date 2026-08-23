@@ -156,8 +156,23 @@ export const assertTeamId = (value) => {
  * things that actually appear when somebody reaches for the previous model: a
  * string containing a SPACE (`"Ying Xian"`), and the empty string.
  */
+/**
+ * Document ids Firestore itself forbids, and which `assertUid` used to wave
+ * through because none of them contains whitespace.
+ *
+ * ⚠️ THE POINT OF THIS GUARD IS TO FAIL AT THE CALL SITE WITH A SENTENCE. Firestore
+ *    would reject `a/b` too — `doc(db, 'users', 'a/b')` composes `users/a/b`, an
+ *    odd number of segments, and throws "Invalid document reference". So the old
+ *    behaviour was loud rather than silent. But the error it produced named neither
+ *    the value nor the habit that produced it, which is the entire reason this
+ *    function exists rather than letting Firestore do the complaining.
+ */
+const FORBIDDEN_ID = (value) => value === '.' || value === '..'
+    || value.includes('/')
+    || /^__.*__$/.test(value);
+
 export const assertUid = (value) => {
-    if (typeof value !== 'string' || value.trim() === '' || /\s/.test(value)) {
+    if (typeof value !== 'string' || value.trim() === '' || /\s/.test(value) || FORBIDDEN_ID(value)) {
         throw new Error(
             `Invalid uid: ${JSON.stringify(value)}. Per-person documents are keyed by Firebase `
             + 'auth uid, never by display name — a name is not unique across teams and routing by '
@@ -269,7 +284,27 @@ export const wellbeingPath = (teamId) => under(teamId, TEAM_COLLECTIONS.wellbein
 export const ANONYMOUS_WELLBEING_ID = '_anonymous_logs';
 export const anonymousWellbeingPath = (teamId) =>
     under(teamId, TEAM_COLLECTIONS.wellbeing, ANONYMOUS_WELLBEING_ID);
-export const wellbeingDocPath = (teamId, uid) => under(teamId, TEAM_COLLECTIONS.wellbeing, assertUid(uid));
+/**
+ * One person's wellbeing document.
+ *
+ * ⚠️ IT REFUSES `ANONYMOUS_WELLBEING_ID`, AND THAT IS THE ENFORCEMENT OF WHAT THE
+ *    NOTE ABOVE ONLY ASSERTED. `assertUid` waves `_anonymous_logs` through — it has
+ *    no whitespace — so this path composed the SHARED anonymous bucket whenever it
+ *    was handed that string, silently, as though it were a person. No Firebase uid
+ *    is that string today, which is why this has never happened; a sentinel that
+ *    shares an id space with real keys is a property to enforce rather than an
+ *    accident to keep being lucky about.
+ */
+export const wellbeingDocPath = (teamId, uid) => {
+    if (uid === ANONYMOUS_WELLBEING_ID) {
+        throw new Error(
+            `Refusing to treat ${JSON.stringify(ANONYMOUS_WELLBEING_ID)} as a person. It is the `
+            + 'shared anonymous check-in bucket; use `anonymousWellbeingPath(teamId)` for that '
+            + 'document, and pass a real `user.uid` here.',
+        );
+    }
+    return under(teamId, TEAM_COLLECTIONS.wellbeing, assertUid(uid));
+};
 
 /**
  * The pulse board. `period` exists so a team can keep more than one snapshot —
@@ -325,7 +360,27 @@ export const teamsPath = () => [ROOT_COLLECTIONS.teams];
 
 /** Cluster-wide configuration: the login domain allowlist, the super-admin list. */
 export const CONFIG_DOCS = Object.freeze({ domains: 'domains', superAdmins: 'superAdmins' });
-export const configPath = (docId) => [ROOT_COLLECTIONS.config, docId];
+
+/**
+ * ⚠️ AN ALLOWLIST, NOT A SHAPE CHECK, AND THIS IS THE ONE PATH WHERE THAT IS RIGHT.
+ *    `config` holds exactly two documents and always will: the login domain
+ *    allowlist and the super-admin list. Both decide who may get in. Every other
+ *    builder here takes an id somebody's data legitimately supplies, so it can only
+ *    validate the SHAPE; this one knows the complete set of legal answers, and a
+ *    typo'd `superadmins` resolving to an empty document reads as "nobody is a
+ *    super admin" rather than as a mistake.
+ *
+ *    It had no guard at all and composed `["config", ""]` from an empty string.
+ */
+export const configPath = (docId) => {
+    if (!Object.values(CONFIG_DOCS).includes(docId)) {
+        throw new Error(
+            `Invalid config document: ${JSON.stringify(docId)}. `
+            + `Expected one of: ${Object.values(CONFIG_DOCS).join(', ')}. Use \`CONFIG_DOCS\`.`,
+        );
+    }
+    return [ROOT_COLLECTIONS.config, docId];
+};
 
 /**
  * THE LEGACY PATHS, NAMED RATHER THAN SCATTERED.

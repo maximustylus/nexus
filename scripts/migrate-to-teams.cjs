@@ -160,7 +160,9 @@ const head = (title) => console.log(`\n── ${title} ${'─'.repeat(Math.max(0
  *
  *    `arrayUnion` writes are different and stay merges: a union genuinely is
  *    idempotent, and `users/{uid}` may exist for reasons that have nothing to do
- *    with this team. Those go through `union()` below.
+ *    with this team. Those go through `union()` below — which writes the union on
+ *    every run and the descriptive fields only once, so a re-run cannot undo a name
+ *    the person has changed since.
  */
 const write = async (ref, data, what) => {
     if (!FORCE_OVERWRITE) {
@@ -172,20 +174,70 @@ const write = async (ref, data, what) => {
             skip(what, ref.path);
             return;
         }
+        plan(what, ref.path);
+        if (WRITE) await ref.set(data, { merge: true });
+        return;
     }
-    plan(what, ref.path);
-    if (WRITE) await ref.set(data, { merge: true });
+
+    /*
+     * ⚠️ `--force-overwrite` REPLACES. IT USED TO MERGE, AND A MERGE IS NEITHER OF
+     *    THE TWO THINGS AN OPERATOR IS CHOOSING BETWEEN.
+     *
+     * Both branches called `set(data, { merge: true })`. For a destination that does
+     * not exist — every write in a normal run — merge and replace are identical, so
+     * the flag looked like it only controlled the "does this exist" read. It did not.
+     *
+     * A roster document is a MAP KEYED BY DATE. Merging it unions the two: days
+     * present in both are replaced by the legacy copy, and days present ONLY in the
+     * destination survive. What lands is a hybrid roster that never existed —
+     * half pre-migration, half whatever somebody had already built — and it is
+     * indistinguishable from a real one. The same is true of `daily_pulse`, keyed by
+     * person, and of `monthly_attendance`, keyed by year.
+     *
+     * This flag is a recovery path. It gets used under pressure, on live clinical
+     * data, by somebody who has already had one thing go wrong. The one behaviour
+     * they can reason about is "the destination becomes the legacy copy", so that is
+     * what it now does: `set(data)` with no merge replaces the document outright.
+     */
+    plan(`${what} — REPLACING the existing document`, ref.path);
+    if (WRITE) await ref.set(data);
 };
 
 /**
- * For writes that are genuinely idempotent because every field is a union or a
- * scalar the migration owns. `users/{uid}` is the only one: `teamIds` is an
- * `arrayUnion`, which adds without replacing, and the display name and email are
- * the migration's own facts about the person.
+ * For `users/{uid}`, the one destination that must be written on EVERY run.
+ *
+ * `teamIds` is an `arrayUnion`: it has to run unconditionally, because somebody may
+ * already belong to another team and a plain `set` would drop that membership.
+ *
+ * ⚠️ BUT THE DESCRIPTIVE FIELDS ARE WRITTEN ONLY ONCE, AND THAT IS A FIX. This used
+ *    to carry `displayName` and `email` unconditionally alongside the union, on the
+ *    reasoning that they are "the migration's own facts about the person". They stop
+ *    being that the moment the person edits their own profile: measured against a
+ *    fake Firestore, renaming a user after migrating and then re-running reverted
+ *    their name to the manifest value.
+ *
+ *    That matters because this file TELLS an operator re-running is safe — the error
+ *    path says "a destination that already exists is left alone, so a second run
+ *    writes only what this one did not". For `users/*` that was not true, and a
+ *    re-run is exactly what somebody does after a partial failure.
+ *
+ *    So: the union always; the descriptive fields only where the document does not
+ *    already carry them.
  */
 const union = async (ref, data, what) => {
-    plan(what, ref.path);
-    if (WRITE) await ref.set(data, { merge: true });
+    const { displayName, email, ...always } = data;
+    const existing = await ref.get();
+    const current = existing.exists ? (existing.data() || {}) : {};
+
+    const payload = { ...always };
+    if (!current.displayName && displayName) payload.displayName = displayName;
+    if (!current.email && email) payload.email = email;
+
+    const described = Object.keys(payload).length > Object.keys(always).length
+        ? what
+        : `${what} (name and email left as they are)`;
+    plan(described, ref.path);
+    if (WRITE) await ref.set(payload, { merge: true });
 };
 
 // =============================================================================
@@ -660,7 +712,8 @@ main()
     .catch((error) => {
         console.error('\n❌ The migration threw and stopped. Nothing after this point ran.');
         console.error('   Re-running is safe: a destination that already exists is left alone,');
-        console.error('   so a second run writes only what this one did not.');
+        console.error('   so a second run writes only what this one did not — and `users/*` keeps');
+        console.error('   any display name or email the person has changed since.');
         console.error(error);
         process.exit(1);
     });

@@ -1054,16 +1054,24 @@ exports.approveLeadRequest = onCall({ cors: true }, async (request) => {
     var probeId = leadRequest
         ? teamApproval.slugTeamId(leadRequest.institution, leadRequest.department)
         : null;
+    // ⚠️ THE TEAM'S DATA, NOT JUST WHETHER IT EXISTS. Two different
+    // institution/department pairs can slug to one id, so "this id is taken" has two
+    // causes — a genuine duplicate, and a lead who put a word on the wrong side of
+    // the split. `assertApprovable` can only tell the owner which if it is handed
+    // what the existing team actually is.
     var teamExists = false;
+    var existingTeam = null;
     if (probeId) {
         var teamSnap = await db.doc('teams/' + probeId).get();
         teamExists = teamSnap.exists;
+        if (teamExists) existingTeam = teamSnap.data() || null;
     }
 
     var verdict = teamApproval.assertApprovable({
         request: leadRequest,
         authUser: authUser,
         teamExists: teamExists,
+        existingTeam: existingTeam,
     });
 
     if (!verdict.ok) {
@@ -1072,7 +1080,14 @@ exports.approveLeadRequest = onCall({ cors: true }, async (request) => {
         }
         // The code travels in `details` so the screen can act on it — `team-exists`
         // in particular is "invite them instead", not "something went wrong".
-        throw new HttpsError('failed-precondition', verdict.message, { code: verdict.code, teamId: verdict.teamId });
+        throw new HttpsError('failed-precondition', verdict.message, {
+            code: verdict.code,
+            teamId: verdict.teamId,
+            // Present only on `team-exists`; lets the screen distinguish a duplicate
+            // from an id collision without reading the sentence.
+            collision: verdict.collision,
+            existingTeam: verdict.existingTeam,
+        });
     }
 
     var now = new Date().toISOString();

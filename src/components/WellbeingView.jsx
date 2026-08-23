@@ -108,7 +108,7 @@ const WellbeingView = ({ user }) => {
             const token = await requestForToken();
             
             if (token) {
-                await setDoc(doc(db, 'users', currentFirebaseUser.uid), {
+                await setDoc(doc(db, ...userPath(currentFirebaseUser.uid)), {
                     fcmToken: token,
                     notificationsEnabled: true,
                     lastUpdated: new Date()

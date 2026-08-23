@@ -21,6 +21,7 @@ import {
     assertApprovable,
     buildApprovalWrites,
     buildDeclineWrite,
+    MAX_FIELD_CHARS, MAX_REASON_CHARS,
 } from './teamApproval.js';
 import { teamIdFrom } from '../src/utils/teamPaths.js';
 
@@ -304,5 +305,127 @@ describe('buildDeclineWrite', () => {
             .toBe('No reason given.');
         expect(buildDeclineWrite({ requestUid: LEAD_UID, approverUid: APPROVER, reason: 'x'.repeat(900), now: NOW })
             .data.declineReason).toHaveLength(500);
+    });
+});
+
+describe('⚠️ "that id is taken" has two causes, and the owner must be able to tell them apart — T4', () => {
+    const REQUEST = {
+        uid: 'leadUID', status: 'pending', role: 'lead', email: 'a@kkh.com.sg',
+        displayName: 'A Lead', institution: 'KKH', department: 'Physiotherapy',
+    };
+    const VERIFIED = { emailVerified: true };
+    const taken = (request, existingTeam) =>
+        assertApprovable({ request: { ...REQUEST, ...request }, authUser: VERIFIED, teamExists: true, existingTeam });
+
+    /**
+     * The hyphen joining institution to department is the same character used inside
+     * each half, so the boundary is not recoverable from the id: `KKH` +
+     * `Respiratory Therapy` and `KKH Respiratory` + `Therapy` both slug to
+     * `kkh-respiratory-therapy`. Measured over 529 realistic pairs, that shape is
+     * the only collision — and it means a genuinely new department can be refused as
+     * a duplicate.
+     */
+    it('names the EXISTING team when a different department holds the id', () => {
+        const verdict = taken(
+            { institution: 'KKH Respiratory', department: 'Therapy' },
+            { institution: 'KKH', department: 'Respiratory Therapy' },
+        );
+        expect(verdict.ok).toBe(false);
+        expect(verdict.code).toBe('team-exists');
+        expect(verdict.message).toMatch(/Respiratory Therapy at KKH/);
+        expect(verdict.message).toMatch(/DIFFERENT department/);
+        expect(verdict.collision).toBe(true);
+        expect(verdict.existingTeam).toEqual({ institution: 'KKH', department: 'Respiratory Therapy' });
+    });
+
+    it('does not cry collision when it really is the same department asking twice', () => {
+        const verdict = taken({}, { institution: 'KKH', department: 'Physiotherapy' });
+        expect(verdict.collision).toBe(false);
+        expect(verdict.message).toMatch(/Physiotherapy at KKH is already on NEXUS/);
+        expect(verdict.message).toMatch(/invite this person/);
+    });
+
+    it('ignores case when deciding whether the two are the same department', () => {
+        const verdict = taken({ institution: 'kkh', department: 'physiotherapy' },
+            { institution: 'KKH', department: 'Physiotherapy' });
+        expect(verdict.collision).toBe(false);
+    });
+
+    /**
+     * THE OLD MESSAGE, WHICH THIS REPLACES. It was built entirely from the request,
+     * so it described a team that does not exist under that name and gave the owner
+     * nothing to check against.
+     */
+    it('never describes the request as though it were the existing team', () => {
+        const verdict = taken(
+            { institution: 'KKH Respiratory', department: 'Therapy' },
+            { institution: 'KKH', department: 'Respiratory Therapy' },
+        );
+        expect(verdict.message).not.toMatch(/^Therapy at KKH Respiratory is already on NEXUS/);
+    });
+
+    /** A caller that only knows the boolean still gets the right verdict. */
+    it('still refuses with a vaguer sentence when the existing team is not supplied', () => {
+        const verdict = assertApprovable({ request: { ...REQUEST }, authUser: VERIFIED, teamExists: true });
+        expect(verdict.ok).toBe(false);
+        expect(verdict.code).toBe('team-exists');
+        expect(verdict.collision).toBe(false);
+        expect(verdict.existingTeam).toBeNull();
+        expect(verdict.message).toMatch(/already has a team on NEXUS/);
+    });
+
+    it('supplying the existing team is enough on its own, without the boolean', () => {
+        const verdict = assertApprovable({
+            request: { ...REQUEST }, authUser: VERIFIED,
+            existingTeam: { institution: 'KKH', department: 'Physiotherapy' },
+        });
+        expect(verdict.ok).toBe(false);
+        expect(verdict.code).toBe('team-exists');
+    });
+});
+
+describe('⚠️ free text from a request is capped, not written verbatim — T8', () => {
+    const REQUEST = {
+        uid: 'leadUID', status: 'pending', role: 'lead', email: 'a@kkh.com.sg',
+        displayName: 'A Lead', institution: 'KKH', department: 'Physiotherapy',
+    };
+
+    /**
+     * The decline reason has always been capped — it is written by the OWNER. The
+     * institution, department and display name come from whoever registered, go into
+     * the team document verbatim, and are then rendered in the team switcher, the
+     * roster header and every screen that names a department. Measured before the
+     * fix: a 5,000-character department name was stored at 5,000 characters.
+     */
+    it('caps every identity field a request supplies', () => {
+        const writes = buildApprovalWrites({
+            request: { ...REQUEST, institution: 'i'.repeat(5000), department: 'd'.repeat(5000), displayName: 'n'.repeat(5000) },
+            teamId: 'kkh-physiotherapy', approverUid: 'S', now: 'NOW',
+        });
+        for (const value of [writes.team.data.institution, writes.team.data.department,
+            writes.team.data.name, writes.member.data.displayName, writes.user.data.displayName]) {
+            expect(value.length).toBeLessThanOrEqual(MAX_FIELD_CHARS);
+        }
+    });
+
+    it('leaves a real department name alone', () => {
+        const writes = buildApprovalWrites({
+            request: { ...REQUEST, department: 'Prosthetics and Orthotics', institution: 'Khoo Teck Puat Hospital' },
+            teamId: 'ktph-prosthetics-and-orthotics', approverUid: 'S', now: 'NOW',
+        });
+        expect(writes.team.data.department).toBe('Prosthetics and Orthotics');
+        expect(writes.team.data.institution).toBe('Khoo Teck Puat Hospital');
+    });
+
+    /**
+     * ⚠️ AND THE DECLINE REASON KEEPS ITS LONGER ALLOWANCE. An earlier version of
+     *    this fix routed it through the same 120-character cap, which would have
+     *    truncated an owner's explanation of a decision to a colleague — a worse
+     *    defect than the one being fixed.
+     */
+    it('does not shorten the owner\'s decline reason to an identity-field length', () => {
+        const write = buildDeclineWrite({ requestUid: 'u', approverUid: 'S', reason: 'r'.repeat(5000), now: 'NOW' });
+        expect(write.data.declineReason.length).toBe(MAX_REASON_CHARS);
+        expect(MAX_REASON_CHARS).toBeGreaterThan(MAX_FIELD_CHARS);
     });
 });

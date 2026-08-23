@@ -82,8 +82,13 @@ if (asPath.length) flag('U1', 'assertUid-accepted-a-path', asPath.map((u) => JSO
 const asName = uidThrough.filter((u) => typeof u === 'string' && /^[A-Za-z]{3,}$/.test(u));
 if (asName.length) flag('U2', 'assertUid-cannot-tell-a-single-word-name-from-a-uid',
     `${asName.map((u) => JSON.stringify(u)).join(', ')} - the guard catches "Ying Xian" but not "Sarah"`);
-if (uidThrough.includes(TP.ANONYMOUS_WELLBEING_ID)) flag('U3',
-    'the-anonymous-wellbeing-sentinel-shares-an-id-space-with-real-uids',
+// The sentinel is a legal uid SHAPE — the refusal belongs to the builder that would
+// otherwise file it as a person, not to `assertUid`, which cannot know the context.
+let sentinelRefused = false;
+try { TP.wellbeingDocPath('kkh-physiotherapy', TP.ANONYMOUS_WELLBEING_ID); } catch { sentinelRefused = true; }
+console.log(`  the anonymous bucket as a person: ${sentinelRefused ? 'refused' : 'ACCEPTED'}`);
+if (!sentinelRefused) flag('U3',
+    'the-anonymous-wellbeing-sentinel-can-be-filed-as-a-person',
     `wellbeingDocPath(team, ${JSON.stringify(TP.ANONYMOUS_WELLBEING_ID)}) resolves to the shared anonymous document`);
 
 H('C. TEAM ID DERIVATION - two departments must never share one id');
@@ -194,18 +199,52 @@ const long = buildApprovalWrites({
 const lengths = { name: long.team.data.name.length, department: long.team.data.department.length,
     institution: long.team.data.institution.length, displayName: long.member.data.displayName.length };
 console.log(`  5000-character fields are stored at: ${JSON.stringify(lengths)}`);
-if (Object.values(lengths).some((n) => n > 500)) flag('S6', 'text-from-a-request-is-written-with-no-length-cap',
-    `${JSON.stringify(lengths)} - the decline reason IS capped at 500 characters; these are not`);
+if (Object.values(lengths).some((n) => n > 200)) flag('S6', 'text-from-a-request-is-written-with-no-length-cap',
+    `${JSON.stringify(lengths)} - these are rendered in the switcher and the roster header`);
 
-const clash = assertApprovable({
+// The two causes of "that id is taken", and whether the owner can tell them apart.
+const collision = assertApprovable({
     request: { ...REQ, institution: 'KKH Respiratory', department: 'Therapy' },
     authUser: { emailVerified: true }, teamExists: true,
+    existingTeam: { institution: 'KKH', department: 'Respiratory Therapy' },
 });
-console.log(`\n  team-exists message: "${clash.message}"`);
-flag('S7', 'the-team-exists-message-describes-the-REQUEST-not-the-team-that-exists',
-    'an owner cannot tell a genuine duplicate from a slug collision: the sentence names neither the existing team nor its id');
+const duplicate = assertApprovable({
+    request: { ...REQ }, authUser: { emailVerified: true }, teamExists: true,
+    existingTeam: { institution: 'KKH', department: 'Physiotherapy' },
+});
+console.log(`\n  a DIFFERENT department holds the id -> collision=${collision.collision}`);
+console.log(`     "${collision.message}"`);
+console.log(`  the SAME department asking twice     -> collision=${duplicate.collision}`);
+console.log(`     "${duplicate.message}"`);
+if (collision.collision !== true || duplicate.collision !== false) {
+    flag('S7', 'the-two-causes-of-a-taken-id-are-not-distinguished',
+        `collision=${collision.collision}, duplicate=${duplicate.collision}`);
+}
+if (!collision.message.includes('Respiratory Therapy at KKH')) {
+    flag('S8', 'the-team-exists-message-does-not-name-the-team-that-exists', collision.message);
+}
 
 H('SUMMARY');
+/*
+ * ⚠️ TWO OF THESE ARE DOCUMENTED LIMITS, NOT OPEN DEFECTS, AND THE DIFFERENCE IS
+ *    WORTH PRINTING RATHER THAN LEAVING TO WHOEVER READS THE LIST.
+ *
+ *   U2  `assertUid` cannot tell "Sarah" from a uid, and a length floor was measured
+ *       and rejected: a Firebase uid draws from 62 alphanumerics, so about 0.7% of
+ *       them — one user in 140 — contain no digit at all. A guard that locks one
+ *       clinician in every 140 out of their own wellbeing record is a worse defect
+ *       than the one it prevents. The property that CAN be enforced — no call site
+ *       passes a name — is enforced by `teamPaths.source.test.js` instead.
+ *
+ *   C1  Two pairs can slug to one id, and the only real fix is changing the id
+ *       FORMAT, which would rename the live team. What is fixed is the consequence:
+ *       `assertApprovable` now reports `collision` and names the existing team, so
+ *       an owner can tell a genuine duplicate from a word on the wrong side of the
+ *       split rather than refusing a real department.
+ */
+const KNOWN_LIMITS = ['U2', 'C1'];
+const open = findings.filter((f) => !KNOWN_LIMITS.includes(f.id));
+console.log(`  ${open.length} open · ${findings.length - open.length} documented limits (see the note in this file)`);
 if (!findings.length) console.log('  no findings');
 const grouped = findings.reduce((m, f) => ((m[`${f.id} ${f.what}`] ??= []).push(f), m), {});
 for (const [key, list] of Object.entries(grouped)) {

@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { Camera, Save, Lock, LogOut, Shield, User, Loader2, AlertTriangle, CheckCircle2, Bell } from 'lucide-react';
 import { auth, db, storage } from '../firebase';
 import { doc, updateDoc, onSnapshot } from 'firebase/firestore';
+import { userPath } from '../utils/teamPaths';
 import { ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
 import { updatePassword } from 'firebase/auth';
 
@@ -14,7 +15,7 @@ const ProfileView = ({ user, onLogout }) => {
 
     useEffect(() => {
         if (!user?.uid) return;
-        const unsub = onSnapshot(doc(db, 'users', user.uid), (docSnap) => {
+        const unsub = onSnapshot(doc(db, ...userPath(user.uid)), (docSnap) => {
             if (docSnap.exists()) {
                 setLiveProfile({ ...user, ...docSnap.data() });
             }
@@ -63,7 +64,7 @@ const ProfileView = ({ user, onLogout }) => {
             const storageRef = ref(storage, `avatars/${user.uid}_${Date.now()}`);
             const uploadTask = await uploadBytesResumable(storageRef, file);
             const downloadURL = await getDownloadURL(uploadTask.ref);
-            await updateDoc(doc(db, 'users', user.uid), { photoURL: downloadURL });
+            await updateDoc(doc(db, ...userPath(user.uid)), { photoURL: downloadURL });
             setProfileMessage({ type: 'success', text: 'Profile picture updated!' });
         } catch (error) {
             setProfileMessage({ type: 'error', text: 'Failed to upload image.' });
@@ -78,7 +79,7 @@ const ProfileView = ({ user, onLogout }) => {
         setIsSaving(true);
         try {
             const cleanRole = formData.role.replace(/\s*\(.*?\)/g, '').trim();
-            await updateDoc(doc(db, 'users', user.uid), {
+            await updateDoc(doc(db, ...userPath(user.uid)), {
                 name: formData.name,
                 role: cleanRole,
                 title: cleanRole,
@@ -116,7 +117,7 @@ const ProfileView = ({ user, onLogout }) => {
         if (!user?.uid) return;
         const newState = !pushEnabled;
         setPushEnabled(newState);
-        try { await updateDoc(doc(db, 'users', user.uid), { notificationsEnabled: newState }); } 
+        try { await updateDoc(doc(db, ...userPath(user.uid)), { notificationsEnabled: newState }); } 
         catch (error) { setPushEnabled(!newState); }
     };
 

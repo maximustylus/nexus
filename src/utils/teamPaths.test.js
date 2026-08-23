@@ -36,6 +36,7 @@ import {
     TEAM_COLLECTIONS,
     ROOT_COLLECTIONS,
     LEGACY,
+    anonymousWellbeingPath, ANONYMOUS_WELLBEING_ID,
 } from './teamPaths';
 
 const TEAM = 'kkh-respiratory-therapy';
@@ -253,5 +254,62 @@ describe('teamPaths — the collection name tables', () => {
         const overlap = Object.values(TEAM_COLLECTIONS)
             .filter((name) => Object.values(ROOT_COLLECTIONS).includes(name));
         expect(overlap).toEqual([]);
+    });
+});
+
+describe('⚠️ the guards that were only shape-deep — T5 and T7', () => {
+    /**
+     * `assertUid` refused whitespace and the empty string, which caught the habit it
+     * was written for ("Ying Xian") and nothing else. Firestore forbids these three
+     * as document ids, so the old behaviour failed loudly — but with an error naming
+     * neither the value nor the habit, which is the whole reason this function
+     * exists rather than letting Firestore do the complaining.
+     */
+    it.each(['a/b', 'a//b', '../../other-team/members/x', '..', '.', '__proto__', '__x__'])(
+        'refuses %s, which Firestore forbids as a document id', (value) => {
+            expect(() => assertUid(value)).toThrow(/Invalid uid/);
+        });
+
+    it('still accepts a real Firebase uid', () => {
+        expect(assertUid('kJ8sQ2mNpR4tV6wX9yZ1aB3cD5eF')).toBe('kJ8sQ2mNpR4tV6wX9yZ1aB3cD5eF');
+    });
+
+    it('still refuses the old habit it was written for', () => {
+        expect(() => assertUid('Ying Xian')).toThrow(/never by display name/);
+    });
+
+    /**
+     * THE SENTINEL AND REAL UIDS SHARED AN ID SPACE. `_anonymous_logs` has no
+     * whitespace, so `assertUid` waved it through and `wellbeingDocPath` composed
+     * the SHARED anonymous bucket as though it were a person's document. No Firebase
+     * uid is that string, which is why it never happened — being lucky is not the
+     * same as being safe, and the note above `ANONYMOUS_WELLBEING_ID` asserted this
+     * exemption without anything enforcing it.
+     */
+    it('refuses to treat the anonymous bucket as a person', () => {
+        expect(() => wellbeingDocPath('kkh-physiotherapy', ANONYMOUS_WELLBEING_ID))
+            .toThrow(/shared anonymous check-in bucket/);
+    });
+
+    it('still composes the anonymous bucket by its own builder', () => {
+        expect(anonymousWellbeingPath('kkh-physiotherapy'))
+            .toEqual(['teams', 'kkh-physiotherapy', 'wellbeing', ANONYMOUS_WELLBEING_ID]);
+    });
+
+    /**
+     * `configPath` had no guard at all and composed `["config", ""]`. It is the one
+     * builder that can use an allowlist rather than a shape check, because `config`
+     * holds a complete and permanent set of two documents — and both of them decide
+     * who may get in, so a typo resolving to an empty document reads as "nobody is a
+     * super admin" rather than as a mistake.
+     */
+    it.each(['', 'superadmins', 'super_admins', 'Domains', '../x', null, undefined])(
+        'refuses %s as a config document', (value) => {
+            expect(() => configPath(value)).toThrow(/Invalid config document/);
+        });
+
+    it('accepts the two documents that exist', () => {
+        expect(configPath(CONFIG_DOCS.domains)).toEqual(['config', 'domains']);
+        expect(configPath(CONFIG_DOCS.superAdmins)).toEqual(['config', 'superAdmins']);
     });
 });
