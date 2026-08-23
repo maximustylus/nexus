@@ -217,6 +217,10 @@ Closes four findings at once, and it is the number the whole instrument reports.
 
 ## P7 — The prompts themselves · **not started**
 
+> ⚠️ **Cite this as `AURA-TODO.md` P7, never a bare `P7`.** `ROSTER_TODO.md` P7 is *persistence
+> and security rules*; `COMMUNITY_TODO.md` P7 is *the pre-merge stress findings*. `P` numbers
+> phases per file — see [`IDS.md`](IDS.md).
+
 ⚠️ **`AURA_SYSTEM_PROMPT` and `SMART_ANALYSIS_SYSTEM_PROMPT` are unchanged since 2026-04-17.**
 Everything closed so far is the plumbing around them. AURA largely **is** its prompts, and
 none of them has been revised.

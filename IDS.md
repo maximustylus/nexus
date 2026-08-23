@@ -28,7 +28,7 @@ One page, because reconstructing this from three files is what prompted it.
 
 | Prefix | Kind | Means | Lives in |
 |---|---|---|---|
-| **`P`**n | plan phase | A **phase** of work. `P0`–`P8` were the roster remediation; `P9` is the multi-team stress findings; the community ledger has its own `P0`–`P7`. **Not "protocol".** | `ROSTER_TODO.md`, `COMMUNITY_TODO.md` |
+| **`P`**n | plan phase | A **phase** of work, **scoped to its own file** — see the warning below. **Not "protocol".** | `ROSTER_TODO.md`, `COMMUNITY_TODO.md`, `AURA-TODO.md` |
 | **`Q`**n | decision | A **question for the owner**. Renamed from the old `D`n-for-decisions precisely to end the collision below. The series runs `Q1`–`Q8` and `Q10`–`Q13` — **there is no `Q9`** | `ROSTER_HANDOFF.md` §5 |
 | **`A`**–**`E`**n | defect | A defect inside a post-mortem **block**: **A** schema split-brain · **B** time and dates · **C** persistence and configuration · **D** verification infrastructure · **E** documentation | `ROSTER_POSTMORTEM.md` |
 | **`A-RC`**n | *neither* | A **root cause** of Block A — an explanation, not a work item | `ROSTER_POSTMORTEM.md` |
@@ -39,6 +39,28 @@ One page, because reconstructing this from three files is what prompted it.
 | **`AN`**n | defect | **AN**alytics defect — the derived-insight layer: the year-end analysis, the population rollup, the coverage watcher, the nudge, the PDPA guard. Opened 2026-08-23 | `AURA-POSTMORTEM.md` |
 | **`AC`**n | defect | **A**URA **C**hat defect — the public conversational screening (`AuraChat.jsx`) and the parser behind it. Opened 2026-08-23. Distinct from `CP`n, which covers the portal around it; `AC` is the chat component itself | `AURA-POSTMORTEM.md` |
 | **`AU`**n | defect | **AU**RA defect — the AI surfaces and what they are trusted to write. Opened 2026-08-23. **`AU`, not `AI`**: `A` already means three things in this set and a fourth reading of the same letter is exactly the failure the rules below exist to prevent | `AURA-POSTMORTEM.md` |
+
+---
+
+## ⚠️ `P`n is FILE-SCOPED, and `P7` now means three different things
+
+`P` numbers phases, and each ledger numbers its own from zero. That was already true of two
+files; a third opened on 2026-08-23. **Always check which file a `P`n came from before acting
+on it.**
+
+| File | Range | `P7` there means |
+|---|---|---|
+| [`ROSTER_TODO.md`](ROSTER_TODO.md) | `P0`–`P9` | *Persistence, config source, security rules* — Block C |
+| [`COMMUNITY_TODO.md`](COMMUNITY_TODO.md) | `P0`–`P7` | *Found by the pre-merge stress test* — `CP22`–`CP26` |
+| [`AURA-TODO.md`](AURA-TODO.md) | `P0`–`P7` | *The prompts themselves* — `AU7` `AU19` `AU20` `AU28` `AN5` `AN7` `AN12` `AU8` |
+
+⚠️ **The `AURA-TODO.md` series was opened without a row here, which rule 2 below requires in
+the same commit.** Recorded on 2026-08-23 after somebody asked *"what's P7?"* and the answer
+turned out to be three answers. Writing it down is the whole of the fix — the numbers stay,
+because renumbering is what rule 1 forbids — but it is the second time this document set has
+grown an ambiguous prefix, and the first one (`D`) is the reason this file exists.
+
+The unambiguous way to cite one is **file-first**: *"`AURA-TODO.md` P7"*, never a bare `P7`.
 
 ---
 
