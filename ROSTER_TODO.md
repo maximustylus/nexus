@@ -257,6 +257,57 @@ post-mortem documents.
 
 ---
 
+## P9 — Found by the pre-merge multi-team stress test · `T1`–`T7` · 2026-08-23
+
+Reproduce with `npm run stress:teams`; the migration's own claims are pinned by
+`scripts/migrate-to-teams.test.mjs` and run in `npm test`.
+
+> **⚠️ `T` IS A NEW SERIES AND MEANS EXACTLY ONE THING** — a defect in the multi-team
+> rebuild, found by this sweep. It is deliberately not `D`n, which this file's own
+> banner records as meaning three different things.
+
+**None of these is a reason to hold the merge.** Everything load-bearing came back
+clean, and that is worth stating as plainly as the findings: 1908 tests, lint clean,
+build green, a **clean fast-forward** onto `main` with zero conflicts, and
+`firestore.rules` at **95 emulator checks, 0 failed** including cross-team isolation.
+The approval function — the only thing between a registered account and its own team —
+answered **19 of 19** authorization and approvability attacks correctly, including an
+unverified address, `emailVerified` as the string `"true"`, `config.uids` as a string
+that merely *contains* the caller, a subdomain lookalike, and prototype pollution.
+Nothing from a request body reached a written document.
+
+| # | What | Evidence | Owner | Status |
+|---|---|---|---|---|
+| 9.1 | **`--force-overwrite` does not overwrite. It merges, and the result is a roster that never existed.** | `T1`. `write()` always calls `set(data, { merge: true })`; the flag only decides whether the "does this already exist" read is honoured. A roster document is a **map keyed by date**, so a merge unions the two: days in both are replaced by the source, days only in the destination **survive**. What lands is a hybrid of the pre-migration roster and whatever somebody had already built — neither of the two an operator believed they were choosing between. The flag is a recovery path, so it gets used under pressure, on live clinical data, by somebody who has already had one thing go wrong. Pinned by a test rather than fixed silently: delete-then-write, or refuse outright, is a decision. | **OWNER** | `OPEN` |
+| 9.2 | **A migration re-run reverts a display name the person has since changed.** | `T2`. `users/{uid}` is written by `union()`, not `write()`, because `teamIds: arrayUnion` must always run — but it carries `displayName` and `email` unconditionally alongside it. Measured against a fake Firestore: rename a user after migrating, re-run, and the name reverts to the manifest value. The script's own error path tells an operator *"Re-running is safe: a destination that already exists is left alone"*. For `users/*`, it is not. | me | `OPEN` |
+| 9.3 | **Two different institution/department pairs can produce one team id.** | `T3`. The hyphen joining the two halves is the same character used inside each, so the boundary is not recoverable: `KKH` + `Respiratory Therapy` and `KKH Respiratory` + `Therapy` both slug to `kkh-respiratory-therapy`. 529 realistic pairs produced 526 ids; the 3 collisions are all this shape. **`teamExists` catches it**, so no data is shared — the cost is that a genuinely new department is refused. Case and punctuation collapse correctly and by design (`KKH` and `kkh` are one institution), and the client and server copies of the slug agreed on all 64 pairs checked. | me | `OPEN` |
+| 9.4 | **The `team-exists` message describes the request, not the team that already exists.** | `T4`. The sentence is built from `request.institution` / `request.department`, so a lead who typed the words on the other side of the boundary is told *"Therapy at KKH Respiratory is already on NEXUS"* — which is not what the existing team is called. The owner cannot tell a genuine duplicate from a slug collision, which is precisely the judgement 9.3 hands them. Naming the existing team and its id would settle it. | me | `OPEN` |
+| 9.5 | **`assertUid` accepts a value that is a path, not an id.** | `T5`. `"a/b"`, `".."` and `"."` all pass the guard, which refuses only whitespace and the empty string. Firestore forbids all three as document ids, so the failure is loud rather than silent — but the guard exists to fail **at the call site with a sentence**, and letting these through defeats that. `configPath` has no guard at all and composes `["config", ""]`. | me | `OPEN` |
+| 9.6 | **`assertUid` cannot tell a single-word display name from a uid.** | `T6`. The guard catches `"Ying Xian"` and not `"Sarah"`. Its own comment says it is "deliberately shaped to catch the OLD habit rather than to validate Firebase's format precisely", so this is a known limit rather than an oversight — recorded because the limit was not written down, and because display-name keying is the defect the whole rebuild exists to end. A length floor is the obvious tightening and is fragile: Firebase's 28-character uid is not a contract. | **OWNER** | `OPEN` |
+| 9.7 | **The anonymous wellbeing sentinel shares an id space with real uids.** | `T7`. `wellbeingDocPath(team, "_anonymous_logs")` resolves to the shared anonymous aggregate rather than being refused. Unreachable in practice — Firebase uids are 28 alphanumeric characters — so this is converting an assumption into an enforcement, not fixing a live bug. One line in `wellbeingDocPath`. | me | `OPEN` |
+
+**Test coverage, stated rather than implied.** `TeamSwitcher.jsx` and
+`LeadRequestsPanel.jsx` have no test file. The switcher's own header calls it *"the
+most consequential control on the screen: every roster, swap and wellbeing record
+below it changes meaning when it changes"* — so its most consequential property is
+now pinned by `RosterView.teamswitch.test.jsx`: **switching to a team with no roster
+yet must not leave the previous team's shifts on the calendar.** That is the exact
+shape of a bug `RosterView` already fixed once for the demo↔live toggle (*"if the
+live document does not exist, no snapshot ever replaces them"*), and the reason the
+new test passes on the first run is that the same lesson was applied to the team
+effect. It was untested, which is a different thing from being unfixed.
+`LeadRequestsPanel` remains presentation over a callable whose decision logic has 39
+tests.
+
+**Scale is unchanged, because the engine is untouched.** `npm run stress` reports what
+it reported before: no invariant broken across 1265 generated rosters, the `AM/PM`
+clash still reproduced (queue item 4 / `Q13`), `D10` still closed. `D11` also stands —
+200 staff over 52 weeks takes **35 seconds** of synchronous generation. Per-team
+partitioning keeps most departments at 20–40 people where it is comfortable; it does
+not make that number smaller, and the release notes should not imply it does.
+
+---
+
 ## Current queue — *updated 2026-08-17, and this is the live part of the file*
 
 Everything above is the closed P0–P8 remediation. This is what is actually next, ordered. The
