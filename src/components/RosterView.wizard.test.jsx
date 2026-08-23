@@ -124,8 +124,6 @@ const BRANDON = { uid: 'uid-brandon', name: 'Brandon', role: 'staff', email: 'br
  * about the rendered markup, and a value-only assertion would pass for a
  * completely restyled control.
  */
-const LIVE_TEXTAREA_CLASS =
-    'input-field w-full mt-1 h-20 font-mono text-xs bg-white dark:bg-slate-900 border dark:border-slate-700 rounded p-2 text-slate-800 dark:text-white';
 
 const openConfigure = () => fireEvent.click(screen.getByRole('button', { name: /configure/i }));
 
@@ -176,29 +174,6 @@ const JUNIOR_SENIOR_DIVIDER = 'Boundary between the Junior and Senior bands';
 const SENIOR_PRINCIPAL_DIVIDER = 'Boundary between the Senior and Principal bands';
 
 /** Every control the sandbox wizard added, as one absence check. */
-const expectNoSandboxTables = () => {
-    expect(screen.queryByText(/grade bands/i)).toBeNull();
-    // CHANGED at the ruler: this used to look for `'Junior band lowest grade'`,
-    // the label of a number box that no longer exists anywhere in the app — an
-    // assertion that could no longer fail. The band editor's controls are now two
-    // sliders, and live mode has no slider of any kind, so the role is the check.
-    expect(screen.queryAllByRole('slider')).toHaveLength(0);
-    expect(screen.queryByLabelText(NONEXEMPT_JUNIOR_DIVIDER)).toBeNull();
-    expect(screen.queryByLabelText(JUNIOR_SENIOR_DIVIDER)).toBeNull();
-    expect(screen.queryByLabelText(SENIOR_PRINCIPAL_DIVIDER)).toBeNull();
-    // CHANGED: junior is AH11–AH12 now; AH7–AH10 is the non-exempt band.
-    expect(screen.queryByText('Junior AH11–AH12')).toBeNull();
-    expect(screen.queryByText('Non-exempt AH7–AH10')).toBeNull();
-    expect(screen.queryByLabelText('Staff row 1 name')).toBeNull();
-    expect(screen.queryByLabelText('Staff row 1 job grade')).toBeNull();
-    expect(screen.queryByLabelText('Task row 1 name')).toBeNull();
-    expect(screen.queryByLabelText('Task row 1: Senior may lead')).toBeNull();
-    expect(screen.queryAllByRole('button', { name: /add row/i })).toHaveLength(0);
-    expect(screen.queryByText(/it is not a preference order/i)).toBeNull();
-    // The grade dropdown is the only `<select>` the tables add, and the live
-    // wizard has none at all.
-    expect(document.querySelectorAll('select')).toHaveLength(0);
-};
 
 beforeEach(() => {
     vi.clearAllMocks();
@@ -211,107 +186,112 @@ afterEach(() => {
 
 // ─── LIVE MODE: THE WIZARD IS UNTOUCHED ───────────────────────────────────────
 
-describe('live mode: the Configure wizard is exactly what it was', () => {
-    it('renders the two comma-separated textareas, with their ids, classes and values', () => {
+/**
+ * ==============================================================================
+ * LIVE MODE: THE SAME WIZARD, WITH THE TEAM AS ITS STAFF
+ * ==============================================================================
+ *
+ * ⚠️ THIS BLOCK USED TO BE CALLED "the Configure wizard is exactly what it was",
+ *    AND IT WAS RIGHT UNTIL `R3`/`R4`. It pinned two comma-separated textareas —
+ *    `roster-staff-pool` and `roster-tasks` — their exact class strings, and a
+ *    Generate button gated by `validateRosterConfig`.
+ *
+ *    That was the honest UI for the engine behind it. Live mode ran
+ *    `generateRoster`: a round-robin that rotated a list of NAMES and assigned
+ *    `staff[taskIdx % staff.length]` as lead, Monday to Friday. It could not see a
+ *    grade, an FTE, a skill, a leave date or a rule, so there was nothing else to
+ *    configure. Everything the sandbox demonstrated for months — grade bands, skill
+ *    matching, part-time fairness, hours ceilings, the grade floor shipped in
+ *    v1.18.0 — was reachable only there.
+ *
+ *    Both modes now run `generateRosterV2`, so both get the screen that configures
+ *    it. These tests assert the new arrangement, and the old ones are deleted
+ *    rather than skipped: a test asserting the textareas still exist would now be
+ *    asserting a regression.
+ *
+ * The one difference that remains is real, and is pinned below: in the sandbox the
+ * staff are TYPED, because there is no team; in a department they ARE the team, and
+ * the table shows them read-only.
+ */
+describe('live mode: the same wizard, with the team as its staff', () => {
+    it('renders the sandbox tables — the two textareas are gone', () => {
         render(<RosterView user={BRANDON} />);
         openConfigure();
 
-        const staffBox = document.getElementById('roster-staff-pool');
-        expect(staffBox).toBeTruthy();
-        expect(staffBox.tagName).toBe('TEXTAREA');
-        expect(staffBox.className).toBe(LIVE_TEXTAREA_CLASS);
-        /**
-         * CHANGED BY THE MULTI-TEAM REWIRE, and it is a real behaviour change rather
-         * than a test fix. The live staff pool used to be `LIVE_ROSTER_DEFAULTS.staff`
-         * — four names hardcoded in `auraEngine.js`, a FOURTH copy of one department
-         * alongside `TEAM_DIRECTORY`, `ADMIN_EMAILS` and the rules file. It is now the
-         * active team's own member list, so a respiratory therapy lead pressing
-         * Generate no longer staffs their week with four clinical exercise
-         * physiologists from another service.
-         *
-         * The ORDER changed with it: members arrive sorted by display name, which is
-         * what makes the staff pool, the swap picker and the load editor agree with
-         * each other. The old order was whatever `LIVE_ROSTER_DEFAULTS` happened to
-         * list.
-         */
-        expect(staffBox.value).toBe('Brandon, Derlinder, Fadzlynn, Ying Xian');
-        // No placeholder in live mode, as before.
-        expect(staffBox.hasAttribute('placeholder')).toBe(false);
-
-        const tasksBox = document.getElementById('roster-tasks');
-        expect(tasksBox).toBeTruthy();
-        expect(tasksBox.tagName).toBe('TEXTAREA');
-        expect(tasksBox.className).toBe(LIVE_TEXTAREA_CLASS);
-        expect(tasksBox.value).toBe(LIVE_ROSTER_DEFAULTS.tasks.join(', '));
-        expect(tasksBox.hasAttribute('placeholder')).toBe(false);
-
-        // Their labels, which is how every existing test reaches them.
-        expect(screen.getByLabelText(/staff pool/i)).toBe(staffBox);
-        expect(screen.getByLabelText(/core tasks/i)).toBe(tasksBox);
+        expect(document.getElementById('roster-staff-pool'),
+            'the comma-separated staff pool is back').toBeNull();
+        expect(document.getElementById('roster-tasks'),
+            'the comma-separated task list is back').toBeNull();
+        expect(screen.queryByLabelText(/staff pool/i)).toBeNull();
     });
 
-    it('has none of the sandbox controls, and none of the sandbox copy', () => {
+    /**
+     * ⚠️ THE PEOPLE COME FROM THE MEMBERSHIP, NOT FROM TYPING. A name typed into a
+     *    form matches a person only by spelling; a member row carries their uid.
+     *    This is the defect the multi-team migration removed, and the textarea was
+     *    the last place it survived.
+     */
+    it('shows the team as the staff rows, in member order', () => {
         render(<RosterView user={BRANDON} />);
         openConfigure();
 
-        expectNoSandboxTables();
-        // Sandbox-only chrome, absent as before.
-        expect(screen.queryByText(/sandbox mode/i)).toBeNull();
-        // CHANGED TWICE, and both times for the same reason: a "this control is absent"
-        // test must name a string that EXISTS somewhere, or it passes vacuously. It was
-        // `/load example department/i` (a button that became a dropdown), then
-        // `/load an example arrangement/i` (a dropdown of twelve per-department
-        // arrangements). The sandbox picker is now TWO dropdowns — a profession and a
-        // shape — and both labels below DO exist in demo mode, asserted in the demo-mode
-        // test at the foot of this file, so their absence here is a claim about live mode
-        // rather than about a dead string.
-        expect(screen.queryByLabelText(/shape to start from/i)).toBeNull();
-        expect(screen.queryByLabelText(/your profession/i)).toBeNull();
-        expect(screen.queryByText(/shape to start from/i)).toBeNull();
-        expect(screen.queryByText(/your profession/i)).toBeNull();
-        // …and no trace of the twelve-arrangement picker that came before it.
-        expect(screen.queryByLabelText(/load an example arrangement/i)).toBeNull();
-        expect(screen.getByRole('button', { name: /^generate roster$/i })).toBeTruthy();
-    });
-
-    it('keeps the narrow, non-scrolling modal the live wizard has always had', () => {
-        render(<RosterView user={BRANDON} />);
-        openConfigure();
-
-        const panel = document.getElementById('roster-staff-pool').closest('.rounded-2xl');
-        expect(panel.className).toContain('max-w-lg');
-        expect(panel.className).not.toContain('max-w-3xl');
-        expect(panel.className).not.toContain('overflow-y-auto');
-    });
-
-    it('still edits config.staff straight from the textarea, and still writes it', () => {
-        render(<RosterView user={BRANDON} />);
-        openConfigure();
-
-        fireEvent.change(screen.getByLabelText(/staff pool/i), {
-            target: { value: 'Brandon, Ying Xian' },
+        TEAM_ROSTERED.forEach((person) => {
+            expect(screen.getAllByDisplayValue(person.displayName).length,
+                `${person.displayName} is not in the staff table`).toBeGreaterThan(0);
         });
-        fireEvent.change(screen.getByLabelText(/core tasks/i), { target: { value: 'EFT' } });
-
-        // The live path is confirmation-gated, and the confirmation names the pool
-        // the textarea holds — the M1 guard. Then it writes.
-        fireEvent.click(screen.getByRole('button', { name: /^generate roster$/i }));
-        expect(screen.getAllByText('Brandon, Ying Xian').length).toBeGreaterThan(0);
-        fireEvent.click(screen.getByRole('button', { name: /^ok$/i }));
-        expect(setDoc).toHaveBeenCalledTimes(1);
     });
 
-    it('is still gated by validateRosterConfig, not by the sandbox tables', () => {
+    /**
+     * Somebody leaves the roster by leaving the TEAM — which is a Cloud Function
+     * that removes their membership and their `teamIds` together. A delete here
+     * would take them out of one week and leave them in the department.
+     */
+    it('does not offer add or remove on the live staff table', () => {
         render(<RosterView user={BRANDON} />);
         openConfigure();
 
-        // Emptying the textarea must still disable Generate. If live mode had been
-        // switched onto the table-driven gate this would pass for the wrong
-        // reason — so the reason is asserted too.
-        fireEvent.change(screen.getByLabelText(/staff pool/i), { target: { value: '' } });
+        expect(screen.queryByRole('button', { name: /remove staff row 1/i })).toBeNull();
+        expect(screen.getByText(/these are your team/i)).toBeTruthy();
+        // Two places say it — step 1's department panel and the staff table's own
+        // note — which is deliberate: whichever one a roster master is looking at
+        // when they wonder how to add somebody should answer them.
+        expect(screen.getAllByText(/admin → team/i).length).toBeGreaterThan(0);
+    });
+
+    /**
+     * ⚠️ GATED BY THE ENGINE'S OWN VALIDATOR NOW. It was `validateRosterConfig`,
+     *    which judged two textareas for the round-robin generator. A department can
+     *    now be refused for the reasons that actually matter, in
+     *    `generateRosterV2`'s own wording.
+     */
+    it('is gated by the configuration, not by a textarea', () => {
+        render(<RosterView user={BRANDON} />);
+        openConfigure();
+
+        // Clearing every task name is the live equivalent of emptying the old task
+        // textarea: there is nothing to roster, and Generate must say so.
+        screen.getAllByLabelText(/task row \d+ name/i).forEach((input) => {
+            fireEvent.change(input, { target: { value: '' } });
+        });
+
         expect(screen.getByRole('button', { name: /^generate roster$/i }).disabled).toBe(true);
-        expect(screen.getByText(/staff pool is empty/i)).toBeTruthy();
-        expect(screen.queryByText(/staff table/i)).toBeNull();
+    });
+
+    /**
+     * The bridge for a department that already has a roster. Team #1 has been
+     * rostering for months with `config.tasks` and has no stored configuration,
+     * because that document did not exist until `R1`. Without this it would open
+     * Configure to blank rows and a refused Generate, with its own roster on screen
+     * behind the modal.
+     */
+    it('opens on the tasks the department is already running', () => {
+        render(<RosterView user={BRANDON} />);
+        openConfigure();
+
+        LIVE_ROSTER_DEFAULTS.tasks.forEach((task) => {
+            expect(screen.getAllByDisplayValue(task).length,
+                `${task} did not carry over from the existing roster`).toBeGreaterThan(0);
+        });
     });
 });
 
@@ -342,10 +322,21 @@ describe('live mode: my week reads the live document and adds nothing to it', ()
         expect(document.querySelector('[data-roster-view="person"]')).toBeNull();
         expect(document.querySelectorAll('[data-date]').length).toBeGreaterThan(0);
 
-        // …and the wizard is still exactly the two textareas, with no slider, no
-        // table and — the check that matters for the person view — no `<select>`.
+        /**
+         * ⚠️ REWRITTEN BY `R3`. This used to assert the live wizard was "still
+         *    exactly the two textareas, with no table and no `<select>`" — the
+         *    person view's constraint being that it adds no control to a deliberately
+         *    plain panel. The panel is no longer plain: live mode configures
+         *    `generateRosterV2` and gets the same tables the sandbox does.
+         *
+         *    The CONSTRAINT is unchanged and is what is asserted instead: the person
+         *    view adds nothing of its own. The sandbox's person picker is a
+         *    `<select>` in the wizard footer, and it must not appear here, because a
+         *    live user's "my week" is their own week and nobody else's.
+         */
         openConfigure();
-        expectNoSandboxTables();
+        expect(screen.queryByLabelText(/whose week/i),
+            'the sandbox person picker leaked into live mode').toBeNull();
     });
 
     it('lists the signed-in user\'s own duties out of the live document, and nobody else\'s', () => {

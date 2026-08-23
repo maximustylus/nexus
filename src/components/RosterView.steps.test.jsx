@@ -118,14 +118,26 @@ describe('the wizard reads as one numbered sequence', () => {
         }
     });
 
-    it('does NOT number live mode, whose wizard is a different and shorter thing', () => {
+    /**
+     * ⚠️ THIS ASSERTED THE OPPOSITE, AND WAS RIGHT UNTIL `R3`. Live mode had two
+     *    textareas, not seven panels, so numbering it would have counted a sequence
+     *    that did not exist there.
+     *
+     *    Live mode now renders the same wizard, so it gets the same numbering — and
+     *    the interesting part is that it must be the SAME numbering, 1 through 7.
+     *    Step 1 in the sandbox is "who are you and what shape is your department",
+     *    which a real department does not need; omitting it left the live wizard
+     *    running 2 to 7, which reads as a step that failed to load. Live mode has
+     *    its own step 1 instead — the department it is configuring.
+     */
+    it('numbers live mode the same way, starting at 1', () => {
         ctx.isDemo = false;
         render(<RosterView user={VISITOR} />);
         openConfigure();
 
-        // Live mode has two textareas, not seven panels. Numbering it would count a
-        // sequence that does not exist there.
-        expect(badgeNumbers()).toEqual([]);
+        const numbers = badgeNumbers();
+        expect(numbers[0], 'the live wizard starts at a step other than 1').toBe(1);
+        expect(numbers).toEqual(WIZARD_STEPS.map((step) => wizardStepNumber(step.id)));
     });
 
     it('costs the phone no horizontal scroll, which is what the gutter risked', () => {

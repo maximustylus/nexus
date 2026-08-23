@@ -44,7 +44,9 @@ vi.mock('../firebase', () => ({
 }));
 
 vi.mock('firebase/firestore', () => ({
-    doc: vi.fn(() => ({ __mock: 'docRef' })),
+    // The path is carried so a write can be identified by the document it targets
+    // rather than by a call count — see the two-write assertion below.
+    doc: vi.fn((_db, ...segments) => ({ __mock: 'docRef', path: segments.join('/') })),
     collection: vi.fn(() => ({ __mock: 'collectionRef' })),
     // Delivers `store.snapshotData` synchronously, the way a warm Firestore
     // cache does, so live mode has a roster on the calendar to click.
@@ -374,7 +376,21 @@ describe('live mode raises no native dialog (P8.3)', () => {
         await act(async () => {
             await vi.advanceTimersByTimeAsync(0);
         });
-        expect(setDoc).toHaveBeenCalledTimes(1);
+        /**
+         * ⚠️ TWO WRITES NOW, AND NAMED RATHER THAN COUNTED. Generating writes the
+         *    roster AND the department's configuration (`R1`) — Generate is the
+         *    moment a roster master commits to a configuration, so it is when the
+         *    configuration is stored.
+         *
+         *    Asserted by PATH rather than as `toHaveBeenCalledTimes(2)`: a count
+         *    says two writes happened and not which, so a third write introduced
+         *    later could be absorbed by relaxing the number. These name the two
+         *    documents that are allowed.
+         */
+        const written = setDoc.mock.calls.map(([ref]) => ref.path);
+        expect(written, 'the roster was not written').toContain(`teams/${TEAM_ID}/rosters/2026`);
+        expect(written, 'the configuration was not stored').toContain(`teams/${TEAM_ID}/settings/roster`);
+        expect(written, 'an unexpected third document was written').toHaveLength(2);
         expect(screen.getByText(/roster saved/i)).toBeTruthy();
 
         // Success is transient; the banner clears itself rather than needing a

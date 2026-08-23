@@ -542,6 +542,49 @@ export const createTaskRow = (seed = {}) => ({
 export const createEmptyStaffRows = (count = DEFAULT_STAFF_ROWS) =>
     Array.from({ length: count }, () => createStaffRow());
 
+/**
+ * THE TEAM'S OWN PEOPLE, AS WIZARD ROWS — what live mode uses instead of a typed
+ * list of names.
+ *
+ * ⚠️ THIS IS THE FUNCTION THAT ENDS THE COMMA-SEPARATED STAFF POOL. Live mode's
+ *    Configure panel held `config.staff.join(', ')` — a textarea of display names,
+ *    split on commas — in the release whose entire purpose was to stop keying
+ *    people by display name. A name typed there matched a person only by spelling.
+ *    These rows carry the `uid`, so the roster is built from the actual membership.
+ *
+ * ⚠️ GRADES ARRIVE SEPARATELY AND MAY BE ABSENT, WHICH IS NOT AN ERROR. They live
+ *    in `teams/{id}/grades/{uid}`, readable only by the person and a lead, and a
+ *    member who has never set one simply has none. `''` is what `createStaffRow`
+ *    means by "not recorded" — the engine bars an ungraded person from leading a
+ *    band-gated task and names them, which is the honest outcome. Inventing AH7
+ *    here would put somebody in charge of a duty their pay scale does not carry.
+ *
+ * `rostered: false` members are already filtered out upstream by
+ * `TeamContext.rosteredMembers` — the roster master who holds no clinical duties
+ * is a lead, not a gap in this function.
+ */
+export const staffRowsFromMembers = (members = [], grades = {}) =>
+    (Array.isArray(members) ? members : [])
+        .filter((person) => person && typeof person.uid === 'string' && person.uid !== '')
+        .map((person) => ({
+            ...createStaffRow({
+                name: person.displayName || person.email || person.uid,
+                grade: typeof grades[person.uid] === 'string' ? grades[person.uid] : '',
+                fte: person.fte,
+                unavailable: person.unavailable,
+                skills: person.skills,
+                maxPerDay: person.maxPerDay,
+            }),
+            /**
+             * ⚠️ CARRIED THROUGH SO THE ROSTER CAN BE KEYED BY IT LATER. The engine
+             *    still works in names — that is `D-names`, a documented limitation
+             *    with its own risk budget — but a row that has FORGOTTEN which uid
+             *    it came from cannot be fixed later without asking the roster master
+             *    to identify people by spelling all over again.
+             */
+            uid: person.uid,
+        }));
+
 /** `DEFAULT_TASK_ROWS` blank task rows, each defaulting to Mon–Fri. */
 export const createEmptyTaskRows = (count = DEFAULT_TASK_ROWS) =>
     Array.from({ length: count }, () => createTaskRow());

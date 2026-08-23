@@ -410,9 +410,29 @@ export const describeGenerationRange = (config) => {
  *
  * `generate` is injectable so the empty-roster branch is reachable from tests
  * without having to find a config that produces `{}`.
+ *
+ * ⚠️ `validate` IS INJECTABLE TOO, AND THAT IS WHAT LETS THE LIVE ROSTER MOVE TO
+ *    `generateRosterV2` WITHOUT A SECOND COPY OF THIS FUNCTION.
+ *
+ *    The default validator is v1's, and it requires `config.staff` to be an array
+ *    of non-empty STRINGS. A v2 configuration's staff are OBJECTS carrying a name,
+ *    a grade, an FTE and leave dates — so the default would refuse every one of
+ *    them with "The staff pool is empty — add at least one name", which is both
+ *    wrong and impossible to act on.
+ *
+ *    The obvious alternative was a `prepareRosterV2Write` beside this one. It was
+ *    rejected because the valuable half of this function is the NON-EMPTY
+ *    ASSERTION below — the guard against a defect this repository has already
+ *    shipped, where an empty write blanked the whole roster document and reported
+ *    success. Two copies of that guard is one copy that can be forgotten when the
+ *    wording or the condition changes.
  */
-export const prepareRosterWrite = (config, generate = generateRoster) => {
-    const validation = validateRosterConfig(config);
+export const prepareRosterWrite = (
+    config,
+    generate = generateRoster,
+    validate = validateRosterConfig,
+) => {
+    const validation = validate(config);
     if (!validation.valid) {
         return { ok: false, reason: validation.reason, data: null };
     }

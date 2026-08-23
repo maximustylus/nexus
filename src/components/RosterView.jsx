@@ -55,6 +55,7 @@ import {
 import { useTeam } from '../context/TeamContext';
 import { rosterPath, swapsPath, swapPath, rosterSettingsPath } from '../utils/teamPaths';
 import { toStoredSettings, fromStoredSettings, settingsChanged } from '../utils/rosterSettings';
+import { useTeamGrades } from '../hooks/useTeamGrades';
 
 /**
  * The roster year. Was baked into a document NAME — `system_data/roster_2026` — so
@@ -135,6 +136,7 @@ import {
     summariseUnfilledCauses,
     wizardStepNumber,
     wizardStepLabel,
+    staffRowsFromMembers,
 } from '../utils/rosterWizard';
 import { categoryChipClass } from '../utils/rosterCategories';
 // 👤 ONE PERSON'S DUTIES — pure, unit-tested in rosterPersonView.test.js, and used
@@ -664,7 +666,7 @@ const RosterView = ({ user }) => {
     // every live effect below is gated on it — a path composed from a null teamId
     // throws by design (`assertTeamId`), so the gate is what keeps that design from
     // becoming a crash on a legitimate screen.
-    const { teamId, rosteredMembers, memberUidByName } = useTeam();
+    const { teamId, team, rosteredMembers, memberUidByName } = useTeam();
 
     // --- STATE ---
     // 🗓️ P4.3 / post-mortem B3: the calendar used to open on a hardcoded
@@ -798,8 +800,57 @@ const RosterView = ({ user }) => {
      *    gates both directions, and this is the same latch every other write in
      *    this component uses.
      */
+    /**
+     * ==========================================================================
+     * ONE WIZARD, ONE ENGINE — `R3`/`R4`
+     * ==========================================================================
+     *
+     * Live mode and the sandbox used to configure two DIFFERENT ENGINES, which is
+     * why they had two different screens. Live called `generateRoster` — a
+     * round-robin over a comma-separated list of names, no grades, no FTE, no
+     * skills, no rules — and the sandbox called `generateRosterV2`. Everything the
+     * sandbox demonstrated was therefore something a real department could not
+     * have, and the plainer live panel was the honest UI for the plainer engine
+     * behind it.
+     *
+     * Both now run `generateRosterV2`. The difference that remains is the one that
+     * is real: in the sandbox the staff are TYPED, because there is no team; in
+     * live mode they ARE the team, with their own grades, FTE and leave.
+     */
+    const { grades: memberGrades, denied: gradesDenied } = useTeamGrades(
+        teamId,
+        rosteredMembers,
+        // ⚠️ NOT IN THE SANDBOX, EVER. A demo visitor may be a lead of a real team,
+        //    and reading their colleagues' pay grades to populate a sandbox they are
+        //    about to edit freely is both unnecessary and the wrong direction of
+        //    travel for the most sensitive value in the app.
+        !isDemo && !!teamId,
+    );
+
+    /**
+     * The staff table, from the two sources that can supply one.
+     *
+     * ⚠️ LIVE ROWS ARE DERIVED, NOT EDITED, AND THAT IS DELIBERATE. Who is in the
+     *    department is the member list — maintained in the TEAM tab, where adding
+     *    somebody checks that their account exists and their address is on an
+     *    allowlisted domain. A second, editable copy here would let a roster master
+     *    type a name that belongs to nobody and roster them, which is exactly the
+     *    defect the migration removed.
+     *
+     *    Their ATTRIBUTES are editable where they belong: grade and profession on
+     *    the person's own profile, FTE and duties on the membership.
+     */
+    const liveStaffRows = useMemo(
+        () => staffRowsFromMembers(rosteredMembers, memberGrades),
+        [rosteredMembers, memberGrades],
+    );
+
     const [storedSettings, setStoredSettings] = useState(null);
     const [settingsError, setSettingsError] = useState(null);
+    // Whether the wizard's rows came from a stored document. `false` means either
+    // "not read yet" or "this department has never configured one", and the bridge
+    // below is what makes the second case survivable.
+    const [settingsSeeded, setSettingsSeeded] = useState(false);
     // Who held which grade in the run that is ON SCREEN, so the load table can
     // report it. Captured at generate time rather than read from the live rows:
     // editing a grade after generating must not silently relabel a finished
@@ -881,14 +932,15 @@ const RosterView = ({ user }) => {
         () => buildDemoRosterV2ConfigFromTables({
             startDate: config.startDate,
             weeks: config.weeks,
-            staffRows: demoStaffRows,
+            staffRows: isDemo ? demoStaffRows : liveStaffRows,
             taskRows: demoTaskRows,
             bandInputs: demoBandInputs,
             hoursInputs: demoHoursInputs,
             rulesInputs: demoRulesInputs,
             extraRules: demoExtraRules,
         }),
-        [config.startDate, config.weeks, demoStaffRows, demoTaskRows, demoBandInputs, demoHoursInputs, demoRulesInputs, demoExtraRules],
+        [config.startDate, config.weeks, isDemo, demoStaffRows, liveStaffRows,
+            demoTaskRows, demoBandInputs, demoHoursInputs, demoRulesInputs, demoExtraRules],
     );
 
     // …and then the engine's OWN validator on the finished config, so the
@@ -902,9 +954,33 @@ const RosterView = ({ user }) => {
         [demoWizard],
     );
 
-    // Which gate the Generate button obeys. Live mode is untouched: it is still
-    // `validateRosterConfig` over the two textareas, exactly as before.
-    const generateGate = isDemo ? demoValidation : configValidation;
+    /**
+     * Which gate the Generate button obeys — now the SAME ONE in both modes.
+     *
+     * ⚠️ IT WAS `isDemo ? demoValidation : configValidation`, and that ternary was
+     *    the visible end of the two-engine split: `configValidation` judged two
+     *    textareas for the round-robin generator, `demoValidation` judged a whole
+     *    configuration for the real one. A department can now be refused for the
+     *    reasons that actually matter — a task requiring a skill nobody holds, a
+     *    band nobody is in, boundaries that do not partition the scale — with
+     *    `generateRosterV2`'s own wording rather than a paraphrase.
+     *
+     * ⚠️ AND A REFUSED GRADE READ IS A REFUSAL TO GENERATE. If `useTeamGrades` was
+     *    denied, `memberGrades` is empty — which is indistinguishable from a
+     *    department where nobody has set a grade, and would produce a plausible
+     *    roster in which no one could lead anything. Better to stop and say so.
+     */
+    const generateGate = useMemo(() => {
+        if (!isDemo && gradesDenied) {
+            return {
+                valid: false,
+                reason: 'Your colleagues\' grades could not be read, so a roster generated now '
+                    + 'would treat the whole department as ungraded. Only a team lead can '
+                    + 'generate a roster.',
+            };
+        }
+        return demoValidation;
+    }, [isDemo, gradesDenied, demoValidation]);
 
     // --- STATUS BANNER PLUMBING ---
     // A success message is transient and clears itself; an error or an info
@@ -1130,10 +1206,11 @@ const RosterView = ({ user }) => {
             doc(db, ...rosterSettingsPath(teamId)),
             (snap) => {
                 setSettingsError(null);
-                if (!snap.exists()) { setStoredSettings(null); return; }
+                if (!snap.exists()) { setStoredSettings(null); setSettingsSeeded(false); return; }
 
                 const restored = fromStoredSettings(snap.data());
                 if (!restored) { setStoredSettings(null); return; }
+                setSettingsSeeded(true);
 
                 setStoredSettings(toStoredSettings(restored));
                 setDemoTaskRows(restored.taskRows);
@@ -1154,6 +1231,48 @@ const RosterView = ({ user }) => {
         );
         return () => unsub();
     }, [isDemo, teamId]);
+
+    /**
+     * ==========================================================================
+     * ⚠️ THE BRIDGE FOR A DEPARTMENT THAT ALREADY HAS A ROSTER — `R4`
+     * ==========================================================================
+     *
+     * Team #1 has been rostering for months. Its tasks live in `config.tasks` —
+     * `['EFT', 'IPT+SKG', 'NC', 'FSG+WI']` — because that is what the round-robin
+     * engine consumed, and it has no `settings/roster` document because that
+     * document did not exist until today.
+     *
+     * Without this, the first thing its roster master sees after the upgrade is a
+     * Configure panel with FOUR BLANK ROWS and a Generate button refusing on "the
+     * core task list is empty" — for a department whose roster is on screen behind
+     * the modal. Found by `RosterView.alerts.test.jsx` failing to open the
+     * confirmation modal, which is the same thing happening in miniature.
+     *
+     * So: no stored document and nothing typed yet ⇒ open the wizard on the tasks
+     * the department is demonstrably already running. They arrive as ordinary
+     * editable rows with the engine's defaults for everything the old model could
+     * not express, and the first Generate stores them properly.
+     *
+     * ⚠️ IT MUST NOT RUN ONCE A DOCUMENT EXISTS, or a saved configuration would be
+     *    overwritten by the legacy list on every mount. `settingsSeeded` is that
+     *    latch, and it is set by the listener rather than inferred here.
+     */
+    useEffect(() => {
+        if (isDemo || !teamId || settingsSeeded) return;
+
+        const legacyTasks = (config.tasks || [])
+            .map((name) => String(name || '').trim())
+            .filter(Boolean);
+        if (legacyTasks.length === 0) return;
+
+        setDemoTaskRows((previous) => {
+            // Only into a wizard nobody has typed into. A half-filled form is
+            // somebody's work in progress, not an empty slate to overwrite.
+            const untouched = previous.every((row) => String(row.name || '').trim() === '');
+            if (!untouched) return previous;
+            return legacyTasks.map((name) => createTaskRow({ name }));
+        });
+    }, [isDemo, teamId, settingsSeeded, config.tasks]);
 
     // --- EFFECT: COVERAGE REQUESTS AIMED AT THE SIGNED-IN USER -----------------
     //
@@ -1501,8 +1620,15 @@ const RosterView = ({ user }) => {
 
         // 🛡️ M3 FIX: never even open the confirmation for a config that cannot
         // be generated. The button is disabled too; this is the second latch.
-        if (!configValidation.valid) {
-            showStatus('error', `Cannot generate: ${configValidation.reason}`);
+        //
+        // ⚠️ `generateGate` NOW, NOT `configValidation`. The live gate used to judge
+        //    two textareas for the round-robin generator; it judges the whole
+        //    configuration for `generateRosterV2` — which is what live mode runs.
+        //    Leaving the old validator here would have let a configuration the
+        //    engine refuses reach the confirmation modal and fail after the user
+        //    said yes.
+        if (!generateGate.valid) {
+            showStatus('error', `Cannot generate: ${generateGate.reason}`);
             return;
         }
 
@@ -1524,13 +1650,55 @@ const RosterView = ({ user }) => {
             return;
         }
 
-        // 🛡️ M3 FIX (defence in depth): validate, generate, and refuse to write
-        // an empty roster — all decided by prepareRosterWrite, which is unit
-        // tested. An empty write used to blank the whole document and report
-        // success.
-        const prepared = prepareRosterWrite(config);
+        /**
+         * ======================================================================
+         * ⚠️ THE LIVE ROSTER NOW COMES FROM `generateRosterV2` — `R4`
+         * ======================================================================
+         *
+         * It used to come from `prepareRosterWrite(config)`, which defaults to
+         * `generateRoster`: a round-robin that rotates a list of NAMES and assigns
+         * `staff[taskIdx % staff.length]` as lead and the next one as co-lead,
+         * Monday to Friday. It could not see a grade, an FTE, a skill, a leave
+         * date or a rule, because its input was two comma-separated strings.
+         *
+         * Every capability the sandbox has demonstrated for months — grade bands,
+         * skill matching, part-time fairness, working-hours ceilings, consecutive-day
+         * limits, the grade floor shipped in v1.18.0 — existed only there. This is
+         * the line that ends that split.
+         *
+         * ⚠️ IT WILL PRODUCE A DIFFERENT ROSTER FROM THE ONE PEOPLE HAVE BEEN
+         *    WORKING TO, AND THAT IS THE POINT RATHER THAN A REGRESSION. v2
+         *    respects constraints v1 ignored, so the allocation legitimately
+         *    changes. The confirmation modal is what makes that a decision.
+         *
+         * ⚠️ `prepareRosterWrite` IS STILL THE GATE. It is what refuses to write an
+         *    empty schedule — a defect this repository has already had, where an
+         *    empty write blanked the whole document and reported success — so the
+         *    engine is passed to it rather than called around it.
+         */
+        if (!demoWizard.ok) {
+            showStatus('error', `Roster NOT generated. ${demoWizard.reason}`);
+            return;
+        }
+
+        const v2Config = demoWizard.config;
+        const prepared = prepareRosterWrite(
+            v2Config,
+            (cfg) => {
+                const run = generateRosterV2(cfg);
+                // `prepareRosterWrite` expects the roster map itself. A refusal
+                // returns no roster, and an empty object is exactly what its own
+                // guard catches and reports — so a refusal cannot become a silent
+                // empty write.
+                return run && run.ok ? run.roster : {};
+            },
+            // ⚠️ THE V2 VALIDATOR, NOT THE DEFAULT. v1's requires `staff` to be an
+            //    array of STRINGS; a v2 config's staff are objects, so the default
+            //    would refuse every real department with "The staff pool is empty".
+            validateRosterV2Config,
+        );
         if (!prepared.ok) {
-            console.error("Roster generation blocked before write:", prepared.reason, config);
+            console.error("Roster generation blocked before write:", prepared.reason, v2Config);
             showStatus('error', `Roster NOT generated. ${prepared.reason}`);
             return;
         }
@@ -3104,16 +3272,24 @@ const RosterView = ({ user }) => {
                        in full rather than composed, because `RosterView.wizard.test.jsx`
                        pins the live wizard and a shared base string is exactly how a
                        "sandbox only" change stops being sandbox only. */
-                    className={isDemo
-                        ? 'fixed inset-0 bg-slate-900/60 backdrop-blur-md flex items-stretch sm:items-center justify-center z-[100] p-0 sm:p-4'
-                        : 'fixed inset-0 bg-slate-900/60 backdrop-blur-md flex items-center justify-center z-[100] p-4'}
+                    /**
+                     * ⚠️ ONE PANEL NOW, AND THE OLD BRANCH WOULD HAVE MADE THE LIVE
+                     *    WIZARD UNUSABLE. Live mode's dialog was `max-w-lg` with no
+                     *    scroll, which was right for two textareas and is not right
+                     *    for two tables and a band editor: the tables would have been
+                     *    crammed into a narrow box with the Generate button pushed
+                     *    off the bottom of a panel that cannot scroll to reach it.
+                     *
+                     *    Found by `RosterView.mobile.test.jsx`, whose whole section 7
+                     *    exists to pin "the responsive work stopped at the branch" —
+                     *    a claim that stopped being true the moment there was no
+                     *    branch. The mobile treatment was never sandbox-specific; it
+                     *    was applied where the tables were, and the tables are now in
+                     *    both.
+                     */
+                    className="fixed inset-0 bg-slate-900/60 backdrop-blur-md flex items-stretch sm:items-center justify-center z-[100] p-0 sm:p-4"
                 >
-                    {/* 🧪 The sandbox wizard is WIDER, and scrolls: two tables and a
-                        band editor do not fit the live wizard's max-w-lg. Live mode
-                        keeps that width, and every class on it, exactly as before. */}
-                    <div className={isDemo
-                        ? 'bg-white dark:bg-slate-800 w-full max-w-3xl h-full sm:h-auto sm:max-h-[90vh] overflow-y-auto overscroll-contain rounded-none sm:rounded-2xl shadow-2xl p-4 sm:p-6 pt-[max(1rem,env(safe-area-inset-top))] sm:pt-6 border-0 sm:border sm:border-slate-200 sm:dark:border-slate-700 animate-in zoom-in-95'
-                        : 'bg-white dark:bg-slate-800 w-full rounded-2xl shadow-2xl p-6 border border-slate-200 dark:border-slate-700 animate-in zoom-in-95 max-w-lg'}>
+                    <div className="bg-white dark:bg-slate-800 w-full max-w-3xl h-full sm:h-auto sm:max-h-[90vh] overflow-y-auto overscroll-contain rounded-none sm:rounded-2xl shadow-2xl p-4 sm:p-6 pt-[max(1rem,env(safe-area-inset-top))] sm:pt-6 border-0 sm:border sm:border-slate-200 sm:dark:border-slate-700 animate-in zoom-in-95">
                         
                         <div className="flex items-center gap-2 mb-4">
                             {isDemo && <span className="bg-emerald-100 text-emerald-700 text-[10px] font-bold px-2 py-0.5 rounded">SANDBOX MODE</span>}
@@ -3166,6 +3342,48 @@ const RosterView = ({ user }) => {
                             does not exist there. `WizardStep` renders its children bare when it
                             is handed no number, which is how live mode opts out without a second
                             branch of markup. */}
+                        {!isDemo && (
+                            /**
+                             * ⚠️ LIVE MODE GETS ITS OWN STEP 1, RATHER THAN STARTING AT 2.
+                             *
+                             *    The sandbox's first step is "who are you and what shape is
+                             *    your department" — a profession dropdown and a worked-example
+                             *    picker, which exist because a visitor is INVENTING a
+                             *    department. A real one already exists, so those controls have
+                             *    nothing to do.
+                             *
+                             *    But omitting the step entirely left the live wizard numbered
+                             *    2 to 7, which reads as a step that failed to load. Found by
+                             *    `RosterView.steps.test.jsx`, whose claim was "live mode is not
+                             *    numbered" — true while live mode was two textareas, and false
+                             *    the moment it became the same wizard.
+                             *
+                             *    So the step stays and answers the same question from the other
+                             *    direction: this is the department you are configuring, and
+                             *    here is where its facts are edited.
+                             */
+                            <WizardStep number={wizardStepNumber('team')} label={wizardStepLabel('team')}>
+                                <div className="pb-4">
+                                    <div className="p-4 rounded-xl bg-indigo-50/60 dark:bg-indigo-900/20 border border-indigo-200 dark:border-indigo-800/50">
+                                        <p className="text-sm font-black text-slate-800 dark:text-white">
+                                            {team?.name || 'Your department'}
+                                        </p>
+                                        <p className="text-[11px] font-bold text-slate-500 mt-0.5">
+                                            {[team?.institution, team?.profession].filter(Boolean).join(' · ')
+                                                || 'Institution not set'}
+                                        </p>
+                                        <p className="mt-3 text-[10px] text-slate-500 dark:text-slate-400 leading-relaxed">
+                                            {rosteredMembers.length} {rosteredMembers.length === 1 ? 'person' : 'people'} in
+                                            the roster pool. Add or remove them in{' '}
+                                            <span className="font-bold">Admin → Team</span>; a colleague who runs
+                                            the roster without working in it is marked <span className="font-bold">not
+                                            rostered</span> there and does not appear below.
+                                        </p>
+                                    </div>
+                                </div>
+                            </WizardStep>
+                        )}
+
                         {isDemo && (
                             <WizardStep number={wizardStepNumber('team')} label={wizardStepLabel('team')}>
                             <div className="mb-4 p-3 rounded-xl bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800">
@@ -3338,9 +3556,15 @@ const RosterView = ({ user }) => {
 
                         {/* `space-y-0` in Sandbox: the vertical rhythm between numbered panels
                             belongs to the spine, and a margin between rows would chop the line
-                            into dashes. Live mode keeps `space-y-4`, unnumbered and unchanged. */}
-                        <div className={isDemo ? 'mb-6' : 'space-y-4 mb-6'}>
-                            <WizardStep number={isDemo ? wizardStepNumber('period') : null} label={wizardStepLabel('period')}>
+                            into dashes.
+
+                            ⚠️ `isDemo ? number : null` HERE WAS THE LAST UNNUMBERED STEP, and it
+                            left the live wizard running 1, 3, 4, 5, 6, 7 — a gap that reads as a
+                            step which failed to load rather than as a step that was never there.
+                            Caught by `RosterView.steps.test.jsx` asserting the sequence rather
+                            than just its first entry, which is why it asserts the whole list. */}
+                        <div className="mb-6">
+                            <WizardStep number={wizardStepNumber('period')} label={wizardStepLabel('period')}>
                             {/* In Sandbox this gets the same card as every other numbered step.
                                 Left bare it was the one step on the spine with no panel around
                                 it, which read as a gap in the sequence rather than as a step.
@@ -3398,51 +3622,45 @@ const RosterView = ({ user }) => {
                                 `config.staff` / `config.tasks`, which is what
                                 `prepareRosterWrite` reads, and this feature is not
                                 allowed anywhere near that path. */}
-                            {isDemo ? (
-                                <RosterDemoWizardTables
-                                    bandInputs={demoBandInputs}
-                                    bands={demoWizard.bands}
-                                    bandsReason={demoWizard.bandsReason}
-                                    onBandChange={patchBandInput}
-                                    hoursInputs={demoHoursInputs}
-                                    hoursErrors={demoWizard.hoursErrors}
-                                    onHoursChange={patchHoursInput}
-                                    rulesInputs={demoRulesInputs}
-                                    rulesErrors={demoWizard.rulesErrors}
-                                    onRulesChange={patchRulesInput}
-                                    staffRows={demoStaffRows}
-                                    staffErrors={demoWizard.staffErrors}
-                                    onStaffChange={patchStaffRow}
-                                    onStaffAdd={addStaffRow}
-                                    onStaffRemove={removeStaffRow}
-                                    taskRows={demoTaskRows}
-                                    taskErrors={demoWizard.taskErrors}
-                                    onTaskChange={patchTaskRow}
-                                    onTaskAdd={addTaskRow}
-                                    onTaskRemove={removeTaskRow}
-                                />
-                            ) : (
-                                <>
-                                    <div>
-                                        <label className="text-xs font-bold text-slate-400 uppercase" htmlFor="roster-staff-pool">Staff Pool (Order Matters)</label>
-                                        <textarea
-                                            id="roster-staff-pool"
-                                            className="input-field w-full mt-1 h-20 font-mono text-xs bg-white dark:bg-slate-900 border dark:border-slate-700 rounded p-2 text-slate-800 dark:text-white"
-                                            value={config.staff.join(', ')}
-                                            onChange={(e) => setConfig({...config, staff: e.target.value.split(',').map(s => s.trim())})}
-                                        />
-                                    </div>
-                                    <div>
-                                        <label className="text-xs font-bold text-slate-400 uppercase" htmlFor="roster-tasks">Core Tasks</label>
-                                        <textarea
-                                            id="roster-tasks"
-                                            className="input-field w-full mt-1 h-20 font-mono text-xs bg-white dark:bg-slate-900 border dark:border-slate-700 rounded p-2 text-slate-800 dark:text-white"
-                                            value={config.tasks.join(', ')}
-                                            onChange={(e) => setConfig({...config, tasks: e.target.value.split(',').map(t => t.trim())})}
-                                        />
-                                    </div>
-                                </>
-                            )}
+                            {/*
+                              * ⚠️ ONE WIZARD NOW, IN BOTH MODES — `R3`.
+                              *
+                              * This was `{isDemo ? <RosterDemoWizardTables/> : <two
+                              * textareas/>}`, and the split was honest at the time: the
+                              * two branches configured two DIFFERENT ENGINES. Live ran
+                              * `generateRoster`, a round-robin over a comma-separated list
+                              * of names that could not see a grade, an FTE, a skill or a
+                              * rule — so two textareas were the right UI for it. The
+                              * sandbox ran `generateRosterV2`, which needed all of it.
+                              *
+                              * Both now run `generateRosterV2`, so both get the screen that
+                              * configures it. The remaining difference is the real one: in
+                              * the sandbox the staff are typed, and in a department they
+                              * are the team.
+                              */}
+                            <RosterDemoWizardTables
+                                bandInputs={demoBandInputs}
+                                bandsReason={demoWizard.bandsReason}
+                                bands={demoWizard.bands}
+                                onBandChange={patchBandInput}
+                                hoursInputs={demoHoursInputs}
+                                hoursErrors={demoWizard.hoursErrors}
+                                onHoursChange={patchHoursInput}
+                                rulesInputs={demoRulesInputs}
+                                rulesErrors={demoWizard.rulesErrors}
+                                onRulesChange={patchRulesInput}
+                                staffRows={isDemo ? demoStaffRows : liveStaffRows}
+                                staffErrors={demoWizard.staffErrors}
+                                staffReadOnly={!isDemo}
+                                onStaffChange={patchStaffRow}
+                                onStaffAdd={addStaffRow}
+                                onStaffRemove={removeStaffRow}
+                                taskRows={demoTaskRows}
+                                taskErrors={demoWizard.taskErrors}
+                                onTaskChange={patchTaskRow}
+                                onTaskAdd={addTaskRow}
+                                onTaskRemove={removeTaskRow}
+                            />
                         </div>
 
                         {/* 🧪 Requirement 6, stated where the visitor is about to act. */}
@@ -3485,9 +3703,11 @@ const RosterView = ({ user }) => {
                             was "keep scrolling". They now sit on the bottom edge of the
                             scrollport with a rule above them and the home-bar inset padded,
                             and revert to an ordinary row in the flow from `sm:` up. */}
-                        <div className={isDemo
-                            ? 'sticky sm:static bottom-0 z-10 -mx-4 -mb-4 sm:mx-0 sm:mb-0 px-4 pt-3 pb-[max(1rem,env(safe-area-inset-bottom))] sm:p-0 bg-white dark:bg-slate-800 border-t border-slate-200 dark:border-slate-700 sm:border-0 flex gap-2'
-                            : 'flex gap-2'}>
+                        {/* Sticky on a phone in BOTH modes now, for the reason it was
+                            sticky in one: full-screen and scrolling, "draft it or give
+                            up" was at the bottom of a page of tables, so the answer to
+                            "how do I make it do the thing" was "keep scrolling". */}
+                        <div className="sticky sm:static bottom-0 z-10 -mx-4 -mb-4 sm:mx-0 sm:mb-0 px-4 pt-3 pb-[max(1rem,env(safe-area-inset-bottom))] sm:p-0 bg-white dark:bg-slate-800 border-t border-slate-200 dark:border-slate-700 sm:border-0 flex gap-2">
                             <button onClick={() => setIsConfigOpen(false)} className={`flex-1 py-3 ${isDemo ? `${TOUCH} ` : ''}text-slate-500 dark:text-slate-400 font-bold hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg transition-colors`}>Cancel</button>
                             <button
                                 onClick={handleGenerateClick}
