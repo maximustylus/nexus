@@ -46,13 +46,33 @@ original post-mortems into one. `AU2` means today exactly what it meant when it 
 
 | | Count | Ids |
 |---|---|---|
-| `DONE`, evidenced | **0** | — |
-| `OPEN`, mine | 41 | everything not listed below |
+| `DONE`, evidenced | **8** | `AU2` `AU3` `AU22` `AU25` `AC1` `AC2` `AC15` `AN4` |
+| `OPEN`, mine | 35 | everything not listed below |
 | `OPEN`, **owner's decision** | 10 | `AU1` `AU5` `AU8` `AU11` `AU17` `AC11` `AN7` `AN9` `AN11` `AN12` |
-| **`LIVE` right now** | **4** | `AN1` `AN4` (anyone on the internet) · `AC1` `AC2` (any member of the public who types) |
+| **`LIVE` right now** | **1** | `AN1` — six colleagues' job grades still ship in `dist/` |
 
-**Nothing has been fixed.** Every row is `OPEN`. This file was created the same day as the
-findings.
+**53 findings**, not the 51 this file was created with: `AU25` (the go-live gate) and
+`AC15` (fixing `AC1`) were opened on the same day. Neither renumbers anything.
+
+## Closed on 2026-08-23, with evidence
+
+| Id | What | Evidence |
+|---|---|---|
+| `AN4` | `generateSmartAnalysis` was unauthenticated | `e3b6bb9` — auth + `teamId` validation + membership read + `role === 'lead'`, copied from `processFeedPost:571` |
+| `AU2` | `target_value: null` wrote a zero and reported success | `e3b6bb9` — `src/utils/dataEntryGuard.js`, **58 tests**. `null`/`""`/`[]`/`true`/`NaN`/`Infinity`/numeric-string all refused with a sentence |
+| `AU3` | `target_field` was model-chosen and unconstrained | `e3b6bb9` — `ALLOWED_WORKLOAD_FIELDS` allowlist, taken from the prompt's own schema |
+| `AU22` | The sandbox never showed the `DATA_ENTRY` card | `e3b6bb9` — sandbox emits the live shape; README:186's exact sentence now renders it, month parsed (June → 5) |
+| `AU25` | A persona without a `title` crashed the sandbox | `e3b6bb9` — optional-chained with a fallback; verified no crash |
+| `AC1` | Typed minutes containing "20" recorded as 15 | `a99ffa6` — `parsePavsMinutes` in `clinicalFlags.js`, **70 tests**. `"120 minutes"` → 120; five days × two hours 75 → **600 min/wk** |
+| `AC2` | Word-number answers scored 0 | `a99ffa6` — `"daily"` → 7, `"about an hour"` → 60; an hour every day 0 → **420 min/wk** |
+| `AC15` | `'45–60 mins'` chip scored 65 where the form says 52 | `a99ffa6` — all nine chip combinations now asserted against `ConventionalForm`'s own table |
+
+⚠️ **One regression was written and caught during this work**, and it is recorded because
+the alternative is pretending it did not happen. `dataEntryGuard`'s first draft used
+`Number.isInteger(Number(target_month))`; `Number(null)` is `0`, a valid month, so a `null`
+month was **accepted** and would have been written to January — `AU2` itself, on the one
+field the post-mortem called already correct, re-introduced while fixing it. Its own test
+caught it on the first run. Both the module and the test carry the note.
 
 ---
 
@@ -111,12 +131,12 @@ Closes four findings at once, and it is the number the whole instrument reports.
 
 | # | Id | Item | Owner | Status | Evidence |
 |---|---|---|---|---|---|
-| 0.1 | `AN1` | Delete `STAFF_PROFILES`; verify against `dist/` | me | `OPEN` | — |
-| 0.2 | `AN2` | Source profiles from `members`, grades from `useTeamGrades` | me | `OPEN` | — |
-| 0.3 | `AN4` | Auth + team-membership check on `generateSmartAnalysis` | me | `OPEN` | — |
-| 0.4 | `AU2` | `Number.isFinite` + range on `target_value` | me | `OPEN` | — |
-| 0.5 | `AC1` | Remove the `includes('20')` branch | me | `OPEN` | — |
-| 0.6 | `AC2` | Word-numbers in the PAVS ladder | me | `OPEN` | — |
+| 0.1 | `AN1` | Delete `STAFF_PROFILES`; verify against `dist/` | me | **`OPEN`** | — |
+| 0.2 | `AN2` | Source profiles from `members`, grades from `useTeamGrades` | me | **`OPEN`** | — |
+| 0.3 | `AN4` | Auth + team-membership check on `generateSmartAnalysis` | me | `DONE` | `e3b6bb9` |
+| 0.4 | `AU2` | `Number.isFinite` + range on `target_value` | me | `DONE` | `e3b6bb9` · 58 tests |
+| 0.5 | `AC1` | Remove the `includes('20')` branch | me | `DONE` | `a99ffa6` · 70 tests |
+| 0.6 | `AC2` | Word-numbers in the PAVS ladder | me | `DONE` | `a99ffa6` · 70 tests |
 
 ## P1 — Cost and abuse · `AU14` `AU15` `AN10`
 
@@ -131,7 +151,7 @@ Closes four findings at once, and it is the number the whole instrument reports.
 
 | # | Id | Item | Owner | Status | Evidence |
 |---|---|---|---|---|---|
-| 2.1 | `AU3` | Allowlist `target_field`; add `changedKeys().hasOnly` to the workload rule | me | `OPEN` | — |
+| 2.1 | `AU3` | Allowlist `target_field` | me | `DONE` (client) · `OPEN` (rule) | `e3b6bb9`. ⚠️ The `changedKeys().hasOnly` backstop on the workload rule is **not** done — deliberately, because tonight's list touches no rules. |
 | 2.2 | `AU4` | `assertPeriod` on `workloadPath`, matching `assertYear` | me | `OPEN` | — |
 | 2.3 | `AU6` | Make the System Note, MODE 3 and `memberUidByName` agree on ONE key | me | `OPEN` | — |
 | 2.4 | `AU7` | Update the prompt's schema to the post-migration paths | me | `OPEN` | — |
@@ -212,14 +232,15 @@ These are not blocked on engineering time and several are not code at all.
 In order. `P0` first because those five are reachable today.
 
 ```
-W1   AN1 + AN2 + AN3        ─ delete STAFF_PROFILES; verify against dist/
-W2   AN4                    ─ auth + membership, copied from processFeedPost
-W3   AU2                    ─ Number.isFinite on target_value
-W4   AC1 + AC2 + AC3 + AC5  ─ one shared PAVS parser
-     AU24                   ─ tests, alongside AU2 and AU9
+W1   AN1 + AN2 + AN3        ─ NEXT. delete STAFF_PROFILES; verify against dist/
+W2   AN4                    ─ DONE  e3b6bb9
+W3   AU2                    ─ DONE  e3b6bb9  (+ AU3, AU22, AU25)
+W4   AC1 + AC2              ─ DONE  a99ffa6  (+ AC15, found while fixing AC1)
+     AC3 + AC5              ─ still open: unifying the two pathways on one parser
+     AU24                   ─ partly done: the decision is tested, clampEnergy is not
+     AU1                    ─ owner's, and the ICT survey is the clock
      AU14 + AU15            ─ ceilings on the expensive endpoint
      AN10                   ─ chunk the nudge before it passes 500 users
-     AU1                    ─ owner's, and the ICT survey is the clock
 ```
 
 ## Three things only the logs can answer

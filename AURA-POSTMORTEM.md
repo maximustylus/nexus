@@ -42,7 +42,8 @@ Not one system. Six things, and only four of them involve a model:
 | `demoAura.js` | the sandbox | **none** — deterministic, local | — |
 | `auraEngine.js` + `rosterEngineV2.js` | **the roster generator** | **none — not AI at all** | [`ROSTER_POSTMORTEM.md`](ROSTER_POSTMORTEM.md) |
 
-**51 findings.** 24 `AU` · 14 `AC` · 13 `AN`.
+**53 findings.** 25 `AU` · 15 `AC` · 13 `AN`. (51 at first writing; `AU25` and `AC15`
+were opened the same day by the go-live gate and by fixing `AC1` — see §6.)
 
 ---
 
@@ -434,6 +435,20 @@ through — no block appears. `COMMUNITY_TODO.md` P0.2's evidence lists which ca
 correctly does **not** include this one, so the gap was known at the ledger while the
 module's own comment contradicted it.
 
+### `AU25` — a persona without a title crashes the sandbox · **low**
+
+Found on 2026-08-23 by the go-live gate, not by the post-mortem. `demoAura.js:101`:
+
+```js
+(p) => `Thank you for saying that plainly. Being ${p.title.toLowerCase()} carries a load…`
+```
+
+`respondAsDemoAura`'s fallback substitutes a whole persona only when one is **entirely
+absent**, so a persona object that is present but missing `title` reaches `.toLowerCase()`
+on `undefined` and throws, taking the sandbox chat down. All six `DEMO_PERSONAS` carry a
+title, so it is unreachable through the UI today — which is exactly why it would have
+surfaced first in front of an audience, on a persona somebody added in a hurry.
+
 ### `AU23` — the README describes a codebase that has moved · **medium**
 
 | Claim | Reality |
@@ -537,9 +552,30 @@ reads `"sixty five"` and `"I am 72"` correctly. PAVS never got it.
 | `"daily"` | **0** | not expressible |
 
 ⚠️ **`pathwayParity.test.js` cannot see this, and that is not the test's fault.** The two
-agree **exactly** on all nine chip combinations and diverge **only** on free text, which the
-form cannot accept. There is no input both pathways would take and disagree on. The
-divergence lives precisely in the gap a parity test is structurally unable to reach.
+agree ~~**exactly** on all nine chip combinations~~ on eight of the nine chip combinations
+and diverge **only** on free text, which the form cannot accept. ~~There is no input both
+pathways would take and disagree on.~~ The divergence lives largely in the gap a parity test
+is structurally unable to reach.
+
+> ### ⚠️ Corrected 2026-08-23 — this paragraph was wrong, and the way it was wrong is the point
+>
+> **`AC15`.** The chip `'45–60 mins'` scored **65 in the chat and 52 in the form**, because
+> that string CONTAINS the substring `"60 min"` and the ladder tested
+> `includes('60 min')` first. So there *was* an input both pathways accept and disagree on,
+> and it was a tapped chip in the pathway most people use — a 25% overstatement of session
+> length, recorded to `community_assessments` and shown to the person.
+>
+> The probe behind the word *"verified"* tested **four** day/minute pairs. The sentence
+> claimed **nine**. That is precisely the failure this document set's evidence rule exists to
+> prevent, committed in the document that states the rule — and it is the second instance
+> found this week, after `AU13`.
+>
+> It surfaced only when the fix for `AC1` was asserted against `ConventionalForm`'s midpoint
+> table **written out from the form**, rather than against what the chat was expected to
+> return. An assertion against remembered expectations would have agreed with the bug.
+>
+> The finding above is left as written, per the frozen-snapshot rule. `AC15` below carries
+> the detail.
 
 `pathwayParity.test.js:159` even forbids re-introducing a substring test — scoped correctly
 and narrowly to the falls age gate. `minsStr.includes('20')` sits 300 lines away in the same
@@ -551,6 +587,38 @@ file.
 `MINS_MIDPOINT` is the **form's** table. The chat has no cap; `"500 minutes"` yields 500.
 `calculateRiskScore` reads only `pavsScore` (`:80`) so nothing miscalculates today, but the
 value is written to `community_assessments`.
+
+### `AC15` — a tapped chip scored 25% high, and the parity claim above missed it · **high**
+
+Found on 2026-08-23 while fixing `AC1`. `AuraChat.jsx`'s ladder opened:
+
+```js
+const minsN = minsStr.includes('60+') || minsStr.includes('60 min') ? 65
+            : minsStr.match(/45.?60|45–60/i)                         ? 52
+```
+
+`"45–60 mins"` contains `"60 min"`, so the first branch won:
+
+```
+ORIGINAL chat ladder vs ConventionalForm MINS_MIDPOINT:
+  Less than 20 mins    form=15   chat=15
+  20–30 mins           form=25   chat=25
+  30–45 mins           form=37   chat=37
+  45–60 mins           form=52   chat=65    <-- DISAGREE
+  60+ mins             form=65   chat=65
+```
+
+Not a free-text edge case — **a tapped chip**, in the pathway most people use, overstating
+session length by 25% in the figure written to `community_assessments` and shown on the
+result page.
+
+The tier does not flip for any chip-days × chip-minutes pair (1.5 days is below 150 either
+way; 3.5 and 6 are above either way), which is why nothing downstream looked wrong. The
+recorded number was simply high.
+
+⚠️ **It also falsifies `AC3`'s central claim**, and the correction is recorded there. The
+lesson is narrower than "test more": the assertion has to be written against **the other
+implementation**, not against what you expect this one to do.
 
 ### `AC5` — the parser is unexported, untested, and tested only as a string · **high**
 
@@ -965,6 +1033,7 @@ A post-mortem listing only failures is a misleading document.
 | `AU17` | PDPA control is a README sentence | high | **owner** |
 | `AU24` | `executeDataEntry` and `clampEnergy` have no tests | high | me |
 | `AC3` | Two pathways, two PAVS algorithms; parity test blind to it | high | me |
+| `AC15` | A tapped chip scored 25% high — and falsifies `AC3`'s parity claim | high | me |
 | `AC5` | Parser unexported, untested; suite tests source text | high | me |
 | `AC6` | `concludeTriage` guards the only call that cannot throw | high | me |
 | `AC12` | No live region in the portal; the staff roster has two | high | me |
@@ -993,9 +1062,15 @@ A post-mortem listing only failures is a misleading document.
 | `AC4` | `scoring.js` cap docstring true of one pathway only | low | me |
 | `AC13` | `key={idx}` while `_id` exists | low | me |
 | `AC14` | `TOTAL_STEPS` stale; result wears the Healthier SG badge | low | me |
+| `AU25` | A persona without a title crashes the sandbox | low | me |
 
-**By severity:** 6 critical · 1 high-external · 20 high · 18 medium · 6 low
-**By owner:** 41 mine · 10 the owner's
+**By severity:** 6 critical · 1 high-external · 21 high · 18 medium · 7 low
+**By owner:** 43 mine · 10 the owner's
+
+⚠️ **53, not 51.** `AU25` and `AC15` were opened on 2026-08-23 **after** this document was
+written — `AU25` by the go-live gate walking the README's demo script, `AC15` by fixing
+`AC1` and asserting the result against the other pathway's table. Both are recorded here
+rather than in a separate file, and neither renumbers anything.
 
 ---
 
