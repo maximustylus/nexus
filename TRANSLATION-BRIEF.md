@@ -10,7 +10,7 @@ The portal serves four languages, so each item needs **three** translations:
 | **1** — the two new questions | 9 strings | ✅ **shipped**, machine-translated, **unreviewed** |
 | **2** — in-chat action cards | 49 strings | ⬜ English only |
 | **3** — the notices | 6 blocks | ⬜ English only |
-| **4** — the printed handover slip | 24 strings | ⬜ English only |
+| **4** — the printed handover slip | 24 strings | 🟡 **the 10 flag lines shipped**, bilingual; the other 14 English only |
 
 ## What changed about the position, and why
 
@@ -50,8 +50,8 @@ Anything readable — a table, a spreadsheet, three columns in a message. Keep t
 **IDs**; they are how each string finds its slot. Wiring each one in is a one-line
 change and I will do it.
 
-**Order of value, if you only get some of it done:** Group 2, then Group 4, then
-Group 3.
+**Order of value, if you only get some of it done:** Group 2, then the rest of
+Group 4, then Group 3.
 
 ---
 
@@ -339,11 +339,66 @@ shortened.
 | `slip.footRetention` | Not a referral · no record is held that can be retrieved · the anonymous assessment behind this page is deleted after 24 months. |
 | `ui.printButton` | Print summary |
 
-Plus the nine reported-flag lines (`Chest pain or dizziness on exertion`,
-`Ongoing health condition reported`, `Fall in the past 12 months`, `Fall in the
-past 12 months, and now avoiding some activities`, `Unpaid caregiving strain`,
-`Psychological distress`, `Limited social support`, `Cost or distance is a
-barrier`, `Food insecurity reported`, `Not enrolled with a Healthier SG GP`).
+### ✅ The ten reported-flag lines — SHIPPED, bilingual
+
+Supplied by the owner as a spreadsheet and wired into `src/data/slipFlagLines.js`.
+These are the only strings in Group 4 that are done.
+
+**⚠️ The slip is BILINGUAL rather than translated, and that is a reversal of how
+every other surface in the portal works.** Each line prints English first with the
+person's language beneath it. The reasoning is this file's own note, two sections
+up: *"the reader may be a staff member rather than the resident"*.
+
+- **Translated only** → handed across a counter at an Active Ageing Centre where
+  the working language is English, and the receiving service cannot read the page.
+  The document would be least usable exactly where it has to work, and the person
+  carrying it would have no way to know.
+- **English only** → these lines are assertions *about* the person — *"Psychological
+  distress"*, *"Food insecurity reported"* — printed for a stranger to read. Somebody
+  who cannot read them cannot check them, correct them, or decline to hand the page
+  over. That is a dignity problem before it is a translation one.
+
+English leads so the sheet stays fully readable to counter staff even when the
+second line is a script they do not read.
+
+**⚠️ It costs paper, measured rather than assumed.** In headless Chromium under
+print emulation, A4 with 12mm margins and six services listed:
+
+| flags | 4 | 5 | 6 | 7 | 9 |
+|---|---|---|---|---|---|
+| English only | 1pg | 1pg | 1pg | 1pg | 2pg |
+| bilingual | 1pg | 1pg | **2pg** | 2pg | 2pg |
+
+From six reported flags the slip runs to two sheets, where English-only reached
+eight. Both pages carry real content — this is not the `CP21` defect, which was
+seven *blank* pages — but somebody with six or more flags is the person most likely
+to be handed one, and they now get two sheets. Taken deliberately.
+
+**Two questions back to you, neither of which I can settle:**
+
+1. **Who produced these, and did a native speaker check them?** Not recorded, so
+   `slipFlagLines.js` says provenance is unknown rather than claiming review. If
+   they were reviewed, say so and I will record it; if they came from a model, they
+   sit in the same category as Group 1 and want the same second pair of eyes.
+2. **`fallsAvoiding` in Tamil** — *"...இப்போது சில செயல்பாடுகளைத் **தவிர்க்கிறது**"*.
+   `தவிர்க்கிறது` is the third-person **neuter** ("it avoids"); describing a person
+   in this register I would have expected the honorific `தவிர்க்கிறார்`. The English
+   is a participle with no explicit subject, so the mismatch may be deliberate
+   compression. I am flagging it rather than changing it — **I cannot adjudicate
+   Tamil grammar and should not pretend otherwise.** Every other line reads as a
+   noun phrase and does not raise the question.
+
+### ⬜ Still English only, in this group
+
+`slip.title`, `slip.sub`, `slip.notice`, the six `slip.label.*`, `slip.notProvided`,
+`slip.nothingFlagged`, `slip.bandCaveat`, `slip.servicesHeading`,
+`slip.footDisclaimer`, `slip.footRetention`, `ui.printButton`.
+
+⚠️ **`slip.notice` is the load-bearing one and is deliberately still English.** It is
+the sentence that stops the page being read as a referral, and under the bilingual
+model above the receiving service is its primary reader — so English is where it has
+to be correct first. A translation should be **added beneath** it, exactly like the
+flag lines, not substituted for it.
 
 ---
 

@@ -203,7 +203,7 @@ Decisions taken by the owner, recorded so the reasoning survives:
 | 3e.3 | Caregiver strain its own domain | `DONE` | split in 4 languages from existing wording · routes to `caregiverSupport` |
 | 3e.4 | Falls & function for 60+ | `DONE` | `parseFallsAnswer` · routes ahead of the activity route · "No falls" pinned |
 | 3e.5 | Healthier SG enrolment | `DONE` | `parseHealthierSg` · `null` for "not sure" AND "not asked", never `false` |
-| 3e.6 | Printable handover slip | `DONE` | `HandoverSlip.jsx` + print CSS · 19 tests, most of them about what it does NOT claim. Print output verified in headless Chromium after `CP21`: **one A4 page**, slip at 0,0, 0 stray controls |
+| 3e.6 | Printable handover slip | `DONE` | `HandoverSlip.jsx` + print CSS · **49 tests**, most of them about what it does NOT claim. Print output verified in headless Chromium after `CP21`: **one A4 page**, slip at 0,0, 0 stray controls. ⚠️ Now **bilingual** in the Reported block — English first, the person's language beneath (`CD10` group 4). Re-measured: one page to **five** reported flags, two from six, where English-only reached eight. Both pages carry content; this is not `CP21`'s blank-page defect. |
 
 **Not built, because the consent decision forecloses them:** partner-facing queue,
 closed-loop referral status, re-assessment recall, proxy/assisted mode with an
@@ -450,7 +450,8 @@ larger than one respondent.
 ```
 P0.3  App Check + rate limit                 ─ needs the Firebase console
 P7.7  translate falls + Healthier SG         ─ DONE · needs a native-speaker review
-CD10  groups 2, 3, 4                         ─ owner's call; group 2 is the URGENT tier
+CD10  group 4 flag lines                     ─ DONE, bilingual · provenance + 1 Tamil query open
+CD10  groups 2, 3, rest of 4                 ─ owner's call; group 2 is the URGENT tier
 CD4 / CD11                                   ─ owner's, in parallel, not blocked on me
 P0.5  abort the discarded request
 P3.4  resource freshness
