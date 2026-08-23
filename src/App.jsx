@@ -6,7 +6,7 @@ import { getMessaging, onMessage } from "firebase/messaging";
 
 // FIREBASE
 import { db, auth } from './firebase';
-import { collection, onSnapshot, doc, query, where, orderBy, updateDoc, getDoc } from 'firebase/firestore'; 
+import { collection, onSnapshot, doc, query, where, orderBy, updateDoc, getDoc, setDoc } from 'firebase/firestore'; 
 import { signOut } from 'firebase/auth';
 
 // CHARTS & ICONS
@@ -45,7 +45,7 @@ import { STAFF_LIST, STAFF_IDS, MONTHS, checkAccess, TEAM_DIRECTORY } from './ut
 import AccessGate from './components/AccessGate';
 import LeadRequestsPanel from './components/LeadRequestsPanel';
 import { useTeam } from './context/TeamContext';
-import { accessStateFor, canEnterApp } from './utils/accessPolicy';
+import { accessStateFor, canEnterApp, buildLeadRequest } from './utils/accessPolicy';
 import {
     leadRequestPath,
     userPath,
@@ -599,6 +599,32 @@ export default function App() {
         email={authFacts.email}
         onRetry={() => window.location.reload()}
         onSignOut={() => signOut(auth)}
+        /*
+          THE SANDBOX. The gate above already reads `!isDemo`, so this admits them to
+          the shell without changing who may see real data — the sandbox opens no
+          Firestore listener at all.
+        */
+        onExploreSandbox={toggleDemo}
+        /*
+          THE DECLARATION, WRITTEN CLIENT-SIDE AND THAT IS DELIBERATE. It is a CLAIM,
+          not a grant: `status` is pinned to 'pending' by `buildLeadRequest`, the
+          rules refuse any other value, and only the Admin SDK can approve it. So the
+          worst a person can do here is ask.
+        */
+        onDeclareLead={async (declaration) => {
+          await setDoc(
+            doc(db, ...leadRequestPath(user.uid)),
+            {
+              ...buildLeadRequest({
+                uid: user.uid,
+                email: authFacts.email,
+                displayName: user.displayName || authFacts.email,
+                ...declaration,
+              }),
+              requestedAt: new Date().toISOString(),
+            },
+          );
+        }}
       />
     );
   }

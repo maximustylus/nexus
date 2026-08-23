@@ -319,6 +319,49 @@ not make that number smaller, and the release notes should not imply it does.
 
 ---
 
+## P10 — The two doors out of the holding screen · `T9`–`T12` · 2026-08-23 · **FIXED**
+
+An authenticated user with no team and no pending request lands on `AccessGate`, and
+until now that screen was a dead end with one sentence on it. Two doors were added —
+**explore the sandbox**, and **declare yourself a lead** for somebody who registered
+as staff and only afterwards realised they run a department. The rules already permit
+the second; it was a missing form, not a missing permission.
+
+> **`T9`–`T12` ARE NOT STRESS-TEST FINDINGS.** `T1`–`T8` came from `npm run stress:teams`.
+> These came from auditing what the new sandbox door makes REACHABLE: demo mode had
+> only ever been entered signed-out, or by a member of the legacy ten-person directory,
+> and both of those carry a `teamId`. `isDemo === true` with `teamId === null` was a
+> combination no view had ever been rendered with, and `assertTeamId(null)` throws by
+> design.
+
+| id | what was wrong | evidence | fix |
+|---|---|---|---|
+| `T9` | **`SmartAnalysis` published the sandbox's fabricated report into the real year-end archive.** `handleAnalyze` returns a hardcoded Marvel brief in demo mode — Peter's burnout, Steve's Shield Integration — and `handlePublish` had no matching `isDemo` guard, so PUBLISH wrote it to `teams/{id}/reports/{year}` and overwrote every `projects/{year}/staff/{uid}` document with the demo team's data. It then alerted `SUCCESS`. **This predates the sandbox door and was reachable by any lead who flipped the Live/Demo toggle to show a colleague the tool.** | `src/components/SmartAnalysis.publish.test.jsx` — 4 tests. The live-mode test proves the harness reaches the write, so `not.toHaveBeenCalled()` in the demo test means something. | `if (isDemo)` before the `teamId` check, refusing with the sandbox as the stated reason. Live mode still archives, pinned by its own test. |
+| `T10` | `AuraPulseBot`'s workload write checked `!teamId` **before** `isDemo`, so a sandbox user with no team was told *"No team is selected, so there is nowhere to write this"* — which reads as a fault in their account rather than as the sandbox behaving correctly. | Read; the two guards are four lines apart. | Order swapped. `isDemo` is the reason whenever it is true, so it is the reason that gets named. |
+| `T11` | `FeedsView`'s composer called `processFeedPost({ teamId: null, … })`. The Cloud Function refuses that correctly, but the refusal arrived as the generic *"AURA processing failed"* — blaming the AI for a missing team. | Read + `functions/index.js:542`, the server-side id check. | Client-side guard naming the real cause, and saying the rest of the sandbox still works. |
+| `T12` | No test rendered any view in the `isDemo && !teamId` state. | — | `src/components/sandboxNoTeam.test.jsx` — 9 tests mounting every demo-reachable view with the **real** `teamPaths`, so reaching a builder with a null id is a thrown error rather than a mocked string. |
+
+**What `T12` does and does not catch, measured rather than claimed.** Deleting
+`FeedsView`'s `if (!teamId)` guard fails two of its tests. Deleting
+`StaffLoadEditor`'s does **not** — that fetch loops over `rosteredMembers`, and no
+team means no members, so the loop body never reaches `loadPath` either way. Guards
+written `if (isDemo || !teamId)` are half-exercised for the same reason: `isDemo`
+short-circuits first. Those are pinned by reading, and the suite's header says so
+rather than letting a green tick imply otherwise.
+
+**`RosterView` is not in that suite on purpose.** `RosterView.demo.test.jsx` already
+renders it in exactly this state — it mocks `isDemo: true` and never provides a team,
+so `useTeam()` returns the frozen inert context — and additionally asserts that no
+Firestore call is made at all.
+
+**One thing this sweep found in its own scaffolding, not in the app.** The first
+`useTeam` mock returned a fresh object literal per call and `StaffLoadEditor` spun
+forever: a new `rosteredMembers` array each render is a new effect dependency. The
+real `TeamContext` returns a module-level frozen `INERT` outside a provider and a
+`useMemo`'d value inside one, so neither loops. The mock was wrong, not the component.
+
+---
+
 ## Current queue — *updated 2026-08-17, and this is the live part of the file*
 
 Everything above is the closed P0–P8 remediation. This is what is actually next, ordered. The

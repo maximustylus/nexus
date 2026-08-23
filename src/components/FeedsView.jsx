@@ -157,7 +157,24 @@ const FeedsView = ({ user }) => {
     }, [displayPosts]);
 
     const handlePostSubmit = async () => {
-        if (!draftPost.trim() && !selectedImage) return; 
+        if (!draftPost.trim() && !selectedImage) return;
+
+        /**
+         * NO TEAM, NO WALL TO POST TO — SAID HERE RATHER THAN BY A FAILED CALL.
+         *
+         * The feed a post lands in IS a team (`teams/{teamId}/feed`), including in
+         * demo mode: sandbox posts are real documents tagged `isDemo: true` and
+         * filtered back out of the live view. So a signed-in user with no team yet
+         * — the case the holding screen's sandbox door now creates — has nowhere
+         * for this to go. `processFeedPost` refuses a null `teamId` server-side and
+         * that refusal is correct, but it arrived here as the generic "AURA
+         * processing failed", which blames the AI for a missing team.
+         */
+        if (!teamId) {
+            setPostError('You are not in a team yet, so there is no wall to post to. Everything else in the sandbox works — this one needs a team.');
+            return;
+        }
+
         setIsPosting(true); setPostError(null);
         try {
             let uploadedImageUrl = null;

@@ -720,11 +720,18 @@ export default function AuraPulseBot({ isOpen, onClose, onOpen: _onOpen, user })
              *    invents resolves to nothing and is refused, rather than creating a
              *    document for a colleague who does not exist.
              */
-            if (!teamId) {
-                throw new Error("No team is selected, so there is nowhere to write this.");
-            }
+            // ORDER MATTERS, AND IT USED TO BE THE WRONG WAY ROUND. The sandbox is
+            // now reachable by a signed-in user who has NO TEAM yet — the holding
+            // screen offers it while they wait to be added. Checking `teamId` first
+            // told that person "No team is selected, so there is nowhere to write
+            // this", which reads as a fault in their account rather than as the
+            // sandbox behaving correctly. `isDemo` is the reason for the refusal
+            // whenever it is true, so it is the reason that gets named.
             if (isDemo) {
                 throw new Error("Sandbox mode does not write to the database.");
+            }
+            if (!teamId) {
+                throw new Error("No team is selected, so there is nowhere to write this.");
             }
 
             const TARGET_LOADS = 'staff_loads';

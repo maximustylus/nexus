@@ -124,6 +124,29 @@ const SmartAnalysis = ({ teamData, staffLoads, onClose }) => {
 
     const handlePublish = async () => {
         if (!result) return;
+
+        /**
+         * ⚠️ THE SANDBOX MUST NOT PUBLISH, AND THIS GUARD IS WHAT WAS MISSING.
+         *
+         * `handleAnalyze` above returns a HARDCODED Marvel report in demo mode —
+         * Peter's burnout, Steve's Shield Integration — and then this function
+         * wrote it straight into `teams/{teamId}/reports/{year}` and overwrote
+         * every `projects/{year}/staff/{uid}` document with the demo team's data.
+         * Every other write in this app is fenced by `if (isDemo)`; this one was
+         * not, so a lead who flipped the demo toggle to show a colleague the tool
+         * and pressed ARCHIVE replaced their department's real year-end report
+         * with fiction. It reported SUCCESS and nothing on screen said otherwise.
+         *
+         * Checked BEFORE `teamId`, because the sandbox is the reason to refuse and
+         * "No team selected" would be the wrong sentence for a demo user who has
+         * one. It is also the right sentence for a demo user who has none — the
+         * signed-in-with-no-team case the holding screen now admits to the sandbox.
+         */
+        if (isDemo) {
+            alert('SANDBOX MODE: nothing was archived. The demo report is fabricated sample data, so publishing it would overwrite the real year-end report. Switch to Live to archive.');
+            return;
+        }
+
         setLoading(true);
         try {
             if (!teamId) throw new Error('No team selected.');
