@@ -38,11 +38,32 @@ Group 1 is different in kind, and the difference is not "it is less important":
 - The risk is **carried by a test, not by confidence**. See the Group 1 section: the
   danger turned out not to be the prose at all.
 
-**What is still owed, and it is a real debt rather than a formality:** a native
-speaker of each language should read the back-translations in Group 1 and confirm
-that `falls.chip1` cannot be read as *"I fell"* and that `hsg.chip3` cannot be read
-as *"no"*. Those two are the ones where a misreading changes a clinical value
-rather than a sentence.
+## The review debt
+
+⚠️ **Everything shipped so far is machine-translated and unreviewed.** Two models
+were involved and that is *not* a second opinion — neither can read back what it
+wrote, so this is one debt covering both sets:
+
+| Set | Strings | Translator |
+|---|---|---|
+| Group 1 — falls & Healthier SG chips and prompts | 9 × 3 | Claude |
+| Group 4 — the ten reported-flag lines | 10 × 3 | Google Gemini 3.1 Pro |
+
+A native speaker of each language should read the back-translations and confirm
+**four** things. The rest is prose that can be corrected later; these change a value
+or a clinical meaning:
+
+1. `falls.chip1` cannot be read as *"I fell"* — it is the safest answer and it
+   shares a stem with the riskiest one in every language.
+2. `hsg.chip3` cannot be read as *"no"* — *"not sure"* must stay `null`, because
+   `false` tells the person they are not enrolled with a Healthier SG GP.
+3. `falls.chip4` conveys **avoiding activity out of fear**, not merely doing less.
+4. On the printed slip, that each flag line reads as something a person would accept
+   being said about them to a stranger. They are printed for a third party, so the
+   register matters as much as the meaning.
+
+**This is a ten-minute job for somebody who reads the language, and it is the only
+thing between the current state and being able to say the portal is translated.**
 
 ## How to return the rest
 
@@ -374,19 +395,16 @@ eight. Both pages carry real content — this is not the `CP21` defect, which wa
 seven *blank* pages — but somebody with six or more flags is the person most likely
 to be handed one, and they now get two sheets. Taken deliberately.
 
-**Two questions back to you, neither of which I can settle:**
+**Provenance: Google Gemini 3.1 Pro**, via the owner. Machine translation, no
+native-speaker review — the same state as Group 1, which is mine. See *The review
+debt* below.
 
-1. **Who produced these, and did a native speaker check them?** Not recorded, so
-   `slipFlagLines.js` says provenance is unknown rather than claiming review. If
-   they were reviewed, say so and I will record it; if they came from a model, they
-   sit in the same category as Group 1 and want the same second pair of eyes.
-2. **`fallsAvoiding` in Tamil** — *"...இப்போது சில செயல்பாடுகளைத் **தவிர்க்கிறது**"*.
-   `தவிர்க்கிறது` is the third-person **neuter** ("it avoids"); describing a person
-   in this register I would have expected the honorific `தவிர்க்கிறார்`. The English
-   is a participle with no explicit subject, so the mismatch may be deliberate
-   compression. I am flagging it rather than changing it — **I cannot adjudicate
-   Tamil grammar and should not pretend otherwise.** Every other line reads as a
-   noun phrase and does not raise the question.
+**One query, raised and settled — leave it as it is.** `fallsAvoiding.ta` ends
+*"…செயல்பாடுகளைத் **தவிர்க்கிறது**"*: the third-person **neuter** verb ("it avoids")
+where the honorific `தவிர்க்கிறார்` would be the expected form for describing a
+person. The English is a participle with no explicit subject, so the compression may
+be deliberate. **Owner's decision: kept.** Recorded here and in `slipFlagLines.js`
+so it is not re-discovered and "fixed" by somebody who also cannot read Tamil.
 
 ### ⬜ Still English only, in this group
 

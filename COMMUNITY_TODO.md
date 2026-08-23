@@ -52,8 +52,13 @@ never measured activity — live in it.
 | `DONE`, evidenced | 14 | `CP1` `CP2` `CP3` `CP5` `CP6` `CP7` `CP9` `CP12` `CP13` `CP14` `CP15` `CP17` `CP18` `CP19` |
 | `OPEN`, mine | 2 | `CP8` `CP16` |
 | **`OWNER`, console only** | 1 | `CP7`'s last two steps — see *Turning App Check on*, below. The code is shipped and inert. |
-| `OPEN`, translation | 1 | `CP10`/`CD10` groups 2–4 — group 1 is shipped, see `7.7` |
-| `OPEN`, **owner's decision** | 4 | `CD4` `CD10` `CD11` `CD12` (design) |
+| `OPEN`, translation | 1 | `CP10`/`CD10` groups 2, 3 and the rest of 4 — group 1 and the slip's flag lines are shipped, see `7.7` |
+| `OPEN`, **owner's decision** | 5 | `CD4` `CD10` `CD11` `CD12` (design) `CD13` (translation review) |
+
+**`CD13` opened 2026-08-23** — a native-speaker review of the 19 strings already
+shipped in ms/zh/ta. Everything translated so far is machine output (group 1 by
+Claude, the slip's flag lines by Google Gemini 3.1 Pro) and no person who reads
+those languages has checked any of it. See `7.7`.
 
 **`CP13` is fixed.** The portal wrote a health profile to a database while showing
 the person no disclaimer and no privacy notice on screen — both rendered off-screen
@@ -416,11 +421,28 @@ were found by the test rather than by reading:**
   first. A bare token would have turned *"the portal does not know"* into *"this
   person is not enrolled"*, for every Malay speaker who was unsure, silently.
 
-⚠️ **STILL OWED, AND IT IS A REAL DEBT.** The ms/zh/ta strings are machine
-translations that **no native speaker has reviewed**. `TRANSLATION-BRIEF.md` carries
-a back-translation of every one so a reviewer can check them in minutes. The two
-that change a clinical value if misread are `falls.chip1` (must not read as *"I
-fell"*) and `hsg.chip3` (must not read as *"no"*).
+⚠️ **STILL OWED, AND IT IS A REAL DEBT — `CD13`.** Everything translated so far is
+machine-translated and **reviewed by no native speaker**. Two models were involved
+and that is not a second opinion, since neither can read back what it wrote:
+
+| Set | Strings | Translator |
+|---|---|---|
+| Group 1 — falls & Healthier SG | 9 × 3 | Claude |
+| Group 4 — the ten slip flag lines | 10 × 3 | Google Gemini 3.1 Pro |
+
+`TRANSLATION-BRIEF.md` carries a back-translation of every string and names the four
+a reviewer must check, because they change a value rather than a sentence:
+`falls.chip1` must not read as *"I fell"*; `hsg.chip3` must not read as *"no"*;
+`falls.chip4` must convey avoidance **out of fear**; and each slip flag line must
+read as something a person would accept being said about them to a stranger.
+
+**Ten minutes from somebody who reads the language, and it is the only thing between
+the current state and being able to call the portal translated.**
+
+⚠️ One Tamil query was raised and **settled by the owner: left as it is.**
+`fallsAvoiding.ta` uses the third-person neuter verb where the honorific would be
+expected. Recorded in `slipFlagLines.js` so it is not re-discovered and "fixed" by
+somebody who also cannot read Tamil.
 
 ⚠️ **AND GROUPS 2, 3 AND 4 ARE STILL ENGLISH ONLY, DELIBERATELY.** Group 2 is the
 in-chat action cards, including the URGENT tier — the text somebody reads
@@ -450,7 +472,7 @@ larger than one respondent.
 ```
 P0.3  App Check + rate limit                 ─ needs the Firebase console
 P7.7  translate falls + Healthier SG         ─ DONE · needs a native-speaker review
-CD10  group 4 flag lines                     ─ DONE, bilingual · provenance + 1 Tamil query open
+CD13  native-speaker review of 19 strings    ─ owner's; the only thing left on group 1 + 4
 CD10  groups 2, 3, rest of 4                 ─ owner's call; group 2 is the URGENT tier
 CD4 / CD11                                   ─ owner's, in parallel, not blocked on me
 P0.5  abort the discarded request

@@ -34,9 +34,14 @@
  * ── PROVENANCE ───────────────────────────────────────────────────────────────
  *
  * ⚠️ THE ms/zh/ta STRINGS ARE MACHINE TRANSLATIONS AND HAVE NOT BEEN REVIEWED BY A
- *    NATIVE SPEAKER. That is recorded in `TRANSLATION-BRIEF.md` with a
- *    back-translation of each one, and it is the owner's decision to ship them: the
- *    alternative on the table was continuing to ask nobody, which is what the
+ *    NATIVE SPEAKER. These ones are mine (Claude); the handover slip's flag lines
+ *    in `slipFlagLines.js` are Gemini 3.1 Pro's. Two models is not a second
+ *    opinion — neither of us can read back what we wrote — so the review debt is
+ *    ONE item covering both sets, tracked in `COMMUNITY_TODO.md`.
+ *
+ *    `TRANSLATION-BRIEF.md` carries a back-translation of each string so a reviewer
+ *    can check them in minutes. Shipping them was the owner's decision, and the
+ *    alternative on the table was continuing to ask nobody — which is what the
  *    portal did for its whole life. These are QUESTIONS rather than clinical
  *    instructions, and a question read slightly oddly is recoverable in a way that
  *    a mistranslated "call 995" is not.

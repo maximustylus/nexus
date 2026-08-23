@@ -42,12 +42,27 @@
  * PROVENANCE
  * ------------------------------------------------------------------------------
  *
- * ⚠️ THE ms/zh/ta STRINGS WERE SUPPLIED BY THE OWNER, AND WHETHER A NATIVE SPEAKER
- *    REVIEWED THEM IS NOT RECORDED HERE BECAUSE IT IS NOT KNOWN. That question is
- *    open in `TRANSLATION-BRIEF.md` along with one specific query on `fallsAvoiding`
- *    in Tamil. Do not upgrade this note to "reviewed" without an answer — an
- *    unverified provenance recorded as verified is worse than one recorded as
- *    unknown, because the next person cannot tell it was ever a question.
+ * ⚠️ THE ms/zh/ta STRINGS ARE MACHINE TRANSLATIONS — Google Gemini 3.1 Pro, via the
+ *    owner — AND NO NATIVE SPEAKER HAS REVIEWED THEM. Recorded here because the
+ *    next person to read this file cannot otherwise tell, and because "supplied by
+ *    the owner" reads as human review when it is not.
+ *
+ *    The screening chips in `screeningChips.js` are in the same state by a
+ *    different hand: those are mine. Two models rather than one is not a second
+ *    opinion — neither of us can read back what we wrote — so the review debt is
+ *    ONE item covering both sets, not two. It is tracked in `COMMUNITY_TODO.md`.
+ *
+ *    Do not upgrade this note to "reviewed" without a person. An unverified
+ *    provenance recorded as verified is worse than one recorded as machine, because
+ *    it removes the reason anybody would look again.
+ *
+ * ⚠️ ONE KNOWN QUERY, LEFT AS IT IS BY THE OWNER'S DECISION. `fallsAvoiding.ta`
+ *    ends `…தவிர்க்கிறது` — the third-person NEUTER verb ("it avoids") where the
+ *    honorific `தவிர்க்கிறார்` would be the expected form for describing a person.
+ *    The English is a participle with no explicit subject, so the compression may
+ *    be deliberate. Raised, considered, and kept. Recorded so it is not
+ *    re-discovered and "fixed" by somebody who also cannot read Tamil — which
+ *    includes whoever wrote this line.
  *
  * ⚠️ `CommunityInsightsPanel.jsx` HAS A SIMILAR-LOOKING LABEL MAP AND IS NOT THIS.
  *    It labels POPULATION RATES for staff — "Below 150 min/week", "1–2 room HDB" —
