@@ -13,8 +13,7 @@ import {
     Sun, Moon, ArrowRight, ShieldCheck, 
     ChevronLeft, AlertCircle, ShieldAlert, 
     User, Lock, Mail, Zap, KeyRound, CheckCircle2,
-    UserCircle, Stethoscope, PlaySquare, Globe,
-    Sparkles, Building2 
+    UserCircle, Stethoscope, PlaySquare, Globe, 
 } from 'lucide-react';
 import { doc, setDoc } from 'firebase/firestore';
 import { db } from '../firebase';
@@ -29,6 +28,7 @@ import {
     isLeadRole,
     ROLE_OPTIONS,
     ROLE_STAFF,
+    ROLE_LEAD,
 } from '../utils/accessPolicy';
 import { leadRequestPath } from '../utils/teamPaths';
 import { MOH_PROFESSION_OPTIONS } from '../data/mockData';
@@ -588,11 +588,44 @@ const WelcomeScreen = (props) => {
                                                 {authView === 'LOGIN' ? "New Practitioner? Request Access" : "Have credentials? Sign in"}
                                             </button>
                                             
-                                            <button 
-                                                onClick={() => { setAuthView('ORG_REGISTER'); setError(''); setMessage(''); }} 
+                                            {/*
+                                              * ⚠️ THIS BUTTON USED TO LEAD TO A WALL, AND IT WAS
+                                              *    AIMED AT THE ONE PERSON WHO MUST NOT HIT ONE.
+                                              *
+                                              *    It said "Enterprise / Scale Unit" and opened a
+                                              *    panel whose only button was DISABLED and read
+                                              *    "Registration Restricted — Contact Admin for
+                                              *    whitelisting". That was true when written:
+                                              *    multi-tenancy did not exist, so a department
+                                              *    could not register itself.
+                                              *
+                                              *    It has been false since v2.0.0. A department head
+                                              *    registers, chooses "Team / department / service
+                                              *    lead", declares their department, and an owner
+                                              *    approves it — after which they run it themselves.
+                                              *
+                                              *    The damage was the ROUTING. The two choices on this
+                                              *    screen read as "for individual staff" and "for
+                                              *    setting up a department". An allied health manager
+                                              *    is the second, clicks the second, and meets a
+                                              *    permanently disabled button — while the path they
+                                              *    want sits behind the first, one dropdown down.
+                                              *
+                                              *    Kept rather than deleted, because the signpost is
+                                              *    well aimed. It now points at the working path and
+                                              *    says so in the words a department head uses:
+                                              *    nobody thinks of themselves as a scale unit.
+                                              */}
+                                            <button
+                                                onClick={() => {
+                                                    setAuthView('REGISTER');
+                                                    setRole(ROLE_LEAD);
+                                                    setError('');
+                                                    setMessage('');
+                                                }}
                                                 className="text-[10px] font-black text-emerald-600 dark:text-emerald-500 hover:text-emerald-700 dark:hover:text-emerald-400 uppercase tracking-widest transition-colors flex items-center justify-center gap-2 w-full"
                                             >
-                                                <Globe size={12} /> Enterprise / Scale Unit
+                                                <Globe size={12} /> I run a department — set it up
                                             </button>
                                         </div>
                                     </>
@@ -649,46 +682,6 @@ const WelcomeScreen = (props) => {
                                     </>
                                 )}
 
-                                {/* SCALE UNIT / ORG REGISTER FORM */}
-                                {authView === 'ORG_REGISTER' && (
-                                    <div className="w-full max-w-sm mx-auto animate-in slide-in-from-right duration-500 fade-in text-center md:text-left">
-                                        <button onClick={() => setAuthView('LOGIN')} className="mb-10 text-slate-400 hover:text-indigo-500 flex items-center gap-2 text-[10px] font-black uppercase tracking-widest transition-colors group">
-                                            <ChevronLeft size={14} className="group-hover:-translate-x-1 transition-transform"/> Back
-                                        </button>
-                                        
-                                        <div className="relative w-16 h-16 bg-emerald-500/10 rounded-2xl flex items-center justify-center mx-auto md:mx-0 mb-6 border border-emerald-500/20 ring-4 ring-emerald-500/5">
-                                            <Globe className="text-emerald-500 animate-spin-slow" size={32}/>
-                                            <Sparkles className="absolute -top-2 -right-2 text-amber-400 fill-amber-400" size={16} />
-                                        </div>
-
-                                        <h2 className="text-2xl font-black text-slate-900 dark:text-white uppercase mb-3 tracking-tight">Enterprise Scaling</h2>
-                                        <p className="text-slate-500 text-xs font-medium mb-10 leading-relaxed pr-2">
-                                            NEXUS Multi-Tenant architecture enables isolated instances for specific departments.
-                                        </p>
-
-                                        <div className="grid grid-cols-1 gap-3 mb-8 text-left">
-                                            <div className="p-4 bg-white/50 dark:bg-slate-900/50 rounded-xl border border-slate-200 dark:border-slate-800 flex gap-4 group hover:border-indigo-500/30 transition-colors">
-                                                <div className="bg-indigo-500/10 p-2 rounded-lg h-fit"><Building2 className="text-indigo-500" size={18} /></div>
-                                                <div>
-                                                    <h4 className="text-[10px] font-black text-slate-900 dark:text-white uppercase mb-1">Unit Branding</h4>
-                                                    <p className="text-[9px] text-slate-500">Service-specific AURA logic & logos.</p>
-                                                </div>
-                                            </div>
-                                            <div className="p-4 bg-white/50 dark:bg-slate-900/50 rounded-xl border border-slate-200 dark:border-slate-800 flex gap-4 group hover:border-purple-500/30 transition-colors">
-                                                <div className="bg-purple-500/10 p-2 rounded-lg h-fit"><ShieldCheck className="text-purple-500" size={18} /></div>
-                                                <div>
-                                                    <h4 className="text-[10px] font-black text-slate-900 dark:text-white uppercase mb-1">Data Sharding</h4>
-                                                    <p className="text-[9px] text-slate-500">Isolated Firestore clusters.</p>
-                                                </div>
-                                            </div>
-                                        </div>
-
-                                        <button disabled className="w-full py-4 bg-slate-100 dark:bg-slate-800 text-slate-400 font-bold rounded-xl cursor-not-allowed uppercase text-[10px] tracking-[0.2em] border border-slate-200 dark:border-slate-700">
-                                            Registration Restricted
-                                        </button>
-                                        <p className="mt-4 text-[9px] text-slate-400 font-bold uppercase text-center md:text-left">Contact Admin for whitelisting.</p>
-                                    </div>
-                                )}
                             </div>
                         )}
 
