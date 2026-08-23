@@ -16,6 +16,7 @@ import {
   isSixtyPlus, parseAgeBand,
   matchesFemale, matchesMale,
   isNoPreviousId, parseFallsAnswer, parseHealthierSg,
+  parsePavsDays, parsePavsMinutes,
 } from '../utils/clinicalFlags';
 import { readLanguage, applyDocumentLanguage } from '../utils/language';
 import { getSessionId, saveProgress, loadProgress, clearProgress } from '../utils/assessmentSession';
@@ -645,18 +646,27 @@ const parseClinicalData = (raw) => {
   const daysStr  = (raw.pavs_days || '').toLowerCase();
   const minsStr  = (raw.pavs_mins  || '').toLowerCase();
 
-  const daysN = daysStr.includes('0 day') || daysStr === '0' ? 0
-              : daysStr.match(/5.?7|5\+|every day/i)         ? 6
-              : daysStr.match(/3.?4/i)                        ? 3.5
-              : daysStr.match(/1.?2/i)                        ? 1.5
-              : parseInt((daysStr.match(/\d+/) || ['0'])[0], 10);
-
-  const minsN = minsStr.includes('60+') || minsStr.includes('60 min') ? 65
-              : minsStr.match(/45.?60|45–60/i)                         ? 52
-              : minsStr.match(/30.?45|30–45/i)                         ? 37
-              : minsStr.match(/20.?30|20–30/i)                         ? 25
-              : minsStr.includes('less') || minsStr.includes('20')     ? 15
-              : parseInt((minsStr.match(/\d+/) || ['0'])[0], 10);
+  /*
+   * ⚠️ THE LADDER MOVED TO `clinicalFlags.js` AND IS NOW TESTED — `AC1` `AC2` `AC15`.
+   *
+   * It lived here, inside a module-level `const` that is not exported, so it could
+   * not be unit-tested without a React tree. `COMMUNITY_TODO.md` P4.3 has had
+   * "`parseClinicalData` has no tests" OPEN for weeks, and three defects sat in
+   * these eleven lines the whole time:
+   *
+   *   AC1   `includes('20')` ate every three-digit answer containing "20", so a
+   *         typed "120 minutes" scored 15 and a five-day two-hour exerciser was
+   *         recorded at 75 min/wk and routed to a BEGINNER programme.
+   *   AC2   the digit fallback meant "daily" scored 0 days and "about an hour"
+   *         scored 0 minutes — CP1's defect, one layer upstream.
+   *   AC15  `includes('60 min')` was tested FIRST, and "45–60 mins" contains it,
+   *         so that tapped chip scored 65 where the form's table says 52.
+   *
+   * The parsers are pure, exported and asserted against `ConventionalForm`'s own
+   * midpoint tables, so the two pathways cannot drift while they remain separate.
+   */
+  const daysN = parsePavsDays(daysStr);
+  const minsN = parsePavsMinutes(minsStr);
 
   const pavsScore    = Math.round(daysN * minsN); 
   const pavsDays     = daysN;
