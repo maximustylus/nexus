@@ -36,6 +36,7 @@ One page, because reconstructing this from three files is what prompted it.
 | **`CP`**n | defect | **C**ommunity **P**ortal defect. Numbers track the community post-mortem's `§3.x` one-for-one, so `CP9` is `§3.9` | `COMMUNITY_TODO.md` |
 | **`CD`**n | decision | **C**ommunity **D**ecision — the owner's | `COMMUNITY_TODO.md` |
 | **`T`**n | defect | Multi-**T**eam rebuild defect, opened by the pre-merge stress test | `ROSTER_TODO.md` §P9 |
+| **`AN`**n | defect | **AN**alytics defect — the derived-insight layer: the year-end analysis, the population rollup, the coverage watcher, the nudge, the PDPA guard. Opened 2026-08-23 | `POSTMORTEM-AURA-INTELLIGENCE.md` |
 | **`AC`**n | defect | **A**URA **C**hat defect — the public conversational screening (`AuraChat.jsx`) and the parser behind it. Opened 2026-08-23. Distinct from `CP`n, which covers the portal around it; `AC` is the chat component itself | `POSTMORTEM-AURA-CHAT.md` |
 | **`AU`**n | defect | **AU**RA defect — the AI surfaces and what they are trusted to write. Opened 2026-08-23. **`AU`, not `AI`**: `A` already means three things in this set and a fourth reading of the same letter is exactly the failure the rules below exist to prevent | `POSTMORTEM-AURA.md` |
 
