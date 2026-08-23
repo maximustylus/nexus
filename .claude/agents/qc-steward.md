@@ -78,13 +78,25 @@ Given a proposed fix, answer these and refuse to hand-wave:
 4. **Is it demo-only or shared with LIVE clinical data?** `isDemo` branches share
    most code. A change inside a shared path needs live-mode reasoning even if the
    report came from the sandbox. Live mode writes the team's real duty roster.
-5. **Does it cross the client/Firestore trust boundary?** `firestore.rules` **exists
-   and is tracked, but nothing deploys it** — `firebase.json` declares only `hosting`
-   and `functions`, so authorization still lives only in the owner's console,
-   unversioned (decision **Q6**). The master-roster rewrite executes in the *accepting
-   user's browser*. **Do not read the presence of the file as a guard.** Any change to who may write
-   `system_data/roster_2026` or `shift_swaps` cannot be verified from source —
-   say so explicitly rather than assuming it is guarded.
+5. **Does it cross the client/Firestore trust boundary?** `firestore.rules` **is
+   deployed on every merge to `main`** — `firebase.json` declares `firestore` with
+   both `rules` and `indexes`, and `.github/workflows/deploy.yml` runs
+   `deploy --only functions,firestore:rules,firestore:indexes`. Decision **Q6** is
+   closed. Authorization is membership-as-data:
+   `exists(/databases/$(database)/documents/teams/$(teamId)/members/$(uid))`.
+
+   ⚠️ **THIS PARAGRAPH SAID THE OPPOSITE UNTIL 2026-08-23**, and it was correct when
+   written: the rules file existed, nothing deployed it, and authorization lived only
+   in the owner's console. An agent instruction that keeps saying that after it stops
+   being true is worse than no instruction — it hands a reviewer a false model of the
+   exact boundary it exists to protect. Re-verify against `firebase.json` and the
+   workflow rather than trusting this sentence.
+
+   **What is still true:** the master-roster rewrite executes in the *accepting user's
+   browser*, and a source read alone cannot confirm what the DEPLOYED rules say. The
+   check that can is `scripts/firestore-rules-verify.mjs` against the emulator —
+   119 assertions, and it compiles the real file, so it also catches rules that would
+   fail the deploy.
 6. **Can it be verified before deploy?** Name the check. If the behaviour is
    Firestore-live-only (onSnapshot delivery, security rules, push notifications,
    multi-user swap round-trips), say so and mark it **LIVE-VERIFY PENDING** — do
@@ -205,4 +217,4 @@ top; never touch the finding.
 `src/utils/rosterWizard.js` · `ROSTER_QC_AUDIT.md` ·
 `ROSTER_QC_AUDIT_FOUNDATIONS.md` · `ROSTER_QC_AUDIT_PRIMITIVES.md` ·
 `ROSTER_QC_AUDIT_SURFACES.md` (your own back catalogue) · `src/utils/index.js`
-(`TEAM_DIRECTORY`, the other source of truth for staff names).
+(`TEAM_DIRECTORY` — since deleted; staff names now come from `teams/{id}/members`).
