@@ -2,10 +2,11 @@
 
 Companion to [POSTMORTEM-COMMUNITY.md](POSTMORTEM-COMMUNITY.md), which carries the
 evidence for every row below. AURA — the AI behind the chat pathway — has its own
-post-mortem in [POSTMORTEM-AURA.md](POSTMORTEM-AURA.md) (`AU`n), which is where
-`CP12`'s `Math.random` evidence string is corrected. The chat pathway component
-itself — and the PAVS parser inside it, which `P4.3` has had `OPEN` for weeks — is
-in [POSTMORTEM-AURA-CHAT.md](POSTMORTEM-AURA-CHAT.md) (`AC`n). This file is the plan; the post-mortem is the finding.
+post-mortem in [AURA-POSTMORTEM.md](AURA-POSTMORTEM.md) (`AU`n / `AC`n / `AN`n), with
+its plan in [AURA-TODO.md](AURA-TODO.md). Three things there bear directly on this
+ledger: `AU13` corrects `CP12`'s `Math.random` evidence string, which is now false as
+written; `AC1`/`AC2` are the PAVS parser defects `P4.3` has had `OPEN` for weeks; and
+`AN13` finds that feed **comments** bypass the PDPA guard that posts are fenced by. This file is the plan; the post-mortem is the finding.
 
 **Scope: the `/individuals/*` surface and nothing else.** Five routes, the two
 pathways that feed them, and the Cloud Function behind the chat. The roster side has
