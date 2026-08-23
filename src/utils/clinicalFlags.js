@@ -301,9 +301,48 @@ export const matchesMale = buildMatcher(['male', 'lelaki', '男', 'ஆண்']);
  * at higher risk than somebody who fell once and carried on, and the intervention
  * is different.
  */
-const matchesNoFalls = buildMatcher(['no falls', 'none', 'no']);
-const matchesTwoOrMore = buildMatcher(['two or more', 'two', 'three', 'more than one', '2+']);
-const matchesAvoidance = buildMatcher(['avoid', 'afraid', 'scared', 'stopped']);
+/*
+ * ⚠️ THESE TERM LISTS ARE COUPLED TO THE CHIP TEXT IN ALL FOUR LANGUAGES, AND
+ *    TRANSLATING THE CHIPS WITHOUT THEM IS WORSE THAN LEAVING THEM IN ENGLISH.
+ *
+ *    The falls chips were English-only, so `chatSteps.js` skipped the question for
+ *    ms/zh/ta and the flag stayed unknown — a missing data point. Translating the
+ *    chips makes the question appear; if these lists had stayed English, "Tiada
+ *    jatuh" would have failed `matchesNoFalls` and fallen through to `falls = 1`.
+ *    EVERY Malay, Chinese and Tamil speaker who had never fallen would have been
+ *    recorded as having fallen, and the handover slip would have printed it to a
+ *    community centre as fact. Missing data became WRONG data — the same trade the
+ *    step-skip rule exists to refuse.
+ *
+ *    `clinicalFlags.i18n.test.js` asserts chip-for-chip parity: every chip in every
+ *    language must parse identically to the English chip at the same index. Add a
+ *    chip in one language without its token and that test fails.
+ *
+ * ⚠️ AND ONE TAMIL PHRASE HAD TO CHANGE FOR THE PARSER, NOT FOR THE TRANSLATION.
+ *    "two or more" reads naturally as "இரண்டு அல்லது அதற்கு மேற்பட்ட" — but
+ *    அல்லது ("or") BEGINS with அல்ல, which is a Tamil negator, and Tamil negation
+ *    is postfix, so `isNegated` read the adjacent அல்ல and suppressed the match.
+ *    "இரண்டு முறை அல்லது அதிகமாக" puts முறை between them and means the same. The
+ *    parity test is what surfaced it.
+ */
+const matchesNoFalls = buildMatcher([
+    'no falls', 'none', 'no',
+    'tiada',                    // ms · "Tiada jatuh"
+    '没有跌倒',                  // zh · and NOT bare 没有, which is a general negator
+    'விழுந்ததில்லை',            // ta · "have not fallen", one word
+]);
+const matchesTwoOrMore = buildMatcher([
+    'two or more', 'two', 'three', 'more than one', '2+',
+    'dua',                      // ms · "Jatuh dua kali atau lebih"
+    '两次',                      // zh · "跌倒两次或以上"
+    'இரண்டு',                   // ta · "இரண்டு முறை அல்லது அதிகமாக"
+]);
+const matchesAvoidance = buildMatcher([
+    'avoid', 'afraid', 'scared', 'stopped',
+    'mengelak',                 // ms
+    '避免',                      // zh
+    'தவிர்க்கிறேன்',            // ta
+]);
 
 /**
  * @returns {{falls: 0|1|2, avoidsActivity: boolean, fallsRisk: boolean, asked: boolean}}
@@ -328,8 +367,30 @@ const parseFallsAnswer = (answer) => {
  * Healthier SG enrolment. `null` for "not sure" AND for not asked — both mean the
  * portal does not know, and neither may be read as "not enrolled".
  */
-const matchesEnrolledYes = buildMatcher(['yes', 'enrolled', 'i am enrolled']);
-const matchesEnrolledNo = buildMatcher(['no', 'not enrolled']);
+/*
+ * ⚠️ THE "NOT SURE" CHIP IS WHY THE NON-ENGLISH TOKENS ARE PHRASES, NOT WORDS.
+ *
+ *    The obvious Malay token for "no" is `tidak` — and "Saya tidak pasti" ("I am
+ *    not sure") contains it. Since `matchesEnrolledNo` is tested FIRST, a bare
+ *    `tidak` would have returned `false` for somebody who said they did not know,
+ *    turning "the portal does not know" into "this person is not enrolled with a
+ *    Healthier SG GP". That distinction is the entire point of `CP26`'s `null`,
+ *    and it decides which programmes the person is told they can be referred to.
+ *
+ *    So each language matches the ENROLMENT VERB in its negative form —
+ *    `tidak berdaftar`, `没有登记`, `செய்யவில்லை` — which the "not sure" chip in
+ *    that language does not contain. Tamil is the closest call: "எனக்குத்
+ *    தெரியவில்லை" and "பதிவு செய்யவில்லை" share the -வில்லை ending and differ in
+ *    the verb, which is exactly what is matched.
+ */
+const matchesEnrolledYes = buildMatcher([
+    'yes', 'enrolled', 'i am enrolled',
+    'berdaftar', '已登记', 'பதிவு செய்துள்ளேன்',
+]);
+const matchesEnrolledNo = buildMatcher([
+    'no', 'not enrolled',
+    'tidak berdaftar', '没有登记', 'செய்யவில்லை',
+]);
 
 const parseHealthierSg = (answer) => {
     const text = String(answer ?? '').trim();

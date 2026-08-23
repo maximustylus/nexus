@@ -52,7 +52,7 @@ never measured activity — live in it.
 | `DONE`, evidenced | 14 | `CP1` `CP2` `CP3` `CP5` `CP6` `CP7` `CP9` `CP12` `CP13` `CP14` `CP15` `CP17` `CP18` `CP19` |
 | `OPEN`, mine | 2 | `CP8` `CP16` |
 | **`OWNER`, console only** | 1 | `CP7`'s last two steps — see *Turning App Check on*, below. The code is shipped and inert. |
-| `OPEN`, translation | 1 | `CP10` — merged into `CD10`, below |
+| `OPEN`, translation | 1 | `CP10`/`CD10` groups 2–4 — group 1 is shipped, see `7.7` |
 | `OPEN`, **owner's decision** | 4 | `CD4` `CD10` `CD11` `CD12` (design) |
 
 **`CP13` is fixed.** The portal wrote a health profile to a database while showing
@@ -371,8 +371,64 @@ one of these is a case where it does exactly that and the system is still wrong.
 | 7.4 | **Region and period cells publish a raw respondent count with no minimum** | `CP25`. `MIN_CELL` is applied to `sectors` only; `regions` and `periods` publish `respondents` as-is and band domains at `MIN_COUNT`. At `respondents: 1` the band stops banding: `'<5'` can only mean 1. Measured — one respondent in the North in November 2026 published **eight domains reading `'<5'`**, which is that person's complete flag profile, located to a region and a month. This is the state the dashboard will be in for its first weeks, which is exactly when it will be shown. | me | `DONE` — the floor is uniform now: **no breakdown cell is published below `MIN_CELL`**, sectors, regions and months alike, and the national *breakdown* is withheld below it too while the national headcount stays (a country-wide total locates nobody). Withholding is reported for each. A test walks the whole document and fails on any readable count under the band. |
 | 7.5 | **Typed answers that DENY a symptom set the flag** | `CP22`. The chat renders a free-text input (`AuraChat.jsx:1146`) and prompts *"SELECT AN OPTION OR TYPE FREELY"*; typed text goes to the same substring matchers. `parseFallsAnswer` handles negation — because "No falls" contains "fall" — and **no other matcher does**. Measured: **16 of 22 realistic typed answers set a flag the answer denied**, 0 missed a real report. A fit person typing *"no chest pain"* scores **5 → Red**, is told to consult a GP before any exercise, and the handover slip prints *"Chest pain or dizziness on exertion"* to a centre as fact. **The quick-reply chips are all correct** — this is the text box only. | me | `DONE` — **16 → 1.** `buildMatcher` is negation-aware: a cue must sit in the same clause, immediately before the term (or immediately after it in Tamil, where negation is postfix). Deliberately timid — `and` breaks a denial, `or` does not, and anything ambiguous keeps the flag, so over-triage stays the direction this fails in. Bare `'low'` was also replaced with the phrasings that mean low mood, because `"low back pain"` and `"low income household"` are not denials and negation could not rescue them. **Every chip maps to exactly the same flag as before** — re-verified. 40 new tests. |
 | 7.6 | **The falls screen misses anyone who types their age** | `CP26`. The gate is `when: (data) => /60\s*\+/.test(String(data.demographics))` — literal `60+` only. Measured: `"72"`, `"I am 72"`, `"I am 65 years old"`, `"60 plus"`, `"sixty five"` all fail it. The chips emit `"Male, 60+"`, so tapping works and typing does not — in the one cohort the falls screen exists for. | me | `DONE` — `parseAgeBand` / `isSixtyPlus` in `clinicalFlags.js`, shared by the chat gate, the form gate and both pathways' `age` derivation, which was a second substring test with the same defect and also cost the two 60+ CTA tiers. A closed range is read as a range, so `"41–60"` does not become 60+. 14 tests. |
-| 7.7 | **Falls and Healthier SG are English-only** | `CP26`, and a consequence of `CD10` rather than a new defect — but it needs stating in these terms: `en` ships **15** prompts, `ms`/`zh`/`ta` ship **13**. `isStepAvailable` correctly skips the untranslated two, so a Malay, Chinese or Tamil speaker is never asked about falls or Healthier SG. The skip is right; the gap it leaves is that the older, less English-dominant residents an Active Ageing Centre referral targets get the shortest assessment. `TRANSLATION-BRIEF.md` already carries the strings. | **OWNER** | `OPEN` — not fixable by me: it needs real translations, not machine ones, for clinical questions. |
+| 7.7 | **Falls and Healthier SG are English-only** | `CP26`, and a consequence of `CD10`. `en` shipped **15** prompts, `ms`/`zh`/`ta` shipped **13**. `isStepAvailable` correctly skipped the untranslated two, so a Malay, Chinese or Tamil speaker was never asked about falls or Healthier SG — the older, less English-dominant residents an Active Ageing Centre referral targets got the shortest assessment. | **OWNER** → me | `DONE` — see below. **The translation was the safe half.** |
 | 7.8 | **`/individuals` is a 404** | The section root has no route (`App.jsx:764`–`768` define `/individuals/*` only). Anyone who trims the URL, or types what they were told verbally, gets the not-found page. It recovers well — it offers "Start a health check" — but a redirect to `/individuals/pathway` is one line. | me | `DONE` — `<Route path="/individuals" element={<Navigate to="/individuals/pathway" replace />} />`. Verified in Chromium. |
+
+### ⚠️ `7.7` — what shipping the translation actually required
+
+The owner's call was to machine-translate Group 1 rather than keep asking nobody.
+Doing it surfaced a defect that had been invisible for as long as the questions had
+existed, because nothing had ever exercised the path.
+
+`parseFallsAnswer` and `parseHealthierSg` match **token lists**, and the lists were
+English-only:
+
+```
+matchesNoFalls    = ['no falls', 'none', 'no']
+matchesEnrolledNo = ['no', 'not enrolled']
+```
+
+`"Tiada jatuh"` matches nothing in the first, so the parser falls through to
+`falls = 1, fallsRisk = true`. **Translating the chips alone would have recorded
+every Malay, Chinese and Tamil speaker who had never fallen as having fallen** —
+added to their risk score, printed on their result, and written onto a handover
+slip given to a community centre as fact. That is missing data becoming *wrong*
+data, which is precisely the trade `chatSteps.js`'s skip rule exists to refuse; and
+unlike a skipped question, nothing about it would have looked incomplete.
+
+| | |
+|---|---|
+| Chips moved to | `src/data/screeningChips.js` — the text is parser input, so it lives where a test can import it without React |
+| Matchers extended | `matchesNoFalls`, `matchesTwoOrMore`, `matchesAvoidance`, `matchesEnrolledYes`, `matchesEnrolledNo` |
+| Parity test | `src/utils/clinicalFlags.i18n.test.js` — **33 tests**: chip *n* in any language must parse to what chip *n* in English parses to |
+| Evidence it is load-bearing | reverting the matchers to English-only fails **12 of the 33**; restored, 33 pass |
+| Suite | **2714** tests across 73 files, was 2681 · lint 0 · build green |
+
+**Two phrasings are dictated by the parser rather than by the language, and both
+were found by the test rather than by reading:**
+
+- Tamil `falls.chip3` avoids *"இரண்டு அல்லது…"* — அல்லது ("or") begins with அல்ல,
+  a Tamil negator, and Tamil negation is postfix, so the parser read it as denying
+  the "two" beside it and the chip counted as **one** fall. The sentence is correct
+  Tamil; only the parity test saw it.
+- The Malay "not enrolled" token is `tidak berdaftar`, not `tidak` — because *"Saya
+  tidak pasti"* ("I am not sure") contains `tidak` and `matchesEnrolledNo` is tested
+  first. A bare token would have turned *"the portal does not know"* into *"this
+  person is not enrolled"*, for every Malay speaker who was unsure, silently.
+
+⚠️ **STILL OWED, AND IT IS A REAL DEBT.** The ms/zh/ta strings are machine
+translations that **no native speaker has reviewed**. `TRANSLATION-BRIEF.md` carries
+a back-translation of every one so a reviewer can check them in minutes. The two
+that change a clinical value if misread are `falls.chip1` (must not read as *"I
+fell"*) and `hsg.chip3` (must not read as *"no"*).
+
+⚠️ **AND GROUPS 2, 3 AND 4 ARE STILL ENGLISH ONLY, DELIBERATELY.** Group 2 is the
+in-chat action cards, including the URGENT tier — the text somebody reads
+immediately after reporting chest pain. Questions and clinical instructions are not
+the same risk, and the argument for machine-translating the first does not carry to
+the second.
+
+---
 
 **Deliberately NOT filed as defects, because they are judgement calls that belong
 to the owner rather than to me:**
@@ -393,8 +449,9 @@ larger than one respondent.
 
 ```
 P0.3  App Check + rate limit                 ─ needs the Firebase console
-P7.7  translate falls + Healthier SG         ─ owner's; brief already written
-CD4 / CD10 / CD11                            ─ owner's, in parallel, not blocked on me
+P7.7  translate falls + Healthier SG         ─ DONE · needs a native-speaker review
+CD10  groups 2, 3, 4                         ─ owner's call; group 2 is the URGENT tier
+CD4 / CD11                                   ─ owner's, in parallel, not blocked on me
 P0.5  abort the discarded request
 P3.4  resource freshness
 P4.2  share selectCTA                        ─ retires ctaTierParity.test.js

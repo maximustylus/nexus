@@ -19,6 +19,7 @@ import {
 } from '../utils/clinicalFlags';
 import { readLanguage, applyDocumentLanguage } from '../utils/language';
 import { getSessionId, saveProgress, loadProgress, clearProgress } from '../utils/assessmentSession';
+import { FALLS_CHIPS, HSG_CHIPS } from '../data/screeningChips';
 
 // ── Cloud Function — same pattern as AuraPulseBot.jsx ────────────────────────
 // Gemini API key is secured in Firebase Cloud Functions (never client-side)
@@ -365,8 +366,8 @@ const DICTIONARY = {
       */
       ['Other / Type my own'],
       /* 12 previous_id    */ ['No previous ID'],
-      /* 13 falls           */ ['No falls', 'One fall', 'Two or more falls', 'A fall, and I now avoid some activities'],
-      /* 14 healthier_sg    */ ['Yes, I am enrolled', 'No, not enrolled', 'I am not sure'],
+      /* 13 falls           */ FALLS_CHIPS.en,
+      /* 14 healthier_sg    */ HSG_CHIPS.en,
     ],
   },
 
@@ -397,6 +398,8 @@ const DICTIONARY = {
       'Apakah jenis perumahan yang anda diami? (cth. HDB 3-Bilik, Kondo)',
       'Apakah dua digit pertama poskod anda supaya saya boleh mencari sumber berdekatan?',
       'Soalan terakhir — adakah anda mempunyai ID Penilaian NEXUS yang sebelumnya? Jika ya, tampal di bawah. Jika tidak, pilih Tiada.',
+      /* 13 falls          */ 'Dua soalan ringkas tentang keseimbangan. Dalam 12 bulan yang lalu, pernahkah anda jatuh — termasuk tergelincir atau tersandung sehingga anda terjatuh ke lantai?',
+      /* 14 healthier_sg   */ 'Yang terakhir — adakah anda berdaftar dengan doktor Healthier SG? Ia menentukan program mana yang boleh dirujuk kepada anda.',
     ],
     reflections: [
       (input) => { const n = parseInt((input.match(/\d+/) || ['0'])[0], 10); return n === 0 ? 'Memulakan dari sifar adalah normal. ' : 'Permulaan yang baik. '; },
@@ -440,6 +443,20 @@ const DICTIONARY = {
       */
       ['Lain-lain / Taip sendiri'],
       ['Tiada ID'],
+      /*
+        ⚠️ APPENDED AT INDEX 13 AND 14 TO MATCH `DOMAIN_CONFIG`, never inserted.
+           `prompts`, `quickReplies` and `reflections` are parallel arrays across
+           four dictionaries; `chatSteps.js` reads a step by ABSOLUTE index, and a
+           renumber to close a gap is how a question goes missing in one language.
+
+        ⚠️ THE CHIP TEXT IS PARSER INPUT, NOT ONLY READER TEXT. `parseFallsAnswer`
+           and `parseHealthierSg` match tokens in `clinicalFlags.js`, and every
+           token below is registered there. `clinicalFlags.i18n.test.js` asserts
+           chip-for-chip parity with English — a chip changed here without its
+           token fails that test rather than silently mis-flagging somebody.
+      */
+      /* 13 falls          */ FALLS_CHIPS.ms,
+      /* 14 healthier_sg   */ HSG_CHIPS.ms,
     ],
   },
 
@@ -470,6 +487,8 @@ const DICTIONARY = {
       '您居住的房屋类型是什么？（例如：HDB 3房式，公寓等）',
       '您的邮政编码前两位数是什么？这样我可以为您找到附近的资源。',
       '最后一个问题 — 您是否有之前的 NEXUS 评估 ID？如有，请粘贴在下方；如没有，请选择"没有"。',
+      /* 13 falls          */ '关于平衡的两个简短问题。在过去 12 个月里，您跌倒过吗？包括滑倒或绊倒而摔在地上的情况。',
+      /* 14 healthier_sg   */ '最后一个问题 — 您是否已向 Healthier SG 家庭医生登记？这会影响您可以被转介到哪些计划。',
     ],
     reflections: [
       (input) => { const n = parseInt((input.match(/\d+/) || ['0'])[0], 10); return n === 0 ? '从零开始完全正常。' : '这是一个很好的起点。'; },
@@ -513,6 +532,20 @@ const DICTIONARY = {
       */
       ['其他 / 手动输入'],
       ['没有之前的 ID'],
+      /*
+        ⚠️ APPENDED AT INDEX 13 AND 14 TO MATCH `DOMAIN_CONFIG`, never inserted.
+           `prompts`, `quickReplies` and `reflections` are parallel arrays across
+           four dictionaries; `chatSteps.js` reads a step by ABSOLUTE index, and a
+           renumber to close a gap is how a question goes missing in one language.
+
+        ⚠️ THE CHIP TEXT IS PARSER INPUT, NOT ONLY READER TEXT. `parseFallsAnswer`
+           and `parseHealthierSg` match tokens in `clinicalFlags.js`, and every
+           token below is registered there. `clinicalFlags.i18n.test.js` asserts
+           chip-for-chip parity with English — a chip changed here without its
+           token fails that test rather than silently mis-flagging somebody.
+      */
+      /* 13 falls          */ FALLS_CHIPS.zh,
+      /* 14 healthier_sg   */ HSG_CHIPS.zh,
     ],
   },
 
@@ -543,6 +576,8 @@ const DICTIONARY = {
       'நீங்கள் எந்த வகையான வீட்டில் வசிக்கிறீர்கள்? (எ.கா. HDB 3-அறை, காண்டோ)',
       'உங்கள் தபால் குறியீட்டின் முதல் இரண்டு இலக்கங்கள் என்ன?',
       'கடைசி கேள்வி — உங்களிடம் ஏற்கனவே NEXUS மதிப்பீட்டு ID உள்ளதா? இருந்தால் கீழே ஒட்டவும்; இல்லையெனில் "இல்லை" என்பதைத் தேர்ந்தெடுக்கவும்.',
+      /* 13 falls          */ 'சமநிலை குறித்த இரண்டு சிறிய கேள்விகள். கடந்த 12 மாதங்களில் நீங்கள் விழுந்ததுண்டா — வழுக்கியோ இடறியோ தரையில் விழுந்தது உட்பட?',
+      /* 14 healthier_sg   */ 'கடைசியாக — நீங்கள் Healthier SG மருத்துவரிடம் பதிவு செய்துள்ளீர்களா? இது உங்களை எந்தத் திட்டங்களுக்குப் பரிந்துரைக்க முடியும் என்பதை மாற்றும்.',
     ],
     reflections: [
       (input) => { const n = parseInt((input.match(/\d+/) || ['0'])[0], 10); return n === 0 ? 'சூன்யத்திலிருந்து தொடங்குவது முற்றிலும் சாதாரணமானது. ' : 'இது ஒரு சிறந்த தொடக்கம். '; },
@@ -586,6 +621,20 @@ const DICTIONARY = {
       */
       ['மற்றவை / தட்டச்சு செய்கிறேன்'],
       ['முந்தைய ID இல்லை'],
+      /*
+        ⚠️ APPENDED AT INDEX 13 AND 14 TO MATCH `DOMAIN_CONFIG`, never inserted.
+           `prompts`, `quickReplies` and `reflections` are parallel arrays across
+           four dictionaries; `chatSteps.js` reads a step by ABSOLUTE index, and a
+           renumber to close a gap is how a question goes missing in one language.
+
+        ⚠️ THE CHIP TEXT IS PARSER INPUT, NOT ONLY READER TEXT. `parseFallsAnswer`
+           and `parseHealthierSg` match tokens in `clinicalFlags.js`, and every
+           token below is registered there. `clinicalFlags.i18n.test.js` asserts
+           chip-for-chip parity with English — a chip changed here without its
+           token fails that test rather than silently mis-flagging somebody.
+      */
+      /* 13 falls          */ FALLS_CHIPS.ta,
+      /* 14 healthier_sg   */ HSG_CHIPS.ta,
     ],
   },
 };
