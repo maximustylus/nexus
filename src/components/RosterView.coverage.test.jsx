@@ -197,6 +197,9 @@ let rosterWritesLand;
 /** The registered listeners, so a test can deliver a later snapshot or an error. */
 let rosterListener;
 let coverageListener;
+// The department's saved configuration (`R1`). Held so the routing above has
+// somewhere to put it; this file is about coverage requests, so it stays absent.
+let _settingsListener;
 /** Every Firestore operation, in order: the read-back discipline is an ORDER claim. */
 let callLog;
 
@@ -239,16 +242,35 @@ beforeEach(() => {
     query.mockImplementation((ref, ...constraints) => ({ __mock: 'query', ref, constraints }));
     where.mockImplementation((field, op, value) => ({ __mock: 'where', field, op, value }));
 
-    // One listener mock, two subscriptions: the roster document and the coverage
-    // query. Routed on the ref shape rather than on call order, so a future
-    // reordering of the effects cannot silently swap them.
+    /**
+     * One listener mock, THREE subscriptions now: the roster document, the coverage
+     * query, and the department's saved configuration (`R1`).
+     *
+     * ⚠️ ROUTED ON THE REF'S PATH, NOT ITS SHAPE, AND THE DIFFERENCE IS A REAL BUG
+     *    THIS CAUGHT. It used to be `__mock === 'query' ? coverage : roster` — a
+     *    shape test — which was written to survive the effects being reordered, and
+     *    did. What it could not survive was a SECOND `doc()` listener: the settings
+     *    subscription fell into the `else`, overwrote `rosterListener`, and every
+     *    later `rosterListener.onNext(...)` in this file pushed a roster snapshot
+     *    into the settings handler. The calendar simply never updated, and the
+     *    failure read as "the covered shift is missing" rather than as "the test is
+     *    talking to the wrong listener".
+     *
+     *    A path is what actually distinguishes these three, so a fourth listener
+     *    added later lands in `other` and is ignored rather than impersonating one
+     *    of them.
+     */
     onSnapshot.mockImplementation((target, onNext, onError) => {
+        const path = target && typeof target.path === 'string' ? target.path : '';
         if (target && target.__mock === 'query') {
             coverageListener = { onNext, onError };
             onNext(querySnapshot());
-        } else {
+        } else if (path === ROSTER_PATH) {
             rosterListener = { onNext, onError };
             if (rosterExists) onNext({ exists: () => true, data: () => clone(rosterDoc) });
+        } else if (path.endsWith('/settings/roster')) {
+            _settingsListener = { onNext, onError };
+            onNext({ exists: () => false, data: () => undefined });
         }
         return () => {};
     });

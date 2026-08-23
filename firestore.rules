@@ -277,6 +277,40 @@ service cloud.firestore {
         allow delete: if false;
       }
 
+      // ── The department's roster CONFIGURATION ──────────────────────────────
+      //
+      // Tasks, band boundaries, hours policy, scheduling rules. NOT the roster and
+      // NOT the people — the staff pool is `members` and their grades are `grades`,
+      // and both stay where they are.
+      //
+      // READ BY THE WHOLE TEAM, deliberately. A staff member looking at a generated
+      // week should be able to see what "EFT" is, how long it takes and which days
+      // it runs — that is the department describing itself, not a secret. Band
+      // BOUNDARIES are here too, and they are not personal data: they say where
+      // this department draws its senior line, not who is on which side of it.
+      //
+      // WRITTEN BY A LEAD ONLY. It decides what every generated roster contains,
+      // so a staff member who could edit it could rewrite the department's duties.
+      match /settings/{settingId} {
+        allow get: if isMember(teamId);
+        // Nothing lists this collection: there is one document and its id is a
+        // constant, so a list would only ever be a way to discover documents
+        // somebody added by hand.
+        allow list: if false;
+
+        // `setDoc` on a document that does not exist yet is a create; on one that
+        // does it is an update. Configuring a department for the first time and
+        // changing it later are the same gesture, so both verbs, same condition.
+        allow create, update: if isLead(teamId);
+
+        // ⚠️ NO DELETE. An absent configuration and a blank one are different
+        //    states: absent means "never set up" and the wizard opens with
+        //    defaults, blank would mean a department whose Generate silently
+        //    produces nothing. Clearing tasks one at a time is an update, and it is
+        //    visible while it happens.
+        allow delete: if false;
+      }
+
       // ── The duty roster, one document per year ─────────────────────────────
       //
       // Was `system_data/roster_2026` — ONE document for the whole installation.

@@ -53,7 +53,8 @@ import {
 // by hand. `system_data/roster_2026` — a single document shared by the whole
 // installation — is what these replace.
 import { useTeam } from '../context/TeamContext';
-import { rosterPath, swapsPath, swapPath } from '../utils/teamPaths';
+import { rosterPath, swapsPath, swapPath, rosterSettingsPath } from '../utils/teamPaths';
+import { toStoredSettings, fromStoredSettings, settingsChanged } from '../utils/rosterSettings';
 
 /**
  * The roster year. Was baked into a document NAME — `system_data/roster_2026` — so
@@ -778,6 +779,27 @@ const RosterView = ({ user }) => {
     // them — two sources for one value is how a roster gets generated against a policy
     // nobody can see.
     const [demoExtraRules, setDemoExtraRules] = useState(null);
+
+    /**
+     * ==========================================================================
+     * THE DEPARTMENT'S CONFIGURATION, PERSISTED — `R1`
+     * ==========================================================================
+     *
+     * Everything above lived in React state and nowhere else, so it existed only
+     * for as long as the tab did. Survivable while the wizard was sandbox-only —
+     * a visitor exploring a fictional department loses nothing by closing the
+     * page. Not survivable for a roster master configuring a real one, who would
+     * otherwise retype their department's entire structure on every visit.
+     *
+     * ⚠️ THE SANDBOX NEVER READS OR WRITES IT. A demo visitor may have a team —
+     *    a lead can flip the toggle — and loading their real tasks into a
+     *    sandbox they are about to edit freely would be one Save away from
+     *    overwriting the department's configuration with an experiment. `isDemo`
+     *    gates both directions, and this is the same latch every other write in
+     *    this component uses.
+     */
+    const [storedSettings, setStoredSettings] = useState(null);
+    const [settingsError, setSettingsError] = useState(null);
     // Who held which grade in the run that is ON SCREEN, so the load table can
     // report it. Captured at generate time rather than read from the live rows:
     // editing a grade after generating must not silently relabel a finished
@@ -1090,6 +1112,48 @@ const RosterView = ({ user }) => {
         }
         return undefined;
     }, [isDemo, teamId, rosteredMembers]);
+
+    /**
+     * Load the department's configuration into the wizard.
+     *
+     * ⚠️ IT OVERWRITES WHATEVER IS IN THE FORM, AND THAT IS ONLY SAFE BECAUSE IT
+     *    RUNS ONCE PER TEAM. Keyed on `teamId` alone, deliberately: re-running it
+     *    while somebody is mid-edit would discard their typing every time an
+     *    unrelated dependency moved. A team SWITCH must reload — the previous
+     *    department's tasks in the new department's form is exactly the kind of
+     *    silent cross-team bleed the rebuild exists to remove.
+     */
+    useEffect(() => {
+        if (isDemo || !teamId) return undefined;
+
+        const unsub = onSnapshot(
+            doc(db, ...rosterSettingsPath(teamId)),
+            (snap) => {
+                setSettingsError(null);
+                if (!snap.exists()) { setStoredSettings(null); return; }
+
+                const restored = fromStoredSettings(snap.data());
+                if (!restored) { setStoredSettings(null); return; }
+
+                setStoredSettings(toStoredSettings(restored));
+                setDemoTaskRows(restored.taskRows);
+                setDemoBandInputs(restored.bandInputs);
+                setDemoHoursInputs(restored.hoursInputs);
+                setDemoRulesInputs(restored.rulesInputs);
+                setDemoExtraRules(restored.extraRules);
+            },
+            // ⚠️ A DENIAL HERE IS SILENT OTHERWISE, and the failure it produces is
+            //    a roster master typing their department in again believing it was
+            //    never saved. Two of the three listeners in this app had no error
+            //    callback and that is the post-mortem this repository already has.
+            (error) => {
+                console.error('[NEXUS] roster settings unreadable', error);
+                setSettingsError('Your department\'s saved configuration could not be read. '
+                    + 'Anything you change here will not be saved until that is fixed.');
+            },
+        );
+        return () => unsub();
+    }, [isDemo, teamId]);
 
     // --- EFFECT: COVERAGE REQUESTS AIMED AT THE SIGNED-IN USER -----------------
     //
@@ -1475,16 +1539,64 @@ const RosterView = ({ user }) => {
             // 🛡️ C2 FIX: { merge: true } — generating one period must not erase
             // the periods already stored in this document.
             await setDoc(doc(db, ...rosterPath(teamId, ROSTER_YEAR)), prepared.data, { merge: true });
+
+            /**
+             * ⚠️ THE CONFIGURATION IS SAVED HERE, AFTER THE ROSTER, AND NOT BEFORE.
+             *
+             *    Generate is the moment a roster master COMMITS to a configuration —
+             *    they have just produced a roster from it — so it is the honest
+             *    moment to persist it, and it needs no second button nobody would
+             *    press.
+             *
+             *    Ordering it after the roster write is deliberate. If the roster
+             *    write fails, the configuration that produced nothing must not
+             *    become the department's stored setup; the `catch` below already
+             *    reports that failure and this line is simply never reached.
+             *
+             * ⚠️ AND ITS FAILURE MUST NOT REPORT THE ROSTER AS FAILED. The roster
+             *    IS saved by this point. Losing the configuration means retyping a
+             *    form; being told the roster did not save means regenerating one
+             *    that already exists, over the top of itself. So this has its own
+             *    `catch` and its own sentence.
+             */
+            const nextSettings = toStoredSettings(
+                {
+                    taskRows: demoTaskRows,
+                    bandInputs: demoBandInputs,
+                    hoursInputs: demoHoursInputs,
+                    rulesInputs: demoRulesInputs,
+                    extraRules: demoExtraRules,
+                },
+                { now: new Date().toISOString(), by: user?.uid || null },
+            );
+
+            let settingsSaved = true;
+            if (nextSettings && settingsChanged(storedSettings, nextSettings)) {
+                try {
+                    await setDoc(doc(db, ...rosterSettingsPath(teamId)), nextSettings);
+                    setStoredSettings(nextSettings);
+                } catch (settingsWriteError) {
+                    console.error('[NEXUS] roster settings not saved', settingsWriteError);
+                    settingsSaved = false;
+                }
+            }
+
             setIsConfigOpen(false); // Close the config wizard
             // 🌟 P8.3: "conflict-free" was the old copy. Post-mortem E1: the
             // generator cannot know that — it means "cannot double-book by
             // construction". It says what it actually did instead.
-            showStatus(
-                'success',
-                generationPlan
-                    ? `Roster saved: ${generationPlan.dayCount} days, ${formatRosterDateKey(generationPlan.firstDate)} → ${formatRosterDateKey(generationPlan.lastDate)}.`
-                    : 'Roster saved.',
-            );
+            const rosterSentence = generationPlan
+                ? `Roster saved: ${generationPlan.dayCount} days, ${formatRosterDateKey(generationPlan.firstDate)} → ${formatRosterDateKey(generationPlan.lastDate)}.`
+                : 'Roster saved.';
+
+            if (settingsSaved) {
+                showStatus('success', rosterSentence);
+            } else {
+                // Not an error tone: the roster — the thing they pressed the button
+                // for — is saved. What failed is the convenience of not retyping.
+                showStatus('info', `${rosterSentence} Your department's configuration could `
+                    + 'not be saved, so you may have to set it up again next time.');
+            }
         } catch (error) {
             console.error("Error generating roster:", error);
             // The code is included for the same reason the M8 listener banner
@@ -3338,6 +3450,17 @@ const RosterView = ({ user }) => {
                             <p className="-mt-4 mb-4 text-[10px] font-bold text-emerald-700 dark:text-emerald-300 leading-relaxed">
                                 Sandbox: this runs the real rostering engine in your browser and saves nothing.
                                 Nothing is written to the live roster, and closing or reloading this page clears everything.
+                            </p>
+                        )}
+
+                        {/* ⚠️ A DENIED READ IS OTHERWISE SILENT, and the failure it
+                            produces is a roster master typing their department in
+                            again believing it was never saved. Shown inside Configure
+                            because that is the form the warning is about. */}
+                        {settingsError && (
+                            <p className="-mt-2 mb-4 text-xs font-bold text-amber-700 dark:text-amber-400 flex items-start gap-1.5">
+                                <ShieldAlert size={14} className="shrink-0 mt-px" />
+                                <span>{settingsError}</span>
                             </p>
                         )}
 

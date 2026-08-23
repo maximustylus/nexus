@@ -48,8 +48,13 @@ vi.mock('../firebase', () => ({
 }));
 
 vi.mock('firebase/firestore', () => ({
-    doc: vi.fn(() => ({ __mock: 'docRef' })),
-    collection: vi.fn(() => ({ __mock: 'collectionRef' })),
+    // ⚠️ THE PATH IS CARRIED, and it was not. These returned a bare `{ __mock }`,
+    //    so a listener could only be identified by what it was NOT — which is how
+    //    `rosterListenerCalls` came to mean "every subscription except the coverage
+    //    query" and started counting the settings listener too. Joining the segments
+    //    is what lets each subscription be named by the document it actually reads.
+    doc: vi.fn((_db, ...segments) => ({ __mock: 'docRef', path: segments.join('/') })),
+    collection: vi.fn((_db, ...segments) => ({ __mock: 'collectionRef', path: segments.join('/') })),
     onSnapshot: vi.fn(() => () => {}),
     setDoc: vi.fn(() => Promise.resolve()),
     addDoc: vi.fn(() => Promise.resolve({ id: 'mock' })),
@@ -136,7 +141,26 @@ const openConfigure = () => fireEvent.click(screen.getByRole('button', { name: /
  * listener is asserted separately, so "two listeners" cannot quietly become three.
  */
 const rosterListenerCalls = () =>
-    onSnapshot.mock.calls.filter(([target]) => target?.__mock !== 'query');
+    onSnapshot.mock.calls.filter(([target]) => typeof target?.path === 'string'
+        && target.path.includes('/rosters/'));
+
+/**
+ * The department's saved configuration (`R1`) — a second DOCUMENT listener, and
+ * the reason the helper above had to be tightened a second time.
+ *
+ * ⚠️ IT WAS `target?.__mock !== 'query'`, WHICH MEANT "EVERY LISTENER THAT IS NOT
+ *    THE COVERAGE QUERY". That was exact while the roster document was the only
+ *    other subscription, and this file's note above records it having already been
+ *    narrowed once for precisely this reason. A second `doc()` listener made it
+ *    wrong again: the claim "one listener on the roster document" started counting
+ *    two and failed, which is the RIGHT failure — a count that silently absorbed
+ *    the new listener would have quietly stopped being the statement it says it is.
+ *
+ *    Matching on the path is what makes it stop needing to be re-narrowed.
+ */
+const settingsListenerCalls = () =>
+    onSnapshot.mock.calls.filter(([target]) => typeof target?.path === 'string'
+        && target.path.endsWith('/settings/roster'));
 
 /**
  * The lower divider's `aria-label`, spelled out. Used for both the presence
@@ -372,11 +396,12 @@ describe('live mode: my week reads the live document and adds nothing to it', ()
         expect(within(list).queryByText(/h$/)).toBeNull();
 
         // ONE listener on the roster document, no second read of it, and nothing
-        // written. CHANGED (one-tap cover): the coverage-request listener is counted
-        // explicitly rather than folded into a global count, so switching view still
-        // cannot add a subscription and neither can this feature add a third.
-        expect(rosterListenerCalls()).toHaveLength(1);
-        expect(onSnapshot).toHaveBeenCalledTimes(2);
+        // written. Each subscription is now counted BY PATH rather than by
+        // subtraction, so a fourth one added later fails a specific assertion
+        // instead of being absorbed into whichever count was defined as "the rest".
+        expect(rosterListenerCalls(), 'the person view added a read of the roster').toHaveLength(1);
+        expect(settingsListenerCalls(), 'the saved configuration is read once').toHaveLength(1);
+        expect(onSnapshot, 'roster + coverage query + settings').toHaveBeenCalledTimes(3);
         expect(setDoc).not.toHaveBeenCalled();
         expect(addDoc).not.toHaveBeenCalled();
     });

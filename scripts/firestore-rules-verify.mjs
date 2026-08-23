@@ -288,6 +288,31 @@ console.log('\n══ pay grade: private to the person and their lead ══');
 }
 
 // ═════════════════════════════════════════════════════════════════════════════
+// 2c. ROSTER SETTINGS — the department describes itself; a lead writes it
+// ═════════════════════════════════════════════════════════════════════════════
+console.log('\n══ roster settings: read by the team, written by a lead ══');
+{
+    await seed();
+    await check('a lead CAN write the department configuration',
+        assertSucceeds(setDoc(doc(as(ALIF), `teams/${TEAM_A}/settings/roster`), { version: 1, tasks: [{ name: 'EFT' }] })));
+    await check('a member CAN read it — it is the department describing itself',
+        assertSucceeds(getDoc(doc(as(BRANDON), `teams/${TEAM_A}/settings/roster`))));
+
+    /**
+     * ⚠️ IT DECIDES WHAT EVERY GENERATED ROSTER CONTAINS. A staff member who could
+     *    edit this could rewrite the department's duties without touching a roster.
+     */
+    await check('a member CANNOT write it',
+        assertFails(setDoc(doc(as(BRANDON), `teams/${TEAM_A}/settings/roster`), { version: 1, tasks: [{ name: 'Nothing' }] })));
+    await check('nobody may delete it (clearing tasks is an update)',
+        assertFails(deleteDoc(doc(as(ALIF), `teams/${TEAM_A}/settings/roster`))));
+    await check('nobody may list the settings collection',
+        assertFails(getDocs(collection(as(ALIF), `teams/${TEAM_A}/settings`))));
+    await check('another department gets nothing',
+        assertFails(getDoc(doc(as(SGH_LEAD), `teams/${TEAM_A}/settings/roster`))));
+}
+
+// ═════════════════════════════════════════════════════════════════════════════
 // 3. THE ROSTER — generation is lead-only, one-day edits are any member
 // ═════════════════════════════════════════════════════════════════════════════
 console.log('\n══ roster: the verb split ══');

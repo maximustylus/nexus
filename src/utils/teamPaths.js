@@ -122,6 +122,14 @@ export const TEAM_COLLECTIONS = Object.freeze({
      * person and by a lead, and by nobody else. See `firestore.rules`.
      */
     grades: 'grades',
+    /**
+     * A department's roster CONFIGURATION — its tasks, band boundaries, hours
+     * policy and scheduling rules. Not the roster itself, and not the people: the
+     * staff pool is `members`, and their grades are `grades`. See
+     * `src/utils/rosterSettings.js` for why those two are excluded rather than
+     * copied in.
+     */
+    settings: 'settings',
 });
 
 /** Root collections that are NOT beneath a team. See the header for each reason. */
@@ -376,6 +384,18 @@ export const projectStaffPath = (teamId, year, uid) =>
  */
 export const gradesPath = (teamId) => under(teamId, TEAM_COLLECTIONS.grades);
 export const gradePath = (teamId, uid) => under(teamId, TEAM_COLLECTIONS.grades, assertUid(uid));
+
+/**
+ * `teams/{id}/settings/roster` — the Configure wizard, persisted.
+ *
+ * A fixed document id rather than a free one: there is exactly one roster
+ * configuration per team and always will be, so the id is a constant and a typo
+ * cannot silently address a second, empty document that reads as "never
+ * configured".
+ */
+export const ROSTER_SETTINGS_ID = 'roster';
+export const rosterSettingsPath = (teamId) =>
+    under(teamId, TEAM_COLLECTIONS.settings, ROSTER_SETTINGS_ID);
 
 export const feedPath = (teamId) => under(teamId, TEAM_COLLECTIONS.feed);
 export const feedPostPath = (teamId, postId) => under(teamId, TEAM_COLLECTIONS.feed, postId);
