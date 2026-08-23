@@ -125,7 +125,7 @@ evidence.
   every storage access, because Safari private mode throws on `localStorage`. `189a61b`
 
 - 4 cases added to `scripts/firestore-rules-verify.mjs` for the
-  `community_assessments` rule. Suite: **95 emulator checks, 0 failed.** `45323f2`
+  `community_assessments` rule. Suite: **101 emulator checks, 0 failed** (re-run 2026-08-23 before the v2.0 merge). `45323f2`
 
 ### Audit
 
@@ -142,6 +142,34 @@ evidence.
   next version. `31fafde`, corrected and extended `53f9bd7`.
 - [COMMUNITY_TODO.md](COMMUNITY_TODO.md) — this work as a ledger, with the same
   evidence rule the roster ledger uses.
+
+### Audit — pre-merge stress test, 2026-08-23
+
+- `scripts/community-stress.mjs` + `npm run stress:community` — the counterpart to
+  the roster harness, for the public screening. It reports; it applies no pass/fail
+  threshold, because none has been agreed.
+
+- **Green, and measured rather than assumed:** all 81 postal sectors parse in five
+  written forms; 20,000 random digit strings produced no sector outside the table;
+  the seven `CP19`-shaped labels all return `null`; 3,440 `servicesForSector` calls
+  threw nothing, returned nothing empty and produced no duplicates; every quick-reply
+  chip maps to the flag its author intended; the result page has no horizontal
+  overflow between 280px and 1920px; ten hostile `sessionStorage` payloads produced
+  no crash, no blank page and no script execution; the merged tree runs 2,277 tests
+  green with a clean fast-forward and zero conflicts; `firestore.rules` passes 101
+  emulator checks including cross-team isolation; all eleven Cloud Functions load,
+  and the export set is a strict superset of `main`'s, so the deploy has nothing to
+  orphan.
+
+- **Eight findings, filed as `P7.1`–`P7.8` / `CP22`–`CP26` in
+  [COMMUNITY_TODO.md](COMMUNITY_TODO.md).** The three that decide whether this merges:
+  a completed assessment **dead-ends when Firestore is unreachable** (measured: 45s
+  and still waiting); interaction telemetry is **counted as respondents** in the
+  population rollup (12 people became 96, every domain rate 100% → 13%); and
+  `MIN_CELL` — the suppression threshold the dashboard's privacy claim rests on —
+  **can be cleared by one person's own clicks**.
+
+  None of these was visible to the unit suites. All 2,253 tests passed throughout.
 
 ### Known issues — **authoritative list for this surface**
 

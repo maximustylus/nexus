@@ -100,7 +100,7 @@ The three that changed what a person was told about their own health.
 | # | Item | Detail | Tier | Status | Evidence |
 |---|---|---|---|---|---|
 | 2.1 | Stop fingerprinting | `CP3`. `telemetry.js` wrote `clientReference: navigator.userAgent` on a screen that told the public the record was de-identified (`ResultPage.jsx:758`). Removed. | Opus-alone | `DONE` | `301bb5a` |
-| 2.2 | Close the read rule | `CP5`. `community_assessments` allowed `read: if isSignedIn()` — every signed-in staff member could read the public's health records. Grep proved no reader exists. Now `if false`. | Opus-alone | `DONE` | `301bb5a` · `45323f2` · 95 emulator checks, 0 failed |
+| 2.2 | Close the read rule | `CP5`. `community_assessments` allowed `read: if isSignedIn()` — every signed-in staff member could read the public's health records. Grep proved no reader exists. Now `if false`. | Opus-alone | `DONE` | `301bb5a` · `45323f2` · re-verified 2026-08-23: **101 emulator checks, 0 failed** |
 
 ---
 
@@ -314,13 +314,49 @@ public, with none of the benefit.
 
 ---
 
+## P7 — Found by the pre-merge stress test · `CP22`–`CP26` · risk: **high**
+
+Run `npm run stress:community` to reproduce every number below. These were found
+by driving the built app and fuzzing the pure logic, **not** by the unit suites —
+all 2253 tests were passing throughout, and still are. That is the point of the
+harness: a unit test asks whether a function does what its author meant, and every
+one of these is a case where it does exactly that and the system is still wrong.
+
+| # | What | Evidence | Owner | Status |
+|---|---|---|---|---|
+| 7.1 | **A completed assessment dead-ends when Firestore is unreachable** | `CP24`. Both pathways `await recordTelemetry(...)` **before** navigating to the result (`AuraChat.jsx:987`, `ConventionalForm.jsx:764`). Firestore's `addDoc` does not reject when the backend is unreachable — it queues the write and the promise never settles, so the `catch` that exists for this never runs. Measured in Chromium with `firestore.googleapis.com` blocked: the chat completes every question and then sits on *"Generating your personalised plan now…"* — **still waiting after 45s**. The form's `finally { setBusy(false) }` never runs either, so its Submit stays on "Processing…" — the state `FIX 4` in that file claims to have fixed. `telemetry.js`'s header says the visitor "must still reach their result if the write fails"; against a hang, it does not. | me | `OPEN` |
+| 7.2 | **Interaction telemetry is counted as respondents in the population rollup** | `CP23`. `buildCommunityInsights` reads `community_assessments` with **no filter** (`functions/index.js:988`), and `ResultPage` writes four kinds of interaction row to that same collection — `print_handover_slip`, `download_pdf`, `share_result` and one `click_<id>` per resource tapped — none carrying `flags` or `payload`. `flagsOf` returns `{}` for them; `tallyInto` counts a respondent anyway. Measured: **12 respondents all reporting need became 96 "respondents", and every domain rate fell from 100% to 13%.** A health system would plan from that. | me | `OPEN` |
+| 7.3 | **`MIN_CELL` can be cleared by one person's interaction trail** | `CP23`, the disclosure half of 7.2. Primary suppression is supposed to guarantee ten respondents before a sector is published. Measured: **1 assessment + 11 of that person's own clicks published sector 18 with `respondents: 12`.** The privacy control the dashboard rests on can be satisfied by a single individual. | me | `OPEN` |
+| 7.4 | **Region and period cells publish a raw respondent count with no minimum** | `CP25`. `MIN_CELL` is applied to `sectors` only; `regions` and `periods` publish `respondents` as-is and band domains at `MIN_COUNT`. At `respondents: 1` the band stops banding: `'<5'` can only mean 1. Measured — one respondent in the North in November 2026 published **eight domains reading `'<5'`**, which is that person's complete flag profile, located to a region and a month. This is the state the dashboard will be in for its first weeks, which is exactly when it will be shown. | me | `OPEN` |
+| 7.5 | **Typed answers that DENY a symptom set the flag** | `CP22`. The chat renders a free-text input (`AuraChat.jsx:1146`) and prompts *"SELECT AN OPTION OR TYPE FREELY"*; typed text goes to the same substring matchers. `parseFallsAnswer` handles negation — because "No falls" contains "fall" — and **no other matcher does**. Measured: **16 of 22 realistic typed answers set a flag the answer denied**, 0 missed a real report. A fit person typing *"no chest pain"* scores **5 → Red**, is told to consult a GP before any exercise, and the handover slip prints *"Chest pain or dizziness on exertion"* to a centre as fact. **The quick-reply chips are all correct** — this is the text box only. | **OWNER** (clinical wording) + me | `OPEN` |
+| 7.6 | **The falls screen misses anyone who types their age** | `CP26`. The gate is `when: (data) => /60\s*\+/.test(String(data.demographics))` — literal `60+` only. Measured: `"72"`, `"I am 72"`, `"I am 65 years old"`, `"60 plus"`, `"sixty five"` all fail it. The chips emit `"Male, 60+"`, so tapping works and typing does not — in the one cohort the falls screen exists for. | me | `OPEN` |
+| 7.7 | **Falls and Healthier SG are English-only** | `CP26`, and a consequence of `CD10` rather than a new defect — but it needs stating in these terms: `en` ships **15** prompts, `ms`/`zh`/`ta` ship **13**. `isStepAvailable` correctly skips the untranslated two, so a Malay, Chinese or Tamil speaker is never asked about falls or Healthier SG. The skip is right; the gap it leaves is that the older, less English-dominant residents an Active Ageing Centre referral targets get the shortest assessment. `TRANSLATION-BRIEF.md` already carries the strings. | **OWNER** | `OPEN` |
+| 7.8 | **`/individuals` is a 404** | The section root has no route (`App.jsx:764`–`768` define `/individuals/*` only). Anyone who trims the URL, or types what they were told verbally, gets the not-found page. It recovers well — it offers "Start a health check" — but a redirect to `/individuals/pathway` is one line. | me | `OPEN` |
+
+**Deliberately NOT filed as defects, because they are judgement calls that belong
+to the owner rather than to me:**
+
+- **`'Some stress but managing'` sets `psychologicalDistress`.** The chip's own
+  wording says the person is coping; the flag adds a risk point and counts them in
+  the population distress figure. Defensible either way, but it should be a
+  decision rather than a side effect of the term list containing `'stress'`.
+- **`'I mostly manage on my own'` sets `socialIsolation`.** Same shape, and this one
+  reads correct to me — recorded so the next pass does not "fix" it.
+
+---
+
 ## Current queue
 
 In order. `P0` first because it is the only item on this page whose blast radius is
 larger than one respondent.
 
 ```
+P7.1  the offline dead end                   ─ a completed assessment reaching nobody
+P7.2  P7.3  filter the rollup                ─ one fix, two defects
+P7.4  a minimum on region and period cells
 P0.3  App Check + rate limit
+P7.5  negation in the matchers               ─ owner's wording, my parser
+P7.6  the falls gate
 P0.5  abort the discarded request
 CD4 / CD10 / CD11                            ─ owner's, in parallel, not blocked on me
 P3.4  resource freshness
