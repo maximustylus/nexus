@@ -41,7 +41,7 @@ import ConventionalForm from './components/ConventionalForm';
 import ResultPage from './components/ResultPage';
 
 // UTILITIES
-import { STAFF_LIST, STAFF_IDS, MONTHS, checkAccess, TEAM_DIRECTORY } from './utils';
+import { STAFF_LIST, STAFF_IDS, MONTHS, checkAccess } from './utils';
 import AccessGate from './components/AccessGate';
 import LeadRequestsPanel from './components/LeadRequestsPanel';
 import { useTeam } from './context/TeamContext';
@@ -755,7 +755,31 @@ export default function App() {
       <div className="md:col-span-2 bg-white dark:bg-slate-800 p-6 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-700 mt-6">
         <h2 className="text-sm font-bold text-slate-400 uppercase tracking-wider mb-6">Individual Clinical Load</h2>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {(isDemo ? activeStaffList.map(name => ({ id: name.toLowerCase(), name })) : TEAM_DIRECTORY.filter(m => m.role === 'staff' || m.id === 'alif')).map((member) => {
+          {/*
+            * ⚠️ THIS PANEL RENDERED `TEAM_DIRECTORY` — THE SIXTH HARDCODED COPY OF ONE
+            *    DEPARTMENT, AND THE LAST ONE STANDING.
+            *
+            *    It listed ten people from Sport & Exercise Medicine at KKH, in live
+            *    mode, for EVERY team. A respiratory therapy lead at SGH opened their
+            *    dashboard to somebody else's colleagues.
+            *
+            * ⚠️ AND THE HOURS WERE ALL ZERO, WHICH IS WHY THIS WAS NOT MERELY
+            *    COSMETIC. `getClinicalData` looks a person up in `activeStaffLoads`,
+            *    which the multi-team rewire re-keyed by UID (`setStaffLoads(prev =>
+            *    ({ ...prev, [member.uid]: … }))`). This list supplied a DIRECTORY ID
+            *    — `'brandon'`, `'alif'` — so the lookup missed every time and fell
+            *    back to `Array(12).fill(0)`. Twelve months of zero bars per clinician,
+            *    rendered confidently, on the first screen anybody sees.
+            *
+            *    Both halves are one fix: take the people from the team and key them by
+            *    the uid the loads are already stored under.
+            */}
+          {(isDemo
+            ? activeStaffList.map(name => ({ id: name.toLowerCase(), name }))
+            : members
+                .filter(m => m.rostered !== false)
+                .map(m => ({ id: m.uid, name: m.displayName || m.email || m.uid }))
+          ).map((member) => {
             const chartData = getClinicalData(member.id);
             const yearlyTotal = chartData.reduce((sum, month) => sum + (month.value || 0), 0);
 
