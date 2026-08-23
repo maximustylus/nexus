@@ -34,18 +34,51 @@ vi.mock('firebase/firestore', () => ({
     setDoc: (...args) => setDoc(...args),
 }));
 
+/**
+ * The callable is captured rather than anonymous, so the PAYLOAD can be asserted —
+ * `AN2`/`AN3` are about what is sent, not about what comes back.
+ */
+const analysisSpy = vi.fn(() => Promise.resolve({
+    data: { private: 'LIVE private brief', public: 'LIVE team pulse' },
+}));
 vi.mock('firebase/functions', () => ({
     getFunctions: vi.fn(() => ({})),
-    httpsCallable: vi.fn(() => vi.fn(() => Promise.resolve({
-        data: { private: 'LIVE private brief', public: 'LIVE team pulse' },
-    }))),
+    httpsCallable: vi.fn(() => (...args) => analysisSpy(...args)),
 }));
 
 let demoMode = true;
 vi.mock('../context/NexusContext', () => ({ useNexus: () => ({ isDemo: demoMode }) }));
 
 let activeTeamId = 'kkh-sport-exercise-medicine';
-vi.mock('../context/TeamContext', () => ({ useTeam: () => ({ teamId: activeTeamId }) }));
+/**
+ * ⚠️ `isLead` AND `members` ARE NOW LOAD-BEARING, AND THIS MOCK DID NOT CARRY THEM.
+ *
+ *    `AN4` made `generateSmartAnalysis` refuse a caller whose membership role is not
+ *    `'lead'`, and `SmartAnalysis` now checks the same thing client-side so the
+ *    refusal is a sentence rather than a `permission-denied` mid-demo. `AN2` made the
+ *    profile payload come from the team's own `members` instead of a hardcoded array
+ *    of six named colleagues.
+ *
+ *    With the old mock this suite's live-mode test could no longer reach GENERATE, so
+ *    the Publish button never rendered. That is the mock being stale, not the guard
+ *    being wrong — but it is worth stating, because a mock that quietly grants a
+ *    permission the real context would refuse is how a test starts proving nothing.
+ */
+let activeIsLead = true;
+vi.mock('../context/TeamContext', () => ({
+    useTeam: () => ({
+        teamId: activeTeamId,
+        team: { name: 'Respiratory Therapy, KKH' },
+        members: [
+            { uid: 'u1', displayName: 'A. Clinician', title: 'Physiotherapist', rostered: true },
+            { uid: 'u2', displayName: 'B. Clinician', title: 'Physiotherapist', rostered: true },
+        ],
+        isLead: activeIsLead,
+    }),
+}));
+vi.mock('../hooks/useTeamGrades', () => ({
+    useTeamGrades: () => ({ grades: {}, loading: false, denied: false }),
+}));
 
 import SmartAnalysis from './SmartAnalysis';
 
@@ -82,6 +115,8 @@ beforeEach(() => {
     vi.spyOn(window, 'alert').mockImplementation((message) => { alerts.push(String(message)); });
     demoMode = true;
     activeTeamId = 'kkh-sport-exercise-medicine';
+    activeIsLead = true;
+    analysisSpy.mockClear();
 });
 
 afterEach(() => {
@@ -154,5 +189,78 @@ describe('SmartAnalysis — publishing from the sandbox', () => {
         expect(paths).toContain('teams/kkh-sport-exercise-medicine/reports/2026');
         expect(paths).toContain('teams/kkh-sport-exercise-medicine/projects/2026/staff/uid-alif');
         expect(alerts.join(' ')).toMatch(/SUCCESS/);
+    });
+});
+
+// ── AN2 / AN3 / AN4, added 2026-08-23 ─────────────────────────────────────
+
+describe('AN2 — the analysis is generated over the TEAM\'s own people', () => {
+    /**
+     * ⚠️ IT WAS GENERATED OVER SIX HARDCODED NAMED COLLEAGUES, FOR EVERY TEAM.
+     *    `const currentProfiles = STAFF_PROFILES` — Alif, Fadzlynn, Derlinder,
+     *    Ying Xian, Brandon, Nisa, with their job grades — so a Respiratory Therapy
+     *    lead's year-end report named another department's staff, and
+     *    `handlePublish` archived it to THEIR `reports/{year}`, readable by every
+     *    member of their team. A cross-tenant disclosure by construction.
+     */
+    it('sends the team\'s own members, and none of the old hardcoded names', async () => {
+        demoMode = false;
+        activeTeamId = 'kkh-respiratory-therapy';
+        renderPanel();
+        await generate();
+
+        const payload = analysisSpy.mock.calls[0][0];
+        expect(payload.staffProfiles.map((p) => p.name)).toEqual(['A. Clinician', 'B. Clinician']);
+
+        const serialised = JSON.stringify(payload);
+        ['Fadzlynn', 'Derlinder', 'Ying Xian', 'Nisa', 'Brandon'].forEach((n) => {
+            expect(serialised, `${n} must not reach the model`).not.toContain(n);
+        });
+    });
+
+    /**
+     * ⚠️ THE BAND, NEVER THE GRADE. A like-for-like replacement would have put
+     *    `AH14` into a payload that goes to Gemini — the same disclosure the grade
+     *    privacy model exists to prevent, through a different door.
+     */
+    it('never puts a raw job grade in the payload', async () => {
+        demoMode = false;
+        renderPanel();
+        await generate();
+        expect(JSON.stringify(analysisSpy.mock.calls[0][0])).not.toMatch(/\b(AH|JG)\d{1,2}\b/);
+    });
+
+    /** `AN3` — the team name was the literal string "SSMC@KKH CEP Team", for everyone. */
+    it('sends the real team name and the teamId the server authorises against', async () => {
+        demoMode = false;
+        activeTeamId = 'kkh-respiratory-therapy';
+        renderPanel();
+        await generate();
+
+        const payload = analysisSpy.mock.calls[0][0];
+        expect(payload.teamName).toBe('Respiratory Therapy, KKH');
+        expect(payload.teamId).toBe('kkh-respiratory-therapy');
+        expect(payload.teamName).not.toMatch(/SSMC/);
+    });
+});
+
+describe('AN4 — a non-lead is refused before the callable, not by it', () => {
+    /**
+     * `hasAdminAccess` (`App.jsx:459`) is `isDemo || isLead || ADMIN_EMAILS.includes(email)
+     * || user?.role === 'admin'` — four disjuncts, three of which are true for people
+     * whose MEMBERSHIP role is not `'lead'`, including the two legacy admin addresses.
+     * Without this check such a person reaches GENERATE and gets `permission-denied`
+     * back from the server, in front of whoever is watching.
+     */
+    it('does not call the function at all', async () => {
+        demoMode = false;
+        activeIsLead = false;
+        renderPanel();
+
+        fireEvent.click(screen.getByRole('button', { name: /generate 2026 report/i }));
+        await act(async () => { await vi.advanceTimersByTimeAsync(3000); });
+
+        expect(analysisSpy).not.toHaveBeenCalled();
+        expect(screen.getByText(/not lead|team lead/i)).toBeTruthy();
     });
 });

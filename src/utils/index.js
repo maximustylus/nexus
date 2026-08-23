@@ -36,6 +36,42 @@ export const MONTHS = [
 // Removed from both, they instead see "nobody has added you to a team yet", which
 // is true and tells them who to ask. Their existing records are untouched; a lead
 // can invite them back without a deploy.
+/**
+ * ==============================================================================
+ * ⚠️ THE `title` FIELDS NO LONGER CARRY A JOB GRADE — `AN1`
+ * ==============================================================================
+ *
+ * They read `'Lead and Sr. CEP (JG14)'`, `'CEP (JG13)'`, `'CEP (JG12)'`,
+ * `'CEP (JG11)'`. This array is a module-level constant, so those strings were in
+ * the built bundle, which one route serves to every visitor — including
+ * `/individuals`, the community health screening a member of the public opens with
+ * no sign-in. Six colleagues' pay grades, downloadable as part of the page. No
+ * Firestore read is involved, so no rule in `firestore.rules` could ever have
+ * stopped it.
+ *
+ * That is the whole grade-privacy model — grade in its own collection,
+ * `allow list: if false` even to a lead, `useTeamGrades` lead-only, grade never in
+ * a member-list render — bypassed by a string.
+ *
+ * ⚠️ AND THE OBVIOUS FIX WAS NOT ENOUGH. Replacing `(JG12)` with `CEP II` hides
+ *    nothing: `src/knowledgeBase.js` ships too, and it maps the tiers to the grades
+ *    one-for-one — *"CLINICAL EXERCISE PHYSIOLOGIST II (JG12)"*, with a duty split
+ *    and promotion criteria for each. The tier IS the grade to anybody holding both
+ *    files, and both files are in the same bundle. So the tier came out as well.
+ *
+ * What remains is a profession and a function, which are on somebody's badge.
+ * A person's real title now lives on `teams/{id}/members/{uid}.title`, which a lead
+ * maintains and which no unauthenticated visitor can read.
+ *
+ * ⚠️ STILL SHIPPING, AND NOT FIXABLE TONIGHT — `AN14`. This array also carries
+ *    eight real NAMES and eight real WORK EMAIL ADDRESSES, and it is still live:
+ *    `checkAccess` matches on email to seed a legacy member's profile
+ *    (`App.jsx:599`, `WelcomeScreen.jsx:170`), and `STAFF_LIST`/`STAFF_IDS` are
+ *    derived from it. Removing it means reworking an auth-adjacent bridge, which is
+ *    not a thing to do the night before a demo. The grade is the attribute the
+ *    privacy model protects and it is gone; the names and addresses are `AN14` and
+ *    are a smaller, separate problem.
+ */
 export const TEAM_DIRECTORY = [
   // --- LEADERSHIP & ADMINS ---
   { 
@@ -43,7 +79,7 @@ export const TEAM_DIRECTORY = [
     name: 'Alif', 
     email: 'muhammad.alif@kkh.com.sg', 
     role: 'admin',
-    title: 'Lead and Sr. CEP (JG14)'
+    title: 'Lead, Clinical Exercise Physiology'
   },
   { 
     id: 'nisa', // Matches Firestore ID 'nisa'
@@ -69,28 +105,28 @@ export const TEAM_DIRECTORY = [
     name: 'Brandon', 
     email: 'brandon.feng.gg@kkh.com.sg', 
     role: 'staff',
-    title: 'CEP (JG11)'
+    title: 'Clinical Exercise Physiologist'
   },
   { 
     id: 'ying_xian', // 🛡️ FIXED: Replaced space with underscore to perfectly match Firestore
     name: 'Ying Xian', 
     email: 'lim.ying.xian@kkh.com.sg', 
     role: 'staff',
-    title: 'CEP (JG12)'
+    title: 'Clinical Exercise Physiologist'
   },
   { 
     id: 'derlinder', // Matches Firestore ID 'derlinder'
     name: 'Derlinder', 
     email: 'derlinder.kaur@kkh.com.sg', 
     role: 'staff',
-    title: 'CEP (JG12)'
+    title: 'Clinical Exercise Physiologist'
   },
   { 
     id: 'fadzlynn', // Matches Firestore ID 'fadzlynn'
     name: 'Fadzlynn', 
     email: 'fadzlynn.mohamad.fadzully@kkh.com.sg', 
     role: 'staff',
-    title: 'CEP (JG13)'
+    title: 'Clinical Exercise Physiologist'
   }
 ];
 

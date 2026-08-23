@@ -54,6 +54,27 @@ original post-mortems into one. `AU2` means today exactly what it meant when it 
 **53 findings**, not the 51 this file was created with: `AU25` (the go-live gate) and
 `AC15` (fixing `AC1`) were opened on the same day. Neither renumbers anything.
 
+## ⚠️ Two new ids, opened by review of the first fix batch
+
+| Id | Finding | Severity |
+|---|---|---|
+| `AU26` | `target_doc` — the field that CHOOSES the Firestore document — was the one model-supplied value left to `String()` coercion. `{}` → `"[object Object]"`, `true` → `"true"`, `0` → `"0"`, all ACCEPTED. Contained on `staff_loads` by the `memberUidByName` lookup; **not** contained on `monthly_workload`, where `workloadPath` asserts nothing. Data quality, not disclosure. **Closed** in `c2a41c1`. | medium |
+| `AN14` | `TEAM_DIRECTORY` still ships in the bundle: eight real **names** and eight real **work email addresses**. Still live via `checkAccess` (`App.jsx:599`, `WelcomeScreen.jsx:170`) and `STAFF_LIST`/`STAFF_IDS`. The **grades** are out; the names and addresses need the legacy auth bridge reworked, which is not a night-before-a-demo change. | medium · **OPEN** |
+
+## ⚠️ What the review of the first batch found in my own work
+
+Recorded because a ledger that lists only successes is the thing this repository keeps
+getting burned by. All four are fixed in `c2a41c1`.
+
+| What | Why it matters |
+|---|---|
+| **`'i saw '` in `selectDemoMode` was worse than the bug it fixed** | DATA_ENTRY is tested first, so a two-word prefix beat COACH, ASSISTANT and RESEARCH. Twelve routings changed. *"I saw 3 arrests back to back and I am wrung out"* → **"Logged 3 against your workload record"** plus a green commit card. Distress answered with a database write, in front of the Allied Health Director. |
+| **The commit claimed "all four other routings are unchanged"** | True of the four exact README sentences and nothing else. The `AU13` corollary again — evidence scoped narrower than the claim above it. Caught by review, not by a test. |
+| **The first replacement was still too broad** | A bare `'patients in'` caught *"12 patients in a morning is too many"*. A keyword cannot separate "patients in June" from "patients in a morning"; only a named month can, so the pattern now requires one. |
+| **Fixing `AU22` created a red failure banner on stage** | The card renders now, so the **Commit Workload** button exists — and pressing it in Demo Mode threw, painting *"⚠️ Write failed: Sandbox mode does not write to the database."* `README.md:186` scripts a presenter to demo that card and promises "a button to push to Firestore". The sandbox refusal is an explanation, not a failure, and now reads as one. |
+| **My comment on `AN4` was false** | It said *"`hasAdminAccess` already gates the screen to a lead"*. It does not — `App.jsx:459` is four disjuncts, three of which are true for people whose membership role is **not** `'lead'`, including the two legacy admin addresses. A presenter reaching the screen by the email path would have hit `permission-denied` mid-demo on a feature that worked yesterday. `SmartAnalysis` now checks `isLead` client-side and says so in a sentence. |
+| **Three of eight rows were closed with no regression test** | `AN4`, `AU22` and `AU25` were closed on an edit plus a manual observation. `demoAura.test.js`'s existing `toMatchObject({ value, written })` is a PARTIAL match that passes with or without the `AU22` fix. All three now have tests that fail on the pre-fix code. |
+
 ## Closed on 2026-08-23, with evidence
 
 | Id | What | Evidence |
@@ -131,8 +152,8 @@ Closes four findings at once, and it is the number the whole instrument reports.
 
 | # | Id | Item | Owner | Status | Evidence |
 |---|---|---|---|---|---|
-| 0.1 | `AN1` | Delete `STAFF_PROFILES`; verify against `dist/` | me | **`OPEN`** | — |
-| 0.2 | `AN2` | Source profiles from `members`, grades from `useTeamGrades` | me | **`OPEN`** | — |
+| 0.1 | `AN1` | Delete `STAFF_PROFILES`; verify against `dist/` | me | `DONE` (grades) · `OPEN` (`AN14`) | `c2a41c1`. **No real colleague is within 120 chars of a grade string in the bundle** — verified by script against `dist/`. Remaining `JG` hits are the Marvel fixture and the job framework. ⚠️ `STAFF_PROFILES` was only one of two copies: `TEAM_DIRECTORY.title` also carried `(JG14)`, `(JG13)`, `(JG12)`, `(JG11)`. Names and emails still ship — `AN14`. |
+| 0.2 | `AN2` | Source profiles from `members`, grades from `useTeamGrades` | me | `DONE` | `c2a41c1` · the payload carries the **band**, never the grade, because it goes to Gemini |
 | 0.3 | `AN4` | Auth + team-membership check on `generateSmartAnalysis` | me | `DONE` | `e3b6bb9` |
 | 0.4 | `AU2` | `Number.isFinite` + range on `target_value` | me | `DONE` | `e3b6bb9` · 58 tests |
 | 0.5 | `AC1` | Remove the `includes('20')` branch | me | `DONE` | `a99ffa6` · 70 tests |

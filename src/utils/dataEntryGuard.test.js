@@ -59,6 +59,14 @@ describe('the happy paths still pass', () => {
         expect(refuseWorkloadWrite(workload({ target_field: f }))).toBeNull();
     });
 
+    /**
+     * ⚠️ AN INTEGER, LIKE THE MONTH BESIDE IT. Accepting `35.7` patients while
+     *    refusing a non-integer month was an asymmetry with no reason behind it.
+     */
+    it.each([35.7, 0.5, 1e-3])('refuses the non-integer count %p', (v) => {
+        expect(refuseWorkloadWrite(loads({ target_value: v }))).toMatch(/whole number/i);
+    });
+
     it('accepts zero as a real, deliberate figure', () => {
         // ⚠️ A TYPED zero is legitimate — a clinic that ran no sessions in a month.
         //    What `AU2` was about is a zero the model never meant: `null` COERCED
@@ -162,9 +170,35 @@ describe('the collection allowlist', () => {
     });
 });
 
-describe('the target document', () => {
-    it.each(['', '   ', 'null', 'NULL', null, undefined])('refuses target_doc %p', (d) => {
+describe('the target document — AU26', () => {
+    it.each(['', '   ', 'null', 'NULL'])('refuses the empty-ish string %p', (d) => {
         expect(refuseWorkloadWrite(loads({ target_doc: d }))).toMatch(/Missing target document/i);
+    });
+
+    /**
+     * ⚠️ `AU26`. `target_doc` CHOOSES THE DOCUMENT, and it was the one model-supplied
+     *    field still left to `String()` coercion — `AU2`'s mechanism on the value
+     *    with the largest consequence. Each of these was ACCEPTED before the typeof
+     *    check, and `workloadPath` asserts nothing (unlike `rosterPath` beside it),
+     *    so on `monthly_workload` a model returning an object wrote
+     *    `teams/{id}/workload/[object Object]` while the clinician read "Database
+     *    updated successfully."
+     */
+    it.each([
+        [{},    '[object Object]'],
+        [true,  'true'],
+        [0,     '0'],
+        [[1],   '1'],
+        [null,  'null'],
+        [undefined, 'undefined'],
+    ])('refuses the non-string %p, which String() made %p', (value, coerced) => {
+        expect(String(value)).toBe(coerced);                  // the old behaviour
+        expect(refuseWorkloadWrite(loads({ target_doc: value })))
+            .toMatch(/did not say clearly|Missing target document/i);
+    });
+
+    it('refuses a path rather than a record name', () => {
+        expect(refuseWorkloadWrite(loads({ target_doc: 'a/b/c' }))).toMatch(/cannot use as a record name/i);
     });
 });
 

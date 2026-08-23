@@ -60,6 +60,15 @@
  * exists. Those need `memberUidByName` and a live context, they are effects rather
  * than judgements, and they stay in the component. This module answers exactly one
  * question: **is this object safe to turn into a write?**
+ *
+ * ⚠️ IT RETURNS `string | null`, NOT A PLAN. An earlier version of this paragraph
+ *    said "an object in, a refusal or a plan out" — there is no plan, and the
+ *    component still calls `Number(workload.target_value)` at the write itself.
+ *    That is harmless only because the guard has already proven the value IS a
+ *    finite integer, so the coercion is a no-op. Handing back a normalised value
+ *    would be better and is not tonight's change; the docstring is corrected rather
+ *    than left describing something that was never built, which is trap 4 in this
+ *    project's own list.
  */
 
 /** The only two collections MODE 3 may target. Names are pre-migration; the
@@ -108,9 +117,41 @@ export const refuseWorkloadWrite = (workload) => {
         return 'AURA asked to write somewhere I do not recognise. Nothing was saved.';
     }
 
-    const rawTarget = String(workload.target_doc ?? '').trim();
+    /**
+     * ⚠️ `AU26` — `target_doc` CHOOSES THE DOCUMENT, and it was the one model-supplied
+     *    field still left to `String()` coercion: the exact mechanism `AU2` is about,
+     *    applied to the value with the largest consequence. Measured before this
+     *    check existed:
+     *
+     *        target_doc: {}      -> ACCEPTED -> "[object Object]"
+     *        target_doc: true    -> ACCEPTED -> "true"
+     *        target_doc: 0       -> ACCEPTED -> "0"
+     *        target_doc: [1]     -> ACCEPTED -> "1"
+     *
+     *    On `staff_loads` the damage was contained by the `memberUidByName` lookup,
+     *    which resolves an invented name to nothing. On `monthly_workload` it was
+     *    not: `workloadPath` asserts nothing (`teamPaths.js:345`, unlike `rosterPath`
+     *    and `reportPath` beside it), so a model returning an object wrote
+     *    `teams/{id}/workload/[object Object]` and the clinician read "Database
+     *    updated successfully."
+     *
+     *    Bounded rather than catastrophic — `match /workload/{period}` is a single
+     *    segment, so a path-like string matches no rule and is denied by the
+     *    catch-all, and the collection's rule is `allow read: if false`. It is data
+     *    quality, not disclosure. It is written down because `AU3` was closed while
+     *    its sibling sat one `String()` away and unrecorded.
+     */
+    if (typeof workload.target_doc !== 'string') {
+        return 'AURA did not say clearly who or what this is for. Nothing was saved.';
+    }
+    const rawTarget = workload.target_doc.trim();
     if (rawTarget === '' || rawTarget.toLowerCase() === 'null') {
         return 'Missing target document. Please ask AURA to clarify who this is for.';
+    }
+    // A document id is one path segment. A model that emits `a/b/c` is describing a
+    // path, and the rules would refuse it anyway — refused here with a sentence.
+    if (rawTarget.includes('/')) {
+        return 'AURA gave a target I cannot use as a record name. Nothing was saved.';
     }
 
     /**
@@ -123,6 +164,14 @@ export const refuseWorkloadWrite = (workload) => {
     const value = workload.target_value;
     if (typeof value !== 'number' || !Number.isFinite(value)) {
         return 'AURA did not give a usable number. Tell it the figure again — nothing was saved.';
+    }
+    /**
+     * ⚠️ AN INTEGER, LIKE THE MONTH BESIDE IT. `35.7` patients is not a count, and
+     *    accepting it while refusing a non-integer month was an asymmetry with no
+     *    reason behind it — noticed in review rather than designed.
+     */
+    if (!Number.isInteger(value)) {
+        return 'That is not a whole number of patients, so it was not saved. Check the figure with AURA.';
     }
     if (value < 0) {
         return 'That figure is negative, so it was not saved. Tell AURA the number again.';

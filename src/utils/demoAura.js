@@ -90,11 +90,35 @@ export const selectDemoMode = (userText) => {
      *    Found by the go-live gate walking the README step by step, not by any
      *    test — every test here used a sentence that already worked.
      */
+    /*
+     * ⚠️ `'i saw '` WAS HERE FOR ELEVEN MINUTES AND IT WAS WORSE THAN THE BUG IT
+     *    FIXED. DATA_ENTRY is tested FIRST, so a two-word prefix that common beat
+     *    COACH, ASSISTANT and RESEARCH. Measured over a corpus of plausible
+     *    sentences, twelve routings changed, including:
+     *
+     *      "I saw 3 arrests back to back and I am wrung out"   COACH -> DATA_ENTRY
+     *      "I saw so many patients today that I did not eat"   COACH -> DATA_ENTRY
+     *      "I saw a guideline on falls prevention"          RESEARCH -> DATA_ENTRY
+     *
+     *    A clinician describing distress would have been answered by the wellbeing
+     *    tool with *"Logged 3 against your workload record for January"* and a green
+     *    commit card. `'patients this'` and `'patients last'` went with it: they
+     *    bought nothing the README needed and widened the same net.
+     *
+     *    The original commit claimed "all four other routings are unchanged" — true
+     *    of the four exact README sentences and of nothing else. That is the `AU13`
+     *    corollary again: evidence scoped narrower than the claim it sits under.
+     *
+     * ⚠️ AND THE FIRST REPLACEMENT, A BARE `'patients in'`, WAS STILL TOO BROAD. It
+     *    caught *"I am exhausted, 12 patients in a morning is too many"* — distress,
+     *    routed to a database write, which is the same failure one notch quieter.
+     *    A keyword cannot tell "patients in June" from "patients in a morning";
+     *    only the MONTH can, so `MONTH_QUALIFIED` requires one.
+     */
     if (has(userText, [
         'log ', 'record ', 'update my', 'add to database',
-        'patients for', 'patients in', 'patients last', 'patients this',
-        'workload for', 'workload in', 'i saw ',
-    ])) {
+        'patients for', 'workload for', 'workload in',
+    ]) || MONTH_QUALIFIED.test(String(userText || ''))) {
         return 'DATA_ENTRY';
     }
     if (has(userText, ['memo', 'draft', 'letter', 'email', 'agenda', 'minutes', 'roster note', 'write me'])) {
@@ -114,6 +138,17 @@ export const selectDemoMode = (userText) => {
  *    Affirmations, Reflective listening, Summaries — so a demo that dispensed tips
  *    would misrepresent the tool to the person deciding whether to adopt it.
  */
+/**
+ * `"…patients in June"` — a figure explicitly attached to a month.
+ *
+ * ⚠️ THE MONTH IS WHAT MAKES IT A LOGGING REQUEST. `'patients in'` as a bare
+ *    keyword also matches "12 patients in a morning is too many", which is somebody
+ *    telling a wellbeing tool they are overloaded. The distinction is not the verb
+ *    or the noun — it is whether a PERIOD is named, and a period is what a workload
+ *    record is keyed by.
+ */
+const MONTH_QUALIFIED = /\b(?:patients?|cases?|sessions?)\s+(?:in|for|during)\s+(?:january|february|march|april|may|june|july|august|september|october|november|december)\b/i;
+
 /** Month names, for the demo's own echo and for `target_month`. */
 const MONTH_NAMES = Object.freeze([
     'January', 'February', 'March', 'April', 'May', 'June',
@@ -129,8 +164,26 @@ const MONTH_NAMES = Object.freeze([
  */
 const demoMonthIndex = (userText) => {
     const text = String(userText || '').toLowerCase();
-    const found = MONTH_NAMES.findIndex((m) => text.includes(m.toLowerCase()));
-    return found === -1 ? 0 : found;
+    /**
+     * ⚠️ A PREPOSITION IS REQUIRED, AND A WORD BOUNDARY WAS NOT ENOUGH.
+     *
+     *    The first draft used `text.includes(month)`, so *"log 20 patients, I may
+     *    have miscounted"* resolved to **May** and *"march the patients through"*
+     *    to **March** — the unanchored-substring trap, written into the fix for
+     *    `AC1`, which is the same trap.
+     *
+     *    The obvious repair, `\bmay\b`, DOES NOT WORK: "may" in "I may have
+     *    miscounted" is a genuine word with genuine boundaries, and so is "march"
+     *    as a verb. Three of the twelve month names are ordinary English words
+     *    (may, march, august). What actually disambiguates them is the preposition
+     *    a person uses when they mean the month — "for June", "in March" — so that
+     *    is what is matched. A bare month name is left unresolved rather than
+     *    guessed at.
+     */
+    const found = MONTH_NAMES.findIndex(
+        (m) => new RegExp(`\\b(?:for|in|during|of)\\s+${m}\\b`, 'i').test(text),
+    );
+    return found === -1 ? null : found;
 };
 
 const COACH_TURNS = [
@@ -208,6 +261,7 @@ export const respondAsDemoAura = ({ userText, persona, turnIndex = 0 }) => {
          *    alongside so a reader of the object can see that at a glance.
          */
         const matched = String(userText || '').match(/(\d+)/);
+        const monthIndex = demoMonthIndex(userText);
         if (!matched) {
             return {
                 mode: 'DATA_ENTRY',
@@ -216,14 +270,24 @@ export const respondAsDemoAura = ({ userText, persona, turnIndex = 0 }) => {
         }
         return {
             mode: 'DATA_ENTRY',
-            reply: `Logged ${matched[1]} against your workload record for ${MONTH_NAMES[demoMonthIndex(userText)]}. `
-                 + 'In the live system this writes straight to the department dataset; in the sandbox it is displayed only.',
+            reply: monthIndex === null
+                ? `Logged ${matched[1]} against your workload record. Tell me which month and I will place it. `
+                  + 'In the live system this writes straight to the department dataset; in the sandbox it is displayed only.'
+                : `Logged ${matched[1]} against your workload record for ${MONTH_NAMES[monthIndex]}. `
+                  + 'In the live system this writes straight to the department dataset; in the sandbox it is displayed only.',
             db_workload: {
                 target_collection: 'staff_loads',
                 target_doc: who.name,
                 target_field: 'data',
                 target_value: Number(matched[1]),
-                target_month: demoMonthIndex(userText),
+                /**
+                 * ⚠️ `null`, NOT `0`, WHEN NO MONTH WAS NAMED. Defaulting to January
+                 *    invents a fact — it is `AU2`'s `Number(null) === 0` wearing a
+                 *    different hat, and the live guard now refuses a null month
+                 *    rather than guessing, so the sandbox must not model something
+                 *    the live path would reject.
+                 */
+                target_month: monthIndex,
                 value: Number(matched[1]),
                 period: 'demo',
                 written: false,

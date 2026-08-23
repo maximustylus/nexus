@@ -204,3 +204,151 @@ describe('the modes that show a feature rather than a conversation', () => {
         expect(r.reply).not.toMatch(/\b(19|20)\d{2}\b\s*\)/);   // no fabricated citation year
     });
 });
+
+const PERSONA = DEMO_PERSONAS[0];
+
+// ── THE REGRESSION TESTS THAT WERE MISSING ──────────────────────────────────
+//
+// Review of the first fix batch found three rows closed on "an edit plus a manual
+// observation, with no test that would fail if the fix were undone". These are
+// those tests. Every one of them fails on the code as it was before.
+
+describe('AU22 — the sandbox emits the shape the card actually renders from', () => {
+    /**
+     * ⚠️ ASSERTED ON `target_collection` EXPLICITLY, NOT WITH `toMatchObject`.
+     *    The existing assertion at the top of this file is
+     *    `toMatchObject({ value: 35, written: false })` — a PARTIAL match, which
+     *    passes with or without the fix. It would not have caught the original
+     *    defect and would not catch its return.
+     *
+     *    The gate it has to satisfy is `AuraPulseBot.jsx:1104`:
+     *    `m.db_workload && m.db_workload.target_collection && … !== 'null'`.
+     */
+    const rendersCard = (m) => !!(
+        m.mode === 'DATA_ENTRY'
+        && m.db_workload
+        && m.db_workload.target_collection
+        && m.db_workload.target_collection !== 'null'
+    );
+
+    it('renders the card for the README\'s own scripted demo sentence', () => {
+        // `README.md:186` — "The Data Entry Test". The presenter says this on stage.
+        const r = respondAsDemoAura({ userText: 'I saw 145 patients in June', persona: PERSONA });
+        expect(r.mode).toBe('DATA_ENTRY');
+        expect(rendersCard(r)).toBe(true);
+        expect(r.db_workload.target_value).toBe(145);
+        expect(r.db_workload.target_month).toBe(5);   // June
+    });
+
+    it('carries every field the card reads', () => {
+        const r = respondAsDemoAura({ userText: 'log 35 patients for January', persona: PERSONA });
+        expect(r.db_workload).toHaveProperty('target_collection', 'staff_loads');
+        expect(r.db_workload).toHaveProperty('target_doc');
+        expect(r.db_workload).toHaveProperty('target_value', 35);
+        expect(r.db_workload).toHaveProperty('target_month', 0);
+    });
+
+    it('still says plainly that nothing was written', () => {
+        const r = respondAsDemoAura({ userText: 'log 35 patients for January', persona: PERSONA });
+        expect(r.db_workload.written).toBe(false);
+    });
+});
+
+describe('the DATA_ENTRY keywords must not swallow distress', () => {
+    /**
+     * ⚠️ THIS IS THE TEST THAT WOULD HAVE STOPPED A REAL REGRESSION.
+     *
+     *    The first fix for `README.md:186` added `'i saw '` to the keyword list.
+     *    DATA_ENTRY is tested FIRST, so that two-word prefix beat COACH, ASSISTANT
+     *    and RESEARCH — and a clinician typing *"I saw 3 arrests back to back and I
+     *    am wrung out"* would have been answered by the wellbeing tool with
+     *    *"Logged 3 against your workload record"* and a green commit card, in front
+     *    of the Allied Health Director.
+     *
+     *    The commit claimed "all four other routings are unchanged". That was true
+     *    of the four exact README sentences and of nothing else. This corpus is the
+     *    difference between those two statements.
+     */
+    it.each([
+        'I saw so many patients today that I did not eat',
+        'I saw 3 arrests back to back and I am wrung out',
+        'Honestly I saw my whole team struggling this week',
+        'I saw the roster and I have 6 late shifts in a row',
+        'This week I saw more patients than usual and I am done',
+        'I felt fine until I saw the clinic list',
+        'I have seen 20 patients this week and it is only Wednesday',
+        'I am exhausted, 12 patients in a morning is too many',
+    ])('%s stays with the coach', (text) => {
+        expect(selectDemoMode(text)).toBe('COACH');
+    });
+
+    it.each([
+        'I saw a guideline on falls prevention',
+        'I saw an interesting study on exercise oncology',
+    ])('%s stays with research', (text) => {
+        expect(selectDemoMode(text)).toBe('RESEARCH');
+    });
+
+    it('still routes the sentences that are genuinely a logging request', () => {
+        expect(selectDemoMode('I saw 145 patients in June')).toBe('DATA_ENTRY');
+        expect(selectDemoMode('Log 35 patients for January')).toBe('DATA_ENTRY');
+        expect(selectDemoMode('update my workload for March')).toBe('DATA_ENTRY');
+    });
+});
+
+describe('the demo month is read, not guessed', () => {
+    /**
+     * ⚠️ THREE MONTH NAMES ARE ORDINARY ENGLISH WORDS. An `includes` scan read
+     *    *"I may have miscounted"* as **May** and *"march the patients through"* as
+     *    **March** — the unanchored-substring trap, written into the fix for
+     *    `AC1`, which is the same trap. A word boundary does not help: those are
+     *    real words with real boundaries. A preposition does.
+     */
+    const monthOf = (t) => respondAsDemoAura({ userText: t, persona: PERSONA }).db_workload?.target_month;
+
+    it.each([
+        ['log 30 patients for March', 2],
+        ['I saw 145 patients in June', 5],
+        ['log 55 patients during August', 7],
+    ])('%s -> month %i', (text, expected) => {
+        expect(monthOf(text)).toBe(expected);
+    });
+
+    it.each([
+        'log 20 patients, I may have miscounted',
+        'march the patients through, log 30',
+        'it was august, log 40 patients',
+    ])('%s names no month', (text) => {
+        expect(monthOf(text)).toBeNull();
+    });
+
+    /**
+     * `null`, not `0`. Defaulting to January invents a fact — `AU2`'s
+     * `Number(null) === 0` in a different hat — and the live guard now refuses a
+     * null month rather than guessing, so the sandbox must not model something the
+     * live path would reject.
+     */
+    it('leaves the month unset rather than defaulting to January', () => {
+        expect(monthOf('log 12 patients')).toBeNull();
+    });
+});
+
+describe('AU25 — a persona missing a field does not take the sandbox down', () => {
+    it('does not throw when the persona has no title', () => {
+        expect(() => respondAsDemoAura({
+            userText: 'I am shattered', persona: { name: 'X', baseEnergy: 40 }, turnIndex: 0,
+        })).not.toThrow();
+    });
+
+    it('still produces a usable reply', () => {
+        const r = respondAsDemoAura({
+            userText: 'I am shattered', persona: { name: 'X', baseEnergy: 40 }, turnIndex: 0,
+        });
+        expect(typeof r.reply).toBe('string');
+        expect(r.reply.length).toBeGreaterThan(20);
+    });
+
+    it.each([{}, { name: 'X' }, { title: undefined }])('survives the persona %p', (persona) => {
+        expect(() => respondAsDemoAura({ userText: 'I am tired', persona, turnIndex: 0 })).not.toThrow();
+    });
+});

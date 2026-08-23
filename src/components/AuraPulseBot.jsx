@@ -755,8 +755,30 @@ export default function AuraPulseBot({ isOpen, onClose, onOpen: _onOpen, user })
             // this", which reads as a fault in their account rather than as the
             // sandbox behaving correctly. `isDemo` is the reason for the refusal
             // whenever it is true, so it is the reason that gets named.
+            /**
+             * ⚠️ THE SANDBOX REFUSAL IS AN EXPLANATION, NOT AN ERROR, AND IT USED TO
+             *    RENDER AS ONE. It threw, so the `catch` below painted a red
+             *    `isError: true` banner reading "⚠️ Write failed: Sandbox mode does
+             *    not write to the database."
+             *
+             *    That was invisible until `AU22` was fixed — before it, the card
+             *    never rendered, so the button did not exist and nobody could press
+             *    it. `README.md:186` scripts a presenter to demonstrate this exact
+             *    card and promises "a button to push to Firestore", without saying
+             *    "do not press it". Fixing the card created the failure banner and
+             *    put it in front of an audience.
+             *
+             *    Refusing to write is the sandbox working. It says so, calmly, and
+             *    returns.
+             */
             if (isDemo) {
-                throw new Error("Sandbox mode does not write to the database.");
+                setMessages(prev => [...prev, {
+                    role: 'bot',
+                    text: 'Sandbox: nothing was written. In live mode this commits '
+                        + 'the figure to your department record.',
+                    mode: 'DATA_ENTRY',
+                }]);
+                return;
             }
             if (!teamId) {
                 throw new Error("No team is selected, so there is nowhere to write this.");
