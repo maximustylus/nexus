@@ -17,8 +17,9 @@ ledger rule exists to prevent, and it has happened in this repository before.
 
 ## Ids
 
-Two series, deliberately distinct from the roster's `D`n / `Q`n so a reference is never
-ambiguous across files:
+**[IDS.md](IDS.md) is the legend for every prefix in the document set** — `P`, `Q`,
+`A`–`E`, `A-RC`, `M`, `CP`, `CD`, `T` — including the one letter that means three
+different things. The two series this file uses:
 
 | Prefix | Means | Who closes it |
 |---|---|---|
