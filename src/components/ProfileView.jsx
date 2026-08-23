@@ -181,7 +181,19 @@ const ProfileView = ({ user, onLogout }) => {
              *    that is already stored.
              */
             const memberUpdate = teamId ? buildMemberProfileUpdate(formData, membership || {}) : null;
-            const gradeUpdate = teamId ? buildGradeUpdate(formData.grade, myGrade) : null;
+            /**
+             * ⚠️ `setBy: 'self'` IS NOT COSMETIC — IT CLEARS A STALE 'lead'. A lead
+             *    can set somebody's grade from the TEAM tab, which stamps
+             *    `setBy: 'lead'` so that person can be told a grade they never chose
+             *    is deciding which shifts they lead. If this write did not stamp
+             *    `'self'`, correcting it here would leave the field saying a lead had
+             *    set it — the screen would keep contradicting what the person had
+             *    just done, and `merge: true` means an omitted field is KEPT, not
+             *    cleared.
+             */
+            const gradeUpdate = teamId
+                ? buildGradeUpdate(formData.grade, myGrade, new Date().toISOString(), 'self')
+                : null;
 
             if (memberUpdate || gradeUpdate) {
                 try {

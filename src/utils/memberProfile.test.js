@@ -186,6 +186,33 @@ describe('buildMemberProfileUpdate — the MEMBERSHIP half', () => {
 describe('buildGradeUpdate — the PRIVATE half', () => {
     it('returns the grade as its own document body', () => {
         expect(buildGradeUpdate('AH14', 'AH13')).toEqual({ grade: 'AH14' });
+
+        /**
+         * ⚠️ `setBy` RECORDS WHETHER, NEVER WHO. A lead can set a colleague's grade
+         *    from the TEAM tab, and the person deserves to know a grade they did not
+         *    choose is deciding which shifts they lead. A NAMED log of who changed a
+         *    colleague's pay grade would be a second sensitive artefact, and is the
+         *    reason this document carries no history at all.
+         */
+    });
+
+    it('stamps setBy only when the caller states it', () => {
+        expect(buildGradeUpdate('AH14', 'AH13', null, 'lead'))
+            .toEqual({ grade: 'AH14', setBy: 'lead' });
+        expect(buildGradeUpdate('AH14', 'AH13', null, 'self'))
+            .toEqual({ grade: 'AH14', setBy: 'self' });
+    });
+
+    /**
+     * ⚠️ NEVER INFERRED, AND A DEFAULT OF 'self' WOULD BE THE WORST ONE. This module
+     *    cannot see who is signed in, so a default would silently label every lead
+     *    correction as the person's own choice — the exact fact the field exists to
+     *    carry, reversed.
+     */
+    it('omits setBy entirely rather than guessing', () => {
+        expect(buildGradeUpdate('AH14', 'AH13')).not.toHaveProperty('setBy');
+        expect(buildGradeUpdate('AH14', 'AH13', null, 'nurse')).not.toHaveProperty('setBy');
+        expect(buildGradeUpdate('AH14', 'AH13', null, true)).not.toHaveProperty('setBy');
     });
 
     it('returns null when the grade did not move', () => {
