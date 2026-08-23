@@ -46,10 +46,10 @@ original post-mortems into one. `AU2` means today exactly what it meant when it 
 
 | | Count | Ids |
 |---|---|---|
-| `DONE`, evidenced | **8** | `AU2` `AU3` `AU22` `AU25` `AC1` `AC2` `AC15` `AN4` |
-| `OPEN`, mine | 35 | everything not listed below |
-| `OPEN`, **owner's decision** | 10 | `AU1` `AU5` `AU8` `AU11` `AU17` `AC11` `AN7` `AN9` `AN11` `AN12` |
-| **`LIVE` right now** | **1** | `AN1` — six colleagues' job grades still ship in `dist/` |
+| `DONE`, evidenced | **13** | `AU1` `AU2` `AU3` `AU22` `AU23` `AU25` `AU26` `AC1` `AC2` `AC15` `AN1`* `AN2` `AN3` `AN4` |
+| `OPEN`, mine | 30 | everything not listed below |
+| `OPEN`, **owner's decision** | 9 | `AU5` `AU8` `AU11` `AU17` `AC11` `AN7` `AN9` `AN11` `AN12` |
+| **`LIVE` right now** | **0 grades** · names/emails as `AN14` | \* `AN1`'s grade half is closed and verified against `dist/`; `AN14` is the residue |
 
 **53 findings**, not the 51 this file was created with: `AU25` (the go-live gate) and
 `AC15` (fixing `AC1`) were opened on the same day. Neither renumbers anything.
@@ -224,8 +224,9 @@ Closes four findings at once, and it is the number the whole instrument reports.
 | 6.4 | `AU18` `AC10` | One shared response parser instead of three copies | me | `OPEN` | — |
 | 6.5 | `AU13` | Rewrite `CP12`'s evidence string to what the grep actually shows; key anon logs deterministically | me | `OPEN` | — |
 | 6.6 | `AU20` `AU21` `AC4` | Project names out of the function; stop forwarding upstream error text; scope the `scoring.js` cap docstring | me | `OPEN` | — |
-| 6.7 | `AU1` | **Decide** how AURA is described — see below | **OWNER** | `OPEN` | — |
-| 6.8 | `AU17` | **Decide** what the PDPA control actually is, given `AU15` | **OWNER** | `OPEN` | — |
+| 6.7 | `AU1` | How AURA is described | **OWNER** → done | `DONE` | `README.md` — a *What NEXUS actually is* section separating the deterministic roster engine from the Gemini assistant, with the old claim quoted and struck through rather than deleted. Badges split: `Roster engine — deterministic` and `AURA assistant — Gemini`. |
+| 6.9 | `AU23` | README describes a codebase that has moved | me | `DONE` | Every path in the tree verified against the repo — `auraChat.js` and `useWindowSize.js` were listed and **deleted**; `auraEngine.js` was captioned *"Core LLM prompt structures"* and is roster code; the community portal, `TeamContext`, `firestore.rules` and `functions/` were all missing. The uncorrected autonomy claim in Release History now carries the same correction its Pillar A twin got on 2026-08-15. |
+| 6.8 | `AU17` | **Decide** what the PDPA control actually is, given `AU15` | **OWNER** | `OPEN` | The README no longer *claims* a control it does not have — it now says plainly that the attachment path accepts five files of any size and type with no scan and no log, and that "we tell staff not to" is the current control. The **decision** is still yours. |
 
 ---
 
@@ -259,7 +260,7 @@ W3   AU2                    ─ DONE  e3b6bb9  (+ AU3, AU22, AU25)
 W4   AC1 + AC2              ─ DONE  a99ffa6  (+ AC15, found while fixing AC1)
      AC3 + AC5              ─ still open: unifying the two pathways on one parser
      AU24                   ─ partly done: the decision is tested, clampEnergy is not
-     AU1                    ─ owner's, and the ICT survey is the clock
+     AU1                    ─ DONE  README rewritten; the ICT survey answer can quote it
      AU14 + AU15            ─ ceilings on the expensive endpoint
      AN10                   ─ chunk the nudge before it passes 500 users
 ```
