@@ -42,7 +42,7 @@ Not one system. Six things, and only four of them involve a model:
 | `demoAura.js` | the sandbox | **none** — deterministic, local | — |
 | `auraEngine.js` + `rosterEngineV2.js` | **the roster generator** | **none — not AI at all** | [`ROSTER_POSTMORTEM.md`](ROSTER_POSTMORTEM.md) |
 
-**56 findings.** 27 `AU` · 15 `AC` · 14 `AN`. (51 at first writing. `AU25` and `AC15` were
+**57 findings.** 28 `AU` · 15 `AC` · 14 `AN`. (51 at first writing. `AU25` and `AC15` were
 opened the same day by the go-live gate and by fixing `AC1`; `AU26`, `AU27` and `AN14` by
 reviews of the fixes themselves — see §6. The plan is [`AURA-TODO.md`](AURA-TODO.md).)
 
@@ -408,10 +408,62 @@ var isStrictFormatting = prompt.indexOf('Project HUGE') !== -1 || prompt.indexOf
 var dynamicTemperature = isStrictFormatting ? 0.1 : 0.7;
 ```
 
-`functions/index.js:357`. Two named projects decide sampling temperature for everybody.
-Every other caller gets **0.7** — a creative-writing temperature — including the turns that
-emit database writes and wellbeing classifications. `generateSmartAnalysis` and
-`processFeedPost` both use 0.2.
+`functions/index.js:357`. Every other caller gets **0.7** — a creative-writing temperature —
+including the turns that emit database writes and wellbeing classifications.
+`generateSmartAnalysis` and `processFeedPost` both use 0.2.
+
+> ### ⚠️ Corrected 2026-08-23 — half of this branch is dead code, and I described it wrongly
+>
+> This said *"two named **projects**"*. They are two **personas**: `magnify_mama` and
+> `huge_grant` in `src/config/personas.js`. And the switch is matched against the persona's
+> prompt text by substring, so:
+>
+> ```
+> $ grep -c "Project HUGE" src/config/personas.js
+> 0
+> ```
+>
+> **`prompt.indexOf('Project HUGE')` can never match.** Only `'Magnify Mama'` can lower the
+> temperature; the Grant Strategist persona has silently run at 0.7 — the creative-writing
+> setting — for as long as the branch has existed, on a persona whose entire job is not
+> fabricating citations. Nobody would see it: the output is prose either way.
+
+### `AU28` — the persona mechanism teaches the model to obey overrides in the user turn · **high**
+
+Found 2026-08-23, by being asked whether the prompts had been revised. **They had not, and
+`src/config/personas.js` had never been audited at all** — it is absent from §8's list of
+what this document does not cover, which is its own small failure.
+
+Every `LIVE_PERSONAS` entry's prompt begins with the literal words **`System Override:`**:
+
+```js
+{ id: 'well_well',  …, prompt: 'System Override: You are Well Well…' },
+{ id: 'aim_assist', …, prompt: 'System Override: You are Aim Assist…' },
+{ id: 'data_dude',  …, prompt: 'System Override: You are Data Dude…' },
+```
+
+That text is not a system instruction. `AuraPulseBot.jsx:330` appends it to `contextPrompt`,
+which is sent as the `prompt` field, and `functions/index.js:345` prefixes it:
+
+```js
+if (prompt) contextParts.push('CONTEXT/OVERRIDE: ' + prompt);
+```
+
+— into the **user turn**. So the application's own design demonstrates, on every persona
+switch, that text arriving in a user turn can relabel the assistant. And `validateChatInput`
+accepts a **caller-supplied `prompt` of up to 8,000 characters** (`MAX_PROMPT_LEN`), which the
+server will obligingly label `CONTEXT/OVERRIDE:` on the caller's behalf.
+
+⚠️ **This is a channel, not an accident.** `CP6` closed the equivalent on the public endpoint
+— `communityAck` takes no caller-supplied prompt, deliberately, and its comment says why. The
+staff endpoint kept it, and with no rate limit (`AU14`) and no App Check, an authenticated
+account can send 8,000 characters of override text as often as it likes.
+
+The fix is not obvious and should not be rushed: the persona feature is real and the owner
+uses it. The options are a server-side persona allowlist (the client sends `personaId`, the
+server holds the text), or dropping the `CONTEXT/OVERRIDE` label so user content is never
+framed as an instruction. Both change model behaviour and neither is a night-before-a-demo
+change.
 
 ### `AU21` — upstream error text forwarded to the client, in jargon · **low**
 
@@ -1036,6 +1088,7 @@ A post-mortem listing only failures is a misleading document.
 | `AC3` | Two pathways, two PAVS algorithms; parity test blind to it | high | me |
 | `AC15` | A tapped chip scored 25% high — and falsifies `AC3`'s parity claim | high | me |
 | `AU27` | `exportToDoc` and `confirmAdminAction` write to Firestore with no `isDemo` guard | high | me |
+| `AU28` | Persona prompts are `System Override:` text in the user turn; caller-supplied `prompt` up to 8,000 chars | high | **owner** |
 | `AC5` | Parser unexported, untested; suite tests source text | high | me |
 | `AC6` | `concludeTriage` guards the only call that cannot throw | high | me |
 | `AC12` | No live region in the portal; the staff roster has two | high | me |
@@ -1080,6 +1133,7 @@ none renumbers anything:
 | `AC15` | fixing `AC1` and asserting the result against the **other pathway's** table |
 | `AU26` | review of the first fix batch — `target_doc` left to `String()` coercion |
 | `AU27` | review of the second — the `isDemo` guard on one of three write sites |
+| `AU28` | being asked whether the prompts had been revised — `personas.js` had never been read |
 | `AN14` | fixing `AN1` — `STAFF_PROFILES` was one of **two** copies |
 
 ⚠️ **Three of the five were found in the fixes, not in the original audit.** That is the
@@ -1136,3 +1190,13 @@ full old→new mapping table, and update every citation in `CHANGELOG.md`.
      never fired.
 - **Model output quality is not assessed.** Whether AURA's coaching is *good* is a clinical
   question, not a code question.
+- ⚠️ **THE PROMPTS THEMSELVES HAVE NOT BEEN REVISED, AND `personas.js` WAS NOT READ UNTIL
+  `AU28`.** `AURA_SYSTEM_PROMPT` and `SMART_ANALYSIS_SYSTEM_PROMPT` are **unchanged since
+  2026-04-17** — four months, predating the entire multi-team migration, which is why `AU7`
+  briefs the model on collections that no longer exist. The findings above are about the
+  plumbing AROUND the prompts: what the model is allowed to write, who may call it, what
+  happens to what it returns. **AURA largely IS its prompts**, and revising them is a separate
+  piece of work with no test suite behind it — a changed system prompt shifts behaviour in
+  ways nothing in this repository can catch. Open prompt items: `AU7` `AU8` `AU19` `AU20`
+  `AU28` `AN5` `AN7` `AN12`, plus `SMART_ANALYSIS_SYSTEM_PROMPT`'s hardcoded *"for
+  KKH/SingHealth"*, which is wrong for every team but the first.

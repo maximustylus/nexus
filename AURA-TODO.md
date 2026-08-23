@@ -215,6 +215,29 @@ Closes four findings at once, and it is the number the whole instrument reports.
 | 5.7 | `AN9` | **Decide** whether cluster-wide `isSignedIn()` read of the rollup is acceptable with suppression as the only control | **OWNER** | `OPEN` | — |
 | 5.8 | `AN11` | **Decide** whether the nudge should be per-team | **OWNER** | `OPEN` | — |
 
+## P7 — The prompts themselves · **not started**
+
+⚠️ **`AURA_SYSTEM_PROMPT` and `SMART_ANALYSIS_SYSTEM_PROMPT` are unchanged since 2026-04-17.**
+Everything closed so far is the plumbing around them. AURA largely **is** its prompts, and
+none of them has been revised.
+
+**Why this is not a tonight job, stated so it is a decision rather than a drift:** there is no
+test suite for prompt output. A changed system instruction shifts model behaviour in ways
+nothing in this repository can catch, and the only honest verification is running real turns
+and reading them. That is a morning's work with a person watching, not an 11pm edit.
+
+| # | Id | Item | Owner | Status |
+|---|---|---|---|---|
+| 7.1 | `AU7` | MODE 3's schema names `monthly_workload`, `staff_loads` and `"alif"` — all pre-migration | me | `OPEN` |
+| 7.2 | `AU28` | Personas are `System Override:` text in the user turn; caller `prompt` up to 8,000 chars. Options: server-side persona allowlist, or stop labelling user content `CONTEXT/OVERRIDE` | **OWNER** | `OPEN` |
+| 7.3 | `AU19` | `db_workload` is not in `requiredFields`, and `requiredFields` does not require | me | `OPEN` |
+| 7.4 | `AU20` | Temperature 0.7 on write paths. ⚠️ And `'Project HUGE'` **never matches** — `grep -c` returns 0 — so the Grant Strategist persona has always run at 0.7 | me | `OPEN` |
+| 7.5 | `AN5` | The prompt asks for 1,000–2,000 + 200–500 words against a 2,048-token budget | me | `OPEN` |
+| 7.6 | — | `SMART_ANALYSIS_SYSTEM_PROMPT:2` hardcodes *"for KKH/SingHealth"* — wrong for team #2 | me | `OPEN` |
+| 7.7 | `AU8` | **Decide** whether the wellbeing assessment should be content-gated | **OWNER** | `OPEN` |
+| 7.8 | `AN7` | **Decide** whether a model may split confidential/public staff content unreviewed | **OWNER** | `OPEN` |
+| 7.9 | `AN12` | **Decide** whether a model classification is an acceptable PDPA *guard* | **OWNER** | `OPEN` |
+
 ## P6 — Tests and honesty · `AU18` `AU20`–`AU24` `AC4` `AN`
 
 | # | Id | Item | Owner | Status | Evidence |
