@@ -66,12 +66,16 @@ describe('⚠️ nothing composes a team path by hand', () => {
 
     /**
      * ⚠️ THE EXCEPTIONS ARE NAMED, NOT PATTERN-MATCHED, so adding one is a visible
-     *    decision. Each is global on purpose and `teamPaths.js` says why:
-     *      · `smart_database`      AURA's append-only audit sink, never read back
-     *      · `beta_feedback`       a product feedback sink, not clinical data
-     *      · `community_assessments` the public portal's write; it has no team
+     *    decision. Each is global on purpose:
+     *      · `smart_database`        AURA's append-only audit sink, never read back
+     *      · `beta_feedback`         a product feedback sink, not clinical data
+     *      · `community_assessments` the public portal's write; the person has no team
+     *      · `community_insights`    the population rollup — COUNTS ONLY, cluster-wide
+     *                                by design, written by the Admin SDK and readable
+     *                                by any signed-in member of staff
      */
-    const ALLOWED_GLOBALS = ['smart_database', 'beta_feedback', 'community_assessments'];
+    const ALLOWED_GLOBALS = ['smart_database', 'beta_feedback', 'community_assessments',
+        'community_insights'];
 
     it.each(TEAM_SCOPED)('no file builds a %s path from a string literal', (collection) => {
         const pattern = new RegExp(`\\b(?:doc|collection)\\s*\\(\\s*db\\s*,\\s*['"\`]${collection}['"\`]`);
@@ -82,14 +86,31 @@ describe('⚠️ nothing composes a team path by hand', () => {
             .toEqual([]);
     });
 
-    it('the global sinks are the three that are documented, and no others', () => {
+    /**
+     * ⚠️ A SUBSET CHECK, NOT AN EQUALITY ONE, AND THE DIFFERENCE IS NOT PEDANTRY.
+     *
+     * This asserted `toEqual(ALLOWED_GLOBALS)` and passed on both v2.0 branches
+     * separately while failing the moment they were merged: `community_insights`
+     * exists only on the community branch, so the roster branch legitimately used
+     * three of the four. Equality made "a documented sink this branch happens not to
+     * use" indistinguishable from "an undocumented sink somebody added".
+     *
+     * Only the second is a defect. The property is that every hand-built global is on
+     * the list — not that every entry on the list is currently in use.
+     */
+    it('every hand-built global collection is one of the documented sinks', () => {
         const literals = new Set();
         for (const file of sources) {
             for (const m of file.code.matchAll(/\b(?:doc|collection)\s*\(\s*db\s*,\s*['"`]([a-z_]+)['"`]/g)) {
                 literals.add(m[1]);
             }
         }
-        expect([...literals].sort()).toEqual([...ALLOWED_GLOBALS].sort());
+        const undocumented = [...literals].filter((name) => !ALLOWED_GLOBALS.includes(name));
+        expect(undocumented,
+            `${undocumented.join(', ')} is written by hand and is not one of the documented `
+            + 'global sinks. Either scope it to a team via src/utils/teamPaths.js, or add it to '
+            + 'ALLOWED_GLOBALS above with the reason it is cluster-wide.')
+            .toEqual([]);
     });
 });
 
