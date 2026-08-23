@@ -3,7 +3,9 @@
 Companion to [POSTMORTEM-COMMUNITY.md](POSTMORTEM-COMMUNITY.md), which carries the
 evidence for every row below. AURA — the AI behind the chat pathway — has its own
 post-mortem in [POSTMORTEM-AURA.md](POSTMORTEM-AURA.md) (`AU`n), which is where
-`CP12`'s `Math.random` evidence string is corrected. This file is the plan; the post-mortem is the finding.
+`CP12`'s `Math.random` evidence string is corrected. The chat pathway component
+itself — and the PAVS parser inside it, which `P4.3` has had `OPEN` for weeks — is
+in [POSTMORTEM-AURA-CHAT.md](POSTMORTEM-AURA-CHAT.md) (`AC`n). This file is the plan; the post-mortem is the finding.
 
 **Scope: the `/individuals/*` surface and nothing else.** Five routes, the two
 pathways that feed them, and the Cloud Function behind the chat. The roster side has
