@@ -58,13 +58,14 @@ original post-mortems into one. `AU2` means today exactly what it meant when it 
 
 | Id | Finding | Severity |
 |---|---|---|
-| `AU26` | `target_doc` — the field that CHOOSES the Firestore document — was the one model-supplied value left to `String()` coercion. `{}` → `"[object Object]"`, `true` → `"true"`, `0` → `"0"`, all ACCEPTED. Contained on `staff_loads` by the `memberUidByName` lookup; **not** contained on `monthly_workload`, where `workloadPath` asserts nothing. Data quality, not disclosure. **Closed** in `c2a41c1`. | medium |
-| `AN14` | `TEAM_DIRECTORY` still ships in the bundle: eight real **names** and eight real **work email addresses**. Still live via `checkAccess` (`App.jsx:599`, `WelcomeScreen.jsx:170`) and `STAFF_LIST`/`STAFF_IDS`. The **grades** are out; the names and addresses need the legacy auth bridge reworked, which is not a night-before-a-demo change. | medium · **OPEN** |
+| `AU27` | `exportToDoc` (`AuraPulseBot.jsx:561`) and `confirmAdminAction` (`:690`) write to `smart_database` with **no `isDemo` guard** — the guard was added to `executeDataEntry` and not to its two siblings, which is this project's defining defect shape. `firestore.rules` is `allow create: if isSignedIn()`, and Demo Mode is reachable **signed out** from the landing page, so a signed-out presenter following `README.md` step 3 gets the `.docx` **and** a red *"check your connection"* banner that is false twice over. Zero-code mitigation: sign in first. | high · **OPEN** |
+| `AU26` | `target_doc` — the field that CHOOSES the Firestore document — was the one model-supplied value left to `String()` coercion. `{}` → `"[object Object]"`, `true` → `"true"`, `0` → `"0"`, all ACCEPTED. Contained on `staff_loads` by the `memberUidByName` lookup; **not** contained on `monthly_workload`, where `workloadPath` asserts nothing. Data quality, not disclosure. **Closed** in `c2b45d9`. | medium |
+| `AN14` | `TEAM_DIRECTORY` still ships in the bundle: seven real **names** and seven real **work email addresses**. Still live via `checkAccess` (`App.jsx:599`, `WelcomeScreen.jsx:170`) and `STAFF_LIST`/`STAFF_IDS`. The **grades** are out; the names and addresses need the legacy auth bridge reworked, which is not a night-before-a-demo change. | medium · **OPEN** |
 
 ## ⚠️ What the review of the first batch found in my own work
 
 Recorded because a ledger that lists only successes is the thing this repository keeps
-getting burned by. All four are fixed in `c2a41c1`.
+getting burned by. All four are fixed in `c2b45d9`.
 
 | What | Why it matters |
 |---|---|
@@ -152,8 +153,8 @@ Closes four findings at once, and it is the number the whole instrument reports.
 
 | # | Id | Item | Owner | Status | Evidence |
 |---|---|---|---|---|---|
-| 0.1 | `AN1` | Delete `STAFF_PROFILES`; verify against `dist/` | me | `DONE` (grades) · `OPEN` (`AN14`) | `c2a41c1`. **No real colleague is within 120 chars of a grade string in the bundle** — verified by script against `dist/`. Remaining `JG` hits are the Marvel fixture and the job framework. ⚠️ `STAFF_PROFILES` was only one of two copies: `TEAM_DIRECTORY.title` also carried `(JG14)`, `(JG13)`, `(JG12)`, `(JG11)`. Names and emails still ship — `AN14`. |
-| 0.2 | `AN2` | Source profiles from `members`, grades from `useTeamGrades` | me | `DONE` | `c2a41c1` · the payload carries the **band**, never the grade, because it goes to Gemini |
+| 0.1 | `AN1` | Delete `STAFF_PROFILES`; verify against `dist/` | me | `DONE` (grades) · `OPEN` (`AN14`) | `c2b45d9`. **No real colleague is within 120 chars of a grade string in the bundle** — verified by script against `dist/`. Remaining `JG` hits are the Marvel fixture and the job framework. ⚠️ `STAFF_PROFILES` was only one of two copies: `TEAM_DIRECTORY.title` also carried `(JG14)`, `(JG13)`, `(JG12)`, `(JG11)`. Names and emails still ship — `AN14`. |
+| 0.2 | `AN2` | Source profiles from `members`, grades from `useTeamGrades` | me | `DONE` | `c2b45d9` · the payload carries the **band**, never the grade, because it goes to Gemini |
 | 0.3 | `AN4` | Auth + team-membership check on `generateSmartAnalysis` | me | `DONE` | `e3b6bb9` |
 | 0.4 | `AU2` | `Number.isFinite` + range on `target_value` | me | `DONE` | `e3b6bb9` · 58 tests |
 | 0.5 | `AC1` | Remove the `includes('20')` branch | me | `DONE` | `a99ffa6` · 70 tests |

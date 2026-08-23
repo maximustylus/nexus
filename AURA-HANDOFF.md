@@ -9,15 +9,21 @@ plan, [`AURA-POSTMORTEM.md`](AURA-POSTMORTEM.md) is the evidence,
 ## 0. Today, in one paragraph
 
 AURA was audited end to end on 23 August 2026 across three surfaces — the staff assistant,
-the public health screening, and the intelligence layer — producing **51 findings**, of
-which **none is fixed**. Four are live and reachable right now. The most serious is not an
-AI defect at all: **six named colleagues' job grades are in the public JavaScript bundle**
-(`AN1`), served on every route including the community screening a member of the public
-opens, undoing a grade-privacy model that was rebuilt from scratch three days earlier. The
-second most serious, `AN4`, is an unauthenticated Gemini endpoint on the billed key. The
-audit also found the roster engine is not AI, is described as AI throughout the README, and
-that this matters this month because a cluster-level rostering ICT is asking what NEXUS is
-(`AU1`).
+the public health screening, and the intelligence layer. **56 findings**, of which **14 are
+closed with evidence** as of the same evening. The most serious was not an AI defect at all: **six named
+colleagues' job grades were in the public JavaScript bundle** (`AN1`), served on every route
+including the community screening a member of the public opens — and `STAFF_PROFILES` turned
+out to be one of **two** copies, the other being `TEAM_DIRECTORY.title`, which only a check
+against `dist/` rather than against source could have found. That is closed. So are the
+unauthenticated Gemini endpoint (`AN4`), both PAVS parser defects (`AC1`, `AC2`), and the
+description of NEXUS as *"a proprietary, autonomous AI agent"* (`AU1`) — which mattered this
+month because a cluster-level rostering ICT is asking what NEXUS is.
+
+⚠️ **Five of the 56 findings were opened by reviewing the FIXES, not by the original audit,
+and one of those fixes was a regression worse than the bug it closed** — a keyword added to
+the sandbox router would have answered *"I saw 3 arrests back to back and I am wrung out"*
+with *"Logged 3 against your workload record"*. Read §6 before assuming a small fix is
+small.
 
 ---
 
@@ -44,22 +50,49 @@ ids by number and renumbering would break them. `AURA-POSTMORTEM.md` §7 is the 
 
 ## 2. What is dangerous right now
 
-Four findings need no special access and no unusual behaviour.
+*Updated 2026-08-23, after the first two fix batches. The four findings this section
+originally listed — `AN1` grades, `AN4`, `AC1`, `AC2` — are **closed**; see
+[`AURA-TODO.md`](AURA-TODO.md) for the evidence.*
 
 | Id | What | Who can reach it |
 |---|---|---|
-| **`AN1`** | Six clinicians' names, roles and **job grades** in `dist/assets/index-*.js` | Anyone who loads any page, including `/individuals` |
-| **`AN4`** | `generateSmartAnalysis` has no `request.auth` check — a free Gemini endpoint on the billed key | Anyone on the internet |
-| **`AC1`** | A typed session length containing "20" is recorded as 15 minutes | Any member of the public who types instead of tapping |
-| **`AC2`** | *"daily"* scores 0 days; *"about an hour"* scores 0 minutes | Same |
+| **`AN14`** | `TEAM_DIRECTORY` ships **seven real names and seven real work email addresses** in the bundle | Anyone who loads any page, including `/individuals`, signed out |
+| **`AU27`** | `exportToDoc` and `confirmAdminAction` write to Firestore with **no `isDemo` guard** | A signed-out presenter following `README.md` demo step 3 gets a false red error banner |
 
-Verify `AN1` yourself in ten seconds:
+⚠️ **`AN14` is the one to be honest about.** A work email address is more identifying and
+more phishable than a job grade, and it is served unauthenticated on the public screening
+route. It is filed `medium` because closing it means reworking the `checkAccess` legacy auth
+bridge, which is not a night-before-a-demo change — **not** because it is small.
+
+### Verify the grade fix yourself
+
+⚠️ **The obvious grep gives a FALSE POSITIVE and this document used to recommend it.** It
+was `grep -o 'grade:"JG1[0-9]"' dist/assets/*.js`, which still prints five lines — from
+`src/data/mockData.js`, the Marvel sandbox fixture. Steve, Peter, Charles, Jean and Tony are
+fictional. A vocabulary grep cannot tell a fixture from a colleague.
+
+The question is **co-occurrence**: is any real colleague's name near a grade token?
 
 ```bash
-npm run build && grep -o 'grade:"JG1[0-9]"' dist/assets/*.js | sort | uniq -c
+npm run build && python3 - <<'EOF'
+import glob, re
+names = ['Alif','Fadzlynn','Derlinder','Ying Xian','Brandon','Nisa','Benny']
+grade = re.compile(r'\b(JG1[0-9]|AH[0-9]{1,2}|CEP I{1,3})\b')
+hits = 0
+for f in glob.glob('dist/assets/index-*.js'):
+    src = open(f, encoding='utf-8').read()
+    for n in names:
+        for m in re.finditer(re.escape(n), src):
+            w = src[max(0, m.start()-400):m.start()+400]
+            g = grade.search(w)
+            if g:
+                hits += 1
+                print(f'{n} near {g.group(0)}')
+print('CLEAN — no real colleague co-located with a grade' if not hits else f'{hits} HITS')
+EOF
 ```
 
-If that prints anything, it is live.
+Anything other than `CLEAN` means a grade is live again.
 
 ---
 

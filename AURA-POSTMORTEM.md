@@ -42,8 +42,9 @@ Not one system. Six things, and only four of them involve a model:
 | `demoAura.js` | the sandbox | **none** — deterministic, local | — |
 | `auraEngine.js` + `rosterEngineV2.js` | **the roster generator** | **none — not AI at all** | [`ROSTER_POSTMORTEM.md`](ROSTER_POSTMORTEM.md) |
 
-**53 findings.** 25 `AU` · 15 `AC` · 13 `AN`. (51 at first writing; `AU25` and `AC15`
-were opened the same day by the go-live gate and by fixing `AC1` — see §6.)
+**56 findings.** 27 `AU` · 15 `AC` · 14 `AN`. (51 at first writing. `AU25` and `AC15` were
+opened the same day by the go-live gate and by fixing `AC1`; `AU26`, `AU27` and `AN14` by
+reviews of the fixes themselves — see §6. The plan is [`AURA-TODO.md`](AURA-TODO.md).)
 
 ---
 
@@ -1034,6 +1035,7 @@ A post-mortem listing only failures is a misleading document.
 | `AU24` | `executeDataEntry` and `clampEnergy` have no tests | high | me |
 | `AC3` | Two pathways, two PAVS algorithms; parity test blind to it | high | me |
 | `AC15` | A tapped chip scored 25% high — and falsifies `AC3`'s parity claim | high | me |
+| `AU27` | `exportToDoc` and `confirmAdminAction` write to Firestore with no `isDemo` guard | high | me |
 | `AC5` | Parser unexported, untested; suite tests source text | high | me |
 | `AC6` | `concludeTriage` guards the only call that cannot throw | high | me |
 | `AC12` | No live region in the portal; the staff roster has two | high | me |
@@ -1063,14 +1065,26 @@ A post-mortem listing only failures is a misleading document.
 | `AC13` | `key={idx}` while `_id` exists | low | me |
 | `AC14` | `TOTAL_STEPS` stale; result wears the Healthier SG badge | low | me |
 | `AU25` | A persona without a title crashes the sandbox | low | me |
+| `AU26` | `target_doc` — the field that chooses the document — was `String()`-coerced | medium | me |
+| `AN14` | `TEAM_DIRECTORY` still ships seven real names and seven work email addresses | medium | me |
 
 **By severity:** 6 critical · 1 high-external · 21 high · 18 medium · 7 low
 **By owner:** 43 mine · 10 the owner's
 
-⚠️ **53, not 51.** `AU25` and `AC15` were opened on 2026-08-23 **after** this document was
-written — `AU25` by the go-live gate walking the README's demo script, `AC15` by fixing
-`AC1` and asserting the result against the other pathway's table. Both are recorded here
-rather than in a separate file, and neither renumbers anything.
+⚠️ **56, not 51.** Five were opened on 2026-08-23 **after** this document was written, and
+none renumbers anything:
+
+| Id | Opened by |
+|---|---|
+| `AU25` | the go-live gate, walking the README's demo script |
+| `AC15` | fixing `AC1` and asserting the result against the **other pathway's** table |
+| `AU26` | review of the first fix batch — `target_doc` left to `String()` coercion |
+| `AU27` | review of the second — the `isDemo` guard on one of three write sites |
+| `AN14` | fixing `AN1` — `STAFF_PROFILES` was one of **two** copies |
+
+⚠️ **Three of the five were found in the fixes, not in the original audit.** That is the
+honest shape of this work and it is worth stating rather than smoothing: reviewing a fix
+found more than auditing the code did.
 
 ---
 
