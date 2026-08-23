@@ -49,7 +49,7 @@ not changed by this release.
 
 ## [Unreleased]
 
-## [2.0.0] - 2026-08-21
+## [2.0.0] - 2026-08-23
 
 **MULTI-TEAM.** NEXUS was built for one ten-person department, with every collection at
 the root of the database and the team itself hardcoded in *six* separate places. It now
@@ -214,10 +214,64 @@ changes**.
   where it is comfortable, but a large department rostering a year ahead will still
   freeze the tab.
 
-- **Removing a member is not yet possible from the app.** It needs a Cloud Function,
-  because the membership document and `users.teamIds` must change together and rules
-  cannot write two documents. Half a removal leaves a team in the switcher that every
-  listener then fails to read.
+- **The public screening flags a contradictory free-text answer.** "yes I always have
+  enough food" answers a different question from the yes/no one that was asked, and the
+  matcher reads the leading "yes". Left alone deliberately: the chips are the primary
+  input path, and a sufficiency check on the word "enough" would suppress "yes, I don't
+  always have enough" — a false negative on a social-determinant screen is the worse
+  direction. Documented in `clinicalFlags.test.js` and printed by
+  `npm run stress:community` on every run.
+
+### Added after the first draft of this entry — the launch blocker, and two doors
+
+The entry above was written on 2026-08-21 and described a system that could not
+actually be launched. Three things were found by asking what a colleague meets on
+their first morning, rather than by testing what had been built.
+
+- **`inviteMember` and `removeMember`.** `approveLeadRequest` created a team with
+  exactly ONE person in it and there was no second step: `firestore.rules` denies
+  membership `create` and `delete` outright, and its own comments deferred both to a
+  Cloud Function that had never been written. **A department approved on launch day
+  could never add anybody**, and nothing errored — the system simply had no second
+  step. Adding is by email, because a lead knows their colleague's address and nobody
+  knows a Firebase uid; the server resolves one to the other, which is where it
+  establishes the account is real. Removal refuses two cases outright — the lead the
+  team was created for, and the last remaining lead — because both leave a team with
+  no administrator and no repair path inside the app.
+
+- **A sixth hardcoded copy of the team, and the one that mattered.** `hasAdminAccess`
+  was two email addresses in an array, so a lead whose team was approved that morning
+  could not open the admin panel — `inviteMember` existing would not have helped,
+  because there was no door to the room it lives in. The rules had already assumed
+  otherwise: every write that panel makes is `allow … if isLead(teamId)`.
+
+- **`AccessGate` was a dead end.** An authenticated user with no team saw one sentence.
+  It now offers the sandbox, and lets somebody who registered as staff declare
+  themselves a lead — the rules already permitted a later declaration, so this was a
+  missing form rather than a missing permission. That door is also what makes the
+  invite ordering survivable: somebody who registers before their lead is ready gets a
+  screen that explains the wait.
+
+- **The sandbox could overwrite a real year-end report.** Demo mode returns a
+  fabricated analysis, and `SmartAnalysis.handlePublish` had no `isDemo` guard — so
+  PUBLISH wrote it into `teams/{id}/reports/{year}` and overwrote every
+  `projects/{year}/staff/{uid}` document with demo data, then alerted SUCCESS. Any
+  lead who flipped the Live/Demo toggle to show a colleague the tool could reach it.
+
+- **The public AI endpoint is rate limited.** `communityAck` is reachable without an
+  account by design; nothing bounded how often. Two ceilings an hour — 300 per caller
+  (600 once attested) and 6,000 across the endpoint as a circuit breaker. The
+  per-caller number is deliberately generous: one assessment is thirteen calls, and a
+  roadshow puts thirty people behind one address, so a limit tight enough to stop a
+  script is tight enough to break the event the portal is for. **App Check ships
+  inert** — enforcing it before the client sends tokens would take the screening
+  offline nationally — with the four ordered console steps in `COMMUNITY_TODO.md`.
+
+- **`functions/index.js` has zero firebase-admin v13 namespace calls.** On v14
+  `admin.auth` is undefined, the TypeError lands in a `catch` that only warns, and a
+  real colleague applying to lead a team is told their account does not exist, with
+  nothing red anywhere. The pin stays at `^13`; the conversion is what makes moving it
+  later safe rather than dangerous.
 
 
 Nothing yet.
