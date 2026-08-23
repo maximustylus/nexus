@@ -1,2 +1,8 @@
 node_modules/
 *.local
+
+# ⚠️ WRITTEN BY THE DEPLOY WORKFLOW, NEVER COMMITTED. `firebase deploy` reads this
+# file to set a v2 function's environment, and one of the values it can carry is
+# `RATE_LIMIT_SALT` — the salt behind the hashed caller keys in `rate_limits`. A
+# salt in git is not a salt. See `.github/workflows/deploy.yml`.
+.env

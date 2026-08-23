@@ -3,6 +3,7 @@ import { initializeApp } from "firebase/app";
 import { getFirestore } from "firebase/firestore";
 import { getAuth } from "firebase/auth";
 import { getMessaging, getToken } from "firebase/messaging"; // 🛡️ NEW: Messaging imports
+import { initializeAppCheck, ReCaptchaEnterpriseProvider } from "firebase/app-check";
 
 const firebaseConfig = {
   apiKey: "AIzaSyANs4oTfPMmFnALFSFGGCsIfqQMDjqxWK0",
@@ -16,6 +17,54 @@ const firebaseConfig = {
 
 // Initialize Firebase Core
 const app = initializeApp(firebaseConfig);
+
+/**
+ * ==============================================================================
+ * APP CHECK — the client half of `CP7`, off until a site key exists
+ * ==============================================================================
+ *
+ * `communityAck` is the one Cloud Function anybody on the internet can reach
+ * without an account, deliberately: the community portal is FOR members of the
+ * public. App Check is what distinguishes a call from the real web app from a call
+ * from curl, and it is a better mitigation than the rate limit beside it because it
+ * removes the abusive caller rather than slowing them down.
+ *
+ * ⚠️ IT CANNOT SIMPLY BE SWITCHED ON, AND THE ORDER MATTERS. Enabling enforcement
+ *    server-side before the client sends tokens takes the public screening offline
+ *    nationally, and from a browser it looks exactly like an outage. Enabling it
+ *    here before a reCAPTCHA Enterprise site key is registered in the Firebase
+ *    console throws on every page load instead. So:
+ *
+ *      1. Register a reCAPTCHA Enterprise site key (Firebase console → App Check).
+ *      2. Set `VITE_APPCHECK_SITE_KEY` and deploy the bundle. Tokens start flowing;
+ *         nothing is enforced, so nothing can break.
+ *      3. Watch `communityAck`'s `appCheckVerified` in the logs until it is ~100%.
+ *      4. Set `ENFORCE_APP_CHECK=true` on the function and redeploy.
+ *
+ * ⚠️ SO THE ABSENCE OF THE KEY IS A NO-OP, NOT A FAILURE. Without it this block
+ *    does nothing and the app behaves exactly as it does today — which is what
+ *    makes step 2 safe to ship before anybody has done step 1.
+ *
+ * `COMMUNITY_TODO.md` carries the console steps; they are not code and cannot be
+ * done from here.
+ */
+const APPCHECK_SITE_KEY = import.meta.env?.VITE_APPCHECK_SITE_KEY;
+
+if (APPCHECK_SITE_KEY) {
+  try {
+    initializeAppCheck(app, {
+      provider: new ReCaptchaEnterpriseProvider(APPCHECK_SITE_KEY),
+      // Refresh in the background so a long assessment does not expire mid-way.
+      isTokenAutoRefreshEnabled: true,
+    });
+  } catch (error) {
+    // ⚠️ NEVER FATAL. A failure here must not stop the app loading: until step 4
+    //    above, nothing is enforced, so a missing token costs nothing. Logged so
+    //    that a misconfigured key is visible during the observation window rather
+    //    than discovered at the moment enforcement is turned on.
+    console.warn('[NEXUS] App Check did not initialise; calls will be unattested.', error);
+  }
+}
 
 export const storage = getStorage(app);
 export const db = getFirestore(app);

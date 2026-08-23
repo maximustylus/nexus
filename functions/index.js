@@ -12,7 +12,14 @@ const { onSchedule } = require('firebase-functions/v2/scheduler');
 const retention = require('./retention.cjs');
 const insightsLib = require('./insights.cjs');
 const sectorRegions = require('./sectorRegions.cjs');
-const { getFirestore } = require('firebase-admin/firestore');
+const { getFirestore, FieldValue } = require('firebase-admin/firestore');
+// ⚠️ SUBPATH IMPORTS, NOT `admin.auth` / `admin.firestore`. firebase-admin v14
+// removed the service namespaces from the root export, and the namespace form
+// fails QUIETLY there: `admin.auth` is undefined, the TypeError lands in a `catch`
+// that only warns, and a real colleague is reported as having no account with
+// nothing red anywhere. The pin stays at ^13; the conversion is what makes moving
+// it later safe rather than dangerous.
+const { getAuth } = require('firebase-admin/auth');
 const { getMessaging } = require('firebase-admin/messaging');
 
 const admin = require('firebase-admin');
@@ -664,7 +671,7 @@ exports.processFeedPost = onCall({ secrets: ['GEMINI_API_KEY'] }, async (request
         } else {
             postUpdateData.author = authorName || 'Anonymous Staff';
             postUpdateData.role = authorRole || 'Staff';
-            postUpdateData.timestamp = admin.firestore.FieldValue.serverTimestamp();
+            postUpdateData.timestamp = FieldValue.serverTimestamp();
             postUpdateData.likes = 0;
             postUpdateData.comments = 0;
             postUpdateData.isDemo = !!isDemo;
@@ -809,6 +816,108 @@ const WELL_WELL_PROMPT = [
 // public can reach.
 const communityAckRules = require('./communityAck');
 
+// The counting half of `CP7`. The decisions are pure and unit-tested in `npm test`;
+// what is left here is one read, one increment, and the logging that makes the App
+// Check rollout measurable. See `./rateLimit.js` for why the ceilings are shaped the
+// way they are — the short version is that one assessment is thirteen calls and a
+// roadshow puts thirty people behind one address.
+const rateLimit = require('./rateLimit');
+
+/**
+ * ⚠️ APP CHECK IS OBSERVED, NOT ENFORCED, AND THAT IS DELIBERATE FOR EXACTLY ONE
+ *    RELEASE. `enforceAppCheck: true` would reject every caller that does not
+ *    present a valid attestation token — which today is every caller, because the
+ *    client does not send one yet and cannot until a reCAPTCHA Enterprise site key
+ *    exists in the Firebase console. Turning it on now would take the public
+ *    screening offline nationally and look, from the browser, exactly like an
+ *    outage.
+ *
+ *    So the switch is an ENVIRONMENT VARIABLE with a safe default. The rollout is:
+ *    deploy this, read `appCheckVerified` in the logs until the share of attested
+ *    traffic is ~100%, then set `ENFORCE_APP_CHECK=true` and redeploy. That
+ *    sequence is what makes enforcement a measured change rather than a gamble,
+ *    and the log line exists to make the measurement possible.
+ *
+ *    `COMMUNITY_TODO.md` carries the console steps; they are not code and cannot
+ *    be done from here.
+ */
+const ENFORCE_APP_CHECK = process.env.ENFORCE_APP_CHECK === 'true';
+
+/**
+ * Read the caller's counter, decide, and record the call.
+ *
+ * ⚠️ READ-DECIDE-INCREMENT, NOT A TRANSACTION, AND THE IMPRECISION IS THE POINT.
+ *    A transaction would make the count exact at the cost of ~100ms on every
+ *    acknowledgement — and the client discards anything past 1,500ms, so latency
+ *    spent here is answers nobody sees. Two calls racing can both read the same
+ *    count and both be allowed, which overshoots a ceiling of 300 by one. That is
+ *    not what this is defending against: a loop that overshoots by one still stops
+ *    within a second of the limit, and a bill is bounded by an order of magnitude,
+ *    not by an exact integer.
+ *
+ * ⚠️ A FIRESTORE FAILURE ALLOWS THE CALL. The opposite — refusing when the counter
+ *    cannot be read — turns a Firestore blip into a national outage of the public
+ *    screening, to protect against a cost. It is logged at error level so the
+ *    failure is visible rather than silent.
+ */
+async function checkRateLimit(db, request, nowMs) {
+    const headers = (request.rawRequest && request.rawRequest.headers) || {};
+    const key = rateLimit.callerKey(
+        headers['x-forwarded-for'],
+        (request.rawRequest && request.rawRequest.ip) || '',
+    );
+    // `request.app` is present only when a VALID App Check token was supplied.
+    const appCheckVerified = !!(request.app && request.app.appId);
+    const plan = rateLimit.planFor({ callerKey: key, appCheckVerified, nowMs: nowMs });
+
+    let verdict = { allowed: true };
+    try {
+        const refs = [
+            db.doc(plan.caller.path.join('/')),
+            db.doc(plan.global.path.join('/')),
+        ];
+        const snaps = await Promise.all(refs.map((ref) => ref.get()));
+
+        const callerVerdict = rateLimit.decide({
+            count: snaps[0].exists ? snaps[0].data().count : 0,
+            limit: plan.caller.limit,
+            nowMs: nowMs,
+        });
+        const globalVerdict = rateLimit.decide({
+            count: snaps[1].exists ? snaps[1].data().count : 0,
+            limit: plan.global.limit,
+            nowMs: nowMs,
+        });
+
+        if (globalVerdict.used >= plan.global.limit * rateLimit.LIMITS.globalWarnAt) {
+            // ⚠️ THE HONEST USE OF THE GLOBAL CEILING IS AS AN ALARM. By the time it
+            //    refuses anybody, the money is already spent; the warning at half is
+            //    where somebody can still act.
+            logger.warn('[communityAck] global rate window past half', {
+                used: globalVerdict.used, ceiling: plan.global.limit,
+            });
+        }
+
+        verdict = globalVerdict.allowed ? callerVerdict : globalVerdict;
+        verdict.scope = globalVerdict.allowed ? 'caller' : 'global';
+
+        if (verdict.allowed) {
+            // Both counters, always — a refused call is not counted, so a caller
+            // sitting on the wall does not extend their own window.
+            await Promise.all(refs.map((ref) => ref.set({
+                count: FieldValue.increment(1),
+                windowIndex: plan.windowIndex,
+                updatedAt: new Date(nowMs).toISOString(),
+            }, { merge: true })));
+        }
+    } catch (error) {
+        logger.error('[communityAck] rate limiter unavailable; allowing the call', error);
+        return { allowed: true, appCheckVerified, degraded: true };
+    }
+
+    return Object.assign({ appCheckVerified, attributable: plan.caller.attributable }, verdict);
+}
+
 exports.communityAck = onCall({
     cors: true,
     secrets: ['GEMINI_API_KEY'],
@@ -816,8 +925,42 @@ exports.communityAck = onCall({
     // 1500ms anyway (`AI_UPGRADE_WINDOW_MS`), so a long timeout only buys a longer
     // bill for an answer nobody will see.
     timeoutSeconds: 30,
+    // See ENFORCE_APP_CHECK above: observed by default, enforced by an env var once
+    // the console side exists and the logs say real traffic is attested.
+    enforceAppCheck: ENFORCE_APP_CHECK,
 }, async (request) => {
     if (!API_KEY) throw new HttpsError('failed-precondition', 'AI service is not configured.');
+
+    /**
+     * ⚠️ COUNTED BEFORE THE INPUT IS VALIDATED, WHICH IS THE OPPOSITE OF THE USUAL
+     *    ORDER AND IS RIGHT HERE. Validation is free; the thing being protected is
+     *    a paid model call and a Firestore read behind it. Ordering it the other
+     *    way would let a caller send malformed bodies forever without ever touching
+     *    their own counter — a free, unbounded way to keep the function warm and to
+     *    probe it.
+     */
+    const limited = await checkRateLimit(getFirestore(), request, Date.now());
+
+    logger.info('[communityAck] call', {
+        appCheckVerified: limited.appCheckVerified,
+        appCheckEnforced: ENFORCE_APP_CHECK,
+        allowed: limited.allowed,
+        scope: limited.scope,
+        used: limited.used,
+        ceiling: limited.ceiling,
+        attributable: limited.attributable,
+        degraded: limited.degraded || false,
+    });
+
+    if (!limited.allowed) {
+        // `resource-exhausted` rather than `permission-denied`: nothing is wrong
+        // with this caller's credentials, and the difference is what tells a
+        // reviewer reading logs apart from an authorization failure.
+        throw new HttpsError(
+            'resource-exhausted',
+            rateLimit.refusalMessage({ retryAfterSeconds: limited.retryAfterSeconds }),
+        );
+    }
 
     // ⚠️ ALLOWLISTS, NOT LENGTH CHECKS. `validateChatInput` on the staff endpoint
     //    bounds size and type and never content, which is why an 8,000-character
@@ -942,6 +1085,51 @@ exports.expireCommunityAssessments = onSchedule({
         note: undated > 0
             ? 'Records with no usable createdAt were NOT deleted — investigate, they may be a write bug'
             : undefined,
+    });
+
+    /**
+     * THE `CP7` COUNTERS, SWEPT IN THE SAME RUN.
+     *
+     * ⚠️ THIS IS HOUSEKEEPING, NOT ENFORCEMENT, AND THE DIFFERENCE MATTERS. The
+     *    window index is part of every counter's document id, so a counter STOPS
+     *    COUNTING the moment its hour ends whether or not this ever runs — a limiter
+     *    that depended on a nightly job to reset would be a limiter that fails
+     *    closed on the night the job does. What this removes is the residue: a
+     *    collection that otherwise grows by one document per caller per hour
+     *    forever.
+     *
+     * ⚠️ AND IT IS ALSO A PRIVACY SWEEP. Each id carries a hashed caller key. That
+     *    is not a health record, but it is a per-person artefact of a public health
+     *    service, and keeping it after it has stopped being useful is the kind of
+     *    thing this file's retention notice exists to prevent. Two windows of grace,
+     *    so a call in flight across an hour boundary is never counted against a
+     *    document this has just deleted.
+     */
+    const currentWindow = rateLimit.windowIndex(now.getTime());
+    const oldestKept = currentWindow - 2;
+    let countersDeleted = 0;
+
+    const counters = await db.collection('rate_limits').limit(5000).get();
+    const stale = counters.docs.filter((doc) => {
+        // The index is the last `__`-separated segment of the id. Parsed from the id
+        // rather than read from the field, so a document whose write was interrupted
+        // before the field landed is still collectable.
+        const index = Number(String(doc.id).split('__').pop());
+        return Number.isFinite(index) && index < oldestKept;
+    });
+
+    for (const group of retention.intoBatches(stale.map((doc) => doc.id))) {
+        const batch = db.batch();
+        group.forEach((id) => batch.delete(db.collection('rate_limits').doc(id)));
+        await batch.commit();
+        countersDeleted += group.length;
+    }
+
+    logger.info('[RETENTION] rate_limits sweep complete', {
+        currentWindow,
+        oldestKept,
+        scanned: counters.size,
+        deleted: countersDeleted,
     });
 });
 
@@ -1120,7 +1308,7 @@ exports.approveLeadRequest = onCall({ cors: true }, async (request) => {
     var authUser = null;
     if (leadRequest) {
         try {
-            var record = await admin.auth().getUser(requestUid);
+            var record = await getAuth().getUser(requestUid);
             authUser = { uid: record.uid, email: record.email, emailVerified: record.emailVerified };
         } catch (error) {
             logger.warn('[TEAMS] no auth account for ' + requestUid, error);
@@ -1169,7 +1357,7 @@ exports.approveLeadRequest = onCall({ cors: true }, async (request) => {
             email: writes.user.data.email,
             // A UNION, never an overwrite: somebody can lead one team and be staff in
             // another, and an overwrite here would silently drop the other membership.
-            teamIds: admin.firestore.FieldValue.arrayUnion.apply(null, writes.user.data.addTeamIds),
+            teamIds: FieldValue.arrayUnion.apply(null, writes.user.data.addTeamIds),
         },
         { merge: true },
     );

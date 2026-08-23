@@ -49,8 +49,9 @@ never measured activity — live in it.
 
 | | Count | Ids |
 |---|---|---|
-| `DONE`, evidenced | 13 | `CP1` `CP2` `CP3` `CP5` `CP6` `CP9` `CP12` `CP13` `CP14` `CP15` `CP17` `CP18` `CP19` |
-| `OPEN`, mine | 3 | `CP7` `CP8` `CP16` |
+| `DONE`, evidenced | 14 | `CP1` `CP2` `CP3` `CP5` `CP6` `CP7` `CP9` `CP12` `CP13` `CP14` `CP15` `CP17` `CP18` `CP19` |
+| `OPEN`, mine | 2 | `CP8` `CP16` |
+| **`OWNER`, console only** | 1 | `CP7`'s last two steps — see *Turning App Check on*, below. The code is shipped and inert. |
 | `OPEN`, translation | 1 | `CP10` — merged into `CD10`, below |
 | `OPEN`, **owner's decision** | 4 | `CD4` `CD10` `CD11` `CD12` (design) |
 
@@ -77,10 +78,49 @@ AGENT` heading.
 |---|---|---|---|---|---|
 | 0.1 | Public callable, separate prompt | **`communityAck`** replaces `publicTriageChat` in `functions/index.js`. No KKH framing, no schema, no modes. It takes `{domain, answer, priorAnswers, language}` — **no caller-supplied prompt, no `role`, no `history`, no attachments** — and returns plain text. `WELL_WELL_PROMPT` moved out of the browser and onto the server, so the persona can no longer be replaced by the caller. | Fable-supervised | `DONE` | `functions/communityAck.js` + 41 tests |
 | 0.2 | `request.auth` on `chatWithAura` | **DONE**, and the demo is now a real sandbox rather than a claimed one. Demo Mode called this function unconditionally — `isDemo` only chose the prompt text — so a visitor with no account, arriving from the *signed-out* landing page, sent their typing to Gemini on the project's billed key. `src/utils/demoAura.js` answers demo turns locally, deterministically and in the same object shape the component parses, so the mode badge, the document-export card and the wellbeing-log prompt all still work. With nothing unauthenticated left calling it, `chatWithAura` now refuses a caller with no `request.auth`. | Fable-supervised | `DONE` | 26 tests · the only remaining call site is the authenticated branch of `AuraPulseBot` |
-| 0.3 | App Check + rate limit on the public callable | `CP7`. Still unauthenticated — the portal is *for* the public — but the blast radius is now a prompt with no hospital framing and no schema. `maxOutputTokens` is down from 8192 to 200 and the fetch timeout from 90s to 20s, so an abuse loop costs far less. App Check remains the real mitigation. | Opus-alone | `OPEN` | — |
+| 0.3 | App Check + rate limit on the public callable | `CP7`. **The rate limit is live.** Two ceilings per hour: 300 calls per caller (600 once attested) and 6,000 across the whole endpoint as a circuit breaker, warning in the log at half. Counters live in `rate_limits`, keyed by a **hashed** caller key with the window in the document id — so a window self-resets whether or not any job runs, and the nightly sweep only removes the residue. **App Check is shipped but inert**: the client initialises it only when `VITE_APPCHECK_SITE_KEY` is set, the function enforces it only when `ENFORCE_APP_CHECK=true`, and until then an unattested caller simply gets the tighter ceiling and is counted in the logs. The two remaining steps are console work — see *Turning App Check on* below. | Opus-alone | `DONE` (code) · `OWNER` (console) | `functions/rateLimit.js` + **46 tests** |
 | 0.4 | Validate content, not only length | `domain` and `language` are closed sets checked as closed sets. `priorAnswers` is **rebuilt** from the known domain list rather than filtered, so a caller cannot influence the shape of what reaches the model — only the values of at most thirteen known keys. `prompt`/`role`/`history`/`attachments` are ignored entirely, asserted by test. | Opus-alone | `DONE` | `functions/communityAck.test.js` — 41 tests |
 | 0.5 | Abort on the discard window | `AuraChat.jsx` gives the model 1,500 ms then discards the answer without aborting, so it runs to completion server-side and bills in full. Reduced but not fixed: the server timeout is now 20s rather than 90s and the output cap 200 tokens rather than 8192. | Opus-alone | `OPEN` | — |
 | 0.6 | Close the dead endpoints | `publicTriageChat` — 145 lines, unauthenticated, interpolated `request.data.language` into its own system instruction with no allowlist, **and had no callers**. Its body is gone; the **export deliberately remains as a stub that throws**. ⚠️ Deleting the source does not delete the deployed function, and `deploy.yml:37` runs `deploy --only functions,firestore:rules` with no `--force` on a TTY-less runner — firebase-tools ABORTS on an orphan rather than skipping it, which would half-apply the merge (rules land, `communityAck` does not, the auth check does not, Hosting never runs, and every later push fails the same way). `src/utils/auraChat.js` deleted outright — it is client code and deploys with the bundle. | Opus-alone | `DONE` | export diff vs `origin/main` shows **additions only**, so no deletion prompt |
+
+
+### Turning App Check on — the console work the code cannot do
+
+The code for this shipped inert, on purpose, and the ORDER below is the whole
+reason. Enabling enforcement on the function before the client sends tokens takes
+the public screening offline nationally, and from a browser it looks exactly like an
+outage. Enabling it in the client before a site key exists throws on every page load.
+
+1. **Firebase console → App Check → Apps → register the web app** with a reCAPTCHA
+   Enterprise provider. Copy the site key.
+2. **GitHub → Settings → Secrets and variables → Actions → Variables**, add
+   `VITE_APPCHECK_SITE_KEY`, then push to `main`. Tokens start flowing. Nothing is
+   enforced yet, so nothing can break — this step is safe on its own.
+   *(A site key is served to every browser and is not a secret, so it is a
+   repository **variable**. The deploy workflow reads it into the build; unset, it
+   is an empty string and the App Check block in `src/firebase.js` does nothing.)*
+3. **Watch the logs.** `communityAck` logs `appCheckVerified` on every call. Wait
+   until it is ~100% over a period that includes a real weekday. Anything short of
+   that is a browser, a device or a cache that would be refused in step 4.
+4. **Add the repository variable `ENFORCE_APP_CHECK=true`** and push. The deploy
+   workflow writes it into `functions/.env`, which is what firebase-tools reads to
+   set a v2 function's environment. Only now does an unattested call fail.
+
+**Optionally, and worth doing at step 2: add the repository SECRET `RATE_LIMIT_SALT`**
+— any value at all, as long as it is not in this repository. The counter document ids
+contain a hash of the caller's address; with the built-in salt that is obfuscation
+rather than anonymisation, since the IPv4 space is small enough to enumerate. One
+secret makes the tokens genuinely irreversible. A **secret**, not a variable, and
+`functions/.env` is gitignored for the same reason: a salt that lives in git is not a
+salt. The reasoning is in `functions/rateLimit.js`, stated as a limitation rather than
+left implied.
+
+**Rotating the salt is free.** Every counter is at most an hour old and the nightly
+sweep removes the rest, so changing it costs one window of counting, not a migration.
+
+**Rollback at any point is the reverse and is immediate**: set `ENFORCE_APP_CHECK` to
+anything other than `true` (or delete the variable) and push. The rate limit is unaffected either way — it does not depend on App
+Check, it only gives an attested caller a higher ceiling.
 
 ---
 
