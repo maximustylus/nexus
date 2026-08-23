@@ -175,15 +175,34 @@ export default function CommunityInsightsPanel() {
               deleted after 24 months.
             </p>
             <p className="mt-1.5">
-              <strong>{d.suppression?.suppressedSectorCount ?? 0} sectors</strong> are
-              withheld because each had fewer than {d.suppression?.minCell ?? 10}{' '}
-              respondents, covering{' '}
-              <strong>{d.suppression?.suppressedRespondents ?? 0} people</strong> — who
-              are still counted in their region and nationally below. Counts under{' '}
-              {d.suppression?.minCount ?? 5} within a published sector show as{' '}
-              <em>{d.suppression?.band ?? '<5'}</em>. A blank area on this page means
+              {/*
+                ⚠️ THE FLOOR IS UNIFORM NOW, AND THE COPY HAS TO SAY SO. This used to
+                promise that a withheld sector's people were "still counted in their
+                region below" — true when only sectors were suppressed, and false as
+                soon as a thin region is withheld too. The national total is the one
+                place they are always counted, so that is what this now says.
+              */}
+              <strong>
+                {d.suppression?.suppressedSectorCount ?? 0} sectors
+                {(d.suppression?.suppressedRegions?.length ?? 0) > 0
+                  && `, ${d.suppression.suppressedRegions.length} regions`}
+                {(d.suppression?.suppressedPeriods?.length ?? 0) > 0
+                  && `, ${d.suppression.suppressedPeriods.length} months`}
+              </strong>{' '}
+              are withheld because each had fewer than {d.suppression?.minCell ?? 10}{' '}
+              respondents. Everyone withheld is still counted in the national total.
+              Counts under {d.suppression?.minCount ?? 5} within a published area show
+              as <em>{d.suppression?.band ?? '<5'}</em>. A blank area on this page means
               too few responses to publish, <strong>not</strong> no need.
             </p>
+            {d.suppression?.nationalDomainsWithheld && (
+              <p className="mt-1.5 font-bold">
+                Fewer than {d.suppression?.minCell ?? 10} assessments in total, so even
+                the national breakdown is withheld — with a handful of respondents the{' '}
+                <em>{d.suppression?.band ?? '<5'}</em> band would describe individuals
+                rather than a population.
+              </p>
+            )}
             {d.truncated && (
               <p className="mt-1.5 font-bold">
                 ⚠️ This rollup was truncated at the read cap and describes a subset.

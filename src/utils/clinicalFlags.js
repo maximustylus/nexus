@@ -40,14 +40,37 @@
  *    problem is a property of alphabetic scripts sharing letter sequences, and
  *    these ideographic and abugida terms do not have it.
  *
- * ⚠️ WHAT THIS DELIBERATELY DOES NOT DO: negation. "I do not get chest pain"
- *    still sets `symptomFlag`. That is a false positive in the SAFE direction — it
- *    over-triages to URGENT, which routes the person to a GP rather than to an
- *    exercise programme. Teaching these patterns to read negation risks turning a
- *    safe over-triage into an under-triage on the one absolute contraindication in
- *    the model, and that is a clinical judgement rather than a bug fix. Recorded
- *    as `CD11` in COMMUNITY_TODO.md alongside the double-barrelled question that
- *    causes most of it.
+ * ── ⚠️ NEGATION: WHY THIS FILE CHANGED ITS MIND — `CP22` ─────────────────────
+ *
+ * This header used to say negation was deliberately NOT handled, and the argument
+ * was a good one: "I do not get chest pain" setting `symptomFlag` is a false
+ * positive in the SAFE direction, and teaching a regex to read negation risks
+ * turning a safe over-triage into an under-triage on the one absolute
+ * contraindication in the model.
+ *
+ * Two things changed it.
+ *
+ * FIRST, THE RATE. A pre-merge stress run measured 16 of 22 realistic typed answers
+ * setting a flag the answer had just denied — across every matcher, in every
+ * language. Not an edge case: the ordinary way people answer a question in prose.
+ *
+ * SECOND, AND DECISIVELY, WHERE THOSE FLAGS GO NOW. When the argument above was
+ * written, an over-triage cost the person a nudge toward a GP. It no longer stops
+ * there. The flags are printed on the HANDOVER SLIP — a sheet of paper the person
+ * carries to an Active Ageing Centre or a Social Service Office, which states
+ * "Chest pain or dizziness on exertion" as something they reported. A tool that
+ * prints a denial as a positive finding, to a third party, is not erring on the
+ * side of caution; it is putting words in somebody's mouth. The same counts also
+ * reach the population rollup a health system plans from.
+ *
+ * ⚠️ SO THE OLD ARGUMENT IS HONOURED IN THE SHAPE OF THE FIX, NOT DISCARDED.
+ *    Suppression is DELIBERATELY TIMID and every rule below exists to keep it that
+ *    way: the cue must sit in the same clause, immediately before the term (or
+ *    immediately after it in Tamil, where negation is postfix), within a short
+ *    window. Any conjunction, comma or full stop between them and the flag STAYS.
+ *    "no chest pain and dizziness" still flags — the second symptom is not clearly
+ *    covered by the first denial, and when it is ambiguous the flag survives.
+ *    Over-triage remains the direction this fails in.
  */
 
 /** True when a term is pure ASCII, and therefore safe to word-bound. */
@@ -64,17 +87,132 @@ const escapeRegex = (term) => term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
  * plain substring. Returns a predicate rather than a RegExp so the split is not
  * something a caller can accidentally undo.
  */
+/**
+ * Words that turn the term after them into a denial.
+ *
+ * ⚠️ PREFIX LANGUAGES ONLY. English, Bahasa Melayu and Chinese all negate BEFORE
+ *    the thing negated. Tamil does not — it negates after — which is why
+ *    `TAMIL_NEGATORS` is separate and searched in the other direction. Guessing
+ *    that one rule fits all four is how a Tamil speaker's denial goes unread.
+ */
+const NEGATORS_BEFORE = [
+    // English
+    'no', 'not', 'never', 'none', 'nil', 'without', 'lack of',
+    "don't", 'dont', "doesn't", 'doesnt', "didn't", 'didnt', "haven't", 'havent',
+    "hasn't", 'hasnt', "isn't", 'isnt', "aren't", 'arent', 'cannot',
+    'deny', 'denies', 'denied', 'free of', 'ruled out', 'negative for', 'clear of',
+    // Bahasa Melayu
+    'tiada', 'tidak', 'bukan', 'belum', 'tak',
+    // 中文
+    '没有', '没', '無', '无', '不', '未', '别',
+];
+
+/** Tamil negates after the term: "நெஞ்சு வலி இல்லை" is "chest pain — no". */
+const TAMIL_NEGATORS = ['இல்லை', 'இல்ல', 'அல்ல', 'கிடையாது'];
+
+/**
+ * English phrases that dismiss the term BEFORE them: "cost is not a problem",
+ * "my heart is fine".
+ *
+ * ⚠️ COMPLETE PHRASES, NOT A GENERAL "is not" RULE, AND THE DIFFERENCE MATTERS ON
+ *    THE ONE ABSOLUTE CONTRAINDICATION. A rule that suppressed on any following
+ *    "is not" would also suppress "chest pain is not always there" — a person
+ *    describing intermittent exertional chest pain — turning a safe over-triage
+ *    into exactly the under-triage this file's original header warned about. These
+ *    phrases dismiss; "is not …" on its own does not.
+ */
+const DISMISSALS_AFTER = [
+    'not a problem', 'not an issue', 'not a concern', 'not a worry',
+    'is fine', 'are fine', 'is okay', 'is ok', 'was fine',
+];
+
+/**
+ * Where a denial stops carrying. A cue only negates within its own clause: in
+ * "no cost issues, but I feel isolated" the "no" must not reach "isolated".
+ *
+ * ⚠️ `and` BREAKS A DENIAL AND `or` DOES NOT, WHICH IS NOT AN OVERSIGHT.
+ *    "no chest pain and dizziness" is genuinely ambiguous in English — plenty of
+ *    people mean "no chest pain, and I do have dizziness" — so `and` breaks and the
+ *    dizziness flag SURVIVES. "no chest pain or dizziness" is not ambiguous: `or`
+ *    after a negative coordinates the denial across both, and it is the phrasing
+ *    the clinical safety question itself uses, so it is the most likely thing a
+ *    person types. `or` therefore does not break.
+ *
+ *    "no chest pain and no dizziness" is suppressed on both regardless, because the
+ *    second clause carries its own cue.
+ */
+const CLAUSE_BREAK = /[,;.!?·\n\u2013\u2014]|\b(?:but|however|although|though|except|and|tapi|walaupun)\b|但|不过|然而/gi;
+
+/** How far back a cue may sit and still be reaching this term. */
+const WINDOW = 40;
+
+/** The last clause of `text`, capped at `WINDOW` characters. */
+const trailingClause = (text) => {
+    let cut = 0;
+    CLAUSE_BREAK.lastIndex = 0;
+    for (let m = CLAUSE_BREAK.exec(text); m !== null; m = CLAUSE_BREAK.exec(text)) {
+        cut = m.index + m[0].length;
+    }
+    return text.slice(Math.max(cut, text.length - WINDOW));
+};
+
+/** The first clause of `text`, capped at `WINDOW` characters. */
+const leadingClause = (text) => {
+    CLAUSE_BREAK.lastIndex = 0;
+    const m = CLAUSE_BREAK.exec(text);
+    const end = m ? m.index : text.length;
+    return text.slice(0, Math.min(end, WINDOW));
+};
+
+/**
+ * Whether `fragment` carries one of `cues`, at the `edge` nearest the term.
+ *
+ * ⚠️ LATIN CUES GET A WINDOW; NON-LATIN CUES MUST BE ADJACENT. A Latin denial puts
+ *    words between the cue and the thing denied — "never had chest pain" — so the
+ *    whole clause is searched. A bare `包`-style substring search cannot be used the
+ *    same way: `不` is a negator AND a character inside ordinary words, and
+ *    searching the clause for it flipped the Chinese caregiving chip
+ *    「感到不知所措 — 照顾」 ("overwhelmed — caregiving") into a denial, because
+ *    「不知所措」 contains 不. Chinese and Tamil negation is adjacent to what it
+ *    negates — 没有胸痛, நெஞ்சு வலி இல்லை — so adjacency is both correct and safe.
+ */
+const hasCue = (fragment, cues, edge) => cues.some((cue) => {
+    if (isLatin(cue)) {
+        // Word-bounded — "no" must not match inside "know" or "another".
+        return new RegExp(`(^|[^\\w])${escapeRegex(cue)}([^\\w]|$)`, 'i').test(` ${fragment} `);
+    }
+    return edge === 'end' ? fragment.trimEnd().endsWith(cue) : fragment.trimStart().startsWith(cue);
+});
+
+/** Whether the match at [start, end) in `value` is inside a denial. */
+const isNegated = (value, start, end) => {
+    const before = trailingClause(value.slice(0, start));
+    const after = leadingClause(value.slice(end));
+    return hasCue(before, NEGATORS_BEFORE, 'end')
+        || hasCue(after, TAMIL_NEGATORS, 'start')
+        || hasCue(after, DISMISSALS_AFTER, 'start');
+};
+
 export const buildMatcher = (terms) => {
     const latin = terms.filter(isLatin).map(escapeRegex);
     const other = terms.filter((t) => !isLatin(t)).map(escapeRegex);
 
     const patterns = [];
-    if (latin.length > 0) patterns.push(new RegExp(`\\b(${latin.join('|')})\\b`, 'i'));
-    if (other.length > 0) patterns.push(new RegExp(`(${other.join('|')})`, 'i'));
+    if (latin.length > 0) patterns.push(new RegExp(`\\b(${latin.join('|')})\\b`, 'gi'));
+    if (other.length > 0) patterns.push(new RegExp(`(${other.join('|')})`, 'gi'));
 
     return (text) => {
         const value = String(text || '');
-        return patterns.some((pattern) => pattern.test(value));
+        // ⚠️ EVERY occurrence, not the first. "no chest pain, dizziness on stairs"
+        //    must still flag: one denied mention does not answer for the others,
+        //    and `.test()` returning at the first hit could not see the second.
+        return patterns.some((pattern) => {
+            pattern.lastIndex = 0;
+            for (let m = pattern.exec(value); m !== null; m = pattern.exec(value)) {
+                if (!isNegated(value, m.index, m.index + m[0].length)) return true;
+            }
+            return false;
+        });
     };
 };
 
@@ -103,7 +241,18 @@ export const matchesSocialIsolation = buildMatcher([
 ]);
 
 export const matchesPsychologicalDistress = buildMatcher([
-    'stressed', 'stress', 'low', 'overwhelmed',
+    /*
+     * ⚠️ `'feel low'`, NOT A BARE `'low'`. Negation handling cannot rescue this one,
+     *    because these are not denials — they are the word meaning something else:
+     *    "low back pain", "low income household", "my activity level is low" all
+     *    flagged psychological distress and routed the person to a mental health
+     *    service. Every phrasing that actually means low mood is kept below, so
+     *    nothing that should flag stops flagging.
+     */
+    'stressed', 'stress', 'overwhelmed',
+    'feel low', 'feeling low', 'feels low', 'felt low', 'quite low',
+    'low mood', 'mood is low', 'mood has been low', 'been low', 'very low',
+    'depressed', 'depression', 'hopeless',
     'tertekan', 'murung', 'terbeban',
     '压抑', '不知所措', 'மன அழுத்தம்', 'மனச்சோர்வு', 'அதிக சுமை',
 ]);
@@ -203,6 +352,69 @@ const parseHealthierSg = (answer) => {
  */
 const NEGATIVE_WORDS = ['no', 'none', 'nope', 'nil', 'tidak', 'tiada', '没', '无', '不', 'இல்லை'];
 const matchesNegative = buildMatcher(NEGATIVE_WORDS);
+
+/**
+ * The age band an answer describes: `'60+'`, `'41-60'`, `'21-40'` or `'Unknown'`.
+ *
+ * ⚠️ THIS IS THE `CP26` FIX, AND IT DECIDES WHO GETS SCREENED FOR FALLS.
+ *
+ * There were two substring tests for age, in two places, and both only recognised
+ * the CHIP text:
+ *
+ *   · the falls step's gate, `/60\s*\+/.test(data.demographics)`
+ *   · `parseClinicalData`, `demoStr.includes('60+')` … `includes('41')`
+ *
+ * The chat renders a free-text input beside the chips and prompts "SELECT AN OPTION
+ * OR TYPE FREELY". Measured: `"72"`, `"I am 72"`, `"I am 65 years old"`,
+ * `"60 plus"` and `"sixty five"` ALL failed both tests. So a resident who typed
+ * their age instead of tapping was never asked whether they had fallen — in the one
+ * cohort the falls screen exists for — and also lost the two 60+ call-to-action
+ * tiers, because `selectCTA` branches on the same `age` value.
+ *
+ * The chips in all four languages use Western digits and the same band tokens
+ * (`21–40`, `41–60`, `60+`), so one parser serves every language. The en-dash they
+ * are written with is normalised first; it is not a hyphen.
+ *
+ * ⚠️ A RANGE IS READ AS A RANGE. `"41–60"` contains "60" and must NOT become `60+`,
+ *    which is why the range is matched before any bare number is considered.
+ */
+export const parseAgeBand = (answer) => {
+    const text = String(answer ?? '')
+        .toLowerCase()
+        .replace(/[\u2010-\u2015\u2212]/g, '-');   // en/em dash, minus → hyphen
+
+    // 1. An explicit open-ended band, however it is written.
+    if (/\b60\s*\+|\b(60|6[1-9]|[7-9]\d|1\d\d)\s*(\+|plus\b|and (over|above)\b)|\b(over|above)\s*(59|60)\b/.test(text)) {
+        return '60+';
+    }
+
+    // 2. A closed range, classified by its LOWER bound — somebody in "41-60" is not
+    //    60+, and reading the upper bound would put them there.
+    const range = text.match(/\b(\d{1,3})\s*-\s*(\d{1,3})\b/);
+    if (range) {
+        const lo = Number(range[1]);
+        const hi = Number(range[2]);
+        if (lo >= 60) return '60+';
+        if (hi <= 40) return '21-40';
+        return '41-60';
+    }
+
+    // 3. A bare age. Bounded to three digits so a postal code or a year cannot be
+    //    read as somebody's age, and to a plausible human range at the top.
+    const numbers = (text.match(/\b\d{1,3}\b/g) || []).map(Number).filter((n) => n >= 1 && n <= 120);
+    const oldest = numbers.length ? Math.max(...numbers) : null;
+    if (oldest === null) return 'Unknown';
+    if (oldest >= 60) return '60+';
+    if (oldest >= 41) return '41-60';
+    if (oldest >= 21) return '21-40';
+
+    // Under 21 has no band in this portal. `Unknown` is honest; inventing the
+    // nearest band would put a teenager in an adult cohort in the population data.
+    return 'Unknown';
+};
+
+/** Whether the falls and function screen applies to this person. */
+export const isSixtyPlus = (answer) => parseAgeBand(answer) === '60+';
 
 export { parseFallsAnswer, parseHealthierSg };
 

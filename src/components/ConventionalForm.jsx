@@ -59,7 +59,7 @@ import { readTheme, writeTheme } from '../utils/theme';
 import { readLanguage, writeLanguage, applyDocumentLanguage } from '../utils/language';
 import { getSessionId, saveProgress, loadProgress, clearProgress } from '../utils/assessmentSession';
 import { toSector, isValidSector } from '../utils/singapore/postalSectors';
-import { parseFallsAnswer, parseHealthierSg } from '../utils/clinicalFlags';
+import { parseFallsAnswer, parseHealthierSg, parseAgeBand, isSixtyPlus } from '../utils/clinicalFlags';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // OPTION TABLES — values match AuraChatbot quick-reply strings exactly
@@ -231,7 +231,10 @@ const deriveFlags = (f) => {
   const sdohFoodInsecure  = f.foodInsecure === true;
   const sdohHousing       = f.housing === 'HDB 1-2 Room';
 
-  const age    = f.ageGroup === '60+' ? '60+' : f.ageGroup === '41-60' ? '41-60' : f.ageGroup === '21-40' ? '21-40' : 'Unknown';
+  // The same parser the chat uses. The form's values are a controlled select, so
+  // this is identical in behaviour — it is here so there is one age parser rather
+  // than two, which is the `CP9` lesson applied before it becomes a divergence.
+  const age    = parseAgeBand(f.ageGroup);
   const gender = f.gender || 'Unknown';
 
   return {
@@ -738,7 +741,7 @@ export default function ConventionalForm() {
       //    `asked: false`, which is correct for an under-60 who never saw the
       //    question — but for a 60+ respondent who skipped it, "not asked" would be
       //    a lie about whether the cohort was screened.
-      if (f.ageGroup === '60+' && !f.falls) return 'falls';
+      if (isSixtyPlus(f.ageGroup) && !f.falls) return 'falls';
     }
     return null;
   };
@@ -1017,7 +1020,7 @@ export default function ConventionalForm() {
               answer already; the chat uses `chatSteps.js` because it has to decide
               mid-conversation.
             */}
-            {f.ageGroup === '60+' && (
+            {isSixtyPlus(f.ageGroup) && (
               <div className="md:col-span-2 pt-2 border-t border-slate-100 dark:border-slate-800">
                 <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-2">
                   In the past 12 months, have you had a fall — including a slip or trip where you ended up on the ground?<Req />

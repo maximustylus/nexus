@@ -16,6 +16,7 @@ import {
     matchesFoodInsecurity,
     matchesFemale, matchesMale, isNoPreviousId,
     parseFallsAnswer, parseHealthierSg,
+    parseAgeBand, isSixtyPlus,
 } from './clinicalFlags';
 
 describe('⚠️ the false positives that routed people to the wrong tier', () => {
@@ -308,4 +309,183 @@ describe('Healthier SG enrolment', () => {
     it.each(['I am not sure', '', null, undefined])('returns null for %j', (answer) => {
         expect(parseHealthierSg(answer)).toBeNull();
     });
+});
+
+describe('⚠️ parseAgeBand — who gets screened for falls · CP26', () => {
+    /**
+     * THE REGRESSION TEST. The chat renders a free-text input beside the chips and
+     * invites its use. Both age tests recognised only the CHIP text, so a resident
+     * who typed their age got `Unknown` — no falls screen, and no 60+ CTA tier,
+     * because `selectCTA` branches on the same value. This is the population the
+     * falls screen was added for.
+     */
+    it.each(['72', 'I am 72', 'I am 65 years old', '60 plus', 'over 60', '60 and above', '60'])(
+        'reads %s as 60+', (typed) => {
+            expect(parseAgeBand(typed)).toBe('60+');
+            expect(isSixtyPlus(typed)).toBe(true);
+        });
+
+    /** The chips, in all four languages — they share Western digits and band tokens. */
+    it.each([
+        ['Male, 60+', '60+'], ['Female, 60+', '60+'],
+        ['Lelaki, 60+', '60+'], ['男, 60+', '60+'], ['ஆண், 60+', '60+'],
+        ['Male, 41–60', '41-60'], ['Perempuan, 41–60', '41-60'], ['女, 41–60', '41-60'],
+        ['Male, 21–40', '21-40'], ['ஆண், 21–40', '21-40'],
+    ])('reads the chip %s as %s', (chip, band) => {
+        expect(parseAgeBand(chip)).toBe(band);
+    });
+
+    /**
+     * ⚠️ A RANGE IS NOT ITS UPPER BOUND. "41–60" contains "60"; reading a bare number
+     *    out of it would put every 41-year-old in the 60+ cohort, which is the
+     *    mirror-image defect of the one being fixed.
+     */
+    it('never reads a closed range as 60+', () => {
+        expect(parseAgeBand('Male, 41–60')).toBe('41-60');
+        expect(parseAgeBand('41-60')).toBe('41-60');
+        expect(isSixtyPlus('Female, 41–60')).toBe(false);
+    });
+
+    it('places a bare age in the right band', () => {
+        expect(parseAgeBand('35')).toBe('21-40');
+        expect(parseAgeBand('41')).toBe('41-60');
+        expect(parseAgeBand('59')).toBe('41-60');
+    });
+
+    /** Under 21 has no band here. Inventing the nearest one would put a teenager in
+     *  an adult cohort in the population data. */
+    it('returns Unknown rather than guessing for an age below the lowest band', () => {
+        expect(parseAgeBand('18')).toBe('Unknown');
+    });
+
+    it('is not fooled by a number that is not an age', () => {
+        expect(parseAgeBand('560000')).toBe('Unknown');   // a postal code
+        expect(parseAgeBand('2026')).toBe('Unknown');     // a year
+    });
+
+    it('returns Unknown for nothing, and never throws', () => {
+        for (const value of ['', '   ', 'x', null, undefined, 0, [], {}, NaN, true]) {
+            expect(() => parseAgeBand(value)).not.toThrow();
+            expect(typeof parseAgeBand(value)).toBe('string');
+        }
+        expect(parseAgeBand('')).toBe('Unknown');
+        expect(parseAgeBand(null)).toBe('Unknown');
+    });
+});
+
+describe('⚠️ a typed answer that DENIES a symptom must not set its flag · CP22', () => {
+    /**
+     * THE LOAD-BEARING SUITE. The chat renders a free-text input beside the chips
+     * and prompts "SELECT AN OPTION OR TYPE FREELY". Before this, a pre-merge stress
+     * run measured 16 of 22 realistic typed answers setting the flag they denied.
+     *
+     * The cost is not a wasted nudge. These flags are printed on the HANDOVER SLIP,
+     * which a person carries to a centre, and it states them as things they
+     * reported — so a denial became a positive finding handed to a third party.
+     */
+    it.each([
+        [matchesSymptom, 'no chest pain'],
+        [matchesSymptom, 'No chest pain or dizziness'],
+        [matchesSymptom, 'never had chest pain'],
+        [matchesSymptom, 'I do not get dizziness'],
+        [matchesSymptom, 'my doctor ruled out chest pain'],
+        [matchesCondition, 'no diabetes'],
+        [matchesCondition, 'no high blood pressure'],
+        [matchesPsychologicalDistress, 'not stressed at all'],
+        [matchesPsychologicalDistress, 'no stress'],
+        [matchesSocialIsolation, 'I do not live alone'],
+        [matchesSocialIsolation, 'never alone, family visits daily'],
+        [matchesFinancialBarrier, 'no cost issues'],
+        [matchesCaregiverStrain, 'no caregiving duties'],
+        [matchesCaregiverStrain, 'not a caregiver'],
+    ])('does not fire on %#: "%s"', (matcher, text) => {
+        expect(matcher(text.toLowerCase())).toBe(false);
+    });
+
+    /** Negation in the other three languages, which do not work like English. */
+    it.each([
+        [matchesSymptom, 'tiada sakit dada', 'ms — prefix'],
+        [matchesSymptom, 'tidak ada sakit dada', 'ms — prefix'],
+        [matchesSymptom, '没有胸痛', 'zh — adjacent prefix'],
+        [matchesCondition, '没有糖尿病', 'zh — adjacent prefix'],
+        [matchesSymptom, 'நெஞ்சு வலி இல்லை', 'ta — POSTFIX, the opposite direction'],
+    ])('does not fire on %#: "%s" (%s)', (matcher, text, _why) => {
+        expect(matcher(text.toLowerCase())).toBe(false);
+    });
+
+    /**
+     * ⚠️ THE OTHER HALF, AND THE MORE IMPORTANT ONE. Suppression that swallowed a
+     *    real report would turn a safe over-triage into an under-triage on the one
+     *    absolute contraindication in the model.
+     */
+    it.each([
+        [matchesSymptom, 'chest pain when I climb stairs'],
+        [matchesSymptom, 'dizziness sometimes'],
+        [matchesSymptom, 'chest pain is not always there'],
+        [matchesSymptom, 'no dizziness but I do get chest pain'],
+        [matchesSymptom, 'no chest pain and dizziness on the stairs'],
+        [matchesCondition, 'I have diabetes'],
+        [matchesPsychologicalDistress, 'I feel low most days'],
+        [matchesSocialIsolation, 'I live alone'],
+        [matchesFinancialBarrier, 'too expensive for me'],
+        [matchesCaregiverStrain, 'I am a caregiver for my mother'],
+    ])('STILL fires on %#: "%s"', (matcher, text) => {
+        expect(matcher(text.toLowerCase())).toBe(true);
+    });
+
+    /**
+     * A denial does not carry across a clause boundary. This is what keeps the fix
+     * timid: when the sentence changes subject, the flag survives.
+     */
+    it('a denial does not reach past a comma or a "but"', () => {
+        expect(matchesSocialIsolation('no cost issues, but i feel isolated')).toBe(true);
+        expect(matchesPsychologicalDistress('no falls. i feel low most days')).toBe(true);
+    });
+
+    /**
+     * ⚠️ EVERY OCCURRENCE IS CHECKED, NOT THE FIRST. One denied mention does not
+     *    answer for the others, and a `.test()` that returned at the first hit could
+     *    not see the second.
+     */
+    it('a denied mention does not excuse a reported one later in the answer', () => {
+        expect(matchesSymptom('no chest pain. dizziness on the stairs though')).toBe(true);
+    });
+
+    /**
+     * ⚠️ 不 IS A NEGATOR AND ALSO A CHARACTER INSIDE ORDINARY WORDS. Searching the
+     *    clause for it flipped the Chinese caregiving chip into a denial, because
+     *    「不知所措」 ("at a loss") contains it. Non-Latin cues must be ADJACENT.
+     */
+    it('does not read 不 inside a word as a denial', () => {
+        expect(matchesCaregiverStrain('感到不知所措 — 照顾')).toBe(true);
+        expect(matchesPsychologicalDistress('感到不知所措')).toBe(true);
+    });
+
+    /**
+     * ⚠️ THE ACKNOWLEDGED LIMIT, RECORDED SO NOBODY READS THESE AS SOLVED. Both need
+     *    semantics rather than pattern matching, and both fail toward over-triage —
+     *    the direction this whole file fails in on purpose.
+     */
+    it('still over-triages the two cases patterns cannot reach', () => {
+        // Somebody ELSE's condition.
+        expect(matchesCondition('family history of heart disease but i am well')).toBe(true);
+        // Answering a different question than the yes/no one that was asked.
+        expect(matchesFoodInsecurity('yes i always have enough food')).toBe(true);
+    });
+});
+
+describe("the term list means what it says — 'low'", () => {
+    /**
+     * Negation cannot rescue these: they are not denials, they are the word meaning
+     * something else. A bare `'low'` routed all three to a mental health service.
+     */
+    it.each(['low back pain', 'low income household', 'my activity level is low'])(
+        'does not read "%s" as psychological distress', (text) => {
+            expect(matchesPsychologicalDistress(text)).toBe(false);
+        });
+
+    it.each(['i feel low most days', 'feeling quite stressed or low', 'my mood is low', 'i have felt low'])(
+        'still reads "%s" as psychological distress', (text) => {
+            expect(matchesPsychologicalDistress(text)).toBe(true);
+        });
 });

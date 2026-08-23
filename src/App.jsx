@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 // `useLocation` is intentionally not imported here: App's only use of it was a
 // dead `isPublicPathway` flag. `<Routes>` subscribes to the location itself.
-import { Routes, Route, useLocation } from 'react-router-dom';
+import { Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { getMessaging, onMessage } from "firebase/messaging";
 
 // FIREBASE
@@ -761,6 +761,15 @@ export default function App() {
   return (
     <>
       <Routes>
+        {/*
+          ⚠️ THE SECTION ROOT IS A REAL URL TO EVERYBODY EXCEPT THE ROUTER. Only
+          `/individuals/*` was routed, so `/individuals` — the address somebody
+          reaches by trimming the URL, or by typing what they were told out loud —
+          fell through to the 404. The not-found page recovers well, but sending a
+          member of the public to it from the most obvious address for this service
+          is a defect, not a design.
+        */}
+        <Route path="/individuals" element={<Navigate to="/individuals/pathway" replace />} />
         <Route path="/individuals/language" element={<LanguageGate />} />
         <Route path="/individuals/pathway" element={<PathwaySelection />} />
         <Route path="/individuals/form" element={<ConventionalForm />} />

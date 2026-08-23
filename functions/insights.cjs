@@ -119,6 +119,44 @@ const periodOf = (record) => {
 /** The flags object, whichever shape the pathway stored it under. */
 const flagsOf = (record) => (record && (record.flags || record.payload)) || {};
 
+/**
+ * Whether a document in `community_assessments` is an ASSESSMENT at all.
+ *
+ * ⚠️ THIS IS THE `CP23` FIX, AND IT IS NOT A TIDY-UP. That collection holds two
+ *    unrelated kinds of document, because `recordTelemetry` is the portal's only
+ *    write and everything goes through it:
+ *
+ *      · ONE completed screening — `flags` from the form, `payload` from the chat.
+ *      · A ROW PER INTERACTION — `print_handover_slip`, `download_pdf`,
+ *        `share_result`, and one `click_<id>` for every resource tapped
+ *        (`ResultPage.jsx`). These carry a sector and an action and NO flags.
+ *
+ *    The rollup counted both. `flagsOf` returned `{}` for an interaction row, so it
+ *    contributed nothing to any domain, but `tallyInto` still counted a respondent.
+ *
+ *    Measured before the fix: twelve respondents who ALL reported need became 96
+ *    "respondents", and every domain rate fell from 100% to 13%. A health system
+ *    planning from that would conclude the need was not there.
+ *
+ *    And it broke the privacy control in the other direction. `MIN_CELL` exists to
+ *    guarantee ten respondents before a sector is published; one person's own
+ *    assessment plus eleven of their own clicks cleared it, publishing a sector
+ *    that described a single individual.
+ *
+ *    Filtering here rather than in the query is deliberate: Firestore cannot cheaply
+ *    ask "has a `flags` field", the rollup is the only reader, and a filter in the
+ *    aggregator protects every future caller including a manual one.
+ */
+const isAssessment = (record) => {
+    const flags = record && (record.flags || record.payload);
+    // ⚠️ PRESENCE, NOT CONTENT. An earlier draft also required the object to be
+    //    non-empty, which reads as extra safety and is not: a respondent who
+    //    reported nothing is a respondent, and their zero belongs in the
+    //    denominator. What separates the two kinds of document is that an
+    //    interaction row has no `flags` and no `payload` AT ALL.
+    return !!flags && typeof flags === 'object' && !Array.isArray(flags);
+};
+
 const emptyTally = () => {
     const domains = {};
     Object.keys(DOMAINS).forEach((key) => { domains[key] = 0; });
@@ -160,7 +198,14 @@ const buildInsights = (records, regionFor) => {
     let undated = 0;
     let unlocated = 0;
 
-    (records || []).forEach((record) => {
+    // ⚠️ ASSESSMENTS ONLY — see `isAssessment`. The count of what was skipped is
+    //    reported in `quality`, because a rollup that quietly drops most of what it
+    //    read is indistinguishable from a quiet month.
+    const all = records || [];
+    const assessments = all.filter(isAssessment);
+    const nonAssessments = all.length - assessments.length;
+
+    assessments.forEach((record) => {
         const flags = flagsOf(record);
         const sector = typeof record?.postalSector === 'string' ? record.postalSector : null;
         const region = sector ? regionFor(sector) : null;
@@ -187,32 +232,65 @@ const buildInsights = (records, regionFor) => {
         tallyInto(bySector.get(sector), flags);
     });
 
-    // PRIMARY SUPPRESSION. Below-threshold sectors are withheld, but their people
-    // are already counted in the region and the national total above.
-    const sectors = {};
-    const suppressedSectors = [];
-    let suppressedTotal = 0;
-    [...bySector.entries()].sort(([a], [b]) => a.localeCompare(b)).forEach(([sector, tally]) => {
-        if (tally.respondents < MIN_CELL) {
-            suppressedSectors.push(sector);
-            suppressedTotal += tally.respondents;
-            return;
-        }
-        sectors[sector] = { respondents: tally.respondents, domains: bandCounts(tally.domains) };
-    });
+    /**
+     * PRIMARY SUPPRESSION, APPLIED TO EVERY BREAKDOWN — the `CP25` fix.
+     *
+     * ⚠️ THIS USED TO BE SECTORS ONLY, AND THE BAND IS NOT A BAND AT A LOW
+     *    DENOMINATOR. `regions` and `periods` published `respondents` raw and banded
+     *    their domains at `MIN_COUNT`. `bandCounts` maps 0 to `0` and 1–4 to `'<5'`,
+     *    so in a cell with ONE respondent a domain reading `'<5'` can only mean 1 —
+     *    and a domain reading `0` can only mean no. Measured: one respondent in the
+     *    North in November 2026 published EIGHT domains reading `'<5'`, which is that
+     *    person's complete flag profile, located to a region and a month.
+     *
+     *    Regions felt coarse enough to leave alone. They are not: there are five of
+     *    them, and in the weeks after launch — exactly when this page gets shown —
+     *    a region can hold a handful of people. A disclosure control that only holds
+     *    once the tool is popular is not a disclosure control.
+     *
+     *    So the rule is now uniform and stated once: NO BREAKDOWN CELL IS PUBLISHED
+     *    BELOW `MIN_CELL` RESPONDENTS. Their people are still counted in the national
+     *    total, so nothing is lost for planning — only the ability to point at a
+     *    small group of people.
+     */
+    const publish = (tally) => (tally.respondents < MIN_CELL
+        ? null
+        : { respondents: tally.respondents, domains: bandCounts(tally.domains) });
 
-    const regions = {};
-    [...byRegion.entries()].sort(([a], [b]) => a.localeCompare(b)).forEach(([region, tally]) => {
-        regions[region] = { respondents: tally.respondents, domains: bandCounts(tally.domains) };
-    });
+    const partition = (map) => {
+        const published = {};
+        const withheld = [];
+        let withheldRespondents = 0;
+        [...map.entries()].sort(([a], [b]) => a.localeCompare(b)).forEach(([key, tally]) => {
+            const row = publish(tally);
+            if (row) published[key] = row;
+            else { withheld.push(key); withheldRespondents += tally.respondents; }
+        });
+        return { published, withheld, withheldRespondents };
+    };
 
-    const periods = {};
-    [...byPeriod.entries()].sort(([a], [b]) => a.localeCompare(b)).forEach(([period, tally]) => {
-        periods[period] = { respondents: tally.respondents, domains: bandCounts(tally.domains) };
-    });
+    const sectorSplit = partition(bySector);
+    const regionSplit = partition(byRegion);
+    const periodSplit = partition(byPeriod);
+
+    const sectors = sectorSplit.published;
+    const regions = regionSplit.published;
+    const periods = periodSplit.published;
+    const suppressedSectors = sectorSplit.withheld;
+    const suppressedTotal = sectorSplit.withheldRespondents;
 
     return {
-        national: { respondents: national.respondents, domains: bandCounts(national.domains) },
+        /**
+         * ⚠️ THE NATIONAL RESPONDENT COUNT IS ALWAYS PUBLISHED; ITS DOMAIN
+         *    BREAKDOWN IS NOT. "How many people have used this" locates nobody —
+         *    the area is the whole country. "…and this is what they reported",
+         *    from a national total of one, is the same disclosure as any other
+         *    single-person cell.
+         */
+        national: {
+            respondents: national.respondents,
+            domains: national.respondents < MIN_CELL ? null : bandCounts(national.domains),
+        },
         regions,
         sectors,
         periods,
@@ -229,10 +307,26 @@ const buildInsights = (records, regionFor) => {
             suppressedSectors,
             suppressedSectorCount: suppressedSectors.length,
             suppressedRespondents: suppressedTotal,
+            // The same floor now applies to the coarser breakdowns; reported for the
+            // same reason, so a short table reads as withheld rather than as absent.
+            suppressedRegions: regionSplit.withheld,
+            suppressedPeriods: periodSplit.withheld,
+            nationalDomainsWithheld: national.respondents < MIN_CELL,
         },
-        quality: { undatedRecords: undated, unlocatedRecords: unlocated },
+        quality: {
+            undatedRecords: undated,
+            unlocatedRecords: unlocated,
+            /**
+             * ⚠️ Interaction rows — downloads, shares, prints, resource taps — live in
+             *    the same collection and are NOT respondents. Reported so the figure
+             *    can be reconciled against `recordsRead` rather than looking like
+             *    records that went missing.
+             */
+            nonAssessmentRecords: nonAssessments,
+            assessmentRecords: assessments.length,
+        },
         domainKeys: Object.keys(DOMAINS),
     };
 };
 
-module.exports = { MIN_CELL, MIN_COUNT, BAND, DOMAINS, periodOf, flagsOf, buildInsights };
+module.exports = { MIN_CELL, MIN_COUNT, BAND, DOMAINS, periodOf, flagsOf, isAssessment, buildInsights };

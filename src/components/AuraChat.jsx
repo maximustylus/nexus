@@ -13,6 +13,7 @@ import { nextActiveStep, activeStepCount, activeStepPosition } from '../utils/ch
 import {
   matchesSymptom, matchesCondition, matchesFinancialBarrier, matchesSocialIsolation,
   matchesPsychologicalDistress, matchesCaregiverStrain, matchesFoodInsecurity,
+  isSixtyPlus, parseAgeBand,
   matchesFemale, matchesMale,
   isNoPreviousId, parseFallsAnswer, parseHealthierSg,
 } from '../utils/clinicalFlags';
@@ -80,7 +81,11 @@ const DOMAIN_CONFIG = [
      * noise, and every unnecessary question costs completions in the population
      * least likely to finish.
      */
-    when: (data) => /60\s*\+/.test(String(data?.demographics ?? '')),
+    // ⚠️ `isSixtyPlus`, NOT a substring test for "60+". The gate used to be
+    //    `/60\s*\+/` over the raw answer, which only ever matched the CHIP text —
+    //    somebody who typed "72" or "I am 65 years old" was silently never asked.
+    //    See `parseAgeBand` in `clinicalFlags.js`; `CP26`.
+    when: (data) => isSixtyPlus(data?.demographics),
   },
   {
     key: 'healthier_sg', badge: '\u{1FA7A} Healthier SG', group: 'admin', // 14
@@ -650,10 +655,11 @@ const parseClinicalData = (raw) => {
   if (matchesFemale(demoStr))       gender = 'Female';
   else if (matchesMale(demoStr))    gender = 'Male';
 
-  let age = 'Unknown';
-  if (demoStr.includes('60+'))                             age = '60+';
-  else if (demoStr.includes('41'))                         age = '41-60';
-  else if (demoStr.includes('21'))                         age = '21-40';
+  // ⚠️ ONE PARSER, SHARED WITH THE FALLS GATE AND THE FORM. This was three
+  //    `includes` calls that only recognised the chip text, so a typed age became
+  //    `Unknown` — losing the falls screen AND both 60+ CTA tiers, since
+  //    `selectCTA` branches on this value.
+  const age = parseAgeBand(demoStr);
 
   // NEW: Ethnicity & Housing Type
   const ethnicity = raw.ethnicity || 'Unknown';

@@ -22,6 +22,7 @@ import { calculateRiskScore } from '../src/utils/scoring.js';
 import { toSector, POSTAL_SECTORS } from '../src/utils/singapore/postalSectors.js';
 import { servicesForSector, clusterForSector } from '../src/utils/singapore/communityServices.js';
 import * as CF from '../src/utils/clinicalFlags.js';
+import { isSixtyPlus } from '../src/utils/clinicalFlags.js';
 import { createRequire } from 'node:module';
 
 const require = createRequire(import.meta.url);
@@ -128,6 +129,9 @@ for (const [matcher, text, want] of TYPED) {
     else { falseNeg += 1; flag('T2', `${matcher} misses a real report`, JSON.stringify(text)); }
 }
 console.log(`  ${TYPED.length} realistic typed answers`);
+console.log('  ⚠️ one of these is a KNOWN, DOCUMENTED limit rather than an open defect:');
+console.log('     "yes I always have enough food" answers a different question than the');
+console.log('     yes/no one that was asked. See the note in clinicalFlags.test.js.');
 console.log(`  false positives (flag set by a denial): ${falsePos}`);
 console.log(`  false negatives (real report missed)  : ${falseNeg}`);
 if (falsePos) {
@@ -138,36 +142,58 @@ if (falsePos) {
 // ─────────────────────────────────────────────────────────────────────────────
 H('D. THE FALLS GATE — who actually gets asked');
 
-/* `when: (data) => /60\s*\+/.test(String(data.demographics))`, and `demographics`
- * is whatever the person said. The chips emit "Male, 60+"; typed ages do not. */
-const AGES = ['Male, 60+', 'Female, 60+', '72', 'I am 72', 'I am 65 years old', '60 plus', 'sixty five'];
-const asked = AGES.filter((a) => /60\s*\+/.test(a));
-console.log(`  ${AGES.length} ways of saying an age · falls asked for ${asked.length}: ${asked.join(', ')}`);
-const missed = AGES.filter((a) => !/60\s*\+/.test(a) && /\b(6[0-9]|7[0-9]|8[0-9]|sixty|seventy)\b/i.test(a));
-if (missed.length) flag('D1', 'a person over 60 is not asked about falls when they TYPE their age',
+/*
+ * ⚠️ CALLS THE SHIPPED GATE, not a copy of it. The falls step's `when` predicate is
+ *    `isSixtyPlus(data.demographics)`; it used to be `/60\s*\+/` inline, which only
+ *    matched the CHIP text. A harness that re-implements the rule it is checking
+ *    passes while the app fails.
+ */
+const OVER_60 = ['Male, 60+', 'Female, 60+', '72', 'I am 72', 'I am 65 years old', '60 plus',
+    'over 60', '60 and above', 'Lelaki, 60+', '男, 60+'];
+const UNDER_60 = ['Male, 41–60', 'Female, 21–40', '35', 'I am 41', '18', '560000', ''];
+const missed = OVER_60.filter((a) => !isSixtyPlus(a));
+const wrongly = UNDER_60.filter((a) => isSixtyPlus(a));
+console.log(`  ${OVER_60.length} ways of saying 60+ · ${OVER_60.length - missed.length} reach the falls screen`);
+console.log(`  ${UNDER_60.length} ways of not being 60+ · ${wrongly.length} wrongly reach it`);
+if (missed.length) flag('D1', 'a person over 60 is not asked about falls',
     missed.map((m) => JSON.stringify(m)).join(', '));
+if (wrongly.length) flag('D2', 'somebody under 60 is asked the falls question',
+    wrongly.map((m) => JSON.stringify(m)).join(', '));
 
 // ─────────────────────────────────────────────────────────────────────────────
 H('E. POPULATION ROLLUP — suppression, and what dilutes it');
 
-console.log(`  MIN_CELL=${MIN_CELL} (sectors only)  MIN_COUNT=${MIN_COUNT}  BAND=${BAND}`);
+console.log(`  MIN_CELL=${MIN_CELL} (every breakdown)  MIN_COUNT=${MIN_COUNT}  BAND=${BAND}`);
 const at = (m) => ({ toDate: () => new Date(2026, m - 1, 15) });
 const assessment = (sector, m, flags) => ({ createdAt: at(m), postalSector: sector, flags });
 const interaction = (sector, m, action) => ({ createdAt: at(m), postalSector: sector, action, score: 7 });
 const NEEDY = { symptomFlag: true, medFlag: true, sdohSocial: true, sdohFinancial: true,
     sdohFoodInsecure: true, fallsRisk: true, sdohPsychological: true, pavsScore: 40 };
 
-// E1 — one respondent, and the band that hides nothing.
+// E1 — one respondent. Nothing about them may be readable anywhere in the output:
+// at a denominator of one the `<5` band stops banding, because it can only mean 1.
 const solo = buildInsights([assessment('73', 11, NEEDY)], () => 'north');
-const soloRegion = solo.regions.north;
-if (soloRegion && soloRegion.respondents < MIN_COUNT) {
-    const exact = Object.entries(soloRegion.domains).filter(([, v]) => v === BAND).map(([k]) => k);
-    console.log(`  region with ${soloRegion.respondents} respondent → published; ${exact.length} domains read "${BAND}"`);
-    if (exact.length) flag('S1', `a region cell below MIN_COUNT publishes an exact profile`,
-        `respondents=${soloRegion.respondents}, so "${BAND}" can only mean ${soloRegion.respondents}: ${exact.join(', ')}`);
-    else flag('S2', 'region and period cells publish a raw respondent count with no minimum',
-        `primary suppression (MIN_CELL) is applied to sectors only; regions.north.respondents=${soloRegion.respondents} was published`);
-}
+const leaks = [];
+const walk = (node, path) => {
+    if (node === null || node === undefined) return;
+    if (typeof node === 'number') {
+        if (Number.isInteger(node) && node > 0 && node < MIN_COUNT) leaks.push(`${path}=${node}`);
+        return;
+    }
+    if (Array.isArray(node)) return;
+    if (typeof node === 'object') {
+        Object.entries(node).forEach(([k, v]) => {
+            if (path === '' && (k === 'suppression' || k === 'quality' || k === 'national')) return;
+            walk(v, path ? `${path}.${k}` : k);
+        });
+    }
+};
+walk(solo, '');
+console.log(`  1 respondent → sectors ${Object.keys(solo.sectors).length}, regions ${Object.keys(solo.regions).length},`
+    + ` periods ${Object.keys(solo.periods).length} published · national domains ${solo.national.domains === null ? 'withheld' : 'PUBLISHED'}`);
+if (leaks.length) flag('S1', 'a readable count below the band survived in a published cell', leaks.join(' '));
+if (solo.national.domains !== null) flag('S2', "one respondent's flag profile is published nationally",
+    JSON.stringify(solo.national.domains));
 
 // E2 — interaction rows counted as respondents.
 const people = 12;

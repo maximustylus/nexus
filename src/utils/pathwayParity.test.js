@@ -140,14 +140,26 @@ describe('both pathways ask the questions those flags come from', () => {
     });
 
     /**
-     * Both gate falls on 60+, by different mechanisms — the form knows the age
-     * already and reads it directly; the chat has to decide mid-conversation and
-     * goes through `chatSteps.js`. Different code, same rule, and if one drifts the
-     * cohorts stop matching.
+     * Both gate falls on 60+. The form knows the age already; the chat has to decide
+     * mid-conversation and goes through `chatSteps.js`. Different plumbing, and now
+     * the same rule underneath it — if one drifts, the cohorts stop matching.
+     *
+     * ⚠️ THE GATE IS `isSixtyPlus`, AND ASSERTING THAT IS THE POINT — this test used
+     *    to require the two ORIGINAL implementations, a `/60\s*\+/` regex in the chat
+     *    and an `f.ageGroup === '60+'` comparison in the form. Both were substring
+     *    tests that only ever recognised the chip text, so the test was pinning the
+     *    `CP26` defect in place: a person who TYPED "72" was not asked about falls in
+     *    either pathway, and a test that says "both do it this way" is satisfied by
+     *    both doing it wrong.
      */
-    it('both gate the falls question on 60+', () => {
-        expect(src('AuraChat.jsx')).toMatch(/when:\s*\(data\)\s*=>\s*\/60/);
-        expect(src('ConventionalForm.jsx')).toMatch(/f\.ageGroup === '60\+'/);
+    it('both gate the falls question with the shared age parser', () => {
+        ['AuraChat.jsx', 'ConventionalForm.jsx'].forEach((file) => {
+            expect(src(file), file).toMatch(/isSixtyPlus\(/);
+        });
+        expect(src('AuraChat.jsx'), 'the chat must not re-introduce a substring test for the chip text')
+            .not.toMatch(/when:\s*\(data\)\s*=>\s*\/60/);
+        expect(src('ConventionalForm.jsx'), 'the form must not compare against the chip text')
+            .not.toMatch(/ageGroup === '60\+'/);
     });
 
     /**

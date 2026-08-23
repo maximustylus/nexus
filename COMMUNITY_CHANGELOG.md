@@ -143,6 +143,85 @@ evidence.
 - [COMMUNITY_TODO.md](COMMUNITY_TODO.md) — this work as a ledger, with the same
   evidence rule the roster ledger uses.
 
+- **Eight findings, filed as `P7.1`–`P7.8` / `CP22`–`CP26`. Seven are fixed;
+  `P7.7` needs translations rather than code.** See the Fixed entries below.
+
+### Fixed — the pre-merge stress findings
+
+- **`CP24`** — **A completed assessment dead-ended when Firestore was unreachable.**
+  Both pathways `await recordTelemetry(...)` before navigating to the result, and
+  the function's `try`/`catch` was documented as making that safe. It was not: a
+  `catch` protects against a rejection, and `addDoc` does not reject when the
+  backend is unreachable — it queues the write and the promise never settles. So a
+  person answered fifteen questions about their own health and then watched
+  *"Generating your personalised plan now…"* for as long as they were willing to
+  wait. Measured at 45 seconds and counting, with `firestore.googleapis.com`
+  blocked; an ad blocker or a corporate network is enough. `WRITE_DEADLINE_MS`
+  bounds it **inside `recordTelemetry`**, not at the two call sites, because a
+  caller that forgets re-creates the defect and there will be more callers. The
+  write is not cancelled — it stays queued and still lands if connectivity returns;
+  what is bounded is how long a person waits. Re-measured: **6.4s, result reached.**
+
+- **`CP23`** — **Interaction telemetry was counted as respondents in the population
+  rollup, and could clear the suppression threshold on its own.**
+  `community_assessments` holds two kinds of document, because `recordTelemetry` is
+  the portal's only write: one completed screening, and a row per interaction —
+  print, download, share, one `click_<id>` per resource tapped. The rollup read the
+  collection unfiltered. `flagsOf` returned `{}` for an interaction row, so it added
+  nothing to any domain, and `tallyInto` counted a respondent anyway. Measured:
+  **twelve respondents who all reported need became 96, and every domain rate fell
+  from 100% to 13%.** The disclosure half was worse: `MIN_CELL` exists to guarantee
+  ten respondents before a sector is published, and **one person's assessment plus
+  eleven of their own clicks cleared it.** `isAssessment` now gates the tally on the
+  presence of a `flags`/`payload` object, and `quality.assessmentRecords` /
+  `nonAssessmentRecords` report the split so the figures reconcile.
+
+- **`CP25`** — **Only sectors had a suppression floor.** `regions` and `periods`
+  published `respondents` raw and banded their domains at `MIN_COUNT` — and
+  `bandCounts` maps 0 to `0` and 1–4 to `'<5'`, so at a denominator of one the band
+  stops banding: `'<5'` can only mean 1 and `0` can only mean no. Measured: one
+  respondent in the North in November 2026 published **eight domains reading
+  `'<5'`**, which is that person's complete flag profile, located to a region and a
+  month. Regions were left alone because five areas felt coarse; in the weeks after
+  launch — exactly when this page gets shown — a region holds a handful of people.
+  The floor is uniform now, the national *breakdown* is withheld below it while the
+  national headcount stays, and a test walks the whole document and fails on any
+  readable count under the band.
+
+- **`CP22`** — **Typed answers that denied a symptom set its flag.** The chat renders
+  a free-text input beside the chips and prompts *"SELECT AN OPTION OR TYPE FREELY"*.
+  `parseFallsAnswer` handled negation — because "No falls" contains "fall" — and no
+  other matcher did. Measured: **16 of 22 realistic typed answers set a flag the
+  answer denied**, and a fit person typing *"no chest pain"* scored **5 → Red**.
+
+  `clinicalFlags.js` previously argued negation was deliberately unhandled, because
+  an over-triage is the safe direction. That argument is answered rather than
+  discarded: it was written when the cost was a wasted nudge toward a GP, and these
+  flags are now printed on the **handover slip** a person carries to a centre, which
+  states them as things they reported. The fix is deliberately timid — the cue must
+  sit in the same clause, immediately before the term, or immediately after it in
+  Tamil, where negation is postfix. `and` breaks a denial and `or` does not, because
+  *"no chest pain and dizziness"* is genuinely ambiguous and *"no chest pain or
+  dizziness"* is not. Anything ambiguous keeps the flag. **16 → 1**, still 0 false
+  negatives, and **every quick-reply chip maps to exactly the flag it did before.**
+
+  Bare `'low'` was also replaced with the phrasings that actually mean low mood.
+  Negation could not rescue *"low back pain"*, *"low income household"* or *"my
+  activity level is low"* — those are not denials, they are the word meaning
+  something else, and all three routed the person to a mental health service.
+
+- **`CP26`** — **The falls screen missed anyone who typed their age.** The gate was
+  `/60\s*\+/` over the raw answer, which only ever matched the chip text; `"72"`,
+  `"I am 72"`, `"I am 65 years old"` and `"60 plus"` all failed it. There was a
+  second substring test with the same defect in `parseClinicalData`, so a typed age
+  also became `Unknown` and lost both 60+ call-to-action tiers. `parseAgeBand` /
+  `isSixtyPlus` replace all of them and are shared by both pathways; a closed range
+  is read as a range, so `"41–60"` does not become 60+.
+
+- **`/individuals` was a 404.** Only `/individuals/*` was routed, so the most obvious
+  address for the service — the one somebody reaches by trimming the URL — sent a
+  member of the public to the not-found page. It redirects to the pathway picker.
+
 ### Audit — pre-merge stress test, 2026-08-23
 
 - `scripts/community-stress.mjs` + `npm run stress:community` — the counterpart to
@@ -162,7 +241,8 @@ evidence.
   orphan.
 
 - **Eight findings, filed as `P7.1`–`P7.8` / `CP22`–`CP26` in
-  [COMMUNITY_TODO.md](COMMUNITY_TODO.md).** The three that decide whether this merges:
+  [COMMUNITY_TODO.md](COMMUNITY_TODO.md); seven are now fixed above.** The three that
+  had blocked the merge:
   a completed assessment **dead-ends when Firestore is unreachable** (measured: 45s
   and still waiting); interaction telemetry is **counted as respondents** in the
   population rollup (12 people became 96, every domain rate 100% → 13%); and

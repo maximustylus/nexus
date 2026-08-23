@@ -126,6 +126,136 @@ describe('⚠️ a missing flag is never a false one', () => {
     });
 });
 
+describe('⚠️ the floor applies to EVERY breakdown, not only sectors — CP25', () => {
+    /**
+     * THE BAND IS NOT A BAND AT A LOW DENOMINATOR, AND THAT IS THE WHOLE POINT.
+     * `bandCounts` maps 0 to `0` and 1–4 to `'<5'`. In a cell with one respondent,
+     * `'<5'` can only mean 1 and `0` can only mean no — so the "banded" row is that
+     * person's complete flag profile, published beside the region and month they
+     * were in. Regions were left unsuppressed because five areas felt coarse; in the
+     * weeks after launch, which is when this page gets shown, a region holds a
+     * handful of people.
+     */
+    it('withholds a region below the floor, and says so', () => {
+        const out = build([rec('73', { sdohFoodInsecure: true })]);
+        expect(out.regions.north).toBeUndefined();
+        expect(out.suppression.suppressedRegions).toContain('north');
+    });
+
+    it('withholds a month below the floor, and says so', () => {
+        const out = build([rec('73', {}, '2026-07-15T00:00:00Z')]);
+        expect(out.periods['2026-07']).toBeUndefined();
+        expect(out.suppression.suppressedPeriods).toContain('2026-07');
+    });
+
+    it('publishes a region at exactly the floor', () => {
+        const out = build(many('73', MIN_CELL));
+        expect(out.regions.north.respondents).toBe(MIN_CELL);
+        expect(out.suppression.suppressedRegions).not.toContain('north');
+    });
+
+    /**
+     * "How many people have used this" locates nobody — the area is the country.
+     * "…and this is what they reported", from a national total of one, is the same
+     * disclosure as any other single-person cell.
+     */
+    it('keeps the national headcount but withholds its breakdown below the floor', () => {
+        const out = build([rec('73', { sdohFoodInsecure: true, symptomFlag: true })]);
+        expect(out.national.respondents).toBe(1);
+        expect(out.national.domains).toBeNull();
+        expect(out.suppression.nationalDomainsWithheld).toBe(true);
+    });
+
+    it('publishes the national breakdown once the floor is cleared', () => {
+        const out = build(many('73', MIN_CELL, 'sdohFoodInsecure', MIN_CELL));
+        expect(out.national.domains.foodInsecurity).toBe(MIN_CELL);
+        expect(out.suppression.nationalDomainsWithheld).toBe(false);
+    });
+
+    /** No cell anywhere in the document may carry a count below MIN_COUNT. */
+    it('leaves no readable count under the band anywhere in the output', () => {
+        const out = build([
+            ...many('73', MIN_CELL + 2, 'sdohFoodInsecure', 2),
+            ...many('18', 3, 'symptomFlag', 1),
+            rec('46', { fallsRisk: true }, '2026-01-02T00:00:00Z'),
+        ]);
+        const small = [];
+        const walk = (node, path) => {
+            if (node === null || node === undefined) return;
+            if (typeof node === 'number') {
+                if (Number.isInteger(node) && node > 0 && node < MIN_COUNT) small.push(`${path}=${node}`);
+                return;
+            }
+            if (Array.isArray(node)) return;                       // lists of withheld keys
+            if (typeof node === 'object') {
+                Object.entries(node).forEach(([k, v]) => {
+                    // `suppression` and `quality` describe the withholding itself.
+                    if (path === '' && (k === 'suppression' || k === 'quality')) return;
+                    walk(v, path ? `${path}.${k}` : k);
+                });
+            }
+        };
+        walk(out, '');
+        expect(small, 'a count below the band leaked into a published cell').toEqual([]);
+    });
+});
+
+describe('⚠️ interaction rows are not respondents — CP23', () => {
+    /**
+     * `community_assessments` holds two kinds of document because `recordTelemetry`
+     * is the portal's only write: one completed screening, and a row per interaction
+     * (`download_pdf`, `share_result`, `print_handover_slip`, one `click_<id>` per
+     * resource tapped). The interaction rows carry no `flags`, so they contributed
+     * nothing to any domain — and were still counted as respondents.
+     */
+    const interaction = (sector, action) =>
+        ({ postalSector: sector, createdAt: new Date('2026-08-01T00:00:00Z'), action, score: 7 });
+
+    it('does not count a download, a share, a print or a resource tap', () => {
+        const real = many('73', MIN_CELL, 'sdohFoodInsecure', MIN_CELL);
+        const noise = ['download_pdf', 'share_result', 'print_handover_slip', 'click_aac']
+            .map((a) => interaction('73', a));
+        const clean = build(real);
+        const dirty = build([...real, ...noise]);
+        expect(dirty.sectors['73']).toEqual(clean.sectors['73']);
+        expect(dirty.national.respondents).toBe(MIN_CELL);
+    });
+
+    it('every domain RATE is unchanged by interaction rows', () => {
+        const real = many('73', MIN_CELL, 'sdohFoodInsecure', MIN_CELL);
+        const noise = Array.from({ length: 200 }, (_, i) => interaction('73', `click_${i}`));
+        const dirty = build([...real, ...noise]);
+        expect(dirty.sectors['73'].domains.foodInsecurity).toBe(MIN_CELL);
+        expect(dirty.sectors['73'].respondents).toBe(MIN_CELL);
+    });
+
+    /**
+     * THE DISCLOSURE HALF. `MIN_CELL` is supposed to guarantee ten respondents before
+     * a sector is published. One person's own clicks used to clear it.
+     */
+    it(`one person's interaction trail cannot carry a sector past MIN_CELL`, () => {
+        const trail = [
+            rec('18', { sdohFoodInsecure: true, symptomFlag: true }),
+            ...Array.from({ length: MIN_CELL + 5 }, (_, i) => interaction('18', `click_${i}`)),
+        ];
+        const out = build(trail);
+        expect(out.sectors['18']).toBeUndefined();
+        expect(out.suppression.suppressedSectors).toContain('18');
+    });
+
+    it('reports how many rows were not assessments, so the figures reconcile', () => {
+        const out = build([...many('73', MIN_CELL), interaction('73', 'download_pdf'), interaction('73', 'click_a')]);
+        expect(out.quality.assessmentRecords).toBe(MIN_CELL);
+        expect(out.quality.nonAssessmentRecords).toBe(2);
+    });
+
+    it('a respondent who reported nothing is still a respondent', () => {
+        // Presence of `flags`, not its content: their zero belongs in the denominator.
+        const out = build(many('73', MIN_CELL));
+        expect(out.sectors['73'].respondents).toBe(MIN_CELL);
+    });
+});
+
 describe('records that cannot be placed', () => {
     /**
      * The people least able to give a postal code are not a rounding error. An
@@ -143,13 +273,13 @@ describe('records that cannot be placed', () => {
         expect(out.quality.undatedRecords).toBe(1);
     });
 
-    it('groups by month', () => {
+    it('groups by month, above the floor', () => {
         const out = build([
-            ...Array.from({ length: 3 }, () => rec('73', {}, '2026-07-15T00:00:00Z')),
-            ...Array.from({ length: 4 }, () => rec('73', {}, '2026-08-15T00:00:00Z')),
+            ...Array.from({ length: MIN_CELL }, () => rec('73', {}, '2026-07-15T00:00:00Z')),
+            ...Array.from({ length: MIN_CELL + 1 }, () => rec('73', {}, '2026-08-15T00:00:00Z')),
         ]);
-        expect(out.periods['2026-07'].respondents).toBe(3);
-        expect(out.periods['2026-08'].respondents).toBe(4);
+        expect(out.periods['2026-07'].respondents).toBe(MIN_CELL);
+        expect(out.periods['2026-08'].respondents).toBe(MIN_CELL + 1);
     });
 
     it('reads a Firestore Timestamp as well as a Date', () => {
