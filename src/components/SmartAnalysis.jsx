@@ -101,6 +101,11 @@ const SmartAnalysis = ({ teamData, staffLoads, onClose }) => {
 
             const response = await generateSmartAnalysis({
                 targetYear: Number(targetYear),
+                // `AN4` — the server re-reads membership from this and refuses a
+                // caller who is not a lead of it. It is not a hint; it is the whole
+                // authorization check, because the function runs on the Admin SDK
+                // and never passes through `firestore.rules`.
+                teamId,
                 teamName: "SSMC@KKH CEP Team",
                 staffProfiles: profileArray,
                 yearData: filteredYearData,

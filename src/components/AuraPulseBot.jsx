@@ -14,6 +14,7 @@ import { db } from '../firebase';
 import { getFunctions, httpsCallable } from 'firebase/functions';
 import { doc, setDoc, getDoc, updateDoc, arrayUnion } from 'firebase/firestore';
 import { useNexus } from '../context/NexusContext';
+import { refuseWorkloadWrite, TARGET_LOADS } from '../utils/dataEntryGuard';
 import { useTeam } from '../context/TeamContext';
 import {
     wellbeingDocPath,
@@ -761,16 +762,27 @@ export default function AuraPulseBot({ isOpen, onClose, onOpen: _onOpen, user })
                 throw new Error("No team is selected, so there is nowhere to write this.");
             }
 
-            const TARGET_LOADS = 'staff_loads';
-            const TARGET_WORKLOAD = 'monthly_workload';
-            if (![TARGET_LOADS, TARGET_WORKLOAD].includes(workload.target_collection)) {
-                throw new Error("AURA asked to write somewhere I do not recognise. Nothing was saved.");
-            }
+            /**
+             * ⚠️ ONE GUARD, IN ONE PLACE, AND IT IS PURE — see
+             *    `src/utils/dataEntryGuard.js`. The collection allowlist and the
+             *    empty-target check used to live here as inline `if`s, and two
+             *    checks that should have been beside them did not exist at all:
+             *
+             *      `AU2`  `target_value` was consumed with a bare `Number()`, so the
+             *             `null` the prompt's own schema permits became a written
+             *             ZERO and the clinician was told the save succeeded.
+             *      `AU3`  `target_field` was model-chosen with nothing constraining
+             *             it, and the Firestore rule has no `changedKeys()` backstop.
+             *
+             *    Moving the decision out is what made it testable — `AU24`:
+             *    `executeDataEntry` had no tests, against a suite of 2,744, because
+             *    reaching it needs a React tree, a Firestore mock and a team context.
+             *    The judgement is now a function; the effects stay here.
+             */
+            const refusal = refuseWorkloadWrite(workload);
+            if (refusal) throw new Error(refusal);
 
-            const rawTarget = String(workload.target_doc || '').trim();
-            if (rawTarget === '' || rawTarget.toLowerCase() === 'null') {
-                 throw new Error("Missing target document. Please ask AURA to clarify who this is for.");
-            }
+            const rawTarget = String(workload.target_doc).trim();
 
             let docRef;
             if (workload.target_collection === TARGET_LOADS) {
@@ -786,10 +798,9 @@ export default function AuraPulseBot({ isOpen, onClose, onOpen: _onOpen, user })
             let updatedMessage = '';
 
             if (workload.target_collection === TARGET_LOADS) {
-                const monthIndex = parseInt(workload.target_month);
-                if (isNaN(monthIndex) || monthIndex < 0 || monthIndex > 11) {
-                    throw new Error("A valid month (e.g., January) is required to update personal workload.");
-                }
+                // Range already proven by `refuseWorkloadWrite`; this is the read,
+                // not a second opinion about whether the month is valid.
+                const monthIndex = Number(workload.target_month);
 
                 const docSnap = await getDoc(docRef);
                 let currentData = Array(12).fill(0);

@@ -431,13 +431,57 @@ exports.generateSmartAnalysis = onCall({
     cors: true,
     secrets: ['GEMINI_API_KEY'],
 }, async (request) => {
-    if (!API_KEY) throw new HttpsError('failed-precondition', 'AI service is not configured.');
 
     var targetYear = request.data.targetYear;
     var staffProfiles = request.data.staffProfiles;
     var yearData = request.data.yearData;
     var staffLoads = request.data.staffLoads;
     var teamName = request.data.teamName || 'the department';
+    var teamId = request.data.teamId;
+
+    /**
+     * ⚠️ THIS FUNCTION HAD NO AUTHENTICATION AT ALL — `AN4`.
+     *
+     * `cors: true`, no `request.auth` check, and `secrets: ['GEMINI_API_KEY']`. It
+     * accepted 8,000 characters of caller JSON and returned 2,048 tokens of
+     * generated text on the project's billed key, to anybody on the internet. An
+     * anonymous caller could not extract NEXUS data — they supply their own payload
+     * — but they had a free, unmetered Gemini endpoint.
+     *
+     * That is precisely the class `CP6` closed for `publicTriageChat` and the check
+     * in `chatWithAura` closed for the staff assistant. Two of the three were
+     * fixed; this one was left, and `rateLimit.js` does not cover it either
+     * (`AU14`, still open).
+     *
+     * ⚠️ MEMBERSHIP IS READ FROM THE DATABASE, NOT TRUSTED FROM THE ARGUMENT — the
+     *    same reasoning as `processFeedPost` below. This runs on the Admin SDK and
+     *    bypasses `firestore.rules` entirely, so a caller passing another
+     *    department's `teamId` would otherwise generate a wellbeing report about
+     *    them. The rules cannot help here; this check is the whole control.
+     *
+     * ⚠️ AND LEAD-ONLY, not merely a member. What comes back is described by its own
+     *    prompt as "a detailed clinical report for department heads" naming
+     *    individuals and their risk flags, and the client archives it as the team's
+     *    year-end report. `hasAdminAccess` already gates the screen to a lead; this
+     *    makes the server agree rather than trusting that it does.
+     */
+    if (!request.auth || !request.auth.uid) {
+        throw new HttpsError('unauthenticated', 'Sign in first.');
+    }
+    if (typeof teamId !== 'string' || !/^[a-z0-9]+(-[a-z0-9]+)*$/.test(teamId)) {
+        throw new HttpsError('invalid-argument', 'Which team is this analysis for?');
+    }
+    var analysisMemberSnap = await getFirestore()
+        .doc('teams/' + teamId + '/members/' + request.auth.uid)
+        .get();
+    if (!analysisMemberSnap.exists) {
+        throw new HttpsError('permission-denied', 'You are not a member of that team.');
+    }
+    if ((analysisMemberSnap.data() || {}).role !== 'lead') {
+        throw new HttpsError('permission-denied', 'Only a team lead can generate the wellbeing analysis.');
+    }
+
+    if (!API_KEY) throw new HttpsError('failed-precondition', 'AI service is not configured.');
 
     validateAnalysisInput({ targetYear: targetYear, staffProfiles: staffProfiles, yearData: yearData });
 
