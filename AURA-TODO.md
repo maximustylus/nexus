@@ -225,22 +225,42 @@ Closes four findings at once, and it is the number the whole instrument reports.
 Everything closed so far is the plumbing around them. AURA largely **is** its prompts, and
 none of them has been revised.
 
-**Why this is not a tonight job, stated so it is a decision rather than a drift:** there is no
-test suite for prompt output. A changed system instruction shifts model behaviour in ways
-nothing in this repository can catch, and the only honest verification is running real turns
-and reading them. That is a morning's work with a person watching, not an 11pm edit.
+⚠️ **THE DEFERRAL REASON WAS DOING TOO MUCH WORK, AND THE OWNER OVERRULED IT.** It read:
+*"there is no test suite for prompt output."* True, and it stays true — whether AURA's
+coaching is **good** is a clinical question. But a prompt is a string, and a great deal about
+it is decidable without a model:
+
+> does it name collections and fields the code actually accepts · does the length it asks for
+> fit the token budget it is given · does it claim an autonomy the system does not have · is an
+> institution hardcoded into a multi-tenant product · is persona text sitting where an
+> instruction belongs
+
+**Every one of those was wrong, and none of them needed Gemini to find.**
+`functions/promptContract.test.js` is 33 assertions against `dataEntryGuard`'s allowlists and
+`generationConfig` — not against what the prompt was supposed to say. **15 of 33 fail on the
+pre-P7 code.** The residue that genuinely needs a person reading real output is `7.7`–`7.9`,
+and it is smaller than the deferral implied.
 
 | # | Id | Item | Owner | Status |
 |---|---|---|---|---|
-| 7.1 | `AU7` | MODE 3's schema names `monthly_workload`, `staff_loads` and `"alif"` — all pre-migration | me | `OPEN` |
+| 7.1 | `AU7` + `AU6` | MODE 3's schema | me | `DONE` | The two collection names stay — they are the wire format `dataEntryGuard` allowlists. What changed: `target_doc` now asks for the **display name**, which is what `memberUidByName` resolves by, closing `AU6` — the prompt asked for a uid and the client looked up a name, so the feature only worked when the model **disobeyed**. Type rules for `target_value`/`target_month` added, matching the guard. |
 | 7.2 | `AU28` | Personas are `System Override:` text in the user turn; caller `prompt` up to 8,000 chars. Options: server-side persona allowlist, or stop labelling user content `CONTEXT/OVERRIDE` | **OWNER** | `OPEN` |
-| 7.3 | `AU19` | `db_workload` is not in `requiredFields`, and `requiredFields` does not require | me | `OPEN` |
-| 7.4 | `AU20` | Temperature 0.7 on write paths. ⚠️ And `'Project HUGE'` **never matches** — `grep -c` returns 0 — so the Grant Strategist persona has always run at 0.7 | me | `OPEN` |
-| 7.5 | `AN5` | The prompt asks for 1,000–2,000 + 200–500 words against a 2,048-token budget | me | `OPEN` |
-| 7.6 | — | `SMART_ANALYSIS_SYSTEM_PROMPT:2` hardcodes *"for KKH/SingHealth"* — wrong for team #2 | me | `OPEN` |
+| 7.3 | `AU19` | `requiredFields` now requires | me | `DONE` | Throws instead of warning, and `db_workload` is in the list — it was the one field leading to a database write and the only one absent from the check that did not check. |
+| 7.4 | `AU20` | Temperature | me | `DONE` | Keyed on `personaId` against the server allowlist, not on a substring of prompt text. The dead `'Project HUGE'` branch is gone. Default 0.7 → **0.4**: this turn can emit a database write and a wellbeing classification, and 0.7 is a temperature for prose. |
+| 7.5 | `AN5` | Output budget | me | `DONE` | Ask reduced to 600–900 + 200–350 words, budget raised 2,048 → 4,096. A test computes the worst-case ask from the prompt and asserts it against `generationConfig`, so the two cannot drift apart again. |
+| 7.6 | — | Hardcoded institution | me | `DONE` | The analysis prompt names no institution; it takes the department from the request's TEAM IDENTITY line. Asserted. |
 | 7.7 | `AU8` | **Decide** whether the wellbeing assessment should be content-gated | **OWNER** | `OPEN` |
 | 7.8 | `AN7` | **Decide** whether a model may split confidential/public staff content unreviewed | **OWNER** | `OPEN` |
 | 7.9 | `AN12` | **Decide** whether a model classification is an acceptable PDPA *guard* | **OWNER** | `OPEN` |
+
+⚠️ **`7.7`–`7.9` are untouched on purpose.** They are the three that change what AURA *says*
+about a person rather than what it is told about the schema, and each is a judgement the owner
+has to make. Nothing above alters them.
+
+⚠️ **THE PERSONA TEXT IS UNCHANGED, WORD FOR WORD.** Moving where a prompt lives has a testable
+outcome; rewriting what it says does not, and bundling the two would let a behaviour change
+hide inside a plumbing one. Whether the personas say the right things is still the work that
+needs a person reading real turns.
 
 ## P6 — Tests and honesty · `AU18` `AU20`–`AU24` `AC4` `AN`
 

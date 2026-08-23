@@ -323,12 +323,32 @@ export default function AuraPulseBot({ isOpen, onClose, onOpen: _onOpen, user })
                     turnIndex: messages.filter(m => m.role === 'user').length,
                 });
             } else {
+                /**
+                 * ⚠️ THE PERSONA IS NO LONGER SENT AS TEXT — `AU28`. This appended
+                 *    `selectedPersona.prompt`, every one of which began with the
+                 *    literal words "System Override:", and the server prefixed the
+                 *    whole thing `CONTEXT/OVERRIDE:` into the USER TURN. The
+                 *    application taught the model, on every persona switch, that
+                 *    user-turn text can relabel it.
+                 *
+                 *    An **id** goes now. The text lives in `functions/personas.cjs`
+                 *    and reaches the model as a `systemInstruction`, where an
+                 *    instruction belongs.
+                 *
+                 * ⚠️ AND THE NAME. `user.name` was never here, but the DISPLAY NAME
+                 *    is what `executeDataEntry` resolves a personal-load write by
+                 *    (`memberUidByName`), while this line told the model its "exact
+                 *    database ID" was `user.id` — a uid since the migration. MODE 3
+                 *    then asked for that id as `target_doc`, and the lookup failed
+                 *    for everybody who did not happen to be called by their uid
+                 *    (`AU6`). The prompt now asks for the display name and this
+                 *    sends the display name.
+                 */
                 const contextPrompt = [
-                    `System Note: The user's exact database ID is '${user?.id}'.`,
-                    user?.title ? `This staff member is a ${user.title} at KKH/SingHealth.` : '',
+                    user?.name ? `System Note: The user's display name is "${user.name}". Use this exact spelling for target_doc.` : '',
+                    user?.title ? `This staff member is a ${user.title}.` : '',
                     user?.department ? `Department: ${user.department}.` : '',
                     liveMemory ? `Prior session note: "${liveMemory}".` : 'This is their first session with AURA.',
-                    selectedPersona?.prompt ? `\n\n${selectedPersona.prompt}` : '' 
                   ].filter(Boolean).join('\n');
 
                 const result = await secureChatWithAura({
@@ -336,6 +356,7 @@ export default function AuraPulseBot({ isOpen, onClose, onOpen: _onOpen, user })
                     history,
                     role:   selectedPersona?.title ?? user?.title ?? 'Staff',
                     prompt: contextPrompt,
+                    personaId: selectedPersona?.id,
                 });
 
                 try {
