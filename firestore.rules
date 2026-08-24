@@ -455,7 +455,26 @@ service cloud.firestore {
         // until something actually reads it, rather than pre-granting access to a
         // collection whose consumers are unknown.
         allow read: if false;
-        allow create, update: if isLead(teamId);
+        // ⚠️ THE `AU3` BACKSTOP, the deferred half of that finding. The client's
+        //    `ALLOWED_WORKLOAD_FIELDS` allowlist was, by row 2.1's own words,
+        //    "the only thing standing between a model-chosen string and a key on
+        //    that document" — and a client-side allowlist stands nowhere once the
+        //    client is modified. The two counter fields mirror
+        //    `dataEntryGuard.js`'s allowlist EXACTLY; change either and the
+        //    emulator suite (`firestore-rules-verify.mjs`, AU3 section) fails.
+        //    `hasOnly` permits a subset, so a write updating one counter plus the
+        //    two audit fields passes; a model-invented key fails the whole write.
+        allow create, update: if isLead(teamId)
+                      && request.resource.data.keys().hasOnly([
+                           'patient_attendance', 'patient_load',
+                           'last_updated_by', 'last_updated_at'
+                         ])
+                      && (!('patient_attendance' in request.resource.data)
+                          || (request.resource.data.patient_attendance is number
+                              && request.resource.data.patient_attendance >= 0))
+                      && (!('patient_load' in request.resource.data)
+                          || (request.resource.data.patient_load is number
+                              && request.resource.data.patient_load >= 0));
         allow delete: if false;
       }
 

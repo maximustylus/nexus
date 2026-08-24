@@ -755,6 +755,17 @@ const AuraChatbot = () => {
   const navigate                    = useNavigate();
   const chatEndRef                  = useRef(null);
   const inputRef                    = useRef(null);
+  /**
+   * `AC16` — the completion latch. Between `setIsTyping(false)` on the final
+   * step and the `setIsComplete(true)` that only fires inside a 1,200 ms
+   * timeout, the submission guard used to be OPEN: a second tap re-entered the
+   * completion branch and produced a second telemetry row under the same
+   * sessionId and a second navigate. A REF, not state, because the second tap
+   * can land in the same tick as the first and a `setState` latch is not yet
+   * visible to it. Cleared only on a FAILED completion, so the person can
+   * answer again; a successful one stays latched until the navigate.
+   */
+  const concludingRef               = useRef(false);
 
   const [lang]      = useState(() => applyDocumentLanguage(readLanguage()));
   const langData    = DICTIONARY[lang] || DICTIONARY.en;
@@ -833,7 +844,7 @@ const AuraChatbot = () => {
   const AI_UPGRADE_WINDOW_MS = 1500;
 
   const handleUserSubmission = (text) => {
-    if (!text.trim() || isTyping || isComplete) return;
+    if (!text.trim() || isTyping || isComplete || concludingRef.current) return;
 
     setMessages(prev => [...prev, { sender: 'user', text }]);
     setUserInput('');
@@ -918,6 +929,7 @@ const AuraChatbot = () => {
       var closing = (staticAck ? staticAck + ' ' : '') + 'I have mapped your full profile. Generating your personalised plan now…';
       setMessages(prev => [...prev, { sender: 'bot', text: closing, step: currentStep }]);
       setIsTyping(false);
+      concludingRef.current = true; // `AC16` — see the ref's declaration
       // `AC6`: the body traps its own throws now, but a promise rejection from
       // the async machinery itself must not become an unhandled rejection.
       concludeTriage(updatedData).catch((err) => console.error('[AuraChat] concludeTriage rejected:', err));
@@ -998,6 +1010,9 @@ const AuraChatbot = () => {
 
     } catch (err) {
       console.error('[AuraChat] completion failed; progress kept for resume:', err);
+      // `AC16`: a FAILED completion unlatches, so the person can answer the
+      // last question again — the same reasoning as keeping their progress.
+      concludingRef.current = false;
       setTimeout(() => {
         setMessages(prev => [...prev, { sender: 'bot', text: langData.error }]);
       }, 1000);

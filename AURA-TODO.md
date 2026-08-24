@@ -46,8 +46,8 @@ original post-mortems into one. `AU2` means today exactly what it meant when it 
 
 | | Count | Ids |
 |---|---|---|
-| `DONE`, evidenced | **43** | `AU1` `AU2` `AU3`† `AU4` `AU6` `AU7` `AU9` `AU10` `AU12` `AU14`–`AU16` `AU19` `AU20` `AU22`–`AU28` `AC1` `AC2` `AC5`–`AC10` `AC12`–`AC15` `AN1`* `AN2`–`AN4` `AN6` `AN8` `AN10` `AN13` `AN14` + `AN12` (code half) — † `AU3` is client-side only; its rules backstop is open by row 2.1's own deliberate deferral |
-| `OPEN`, mine | **0 full rows** | ⚠️ **not zero work**: `AU3` is `DONE (client) · OPEN (rule)` — the `changedKeys().hasOnly` backstop on the workload document deliberately waits for a rules deploy window (row 2.1) — and `AC16` below is a deferred narrowing, not a fix. The rest is the owner's column and the standing verification work (`P8.8`, `CD13`). |
+| `DONE`, evidenced | **45** | `AU1` `AU2` `AU3` `AU4` `AU6` `AU7` `AU9` `AU10` `AU12` `AU14`–`AU16` `AU19` `AU20` `AU22`–`AU28` `AC1` `AC2` `AC5`–`AC10` `AC12`–`AC16` `AN1`* `AN2`–`AN4` `AN6` `AN8` `AN10` `AN13` `AN14` + `AN12` (code half) — `AU3` now both halves, emulator-verified |
+| `OPEN`, mine | **0** | The engineering queue is genuinely empty as of 2026-08-24: `AU3`'s rules backstop and `AC16`'s latch — the two residuals the previous version of this row disclosed — are closed above, both with evidence. What remains is the owner's column and the standing verification work (`P8.8`, `CD13`). |
 
 ⚠️ **Six rows in this file said `OPEN` for findings closed days earlier** (`AU6` `AU7` `AU19`
 `AN5` `AU22` `AU23`) — the P-section tracked them separately from the P7 batch that closed
@@ -182,7 +182,7 @@ Closes four findings at once, and it is the number the whole instrument reports.
 
 | # | Id | Item | Owner | Status | Evidence |
 |---|---|---|---|---|---|
-| 2.1 | `AU3` | Allowlist `target_field` | me | `DONE` (client) · `OPEN` (rule) | `e3b6bb9`. ⚠️ The `changedKeys().hasOnly` backstop on the workload rule is **not** done — deliberately, because tonight's list touches no rules. |
+| 2.1 | `AU3` | Allowlist `target_field` | me | `DONE` (both) | Client: `e3b6bb9`, `ALLOWED_WORKLOAD_FIELDS`. Rules backstop: 2026-08-24, riding the same rules deploy `AN13` already requires — `keys().hasOnly([patient_attendance, patient_load, last_updated_by, last_updated_at])` plus number-and-non-negative checks on the counters, mirroring `dataEntryGuard.js` exactly. **Emulator: 8 cases in `firestore-rules-verify.mjs`'s AU3 section — a model-invented field, a typo, a string count and a negative all fail the whole write; a subset update passes; staff refused; the collection stays unreadable. 140 passed, 0 failed (2026-08-24).** |
 | 2.2 | `AU4` | `assertPeriod` on `workloadPath`, matching `assertYear` | me | `DONE` | Three layers, 2026-08-24: `dataEntryGuard` refuses a non-`mmm_yyyy` period **with a sentence naming the format** (case-insensitive, so `Jan_2026` is not a user-facing failure); the caller lowercases so a case variant lands on the SAME document instead of splitting a month in two; `teamPaths.workloadPath` throws on anything else, exactly like `assertYear`. Twelve real month names, anchored — `xyz_2026` is not a month. Tested both layers. |
 | 2.3 | `AU6` | Make the System Note, MODE 3 and `memberUidByName` agree on ONE key | me | `DONE` | ⚠️ Closed by **P7 item 7.1** (`88af00f`) and this row went stale — the same finding tracked in two places, updated in one. MODE 3 asks for the display name, which is what `memberUidByName` resolves. |
 | 2.4 | `AU7` | Update the prompt's schema to the post-migration paths | me | `DONE` | ⚠️ Closed by **P7 item 7.1** (`88af00f`); stale row. The two names are the wire format `dataEntryGuard` allowlists; `promptContract.test.js` pins prompt-to-guard agreement. |
@@ -330,7 +330,7 @@ MODE 3 is **unverified** — see item 7 of that document's own assumptions block
 
 | Id | What | Severity |
 |---|---|---|
-| `AC16` | **Double-submit window on the chat's final step.** `setIsTyping(false)` runs before `concludeTriage`, and `setIsComplete(true)` only fires inside a 1,200 ms timeout — so for that window the guard `(!text.trim() \|\| isTyping \|\| isComplete)` is open and a second submit re-enters the completion branch: a second telemetry row under the same `sessionId`, a second navigate. **Pre-existing, and the `AC6` restructure *narrowed* it** (the resurrection window was `await + 1200 ms`; it is now `1200 ms`). Deferred on purpose: the fix is a `submitting` latch plus a test, and a rushed latch on the screening's completion path the night it was restructured is how `AC6` happened the first time. | medium · **OPEN** |
+| `AC16` | ~~Double-submit window on the chat's final step~~ **CLOSED 2026-08-24, same day, after the demo-path pressure lifted.** A `concludingRef` latch — a REF, because a same-tick second tap cannot see a `setState` — checked in the submission guard, set before `concludeTriage`, and cleared **only** in the failure path so a failed completion stays retryable (the same reasoning as keeping the person's progress). **5 tests** (`AuraChat.latch.test.js`, source-scan with `codeOnly`, and 4 of 5 fail on the pre-latch file), including that the success path never unlatches and that exactly one reset exists, in the catch. | medium · **`DONE`** |
 
 ## P6 — Tests and honesty · `AU18` `AU20`–`AU24` `AC4` `AN`
 
