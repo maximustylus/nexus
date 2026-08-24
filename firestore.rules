@@ -484,11 +484,22 @@ service cloud.firestore {
 
         match /comments/{commentId} {
           allow get, list: if isMember(teamId);
+          // ⚠️ THE NRIC/FIN LINE IS THE `AN13` FENCE, and it is deliberately the
+          //    same SHAPE the client checks (`src/utils/nric.js`) — S/T/F/G/M,
+          //    seven digits, a letter. Rules cannot compute the checksum, so the
+          //    client does not either: a stricter client in front of a looser
+          //    fence would make the difference a bypass. RE2 has no lookarounds,
+          //    so the boundary here is "not preceded/followed by alphanumerics"
+          //    spelled as alternation with start/end. Posts get the model-based
+          //    guard in `processFeedPost`; comments get this. It is ONE identifier
+          //    class, not PDPA compliance, and the file says so where it is
+          //    enforced rather than implying more.
           allow create: if isMember(teamId)
                         && request.resource.data.keys().hasOnly(['author', 'text', 'timestamp'])
                         && request.resource.data.text is string
                         && request.resource.data.text.size() > 0
                         && request.resource.data.text.size() <= 5000
+                        && !request.resource.data.text.matches('(.*[^A-Za-z0-9])?[STFGMstfgm][0-9]{7}[A-Za-z]([^A-Za-z0-9].*)?')
                         && request.resource.data.timestamp == request.time;
           // ⚠️ `author` IS NO LONGER PINNED TO THE CALLER'S NAME, and that is a
           //    deliberate loosening with a reason. The old rule required

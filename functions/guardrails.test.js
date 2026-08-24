@@ -371,10 +371,17 @@ describe('the callables return their provenance', () => {
     });
 
     it('generateSmartAnalysis returns provenance, its footer and the assumptions block', () => {
-        const ret = src.slice(src.indexOf('No private report generated'));
-        expect(ret.slice(0, 600)).toMatch(/assumptions:/);
-        expect(ret.slice(0, 600)).toMatch(/provenance:/);
-        expect(ret.slice(0, 600)).toMatch(/provenanceFooter:/);
+        // Anchored on the return statement itself. This used to anchor on the
+        // 'No private report generated.' fallback string, which `AN8` deleted —
+        // an empty report is now REFUSED with a retry rather than archived as
+        // prose about nothing, so the anchor moved to what actually ships.
+        const at = src.indexOf('private: privateText');
+        expect(at, 'the analysis return shape changed').toBeGreaterThan(-1);
+        const ret = src.slice(at, at + 600);
+        expect(ret).toMatch(/public:\s*publicText/);
+        expect(ret).toMatch(/assumptions:/);
+        expect(ret).toMatch(/provenance:/);
+        expect(ret).toMatch(/provenanceFooter:/);
     });
 });
 

@@ -46,8 +46,8 @@ original post-mortems into one. `AU2` means today exactly what it meant when it 
 
 | | Count | Ids |
 |---|---|---|
-| `DONE`, evidenced | **29** | `AU1` `AU2` `AU3` `AU4` `AU6` `AU7` `AU9` `AU10` `AU14` `AU15` `AU16` `AU19` `AU20` `AU22` `AU23` `AU24` `AU25` `AU26` `AU27` `AU28` `AC1` `AC2` `AC15` `AN1`* `AN2` `AN3` `AN4` `AN10` `AN14` |
-| `OPEN`, mine | 11 | `AU12` `AC5` `AC6` `AC7` `AC8` `AC9` `AC10` `AC12` `AC13` `AC14` + `AN6` `AN8` `AN13` (three AN in one row of work) |
+| `DONE`, evidenced | **33** | `AU1` `AU2` `AU3` `AU4` `AU6` `AU7` `AU9` `AU10` `AU14` `AU15` `AU16` `AU19` `AU20` `AU22` `AU23` `AU24` `AU25` `AU26` `AU27` `AU28` `AC1` `AC2` `AC15` `AN1`* `AN2` `AN3` `AN4` `AN6` `AN8` `AN10` `AN13` `AN14` + `AN12` (code half) |
+| `OPEN`, mine | 10 | `AU12` `AC5` `AC6` `AC7` `AC8` `AC9` `AC10` `AC12` `AC13` `AC14` |
 
 ⚠️ **Six rows in this file said `OPEN` for findings closed days earlier** (`AU6` `AU7` `AU19`
 `AN5` `AU22` `AU23`) — the P-section tracked them separately from the P7 batch that closed
@@ -216,10 +216,10 @@ Closes four findings at once, and it is the number the whole instrument reports.
 | # | Id | Item | Owner | Status | Evidence |
 |---|---|---|---|---|---|
 | 5.1 | `AN5` | Raise `maxOutputTokens`, or lower the word counts the prompt asks for | me | `DONE` | ⚠️ Closed by **P7 item 7.5** (`88af00f`); stale row. Both: ask lowered to 600–900 + 200–350 (+ 40–150 assumptions), budget 2,048 → 4,096, with a test computing the worst-case ask from the prompt itself. |
-| 5.2 | `AN6` | Make the client timeout, the function timeout and the fetch abort agree — and tell the user the true number | me | `OPEN` | — |
-| 5.3 | `AN8` | Refuse to render or archive the fallback string as a report | me | `OPEN` | — |
-| 5.4 | `AN13` | Route comments through the PDPA guard, or fence them the way posts are | me | `OPEN` | — |
-| 5.5 | `AN12` | Add a deterministic NRIC/FIN regex **before** the model call | me | `OPEN` | — |
+| 5.2 | `AN6` | Make the client timeout, the function timeout and the fetch abort agree — and tell the user the true number | me | `DONE` | 2026-08-24. The callable timeout was 300,000ms behind a comment claiming it *"matched the backend"* — the backend aborts its fetch at 30s and a v2 onCall defaults to 60s, so the button could pin on "Analysing…" four minutes after the server gave up. Now 60s, the largest value the backend can use, and the status text already said "under a minute". |
+| 5.3 | `AN8` | Refuse to render or archive the fallback string as a report | me | `DONE` | 2026-08-24, closed at the SERVER: the fallback strings are deleted. `parseJsonResponse` throws on an absent key; a key that is present but **empty** now throws too (`"The AI returned an empty report. Please retry."`) instead of returning *"No private report generated."* — which the client rendered and **archived as the department's year-end record** with nothing anywhere saying a generation failed. |
+| 5.4 | `AN13` | Route comments through the PDPA guard, or fence them the way posts are | me | `DONE` | 2026-08-24, the fence, twice: `firestore.rules` refuses a comment containing an NRIC/FIN-shaped token (a fence a modified client cannot bypass), and the client checks the same shape first so the person gets a sentence naming the fix (*"ending 567D"*) instead of `permission-denied`. Shape not checksum, **deliberately**: rules cannot compute a checksum, and a stricter client in front of a looser fence makes the difference a bypass. A parity test re-reads the pattern out of `firestore.rules` and asserts both layers agree on 19 cases. ⚠️ One identifier class — **not** PDPA compliance, said so at every layer. ⚠️ **Rules change: deploy `firestore:rules` with this.** |
+| 5.5 | `AN12` | Add a deterministic NRIC/FIN regex **before** the model call | me | `DONE` (code half) | 2026-08-24. `processFeedPost` refuses an NRIC/FIN-shaped post deterministically, before a token is spent — a regex is free, instant, and cannot have an off day. Same shape as the comments fence, parity-tested. The **owner's half** of `AN12` — whether a model classification is an acceptable PDPA *guard* at all — stays open in the decisions table. |
 | 5.6 | `AN7` | **Decide** whether a model may split confidential/public staff wellbeing content unreviewed | **OWNER** | `OPEN` | — |
 | 5.7 | `AN9` | **Decide** whether cluster-wide `isSignedIn()` read of the rollup is acceptable with suppression as the only control | **OWNER** | `OPEN` | — |
 | 5.8 | `AN11` | **Decide** whether the nudge should be per-team | **OWNER** | `OPEN` | — |

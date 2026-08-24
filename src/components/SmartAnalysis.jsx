@@ -14,8 +14,16 @@ import { bandLabel } from '../utils/rosterWizard';
 import { reportPath, projectStaffPath } from '../utils/teamPaths';
 
 const functions = getFunctions(undefined, 'us-central1');
-// 🛡️ CRITICAL FIX: 300,000ms (5 minutes) timeout to match the backend!
-const generateSmartAnalysis = httpsCallable(functions, 'generateSmartAnalysis', { timeout: 300000 });
+/**
+ * `AN6`. This was 300,000ms with a comment claiming it matched the backend. It
+ * did not: the function's own fetch aborts at 30s (`functions/index.js`,
+ * `AbortSignal.timeout(30000)`) and a v2 onCall's default deadline is 60s — so
+ * the promise could outlive the server by four minutes, pinning the button on
+ * "Analysing…" long after the server had given up. 60s is the largest timeout
+ * the backend can actually use, and the status text ("usually takes under a
+ * minute") now tells the truth twice.
+ */
+const generateSmartAnalysis = httpsCallable(functions, 'generateSmartAnalysis', { timeout: 60000 });
 
 /**
  * ==============================================================================

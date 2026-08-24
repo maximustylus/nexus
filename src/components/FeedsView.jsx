@@ -3,6 +3,7 @@ import { Sparkles, MessageSquare, ThumbsUp, Share2, ShieldAlert, Image as ImageI
 import { useNexus } from '../context/NexusContext';
 import { useTeam } from '../context/TeamContext';
 import { feedPath, feedPostPath } from '../utils/teamPaths';
+import { containsNric, NRIC_REFUSAL } from '../utils/nric';
 import { db, storage } from '../firebase';
 import { collection, query, orderBy, onSnapshot, doc, updateDoc, increment, addDoc, serverTimestamp, deleteDoc } from 'firebase/firestore';
 import { getFunctions, httpsCallable } from 'firebase/functions';
@@ -66,6 +67,19 @@ const CommentSection = ({ postId, user, isMock, postAuthor: _postAuthor }) => {
     const handleSubmit = async (e) => {
         e.preventDefault();
         if (!draft.trim()) return;
+        /**
+         * `AN13`. Posts pass through the PDPA guard in `processFeedPost`; comments
+         * went straight to Firestore with no screen at all. The deterministic
+         * NRIC/FIN check runs here for the SENTENCE (the rules refusal would read
+         * as "permission denied") and again in `firestore.rules` for the FENCE —
+         * this check is advisory the moment someone modifies their client; the
+         * rules one is not. Shape, not checksum, so both layers test the same
+         * thing; the reasoning lives in `src/utils/nric.js`.
+         */
+        if (containsNric(draft)) {
+            alert(NRIC_REFUSAL);
+            return;
+        }
         if (isMock) {
             setComments(prev => [...prev, { id: Date.now().toString(), author: user?.name || 'You', text: draft }]);
             setDraft('');

@@ -753,6 +753,21 @@ exports.generateSmartAnalysis = onCall({
          */
         var result = parseJsonResponse(rawText, ['private', 'public']);
 
+        /**
+         * `AN8`. The fallbacks below used to read 'No private report generated.' —
+         * and the client RENDERED and ARCHIVED that sentence as the report, so an
+         * empty model response became the department's year-end record with
+         * nothing anywhere saying a generation failed. `parseJsonResponse` already
+         * throws when a key is ABSENT; this closes the other door, a key that is
+         * present and empty. An honest retry beats archived prose about nothing.
+         */
+        var privateText = String(result.parsed.private || result.parsed.PRIVATE || '').trim();
+        var publicText = String(result.parsed.public || result.parsed.PUBLIC || '').trim();
+        if (privateText === '' || publicText === '') {
+            logger.warn('[SMART_ANALYSIS] Model returned an empty report field; refusing rather than archiving prose about nothing.');
+            throw new HttpsError('internal', 'The AI returned an empty report. Please retry.');
+        }
+
         var declared = result.parsed.assumptions || result.parsed.ASSUMPTIONS;
         if (typeof declared !== 'string' || declared.trim() === '') {
             logger.warn('[SMART_ANALYSIS] No assumptions block returned; reporting the gap.');
@@ -762,8 +777,8 @@ exports.generateSmartAnalysis = onCall({
         var analysisProvenance = guardrails.aiProvenance(modelName);
 
         return {
-            private: result.parsed.private || result.parsed.PRIVATE || 'No private report generated.',
-            public:  result.parsed.public  || result.parsed.PUBLIC  || 'No public report generated.',
+            private: privateText,
+            public:  publicText,
             // P1 and Rule 12. Both travel with the report into the archive, because a
             // provenance record that exists only in a callable's return value does
             // not make the DOCUMENT reproducible, which is what Rule 12 asks for.
@@ -888,6 +903,25 @@ exports.processFeedPost = onCall({ secrets: ['GEMINI_API_KEY'] }, async (request
         .get();
     if (!memberSnap.exists) {
         throw new HttpsError('permission-denied', 'You are not a member of that team.');
+    }
+
+    /**
+     * `AN12`, the code half. Whether a MODEL classification is an acceptable PDPA
+     * guard is the owner's open question; whatever the answer, the single
+     * highest-signal identifier is checked HERE, deterministically, before a
+     * token is spent — a regex is free, instant, and cannot have an off day. The
+     * shape (S/T/F/G/M + 7 digits + letter) mirrors `src/utils/nric.js` and the
+     * comments fence in `firestore.rules`; RE2-style alternation boundary there,
+     * lookarounds here, parity-tested in `nric.test.js`.
+     */
+    if (rawText && /(?<![A-Za-z0-9])[STFGMstfgm]\d{7}[A-Za-z](?![A-Za-z0-9])/.test(rawText)) {
+        logger.warn('[AURA GUARD] Post refused deterministically: NRIC/FIN shape present.');
+        return {
+            success: false,
+            feedback: 'This looks like it contains an NRIC/FIN, which must not go on the feed. '
+                + 'Please remove or shorten it (e.g. "ending 567D") and post again.',
+            violation: 'PDPA_WARNING',
+        };
     }
 
     // `AU14`. The same per-uid budget as the chat: a feed post costs a Gemini
