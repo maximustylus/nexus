@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { db, auth } from '../firebase';
-import { doc, onSnapshot, setDoc } from 'firebase/firestore';
+import { doc, onSnapshot, setDoc, deleteField } from 'firebase/firestore';
 import { Users, Activity, Zap, X, Save, Lock, Bell, BellRing } from 'lucide-react';
 import { useTeam } from '../context/TeamContext';
 import { pulsePath, userPath, PULSE_PERIOD_DAILY } from '../utils/teamPaths';
@@ -29,9 +29,17 @@ const WellbeingView = ({ user }) => {
     const [isSubscribing, setIsSubscribing] = useState(false);
     const [hasToken, setHasToken] = useState(false);
 
-    const activeStaffList = isDemo
-        ? MOCK_STAFF.map(s => s.name)
-        : members.map(person => person.displayName).filter(Boolean);
+    /**
+     * `AU12`. Tiles carry the uid, not merely the name — the pulse map is keyed
+     * by uid now, with the display name kept only to READ entries written before
+     * the conversion. Demo entries use the name as a pseudo-uid: the sandbox has
+     * no auth uids and writes nothing.
+     */
+    const pulseTiles = isDemo
+        ? MOCK_STAFF.map(s => ({ uid: s.name, name: s.name }))
+        : members
+            .filter(person => person.displayName)
+            .map(person => ({ uid: person.uid, name: person.displayName }));
 
     useEffect(() => {
         if (isDemo) {
@@ -129,13 +137,13 @@ const WellbeingView = ({ user }) => {
     };
 
     // --- CLICK HANDLERS ---
-    const handleCardClick = (name, currentEnergy, currentFocus, canEdit) => {
+    const handleCardClick = (person, currentEnergy, currentFocus, canEdit) => {
         if (!canEdit) {
             alert("🔒 Access Denied: You are only authorized to update your own Social Battery.");
             return;
         }
 
-        setSelectedStaff(name);
+        setSelectedStaff(person);
         setNewEnergy(currentEnergy ? Math.round(currentEnergy / 10) : 5);
         setNewFocus(currentFocus || 5);
     };
@@ -151,26 +159,27 @@ const WellbeingView = ({ user }) => {
         };
 
         if (isDemo) {
-            const updatedData = { ...pulseData, [selectedStaff]: updatePayload };
+            const updatedData = { ...pulseData, [selectedStaff.uid]: updatePayload };
             setPulseData(updatedData);
             calculateStats(updatedData);
         } else {
             if (!teamId) return;
             /**
-             * ⚠️ THE MAP INSIDE THIS DOCUMENT IS STILL KEYED BY DISPLAY NAME, and the
-             *    team scope above is what makes that safe enough to leave. Two people
-             *    called Sarah in different departments now write into different
-             *    documents; two in the SAME department would still collide, which the
-             *    lead fixes by editing one of the names.
-             *
-             *    Converting these keys to uid means converting the heatmap that reads
-             *    them and the roster vocabulary they are matched against — the same
-             *    display-name-in-the-roster problem the swap mutator has. Tracked with
-             *    it, not smuggled in here.
+             * `AU12` — KEYED BY UID NOW, and the write is also the migration. Two
+             * clinicians sharing a display name used to overwrite each other's
+             * wellbeing status, `merge: true` letting the second silently win —
+             * in the one document `firestore.rules`'s own header names display-name
+             * keying as the root problem of. Each save writes the uid key AND
+             * deletes the legacy name key in the same call, so the board converts
+             * itself one person at a time and `calculateStats` (which counts
+             * `Object.values`) never double-counts a person under two keys.
              */
-            await setDoc(doc(db, ...pulsePath(teamId, PULSE_PERIOD_DAILY)), {
-                [selectedStaff]: updatePayload
-            }, { merge: true });
+            const write = { [selectedStaff.uid]: updatePayload };
+            if (selectedStaff.name && selectedStaff.name !== selectedStaff.uid
+                && Object.prototype.hasOwnProperty.call(pulseData, selectedStaff.name)) {
+                write[selectedStaff.name] = deleteField();
+            }
+            await setDoc(doc(db, ...pulsePath(teamId, PULSE_PERIOD_DAILY)), write, { merge: true });
         }
         
         setSelectedStaff(null); 
@@ -287,7 +296,7 @@ const getBatteryIcon = (level) => {
                     </div>
                     <div className="flex justify-end items-center gap-2 text-xs text-slate-400 font-medium pt-1">
                         <Users size={16} />
-                        <span>{stats.active} of {activeStaffList.length} Checked In</span>
+                        <span>{stats.active} of {pulseTiles.length} Checked In</span>
                     </div>
                 </div>
             </div>
@@ -325,9 +334,19 @@ const getBatteryIcon = (level) => {
                 </div>
                 
                 <div className="w-full grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 lg:gap-8">
-                    {activeStaffList.map((name) => {
-                        const dataKey = Object.keys(pulseData).find(k => k.toLowerCase().includes(name.toLowerCase()));
-                        const staffData = pulseData[name] || pulseData[dataKey];
+                    {pulseTiles.map((person) => {
+                        /**
+                         * `AU12`: uid first; the display name only reads entries
+                         * written before the conversion. The old lookup was a
+                         * case-insensitive SUBSTRING search — `'Ann'` matched a key
+                         * `'Joanne'`, the `AC1` defect family on the wellbeing
+                         * board — so the legacy read is an EXACT case-insensitive
+                         * match, which is all the old tolerance actually needed.
+                         */
+                        const legacyKey = pulseData[person.name] === undefined
+                            ? Object.keys(pulseData).find(k => k.toLowerCase() === person.name.toLowerCase())
+                            : person.name;
+                        const staffData = pulseData[person.uid] || pulseData[legacyKey];
                         const currentEnergy = staffData ? staffData.energy : 0;
                         const currentFocus = staffData ? staffData.focus : 0;
                         
@@ -336,12 +355,13 @@ const getBatteryIcon = (level) => {
                         // same grant, no shipped name: her bridge profile's role is
                         // 'admin', and the email check covers her even where a stale
                         // `users/{uid}` document says otherwise.
-                        const canEdit = isDemo || user?.role === 'admin' || isLegacyAdminEmail(user?.email) || user?.name === name;
+                        // `AU12`: self is uid equality now, not name equality.
+                        const canEdit = isDemo || user?.role === 'admin' || isLegacyAdminEmail(user?.email) || user?.uid === person.uid;
                         
                         return (
                             <div 
-                                key={name} 
-                                onClick={() => handleCardClick(name, currentEnergy, currentFocus, canEdit)}
+                                key={person.uid} 
+                                onClick={() => handleCardClick(person, currentEnergy, currentFocus, canEdit)}
                                 className={`group bg-white dark:bg-slate-800 p-6 rounded-3xl border shadow-sm flex flex-col justify-between h-[200px] transition-all duration-300
                                     ${canEdit 
                                         ? 'border-slate-100 dark:border-slate-700 hover:shadow-xl hover:-translate-y-1 cursor-pointer' 
@@ -351,7 +371,7 @@ const getBatteryIcon = (level) => {
                                 <div className="flex justify-between items-start">
                                     <div className="overflow-hidden">
                                         <h3 className={`text-xl font-bold transition-colors truncate pr-2 ${canEdit ? 'text-slate-800 dark:text-slate-100 group-hover:text-indigo-600' : 'text-slate-500 dark:text-slate-400'}`}>
-                                            {name}
+                                            {person.name}
                                         </h3>
                                         <div className="flex items-center gap-2 mt-2">
                                             <span className={`w-2.5 h-2.5 rounded-full ${staffData ? 'bg-emerald-400 animate-pulse' : 'bg-slate-300'}`}></span>
@@ -400,7 +420,7 @@ const getBatteryIcon = (level) => {
                         
                         <div className="text-center mb-6">
                             <div className="text-sm font-bold text-slate-500 uppercase mb-2">Staff Member</div>
-                            <div className="text-3xl font-black text-indigo-600 dark:text-indigo-400">{selectedStaff}</div>
+                            <div className="text-3xl font-black text-indigo-600 dark:text-indigo-400">{selectedStaff.name}</div>
                         </div>
 
                         <div className="space-y-5 mb-8">

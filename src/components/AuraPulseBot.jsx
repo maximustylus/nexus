@@ -12,7 +12,7 @@ import { DEMO_PERSONAS, LIVE_PERSONAS } from '../config/personas';
 import { respondAsDemoAura } from '../utils/demoAura';
 import { db } from '../firebase'; 
 import { getFunctions, httpsCallable } from 'firebase/functions';
-import { doc, setDoc, getDoc, updateDoc, arrayUnion } from 'firebase/firestore';
+import { doc, setDoc, getDoc, updateDoc, arrayUnion, deleteField } from 'firebase/firestore';
 import { useNexus } from '../context/NexusContext';
 import { refuseWorkloadWrite, TARGET_LOADS } from '../utils/dataEntryGuard';
 import { useTeam } from '../context/TeamContext';
@@ -517,7 +517,20 @@ export default function AuraPulseBot({ isOpen, onClose, onOpen: _onOpen, user })
                 // dual-keying the inventory found. Two documents for one person, one
                 // of them never read, and a profile edit that appeared to do nothing.
                 await setDoc(doc(db, ...wellbeingDocPath(teamId, user.uid)), { logs: arrayUnion(logData) }, { merge: true });
-                await setDoc(doc(db, ...pulsePath(teamId, PULSE_PERIOD_DAILY)), { [user.name]: heatmapPayload }, { merge: true });
+                /**
+                 * `AU12` — uid key, and the same self-migrating write as the
+                 * wellbeing board: this line was the one the v2.0 uid conversion
+                 * missed (the comment above it is ABOUT that conversion), so two
+                 * clinicians sharing a display name overwrote each other's pulse
+                 * status, second writer silently winning. Deleting the legacy
+                 * name key in the same call keeps `calculateStats` from counting
+                 * one person twice during the transition.
+                 */
+                const pulseWrite = { [user.uid]: heatmapPayload };
+                if (user.name && user.name !== user.uid) {
+                    pulseWrite[user.name] = deleteField();
+                }
+                await setDoc(doc(db, ...pulsePath(teamId, PULSE_PERIOD_DAILY)), pulseWrite, { merge: true });
                 await setDoc(doc(db, ...userPath(user.uid)), {
                     aura_last_phase:    pendingLog.phase,
                     aura_memory:        pendingLog.action,

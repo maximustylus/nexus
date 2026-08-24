@@ -76,7 +76,17 @@ const returnedKeys = (text, afterMarker) => {
     return [...new Set(names)];
 };
 
-const chatFlags = () => returnedKeys(src('AuraChat.jsx'), 'const parseClinicalData');
+/**
+ * `AC5` moved the chat's parser to `src/utils/clinicalParse.js`, exported and
+ * unit-tested (`clinicalParse.test.js`) — the extraction this file's own header
+ * wished for. The chat side of the parity check follows it there. The FORM side
+ * still lives inside `ConventionalForm.jsx` and is still read as text; when it
+ * gets the same extraction, `formFlags` follows and the source-scan helpers go.
+ */
+const chatFlags = () => returnedKeys(
+    readFileSync(resolve(HERE, 'clinicalParse.js'), 'utf8'),
+    'export const parseClinicalData',
+);
 const formFlags = () => returnedKeys(src('ConventionalForm.jsx'), 'const deriveFlags');
 
 /**

@@ -46,8 +46,8 @@ original post-mortems into one. `AU2` means today exactly what it meant when it 
 
 | | Count | Ids |
 |---|---|---|
-| `DONE`, evidenced | **33** | `AU1` `AU2` `AU3` `AU4` `AU6` `AU7` `AU9` `AU10` `AU14` `AU15` `AU16` `AU19` `AU20` `AU22` `AU23` `AU24` `AU25` `AU26` `AU27` `AU28` `AC1` `AC2` `AC15` `AN1`* `AN2` `AN3` `AN4` `AN6` `AN8` `AN10` `AN13` `AN14` + `AN12` (code half) |
-| `OPEN`, mine | 10 | `AU12` `AC5` `AC6` `AC7` `AC8` `AC9` `AC10` `AC12` `AC13` `AC14` |
+| `DONE`, evidenced | **43** | `AU1`–`AU4` `AU6` `AU7` `AU9` `AU10` `AU12` `AU14`–`AU16` `AU19` `AU20` `AU22`–`AU28` `AC1` `AC2` `AC5`–`AC10` `AC12`–`AC15` `AN1`* `AN2`–`AN4` `AN6` `AN8` `AN10` `AN13` `AN14` + `AN12` (code half) |
+| `OPEN`, mine | **0** | — the ledger's engineering queue is empty as of 2026-08-24; what remains is the owner's column below and the standing verification work (`P8.8`, `CD13`) |
 
 ⚠️ **Six rows in this file said `OPEN` for findings closed days earlier** (`AU6` `AU7` `AU19`
 `AN5` `AU22` `AU23`) — the P-section tracked them separately from the P7 batch that closed
@@ -195,7 +195,7 @@ Closes four findings at once, and it is the number the whole instrument reports.
 |---|---|---|---|---|---|
 | 3.1 | `AU9` | Reject `NaN`; record phase/energy disagreement instead of hiding it | me | `DONE` | `src/utils/wellbeingLog.js` (2026-08-24). `Math.min(79, NaN)` is `NaN`, and that went into the record. An unusable energy now becomes the **band midpoint** flagged `corrected` — not the old 50-then-clamp, which stored 19 for a missing energy on an ILL turn, the least-ill reading the phase allows. A contradiction (energy 85, phase ILL) is clamped **and reported** with the raw value, so a correction no longer looks identical to the model having been right. |
 | 3.2 | `AU10` | Refuse a phase outside the four | me | `DONE` | Same module: an unknown phase (`EXHAUSTED`, a sentence, a number) means **no log card at all**, logged to console — not a record every reader would misread as one of the four. Case and whitespace normalised first, so `" ill "` is not refused. The UI's `PHASE_CONFIG` now derives its bands from the same table, so the badge and the record cannot disagree about where a band starts. |
-| 3.3 | `AU12` | Key the pulse board by uid | me | `OPEN` | — |
+| 3.3 | `AU12` | Key the pulse board by uid | me | `DONE` | 2026-08-24. Both writers (`AuraPulseBot.confirmLog`, `WellbeingView.handleSavePulse`) key by **uid**, and **each save is also the migration**: the legacy display-name key is deleted in the same call, so the board converts itself one person at a time and `calculateStats` never counts one person under two keys. Tiles read uid first with an **exact** case-insensitive name fallback for pre-conversion entries — the old lookup was a case-insensitive *substring* search, so `'Ann'` matched a key `'Joanne'` (`AC1`'s family, on the wellbeing board). Self-edit is uid equality now, not name equality. Anonymous `Anon_*` entries are untouched. |
 | 3.4 | `AU8` | **Decide** whether "diagnosis_ready" should be content-gated, and whether that field should be called *diagnosis* at all | **OWNER** | `OPEN` | — |
 | 3.5 | `AU11` | **Decide** whether model output should persist as memory and re-enter the prompt | **OWNER** | `OPEN` | — |
 
@@ -203,12 +203,12 @@ Closes four findings at once, and it is the number the whole instrument reports.
 
 | # | Id | Item | Owner | Status | Evidence |
 |---|---|---|---|---|---|
-| 4.1 | `AC6` | Move the guard to the calls that can throw; `clearProgress()` after, not before | me | `OPEN` | — |
-| 4.2 | `AC12` | `aria-live="polite"` on the message list | me | `OPEN` | — |
-| 4.3 | `AC5` | Export the parser so it can be tested; add the unit suite `P4.3` has been asking for | me | `OPEN` | — |
-| 4.4 | `AC8` | `AbortController` on the 1500 ms discard window | me | `OPEN` | — |
-| 4.5 | `AC9` | Anchor or drop the error-word screen on the model's reply | me | `OPEN` | — |
-| 4.6 | `AC7` `AC10` `AC13` `AC14` | The four small ones: dead catch, third parser copy, `key={idx}`, `TOTAL_STEPS` | me | `OPEN` | — |
+| 4.1 | `AC6` | Move the guard to the calls that can throw; `clearProgress()` after, not before | me | `DONE` | 2026-08-24. `parseClinicalData`, `calculateRiskScore` and `selectCTA` are inside the try; `clearProgress()` runs only once a result exists, so a failed completion leaves the answers resumable instead of stranding the visitor on *"Generating your personalised plan now…"* with nothing to resume. The caller `.catch`es too, so no unhandled rejection. |
+| 4.2 | `AC12` | `aria-live="polite"` on the message list | me | `DONE` | 2026-08-24. `role="log"` + `aria-live="polite"` on the chat area — the portal built for the highest assistive-technology need announced nothing while the staff roster announced twice. Verified in `dist/`. |
+| 4.3 | `AC5` | Export the parser so it can be tested; add the unit suite `P4.3` has been asking for | me | `DONE` | 2026-08-24. `parseClinicalData` moved verbatim to `src/utils/clinicalParse.js`, exported, **imported by its tests** (11) instead of grepped — including *"parses an entirely empty answer set without throwing"*, which is what `AC6`'s try depends on. `pathwayParity.test.js`'s chat side now reads the module; the form side still reads source and is noted as the next extraction. ⚠️ One expectation in the new suite was wrong on first run — guessed 75 for the `60+ mins` chip; `ConventionalForm`'s table says 65 (`AC15`) — the table is the authority, and the test now says so. |
+| 4.4 | `AC8` | `AbortController` on the 1500 ms discard window | me | `DONE` (finding corrected) | 2026-08-24. **The prescribed fix would not do what the finding says.** `httpsCallable` carries no signal, and aborting the HTTP request does not stop a Cloud Function mid-execution — `communityAck` runs to completion and the Gemini call bills identically whether the client listens or not. The real cost controls are server-side and already exist (`maxOutputTokens: 200`, 20s timeout, `CP7` rate limits). The window only governs whether a paid-for reply is *used*; widening it trades against rewriting text under the reader, which is `AC11` and the owner's. Documented at the site. |
+| 4.5 | `AC9` | Anchor or drop the error-word screen on the model's reply | me | `DONE` | 2026-08-24. **Dropped.** `communityAck`'s errors arrive as thrown `HttpsError`s (the `.catch`), never as prose, so screening the *successful* reply for the word "unavailable" only discarded legitimate sentences (*"if your usual class is unavailable, the centre can suggest another"*). The one check a success needs — non-empty — stays. |
+| 4.6 | `AC7` `AC10` `AC13` `AC14` | The four small ones: dead catch, third parser copy, `key={idx}`, `TOTAL_STEPS` | me | `DONE` | 2026-08-24. `AC7`: the catch is alive (it guards the three real computations now). `AC10`: the third fence-strip/brace-scan copy is deleted — it parsed JSON out of an endpoint whose own prompt says *"No JSON"*. `AC13`: messages key on `_id` (index only for pre-`_id` messages); quick replies key on their label. `AC14`: `TOTAL_STEPS` **deleted** — its comment said 13, the array held 15, and its only two uses badged the final plan with whatever domain happens to be last. Completion and error messages carry no domain badge, because they are not about a domain. |
 | 4.7 | `AC11` | **Decide** whether the acknowledgement should rewrite text in place at all | **OWNER** | `OPEN` | — |
 
 ## P5 — The intelligence layer · `AN5`–`AN13`
