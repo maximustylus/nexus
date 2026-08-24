@@ -369,19 +369,24 @@ These are not blocked on engineering time and several are not code at all.
 
 ## Current queue
 
-In order. `P0` first because those five are reachable today.
+**Empty, as of 2026-08-24.** Every engineering row above is `DONE` with evidence — the
+W-queue below is kept as the record of how it was worked, each line now closed:
 
 ```
-W1   AN1 + AN2 + AN3        ─ NEXT. delete STAFF_PROFILES; verify against dist/
+W1   AN1 + AN2 + AN3        ─ DONE  c2b45d9; AN14 followed on 2026-08-24, an14.bundle.test.js
 W2   AN4                    ─ DONE  e3b6bb9
-W3   AU2                    ─ DONE  e3b6bb9  (+ AU3, AU22, AU25)
-W4   AC1 + AC2              ─ DONE  a99ffa6  (+ AC15, found while fixing AC1)
-     AC3 + AC5              ─ still open: unifying the two pathways on one parser
-     AU24                   ─ partly done: the decision is tested, clampEnergy is not
-     AU1                    ─ DONE  README rewritten; the ICT survey answer can quote it
-     AU14 + AU15            ─ ceilings on the expensive endpoint
-     AN10                   ─ chunk the nudge before it passes 500 users
+W3   AU2                    ─ DONE  e3b6bb9  (+ AU3 both halves, AU22, AU25)
+W4   AC1 + AC2              ─ DONE  a99ffa6  (+ AC15)
+     AC3 + AC5              ─ DONE  clinicalParse.js extraction; pathwayParity re-pointed
+     AU24                   ─ DONE  wellbeingLog.js (29) + dataEntryGuard (77)
+     AU1                    ─ DONE  README rewritten
+     AU14 + AU15            ─ DONE  per-uid limiter + attachmentRules.cjs
+     AN10                   ─ DONE  chunked at 500, result read
 ```
+
+What runs next is the OWNER'S queue: the nine decisions below, `P8.7`/`P8.8`, the
+20-turn read (`AURA-VERIFICATION-TURNS.md`), the three native-speaker reviews
+(`docs/CD13-translation-review.xlsx`), and the merge (rules → functions → hosting).
 
 ## Three things only the logs can answer
 

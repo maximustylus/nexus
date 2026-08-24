@@ -19,6 +19,17 @@ unauthenticated Gemini endpoint (`AN4`), both PAVS parser defects (`AC1`, `AC2`)
 description of NEXUS as *"a proprietary, autonomous AI agent"* (`AU1`) — which mattered this
 month because a cluster-level rostering ICT is asking what NEXUS is.
 
+**Updated 2026-08-24, end of the closing sweep:** `AC16` and the guardrail work's `P8`
+items joined the ledger since the paragraph above was written, and **45 findings are now
+closed with evidence — the engineering queue is empty** (`AURA-TODO.md`'s status table is
+the authoritative count). What remains is the owner's column: nine
+decisions, the model-routing and real-turns items (`AURA-TODO.md` P8.7/P8.8), the
+20-turn read (`AURA-VERIFICATION-TURNS.md`) that gates the merge, the three
+native-speaker reviews (`docs/CD13-translation-review.xlsx` is the instrument), and
+the production `teamIds` check that unlocks deleting the legacy email bridge. Branch
+`aura` carries it all; **nothing is deployed** — deploy order is rules → functions →
+hosting.
+
 ⚠️ **Five of the 56 findings were opened by reviewing the FIXES, not by the original audit,
 and one of those fixes was a regression worse than the bug it closed** — a keyword added to
 the sandbox router would have answered *"I saw 3 arrests back to back and I am wrung out"*
@@ -54,15 +65,16 @@ ids by number and renumbering would break them. `AURA-POSTMORTEM.md` §7 is the 
 originally listed — `AN1` grades, `AN4`, `AC1`, `AC2` — are **closed**; see
 [`AURA-TODO.md`](AURA-TODO.md) for the evidence.*
 
-| Id | What | Who can reach it |
-|---|---|---|
-| **`AN14`** | `TEAM_DIRECTORY` ships **seven real names and seven real work email addresses** in the bundle | Anyone who loads any page, including `/individuals`, signed out |
-| **`AU27`** | `exportToDoc` and `confirmAdminAction` write to Firestore with **no `isDemo` guard** | A signed-out presenter following `README.md` demo step 3 gets a false red error banner |
+*Updated again 2026-08-24: **both remaining rows are closed.** `AN14` — the names and
+emails are out of the bundle, verified by `an14.bundle.test.js` against `dist/` on every
+run (the legacy auth bridge survives on hashed digests; deleting it outright waits on the
+production `teamIds` check). `AU27` — both `smart_database` writes are demo-fenced; the
+sandbox downloads the `.docx` and says plainly that nothing was saved.*
 
-⚠️ **`AN14` is the one to be honest about.** A work email address is more identifying and
-more phishable than a job grade, and it is served unauthenticated on the public screening
-route. It is filed `medium` because closing it means reworking the `checkAccess` legacy auth
-bridge, which is not a night-before-a-demo change — **not** because it is small.
+**Nothing in this section is open.** The nearest thing to a live risk is now a
+BEHAVIOURAL unknown, not a defect: the guardrail preamble has never been run against a
+real model (`AURA-GUARDRAILS.md`, assumptions item 7). That is what the 20-turn read
+exists to answer, and it gates the merge.
 
 ### Verify the grade fix yourself
 
@@ -196,6 +208,12 @@ post-mortems into `AURA-POSTMORTEM.md`. See [`IDS.md`](IDS.md).
 ---
 
 ## 7. The order I would take it in
+
+> **2026-08-24:** this order was executed to completion — every engineering row in it
+> is closed with evidence. What survives of "the order" is the owner's sequence:
+> demo → hand `docs/CD13-translation-review.xlsx` to three readers → run
+> `AURA-VERIFICATION-TURNS.md` → merge `aura` → `main` (rules → functions → hosting)
+> → the nine decisions in §4. The original text below is kept as the record of the plan.
 
 Not by severity — by the gap between cost and consequence.
 

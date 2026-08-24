@@ -21,6 +21,36 @@ refactors in `W4`.
 
 ---
 
+## Re-run 2026-08-24 · branch `aura` · ALL FIVE GATES PASS
+
+```
+G1 nothing live discloses a real person's data   ✅ PASS
+G2 nothing live is an open endpoint              ✅ PASS
+G3 the README demo walkthrough works             ✅ PASS
+G4 AURA is described accurately                  ✅ PASS
+G5 suite / lint / build green                    ✅ PASS
+```
+
+- **G1** — `AN1` and `AN14` closed: no real name, email or grade in `dist/`.
+  Executable: `npx vitest run src/utils/an14.bundle.test.js` (18 assertions,
+  including name-to-grade proximity). The old *"any JG output means live"* grep is
+  retired below — it only ever matches the Marvel fixture now.
+- **G2** — `AN4` (auth + membership + lead-only on the analysis) and `AU14`
+  (per-uid rate limit across all three Gemini callables).
+- **G3** — every step of the README walkthrough works: `AU22` (the data-entry
+  card), `AU25`, and `AU27` (the export's Firestore write is demo-fenced, so the
+  false *"check your connection"* banner on step 3 is gone signed-in AND signed-out).
+- **G4** — `AU1`/`AU23`: the README describes a deterministic engine with a
+  Gemini assistant beside it.
+- **G5** — 3,232 tests / 86 files, lint 0, build clean; plus the rules emulator
+  at **140 passed, 0 failed** (`firestore-rules-verify.mjs`, AU3 + AN13 sections).
+
+⚠️ **The gates pass on the `aura` BRANCH. The live site still runs `main`** until
+the post-demo merge; the deploy order is rules → functions → hosting, and the
+merge waits on the owner's 20-turn read (`AURA-VERIFICATION-TURNS.md`).
+
+---
+
 ## G1 ❌ — six colleagues' names and grades ship in the bundle
 
 ```

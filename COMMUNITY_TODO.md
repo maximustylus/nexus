@@ -428,7 +428,11 @@ were found by the test rather than by reading:**
 
 ⚠️ **STILL OWED, AND IT IS A REAL DEBT — `CD13`.** Everything translated so far is
 machine-translated and **reviewed by no native speaker**. Two models were involved
-and that is not a second opinion, since neither can read back what it wrote:
+and that is not a second opinion, since neither can read back what it wrote.
+**2026-08-24: the review instrument exists** — `docs/CD13-translation-review.xlsx`,
+one sheet per language, all 19 strings beside their English and (for group 1) the
+machine back-translation, the four value-changing checks marked CRITICAL, and a
+named sign-off per sheet. Ten minutes per reviewer; what remains is three readers:
 
 | Set | Strings | Translator |
 |---|---|---|

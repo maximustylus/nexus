@@ -74,6 +74,42 @@ The owner's sixteen rules, in [`AURA-GUARDRAILS.md`](AURA-GUARDRAILS.md) and
 the model*.** §B of `AURA-GUARDRAILS.md` is the split. Do not read a green suite as
 compliance.
 
+### The closing sweep — 2026-08-24, engineering queue to zero
+
+Everything below shipped on branch `aura` the same day, steward-reviewed, with the
+test count moving **3,015 → 3,232 across 86 files** and the rules emulator at
+**140 passed, 0 failed**:
+
+- **Cost and abuse closed** — `AU14` one per-uid budget (120/hr) across all three
+  Gemini callables; `AU15`+`AU17`-log attachment bounds (`attachmentRules.cjs`);
+  `AU16` both halves (provenance recorded AND the fallback model no longer pinned);
+  `AN10` FCM chunked at 500 with the result read.
+- **The quick five** — `AU27` demo fences on both `smart_database` writes; `AU4`
+  `mmm_yyyy` periods at guard, caller and `teamPaths`; `AU9`/`AU10`/`AU24` the
+  wellbeing sanitiser (`wellbeingLog.js`, 29 tests) replacing `clampEnergy`.
+- **The intelligence layer's last rows** — `AN6` client timeout 60s (was a false
+  "matches the backend" 300s); `AN8` an empty report throws instead of archiving
+  *"No private report generated."* as the year-end record; `AN13` the NRIC/FIN
+  fence on comments (rules + client, parity-tested) and `AN12`'s deterministic
+  code half in `processFeedPost`.
+- **`AU12` and the `AC` batch** — pulse board keyed by uid with self-migrating
+  writes (`pulseKeys.js`, 15 tests, both writers delete every case variant);
+  `AC5` `parseClinicalData` extracted VERBATIM to `clinicalParse.js` and finally
+  imported by tests; `AC6`/`AC7` the completion try restructured (progress kept on
+  failure); `AC8` resolved by CORRECTING the finding (a client abort cannot stop a
+  Cloud Function); `AC9`/`AC10` dead tolerance deleted; `AC12` a live region on
+  the public chat; `AC13`/`AC14` stable keys and `TOTAL_STEPS` deleted.
+- **The steward round** — the NRIC fence's first cut let a multi-line NRIC through
+  (RE2's `.` does not cross newlines) while its JS mirror reported agreement;
+  fixed with `(?s)`, and the ACCEPTANCE moved to the real engine: the emulator
+  fails exactly the four multi-line cases on the pre-fix rules. `AC16` filed and
+  closed same day (the completion latch).
+- **`AU3`'s deferred half** — the `hasOnly` backstop on the workload document,
+  riding the same rules deploy `AN13` requires, emulator-verified.
+
+⚠️ **Deploy note, unchanged:** rules → functions → hosting, in that order, after
+the owner's 20-turn read. Nothing above is live until the merge.
+
 ### Before that — `c2b45d9`, `a99ffa6`, `addf3a5`, `e3b6bb9`
 
 `AN1` `AN2` `AN3` (colleagues' job grades out of the public bundle, the analysis over the
