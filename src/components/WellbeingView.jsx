@@ -4,6 +4,7 @@ import { doc, onSnapshot, setDoc, deleteField } from 'firebase/firestore';
 import { Users, Activity, Zap, X, Save, Lock, Bell, BellRing } from 'lucide-react';
 import { useTeam } from '../context/TeamContext';
 import { pulsePath, userPath, PULSE_PERIOD_DAILY } from '../utils/teamPaths';
+import { legacyPulseKeys, resolvePulseEntry } from '../utils/pulseKeys';
 
 // --- CONTEXT, DATA & FIREBASE MESSAGING ---
 import { useNexus } from '../context/NexusContext';
@@ -175,9 +176,17 @@ const WellbeingView = ({ user }) => {
              * `Object.values`) never double-counts a person under two keys.
              */
             const write = { [selectedStaff.uid]: updatePayload };
-            if (selectedStaff.name && selectedStaff.name !== selectedStaff.uid
-                && Object.prototype.hasOwnProperty.call(pulseData, selectedStaff.name)) {
-                write[selectedStaff.name] = deleteField();
+            /**
+             * ⚠️ EVERY case variant, not the exact-case key — the steward's
+             *    finding on the first cut. The reader tolerates a legacy key
+             *    that differs in case; deleting only the exact key meant the
+             *    one scenario the tolerant read existed for was the one the
+             *    migration failed to clean, and the person was then counted
+             *    TWICE by `calculateStats`. `legacyPulseKeys` is the same set
+             *    the reader resolves from, so the two cannot disagree again.
+             */
+            for (const staleKey of legacyPulseKeys(pulseData, selectedStaff.name, selectedStaff.uid)) {
+                write[staleKey] = deleteField();
             }
             await setDoc(doc(db, ...pulsePath(teamId, PULSE_PERIOD_DAILY)), write, { merge: true });
         }
@@ -336,25 +345,28 @@ const getBatteryIcon = (level) => {
                 <div className="w-full grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 lg:gap-8">
                     {pulseTiles.map((person) => {
                         /**
-                         * `AU12`: uid first; the display name only reads entries
-                         * written before the conversion. The old lookup was a
-                         * case-insensitive SUBSTRING search — `'Ann'` matched a key
-                         * `'Joanne'`, the `AC1` defect family on the wellbeing
-                         * board — so the legacy read is an EXACT case-insensitive
-                         * match, which is all the old tolerance actually needed.
+                         * `AU12`: uid first; a legacy name entry only for people
+                         * who have not saved since the conversion. Shared with
+                         * the writer via `pulseKeys.js`, so the set this falls
+                         * back to IS the set a save deletes. (The pre-`AU12`
+                         * lookup was a case-insensitive SUBSTRING search —
+                         * `'Ann'` matched `'Joanne'` — the `AC1` family, on the
+                         * wellbeing board.)
                          */
-                        const legacyKey = pulseData[person.name] === undefined
-                            ? Object.keys(pulseData).find(k => k.toLowerCase() === person.name.toLowerCase())
-                            : person.name;
-                        const staffData = pulseData[person.uid] || pulseData[legacyKey];
+                        const staffData = resolvePulseEntry(pulseData, person);
                         const currentEnergy = staffData ? staffData.energy : 0;
                         const currentFocus = staffData ? staffData.focus : 0;
                         
                         // `AN14`: this said `user?.name === 'Nisa'` — the roster
-                        // master, by first name, in the public bundle. Same person,
-                        // same grant, no shipped name: her bridge profile's role is
-                        // 'admin', and the email check covers her even where a stale
-                        // `users/{uid}` document says otherwise.
+                        // master, by first name, in the public bundle. Her grant now
+                        // rides on the bridge profile's `role: 'admin'`.
+                        // ⚠️ `isLegacyAdminEmail` is BELT-AND-BRACES AT BEST: the
+                        // bridge profile carries no email field, so `user.email` is
+                        // only set when the `users/{uid}` document happens to hold
+                        // one — the same document whose staleness the clause was
+                        // meant to survive. Kept because it is harmless and covers
+                        // the doc-has-email-but-stale-role case; it does NOT cover
+                        // the doc-missing case an earlier comment implied.
                         // `AU12`: self is uid equality now, not name equality.
                         const canEdit = isDemo || user?.role === 'admin' || isLegacyAdminEmail(user?.email) || user?.uid === person.uid;
                         

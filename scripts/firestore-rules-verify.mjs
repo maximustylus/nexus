@@ -588,6 +588,58 @@ await env.withSecurityRulesDisabled(async (c) => {
         assertFails(setDoc(doc(brandon, 'system_data/roster_2026'), { x: 1 })));
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// SECTION: the AN13 comments fence — the REAL RE2, not a JS mirror
+// ─────────────────────────────────────────────────────────────────────────────
+//
+// ⚠️ THIS SECTION EXISTS BECAUSE A JS MIRROR LIED ONCE. `nric.test.js` asserts
+//    the fence's pattern with a JavaScript regex, and its first draft passed the
+//    `s` flag unconditionally — building a MORE permissive mirror than the RE2
+//    engine these rules actually run (RE2's `.` does not match `\n` by default),
+//    so an NRIC mid-way through a multi-line comment sailed past the deployed
+//    fence while all 19 mirror cases passed. The fix was `(?s)` in the pattern;
+//    the ACCEPTANCE for that fix is this section, against the emulator's real
+//    engine. The mirror is a fast regression check; this is the truth.
+console.log('\nAN13 — the comments NRIC fence, against the real RE2:');
+await seed();
+{
+    const brandon = as(BRANDON);
+    const comment = (text) => addDoc(
+        collection(brandon, `teams/${TEAM_A}/feed/post-1/comments`),
+        { author: 'Brandon', text, timestamp: serverTimestamp() },
+    );
+
+    await check('an ordinary comment is allowed',
+        assertSucceeds(comment('great session everyone, see you thursday')));
+    await check('multi-line plain text is allowed',
+        assertSucceeds(comment('line one\nline two\nline three')));
+    await check('the asked-for shortened form ("ending 567D") is allowed',
+        assertSucceeds(comment('patient ending 567D')));
+    await check('an ops code (NS1234567X) is allowed — letters run on',
+        assertSucceeds(comment('ref NS1234567X checked')));
+    await check('a phone number is allowed',
+        assertSucceeds(comment('call me at 91234567')));
+
+    await check('a bare NRIC is refused',
+        assertFails(comment('S1234567D')));
+    await check('a lowercase NRIC in a sentence is refused',
+        assertFails(comment('patient s1234567d came in today')));
+    await check('a FIN (M-series) is refused',
+        assertFails(comment('M1234567W')));
+    await check('a bracketed NRIC is refused',
+        assertFails(comment('the patient (S1234567D) asked about results')));
+
+    // The four arrangements the un-flagged pattern let through:
+    await check('an NRIC mid multi-line text is refused',
+        assertFails(comment('line one\nsee id S1234567D')));
+    await check('an NRIC before a newline is refused',
+        assertFails(comment('S1234567D was here\nsecond line')));
+    await check('an NRIC after a blank line is refused',
+        assertFails(comment('ward round\n\nS1234567D discharged today')));
+    await check('an NRIC in the middle of a handover note is refused',
+        assertFails(comment('Handover notes:\npatient S1234567D for review\nthanks')));
+}
+
 await env.cleanup();
 console.log(`\n${'═'.repeat(64)}\n  ${pass} passed, ${fail} failed\n${'═'.repeat(64)}`);
 process.exit(fail === 0 ? 0 : 1);

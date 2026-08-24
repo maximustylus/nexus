@@ -37,6 +37,16 @@ $ grep -o 'grade:"JG1[0-9]"' dist/assets/*.js | sort | uniq -c
 exposure** — every new viewer is a new disclosure, and the audience is the people most
 likely to look closely.
 
+> **2026-08-24 — this gate is CLOSED, and its second command is retired.** The names
+> grep now returns nothing (`AN14`, `TEAM_DIRECTORY` gone from the bundle). The
+> `grade:"JG1[0-9]"` grep still returns hits and always will: they belong to the
+> Marvel demo fixture (`mockData.js` — Steve, Peter, Charles, Jean, Tony) and the job
+> framework, which are fiction and reference material, not disclosure. *"Any output
+> at all means it is still live"* was therefore over-broad — a gate that cries wolf
+> is a gate that gets ignored (steward, 2026-08-24). The load-bearing check is
+> **proximity of a real name to a grade token**, and it is executable:
+> `npx vitest run src/utils/an14.bundle.test.js` — 18 assertions against `dist/`.
+
 ## G2 ❌ — `generateSmartAnalysis` is unauthenticated
 
 ```

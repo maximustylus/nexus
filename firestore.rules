@@ -494,12 +494,22 @@ service cloud.firestore {
           //    guard in `processFeedPost`; comments get this. It is ONE identifier
           //    class, not PDPA compliance, and the file says so where it is
           //    enforced rather than implying more.
+          //
+          // ⚠️ `(?s)` IS LOAD-BEARING, AND ITS ABSENCE SHIPPED ONCE. RE2's `.`
+          //    does not match a newline by default, so without the flag the
+          //    leading `(.*[^A-Za-z0-9])?` could only absorb text back to the
+          //    NEAREST newline — an NRIC in the middle of a multi-line handover
+          //    note sailed past the fence while the single-line test cases all
+          //    passed. Found by review, not by the parity test, because the test
+          //    had built its JS mirror with the `s` flag RE2 does not have —
+          //    asserting 19 cases against a pattern that was not the deployed
+          //    one. The mirror now derives its flag FROM this pattern.
           allow create: if isMember(teamId)
                         && request.resource.data.keys().hasOnly(['author', 'text', 'timestamp'])
                         && request.resource.data.text is string
                         && request.resource.data.text.size() > 0
                         && request.resource.data.text.size() <= 5000
-                        && !request.resource.data.text.matches('(.*[^A-Za-z0-9])?[STFGMstfgm][0-9]{7}[A-Za-z]([^A-Za-z0-9].*)?')
+                        && !request.resource.data.text.matches('(?s)(.*[^A-Za-z0-9])?[STFGMstfgm][0-9]{7}[A-Za-z]([^A-Za-z0-9].*)?')
                         && request.resource.data.timestamp == request.time;
           // ⚠️ `author` IS NO LONGER PINNED TO THE CALLER'S NAME, and that is a
           //    deliberate loosening with a reason. The old rule required

@@ -57,7 +57,27 @@ describe('the firestore.rules fence tests the SAME shape', () => {
         expect(m).not.toBeNull();
     });
 
-    const rulesRegex = new RegExp('^(?:' + m[1] + ')$', 's');
+    /**
+     * ⚠️ THE FLAG COMES FROM THE PATTERN, NOT FROM THIS TEST — the steward's
+     *    finding. The first draft passed `'s'` unconditionally, which built a
+     *    MORE permissive mirror than the RE2 engine Firestore actually runs
+     *    (RE2's `.` does not match `\n` by default), so the one class of input
+     *    where the two engines disagreed — an NRIC mid-way through a multi-line
+     *    comment — was invisible to all 19 assertions. The deployed pattern now
+     *    carries RE2's inline `(?s)`; this mirror strips it and applies the JS
+     *    equivalent, so removing the flag from the rules FAILS the multi-line
+     *    cases below instead of silently weakening the fence.
+     */
+    const rulesPattern = m[1];
+
+    it('the deployed pattern is dotAll — RE2 (?s), stated inline', () => {
+        expect(rulesPattern.startsWith('(?s)')).toBe(true);
+    });
+
+    const rulesRegex = new RegExp(
+        '^(?:' + rulesPattern.replace(/^\(\?s\)/, '') + ')$',
+        rulesPattern.startsWith('(?s)') ? 's' : '',
+    );
 
     it.each([
         'S1234567D',
@@ -72,7 +92,22 @@ describe('the firestore.rules fence tests the SAME shape', () => {
         'NS1234567X', 'S1234567D9',
         'call me at 91234567',
         'line one\nS1234567D\nline three',
+        // The four arrangements the un-flagged pattern let through: the NRIC not
+        // adjacent to a newline, before one, and after a blank line.
+        'line one\nsee id S1234567D',
+        'Handover notes:\npatient S1234567D for review',
+        'S1234567D was here\nsecond line',
+        'ward round\n\nS1234567D discharged today',
     ])('agrees with containsNric on %j', (text) => {
         expect(rulesRegex.test(text)).toBe(containsNric(text));
+    });
+
+    it.each([
+        ['mid multi-line text', 'line one\nsee id S1234567D'],
+        ['after a blank line', 'ward round\n\nS1234567D discharged today'],
+    ])('the FENCE itself catches an NRIC %s — not only the client', (_l, text) => {
+        // Belt to the parity braces: asserts the rules pattern directly, so this
+        // fails even if containsNric were weakened in the same commit.
+        expect(rulesRegex.test(text)).toBe(true);
     });
 });

@@ -944,9 +944,17 @@ const AuraChatbot = () => {
      *    Now: everything that can throw is inside the try; the catch shows the
      *    error sentence (`AC7`: alive, and the only outcome for a failure); and
      *    `clearProgress()` runs only once there is a computed result to replace
-     *    the in-progress copy — a failed completion leaves the answers intact,
+     *    the in-progress copy — a failed COMPUTATION leaves the answers intact,
      *    so the person can answer the last question again instead of starting
      *    a 15-step screening from nothing.
+     *
+     * ⚠️ SCOPE OF THAT SENTENCE, precisely: it covers a THROW. A failed
+     *    telemetry WRITE is a different case — `recordTelemetry` swallows its
+     *    errors and returns `false` by design, so a Firestore outage still
+     *    falls through to `clearProgress()` and the person still gets their
+     *    plan (correct: their result must not be hostage to our analytics),
+     *    but the answers are gone and no record was stored. That trade is
+     *    telemetry.js's documented decision, not an accident of this try.
      */
     try {
       const parsed    = parseClinicalData(finalData);

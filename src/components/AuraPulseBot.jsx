@@ -54,6 +54,7 @@ import {
 // still contains one; with no listener here, it behaves as a plain replacement.
 import { resetMessagesPreservingAlerts } from '../utils/auraEngine';
 import { sanitizeWellbeingLog, PHASE_BANDS } from '../utils/wellbeingLog';
+import { legacyPulseKeys } from '../utils/pulseKeys';
 
 // ─── CLOUD FUNCTION LINK ──────────────────────────────────────────────────────
 const functions = getFunctions(undefined, 'us-central1');
@@ -526,11 +527,25 @@ export default function AuraPulseBot({ isOpen, onClose, onOpen: _onOpen, user })
                  * name key in the same call keeps `calculateStats` from counting
                  * one person twice during the transition.
                  */
+                /**
+                 * ⚠️ THE BOT READS THE DOCUMENT BEFORE CLEANING IT. Unlike the
+                 *    wellbeing board, this writer has no live copy of the pulse
+                 *    map, and deleting only the exact-case `user.name` key left
+                 *    a case-variant legacy entry in place — which the board's
+                 *    tolerant reader then displayed alongside the new uid entry,
+                 *    counting the person twice. One `getDoc` per confirmed
+                 *    wellbeing log is the price of deleting the same set the
+                 *    reader resolves from (`legacyPulseKeys`).
+                 */
+                const pulseRef = doc(db, ...pulsePath(teamId, PULSE_PERIOD_DAILY));
+                const pulseSnap = await getDoc(pulseRef);
                 const pulseWrite = { [user.uid]: heatmapPayload };
-                if (user.name && user.name !== user.uid) {
-                    pulseWrite[user.name] = deleteField();
+                for (const staleKey of legacyPulseKeys(
+                    pulseSnap.exists() ? pulseSnap.data() : {}, user.name, user.uid,
+                )) {
+                    pulseWrite[staleKey] = deleteField();
                 }
-                await setDoc(doc(db, ...pulsePath(teamId, PULSE_PERIOD_DAILY)), pulseWrite, { merge: true });
+                await setDoc(pulseRef, pulseWrite, { merge: true });
                 await setDoc(doc(db, ...userPath(user.uid)), {
                     aura_last_phase:    pendingLog.phase,
                     aura_memory:        pendingLog.action,
