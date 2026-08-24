@@ -286,6 +286,30 @@ declared gap**.
 | 8.7 | — | **Rule 16 — route model by task risk** | **OWNER** | `OPEN` | `resolveModel()` picks **one** model for every call, from a fixed priority list. Temperature is routed by persona (`AU20`); the model tier is not routed at all. Rule 16's own fallback — *"the record of which model handled evidence-bearing work still exists"* — is what `8.2` satisfies. |
 | 8.8 | — | **Verify the instructed rules against real turns** | **OWNER** | `OPEN` | ⚠️ **Ten of the sixteen are asserted to be *present in the prompt*, never *followed by the model*.** No test in this repository can close that gap. It needs a person running turns and reading them, which is `7.7`–`7.9` territory. |
 
+### What the steward found in the first cut, before the ink was dry
+
+The review ran against `d659f93` and is the reason for the follow-up commit. Recorded because
+the alternative is pretending the first version was the version that shipped.
+
+| Found | Severity | Now |
+|---|---|---|
+| `aiProvenance` on the `smart_database` audit row is **denied by `firestore.rules`** — `hasOnly` fails the whole write on one extra key. The `.docx` downloads, then the chat says *"Document export failed. Please check your connection."* **That is README demo step 3**, and the rules file's own header predicted this exact failure sentence twenty lines above the block. | ⚠️ **blocker** | Key added to the allowlist. ⚠️ **Deploy order is rules first, then hosting** — `hasOnly` permits a subset, so the reverse order denies every export for the length of the gap. A new test compares every written payload against the allowlist and **fails on the pre-fix rules**. |
+| Provenance was stamped on **one of two** `smart_database` writes. Same model output, same document, two sinks. **This repository's signature defect, reproduced inside the change whose commit message cites it.** | high | Both write sites carry it, and a test asserts there are exactly two and that both do. |
+| The archived report's `assumptionsText` and `aiProvenance` were **written and never read** — `SmartReportView` renders neither. Rule 12's test is whether the *document* is reproducible from itself. | high | Rendered at the foot of the full report, conditionally, since older reports have neither. |
+| **P2 as encoded deadlocked MODE 2.** *"Ask for it"* against *"INSTANT GENERATION: Generate the requested document IMMEDIATELY"* means a clarifying question, `action: null`, and **no export card** — on the demo step above. | ⚠️ **blocker** | P2 now says name the assumption and carry on, and explicitly does not override an instruction to draft in the same turn. |
+| **P5 as encoded cut the coaching method.** *"No restating the question… delete any sentence that could go"* against MODE 1's *"Reflection and Summarising"*, which **is** restating what the person said. | high | P5 carves out reflection, affirmation and summarising: *"Cut boilerplate, never empathy."* |
+| **P1's assumptions block was aimed at the wrong field.** MODE 2 says the `action` field *"MUST strictly contain ONLY the final, complete document text"*. | medium | The block goes in the conversational reply. |
+| **The brief variant's P7 forbade `processFeedPost` from saying a post was blocked** — its own schema requires *"explanation of why it was blocked"*. | medium | Reworded: reporting your own assessment is not a claim that you acted. |
+| The Rule 15 channel assertion was **unanchored** and matched three of its four words from *other* rules — *"filed"* in P7 supplied *"file"*. Only `link` was testing anything. | medium | Scoped to Rule 15's own paragraph, plus a mutation test that gutting Rule 15 fails the check. |
+| Four §B rows overstated the code: P3 described a `verified` label the prompt forbids, Rule 15 claimed a code control over attachments and history, Rule 12 claimed one audit row, P7 said *"every"* export. | high | Corrected in place, and item 10 of that document's assumptions block records that they were wrong. |
+| `WELL_WELL_PROMPT` (5) and `HUGE_GRANT_PROMPT` (2) **use em dashes directly beneath a preamble banning them**, and `HUGE_GRANT_PROMPT` bans them itself. | low | Punctuation fixed in both. The persona edit is the single recorded exception to *"the persona text is unchanged, word for word"* and is documented at the top of `functions/personas.cjs`. |
+
+⚠️ **`AN14` is still open and is not mine tonight.** Six colleagues' full names and real
+`@kkh.com.sg` addresses ship in the public bundle from `src/utils/index.js`. The grade half of
+`AN1` holds — a proximity scan of `dist/` finds no real name near a grade token — but the
+ledger's headline *"**LIVE** right now: 0 grades"* reads as more reassuring than the emails
+warrant.
+
 ⚠️ **A behaviour change was made on demo day, and it is recorded rather than smoothed over.**
 The preamble adds roughly 4,500 characters to the two long-form prompts and 600 to the two
 short ones. Its effect on AURA's coaching register in MODE 1 and on the JSON contract in

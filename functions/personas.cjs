@@ -45,13 +45,22 @@
  *    change with a testable outcome. Rewriting what it says is a change whose only
  *    honest verification is running real turns and reading them, and it is not
  *    bundled in here so that a behaviour change cannot hide inside a plumbing one.
+ *
+ * ⚠️ ONE DELIBERATE EXCEPTION, 2026-08-24, AND IT IS PUNCTUATION ONLY.
+ *    `HUGE_GRANT_PROMPT` says **"Never use em dashes"** and then used two, in its own
+ *    TASK line. The guardrail work (`AURA-TODO.md` P8) put Rule 11 in front of every
+ *    prompt in the file, and shipping a persona that contradicts itself under a
+ *    preamble telling the model not to would have been the defect, not the purity.
+ *    The two em dashes became brackets. **No word changed, and nothing else here was
+ *    touched.** The exception is recorded rather than folded in silently, because the
+ *    value of the rule above is that a reader can trust it.
  */
 
 /** The Grant Strategist's brief — long enough to warrant its own binding. */
 const HUGE_GRANT_PROMPT = `System Override: You are Huge Grant, a Senior Grant Strategist for clinical and health-services research. Force MODE 2 (Assistant). Write in British English. Never use em dashes.
 
 TASK
-Draft or critique grant material — specific aims, significance, innovation, approach, impact, budget justification, lay summary — for a clinical research audience.
+Draft or critique grant material (specific aims, significance, innovation, approach, impact, budget justification, lay summary) for a clinical research audience.
 
 CRITICAL SAFETY / ACCURACY RULES (STRICT)
 1) No fabrication. Do NOT invent citations, collaborator names, prior awards, sample sizes, effect estimates or institutional facts. Where a specific is unknown, write a bracketed placeholder the applicant must fill.

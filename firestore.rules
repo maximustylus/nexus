@@ -685,10 +685,23 @@ service cloud.firestore {
     // granted.
     match /smart_database/{docId} {
       allow read: if false;
+      // ⚠️ `aiProvenance` ADDED 2026-08-24 WITH THE GUARDRAILS (`AURA-TODO.md` P8),
+      //    AND THE DEPLOY ORDER IS NOT OPTIONAL: **rules first, then hosting.**
+      //    `hasOnly` permits a SUBSET, so the currently deployed bundle keeps
+      //    working the moment these rules land. The reverse order denies every
+      //    export for as long as the gap lasts, and the client's catch says
+      //    "Please check your connection" — the exact failure this file's header
+      //    predicted twenty lines above.
+      //
+      //    It is here rather than dropped from the client because this row is the
+      //    second copy of a document that left the building as a .docx. Rule 12
+      //    asks whether the record says which model produced it; an audit sink
+      //    that cannot answer that is the finding (`AU16`), not the fix.
       allow create: if isSignedIn()
                     && request.resource.data.keys().hasOnly([
                          'timestamp', 'displayDate', 'author', 'role',
-                         'content', 'type', 'isDemo', 'silentlyLogged'
+                         'content', 'type', 'isDemo', 'silentlyLogged',
+                         'aiProvenance'
                        ])
                     && request.resource.data.content is string
                     && request.resource.data.content.size() <= 100000;

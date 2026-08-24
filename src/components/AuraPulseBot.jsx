@@ -749,7 +749,15 @@ export default function AuraPulseBot({ isOpen, onClose, onOpen: _onOpen, user })
         }
     }, [isDemo, selectedPersona, user, setMessages]);
          
-    const confirmAdminAction = useCallback(async (actionText, msgIndex) => {
+    /**
+     * ⚠️ `provenanceFooter` IS A PARAMETER HERE FOR THE REASON THE STEWARD FOUND IT
+     *    MISSING: this is the SECOND of two `smart_database` writes, and the first
+     *    draft of the guardrail work stamped provenance onto one of them. Same model
+     *    output, same document, two sinks, one record. That is this repository's
+     *    signature defect — a change applied to two of three call sites — reproduced
+     *    inside the change whose commit message cites it.
+     */
+    const confirmAdminAction = useCallback(async (actionText, msgIndex, provenanceFooter) => {
         if (!actionText) return;
         setLoading(true);
 
@@ -765,7 +773,8 @@ export default function AuraPulseBot({ isOpen, onClose, onOpen: _onOpen, user })
                 role: activeUser?.title || 'Staff',
                 content: actionText,
                 type: 'AURA_GENERATED_DOC',
-                isDemo
+                isDemo,
+                aiProvenance: provenanceFooter || ''
             });
 
             setMessages(prev => {
@@ -1152,7 +1161,7 @@ export default function AuraPulseBot({ isOpen, onClose, onOpen: _onOpen, user })
                                                                 <div className="flex flex-col gap-2">
                                                                     <div className="grid grid-cols-2 gap-2">
                                                                         <button 
-                                                                            onClick={() => confirmAdminAction(m.action, i)}
+                                                                            onClick={() => confirmAdminAction(m.action, i, m.provenanceFooter)}
                                                                             disabled={loading}
                                                                             className="py-2 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white text-[10px] font-bold uppercase tracking-wider rounded-xl transition-colors flex items-center justify-center gap-1.5"
                                                                         >
