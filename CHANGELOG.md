@@ -49,6 +49,92 @@ not changed by this release.
 
 ## [Unreleased]
 
+## [2.1.1] - 2026-08-24
+
+A patch release: four fixes and one documentation correction. **No new features, no
+Firestore shape change, no data migration.** The AURA engine stays at `v2.3` — it is
+not touched by this release.
+
+*Classified by reading the diffs. These commit subjects are conventional (`fix(...)`)
+rather than this repository's historical `Update <file>.jsx`, so intent was legible
+for once; the file deletions listed below still had to be attributed by diff, because
+no subject line mentions them.*
+
+### Fixed
+
+- **Hosting never re-served `index.html`, so every deploy was invisible.**
+  `firebase.json` declared no `headers` block at all, leaving Firebase Hosting's
+  default cache policy on the one file that must never be cached. Vite fingerprints
+  every asset; `index.html` is the map naming the current fingerprint, so a stale map
+  points returning browsers at the previous bundle. Three rules now ship: `no-store`
+  on `/index.html` and on `/firebase-messaging-sw.js` (a cached service worker keeps
+  re-registering an old script, which is how a push fix ships and never arrives), and
+  a one-year `immutable` on `/assets/**`, which is safe precisely because the content
+  hash is in the filename.
+
+  ⚠️ **This was true of every deploy this project has ever made.** It surfaced at
+  v2.1.0 only because that was the first release where somebody went looking for a
+  specific new control and could not find it. Covered by
+  `scripts/hosting-headers.test.mjs`.
+
+- **The dashboard showed one department's staff to every team, and every bar read
+  zero.** The *Individual Clinical Load* panel rendered `TEAM_DIRECTORY` in live mode
+  — ten people from Sport & Exercise Medicine at KKH — so a respiratory therapy lead
+  at SGH opened their dashboard onto somebody else's colleagues. This was the sixth
+  hardcoded copy of that one department and the last one standing.
+
+  ⚠️ **And it was not cosmetic.** The multi-team rewire re-keyed `activeStaffLoads`
+  by uid, while this panel still supplied a directory id (`'brandon'`, `'alif'`), so
+  every lookup missed and fell back to `Array(12).fill(0)`. Twelve months of zero bars
+  per clinician, rendered confidently, on the first screen anybody sees — nothing
+  errored and nothing was empty, which is the failure mode that survives a demo. The
+  people now come from `members`, keyed by the uid the loads are already stored under;
+  `rostered !== false` matches the roster's own pool, so the roster master who holds no
+  clinical duties no longer appears as a row of zeros indistinguishable from a bug.
+
+- **"Enterprise / Scale Unit" routed a department head into a disabled button.** The
+  sign-in screen's second option read as *for setting up a department* and opened a
+  panel about multi-tenant architecture whose only button was disabled and said
+  *"Registration Restricted — Contact Admin for whitelisting"*. The path that person
+  wanted sat behind the **first** button, one unmarked role dropdown down.
+
+  That panel was honest when written — multi-tenancy did not exist — and became false
+  at v2.0.0 without anything failing, because a disabled button is not a bug; it is a
+  button doing what it says. No test could have caught it. **The fix is a repoint, not
+  a delete:** the signpost is well aimed, so it now opens registration with the lead
+  role preselected and says so in the words a department head uses.
+
+- **The exported two-page traffic light report (`ResultPage.jsx`).** Three faults in
+  the jsPDF + html2canvas export: the header and footer strips could differ between
+  pages (heights followed their content, page 2 hardcoded its own subtitle, the two
+  footers carried different labels) — both strips now have fixed heights and shared
+  styles, and each page wrapper is clamped to exactly 794×1123 so jsPDF rasterises
+  both canvases at the same scale and the strips print at the same physical size.
+  Nothing in the rasterised pages was clickable — elements tagged `data-pdf-link` (the
+  NEXUS logo and wordmark, resource logos and printed URLs, the primary-action URL, the
+  QR block, the Healthier SG partner logos) now carry real PDF link annotations stamped
+  over their footprint. Em-dashes in the English report copy are replaced with plain
+  punctuation; the UK English spellings are retained.
+
+### Removed
+
+- **Dead modules, no remaining consumers:** `Aura.utils.js`, `KpiChart.jsx`,
+  `ScrollToTop.jsx`, `StaffLoadChart.jsx`, `StatusBarChart.jsx`,
+  `TaskProjectBarChart.jsx` and `hooks/useWindowSize.js`. Removed alongside the
+  dashboard fix above. Internal cleanup only — nothing in `src/` imported them, and
+  no rendered surface changes. `TEAM_DIRECTORY` itself still exists in
+  `src/utils/index.js` but now has **no consumers in `src/`**.
+
+### Documentation
+
+- `firestore.rules.README.md` cited 91 emulator checks; it is 119. The banner
+  correctly points readers at `scripts/firestore-rules-verify.mjs` as the current
+  record, but the number it quoted was two releases stale — which is the specific way
+  a "read this instead" pointer stops being trustworthy. The 28 added since cover
+  pay-grade privacy and the team's roster configuration.
+
+---
+
 ## [2.1.0] - 2026-08-23
 
 **ONE CONFIGURE SCREEN, ONE ENGINE.** The live roster had never used the AURA v2
