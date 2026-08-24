@@ -167,7 +167,7 @@ Closes four findings at once, and it is the number the whole instrument reports.
 | 1.1 | `AU14` | `rateLimit.js` on `chatWithAura` and `generateSmartAnalysis` | me | `OPEN` | — |
 | 1.2 | `AU15` | Byte cap + mimeType allowlist on attachments | me | `OPEN` | — |
 | 1.3 | `AN10` | Chunk `sendEachForMulticast` at 500; surface the failure | me | `OPEN` | — |
-| 1.4 | `AU16` | Reset `modelResolutionPromise` on every non-success; record the model on the response | me | `OPEN` | — |
+| 1.4 | `AU16` | Reset `modelResolutionPromise` on every non-success; record the model on the response | me | **`HALF DONE`** | **Recording the model is done** (`P8`): `aiProvenance()` returns the responding model id, guardrail version and an ISO timestamp on every `chatWithAura` and `generateSmartAnalysis` call, and it is stamped into the .docx export, the `smart_database` audit row and the archived year-end report. ⚠️ **The cache reset is NOT done.** A transient failure still pins `models/gemini-1.5-flash` for the container's life; what changed is that the artefact now says so instead of being silent about it. |
 
 ## P2 — What the model may write · `AU3`–`AU7`
 
@@ -261,6 +261,37 @@ has to make. Nothing above alters them.
 outcome; rewriting what it says does not, and bundling the two would let a behaviour change
 hide inside a plumbing one. Whether the personas say the right things is still the work that
 needs a person reading real turns.
+
+## P8 — The owner's sixteen guardrails · `AU16` · **2026-08-24**
+
+> ⚠️ **`AURA-TODO.md` P8**, not a bare `P8`. See [`IDS.md`](IDS.md).
+
+The owner issued sixteen rules on 2026-08-24 — seven Principles and nine Practices — and asked
+for them in AURA. [`AURA-GUARDRAILS.md`](AURA-GUARDRAILS.md) is the controlled document and
+reproduces them verbatim; `functions/guardrails.cjs` is the machine-readable half.
+
+⚠️ **THE HONEST SPLIT IS IN §B OF THAT FILE, AND IT IS THE PART TO READ.** A rule written into
+a prompt is a **request to a language model**, not a control. Of sixteen rules, **two are
+enforced by code**, ten are asked for in a prompt, three are human process, and **one is a
+declared gap**.
+
+| # | Id | Item | Owner | Status |
+|---|---|---|---|---|
+| 8.1 | — | One preamble, all four callables | me | `DONE` | `GUARDRAIL_PREAMBLE` reaches `chatWithAura` and `generateSmartAnalysis`; `GUARDRAIL_BRIEF` reaches `processFeedPost` and `communityAck`. A test walks **every** `systemInstruction` in `functions/index.js` and fails if one carries no variant, so a fifth model call cannot be added without a decision. |
+| 8.2 | `AU16` | Rule 12 — record which model answered | me | `DONE` | See the `P1` row above. Half of `AU16`; the cache reset is still open. |
+| 8.3 | — | P1 — a declared assumptions block on the wellbeing report | me | `DONE` | Required by the schema, rendered on screen in its own panel, archived with the report. When the model omits it the report carries `NO_ASSUMPTIONS_DECLARED` — **not** a fabricated "None declared". |
+| 8.4 | — | Rule 15 — content is data, never instruction | me | `DONE` | In both variants. `processFeedPost` had **no** such line and is the endpoint that classifies staff-authored text and then acts on its own verdict. |
+| 8.5 | — | Ordering: guardrails first, persona last | me | `DONE` | Five of the six live personas open with the literal words `System Override:` and one says *"Disregard standard persona rules"* (`AU28` left them word for word). Position is what states the precedence. |
+| 8.6 | `AU15` `AU17` | **P6 — classify before you paste** | **OWNER** | `OPEN` | ❌ **Not enforced, and AURA must not be described as a control for it.** The attachment path still accepts five files of any size and any declared type with no scan and no log. |
+| 8.7 | — | **Rule 16 — route model by task risk** | **OWNER** | `OPEN` | `resolveModel()` picks **one** model for every call, from a fixed priority list. Temperature is routed by persona (`AU20`); the model tier is not routed at all. Rule 16's own fallback — *"the record of which model handled evidence-bearing work still exists"* — is what `8.2` satisfies. |
+| 8.8 | — | **Verify the instructed rules against real turns** | **OWNER** | `OPEN` | ⚠️ **Ten of the sixteen are asserted to be *present in the prompt*, never *followed by the model*.** No test in this repository can close that gap. It needs a person running turns and reading them, which is `7.7`–`7.9` territory. |
+
+⚠️ **A behaviour change was made on demo day, and it is recorded rather than smoothed over.**
+The preamble adds roughly 4,500 characters to the two long-form prompts and 600 to the two
+short ones. Its effect on AURA's coaching register in MODE 1 and on the JSON contract in
+MODE 3 is **unverified** — see item 7 of that document's own assumptions block.
+
+---
 
 ## P6 — Tests and honesty · `AU18` `AU20`–`AU24` `AC4` `AN`
 

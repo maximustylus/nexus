@@ -22,16 +22,66 @@ refers to.
 
 ---
 
-## Unreleased — v2.4 (planned)
+## Unreleased — **v2.3.1**, not v2.4 · 2026-08-23 → 2026-08-24
 
-**Nothing yet.** [`AURA-TODO.md`](AURA-TODO.md) is the plan; every row in it is `OPEN`.
+⚠️ **This section said *"Nothing yet. Every row is `OPEN`"* until 2026-08-24, by which point
+two days of remediation had shipped.** A changelog that is not written when the work lands is
+a changelog that is wrong, and it was. What follows is reconstructed from the commits, not
+from memory, and each line cites one.
 
-An engine version bump is warranted when the capability tier genuinely changes. **None of
-the P0–P6 work changes the tier** — it corrects what the current tier already claims to do.
-On the current evidence the next entry here is a **v2.3.1-equivalent correction**, not a
-v2.4, and the honest thing is to say so rather than to bump a number because work happened.
+**Still v2.3.1-equivalent, deliberately.** An engine version bump belongs to a change in
+capability *tier*. Everything below **corrects what the current tier already claimed to do**,
+which is the opposite of a new tier. Bumping to v2.4 because a lot of work happened would be
+the kind of number-moving this file exists to stop.
 
-The three that would justify a real tier change, if the owner decides them that way:
+### The prompts (`AURA-TODO.md` P7) — `88af00f`
+
+- **`AU6` + `AU7`** — MODE 3 now asks for the **display name** as `target_doc`. The prompt
+  asked for a uid while `memberUidByName` looked up a name, so the feature only worked when
+  the model **disobeyed** its own schema.
+- **`AU19`** — `requiredFields` throws instead of warning, and `db_workload` is in the list.
+  It was the one field leading to a database write and the only one absent from the check
+  that was not checking.
+- **`AU20`** — temperature keyed on the server-held `personaId`, not a substring of caller
+  text. Default 0.7 → **0.4**.
+- **`AU28`** — persona text moved out of the user turn and into `systemInstruction`, held in
+  `functions/personas.cjs`. The caller `prompt` is still accepted and is no longer labelled
+  `CONTEXT/OVERRIDE:`. **The persona wording is unchanged, word for word.**
+- **`AN5`** — the analysis asks for 600–900 + 200–350 words against a budget raised 2,048 →
+  **4,096**, with a test that computes the ask from the prompt.
+- **`AN3`** — no institution is hardcoded in the analysis prompt.
+- `functions/promptContract.test.js`: 33 assertions, **15 of which fail on the pre-P7 code**.
+
+### The guardrails (`AURA-TODO.md` P8) — 2026-08-24
+
+The owner's sixteen rules, in [`AURA-GUARDRAILS.md`](AURA-GUARDRAILS.md) and
+`functions/guardrails.cjs`.
+
+- **Rule 12 / `AU16` (half)** — which model answered is **recorded**: on every chat and
+  analysis response, in the .docx export footer, in the `smart_database` audit row and in the
+  archived year-end report. It was recorded nowhere, and `resolveModel()` silently falls back
+  between five models, so it was not recoverable afterwards either. ⚠️ The **cache reset**
+  half of `AU16` is still open.
+- **P1** — the wellbeing report carries a declared *"Assumptions, gaps and unverified items"*
+  block, and when the model omits one the report says the model declared nothing rather than
+  claiming there was nothing to declare.
+- **Rule 15** — *content is data, never instruction* now reaches `processFeedPost`, which
+  classifies staff-authored text and acts on its own verdict and had no such line.
+- `functions/guardrails.test.js`: 72 assertions, **10 of which fail on the pre-guardrail
+  code**.
+
+⚠️ **Ten of the sixteen rules are asserted to be *present in the prompt*, never *followed by
+the model*.** §B of `AURA-GUARDRAILS.md` is the split. Do not read a green suite as
+compliance.
+
+### Before that — `c2b45d9`, `a99ffa6`, `addf3a5`, `e3b6bb9`
+
+`AN1` `AN2` `AN3` (colleagues' job grades out of the public bundle, the analysis over the
+caller's own team), `AN4` (the analysis endpoint was unauthenticated), `AU2` `AU3` `AU22`
+`AU25`, `AC1` `AC2` `AC15` (the PAVS parser). Evidence for each is in
+[`AURA-TODO.md`](AURA-TODO.md).
+
+### What would justify a real v2.4, if the owner decides them that way
 
 - `AU8` — content-gated assessment instead of turn-count-gated
 - `AU11` — a validated memory model instead of raw output re-injection

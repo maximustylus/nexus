@@ -296,6 +296,16 @@ export default function AuraPulseBot({ isOpen, onClose, onOpen: _onOpen, user })
 
             let analysis;
 
+            /**
+             * Rule 12 (`AURA-GUARDRAILS.md`). `AU16`: which model answered was
+             * recorded nowhere, and `resolveModel()` picks between four models at
+             * runtime and falls back to a fifth, so it was not recoverable after the
+             * fact either. It rides on the message because the .docx export is
+             * per-message, and a grant draft leaving the building with no record of
+             * what produced it is the case Rule 12 is written about.
+             */
+            let provenanceFooter = '';
+
             if (isDemo) {
                 // ⚠️ THE SANDBOX ANSWERS LOCALLY, AND THAT IS THE WHOLE POINT.
                 //
@@ -322,6 +332,8 @@ export default function AuraPulseBot({ isOpen, onClose, onOpen: _onOpen, user })
                     persona: selectedPersona,
                     turnIndex: messages.filter(m => m.role === 'user').length,
                 });
+                provenanceFooter = 'Not AI-generated. Fixed sample text held in the application, '
+                    + 'shown because the sandbox toggle is on.';
             } else {
                 /**
                  * ⚠️ THE PERSONA IS NO LONGER SENT AS TEXT — `AU28`. This appended
@@ -369,18 +381,25 @@ export default function AuraPulseBot({ isOpen, onClose, onOpen: _onOpen, user })
                 } catch {
                     throw new Error('AURA returned an unreadable format. Please try again.');
                 }
+
+                // Absent when the client is a few minutes ahead of the functions:
+                // hosting and functions do not deploy atomically. An unrecorded model
+                // is stated as unrecorded rather than left blank.
+                provenanceFooter = result.data?.provenanceFooter
+                    || 'The responding model was not recorded for this document.';
             }
 
             if (!analysis || !analysis.reply) {
                 throw new Error('Incomplete response from AURA.');
             }
 
-            setMessages(prev => [...prev, { 
-                role: 'bot', 
+            setMessages(prev => [...prev, {
+                role: 'bot',
                 text: analysis.reply,
                 mode: analysis.mode || 'COACH',
                 action: analysis.action,
-                db_workload: analysis.db_workload 
+                db_workload: analysis.db_workload,
+                provenanceFooter,
             }]);
 
             if (analysis.mode === 'COACH' && analysis.diagnosis_ready && analysis.phase && analysis.phase !== 'null' && analysis.phase !== 'NULL') {
@@ -579,7 +598,7 @@ export default function AuraPulseBot({ isOpen, onClose, onOpen: _onOpen, user })
         }]);
     }, [setMessages]);
 
-    const exportToDoc = useCallback(async (text, msgIndex) => {
+    const exportToDoc = useCallback(async (text, msgIndex, provenanceFooter) => {
         if (!text) return;
 
         try {
@@ -657,6 +676,25 @@ export default function AuraPulseBot({ isOpen, onClose, onOpen: _onOpen, user })
                 }));
             }
 
+            /**
+             * ⚠️ RULE 12, AND IT HAS TO BE IN THE FILE. This document leaves the
+             *    application as a .docx and is edited, mailed and submitted
+             *    elsewhere: a grant's specific aims, a memo, a literature review.
+             *    A provenance record held in React state does not travel with it, and
+             *    Rule 12's test is whether the DOCUMENT is reproducible from itself.
+             *
+             *    The stated fallback is deliberate. A missing footer would read as a
+             *    human-written document, which is the claim P7 exists to stop.
+             */
+            docChildren.push(new Paragraph({ text: '' }));
+            docChildren.push(new Paragraph({
+                children: [new TextRun({
+                    text: provenanceFooter || 'Drafted with AI assistance. The responding model was not recorded.',
+                    italics: true,
+                    size: 16,
+                })],
+            }));
+
             const wordDoc = new Document({
                 sections: [{
                     properties: {},
@@ -686,6 +724,9 @@ export default function AuraPulseBot({ isOpen, onClose, onOpen: _onOpen, user })
                 content: text,
                 type: 'AUTO_EXPORTED_DOCX', 
                 isDemo,
+                // Rule 12 again: the audit row is the other copy of this document, and
+                // it was as anonymous as the .docx was.
+                aiProvenance: provenanceFooter || '',
                 silentlyLogged: true 
             });
 
@@ -1120,7 +1161,7 @@ export default function AuraPulseBot({ isOpen, onClose, onOpen: _onOpen, user })
                                                                         </button>
 
                                                                         <button 
-                                                                            onClick={() => exportToDoc(m.action, i)}
+                                                                            onClick={() => exportToDoc(m.action, i, m.provenanceFooter)}
                                                                             disabled={loading}
                                                                             className="py-2 bg-slate-700 hover:bg-slate-600 disabled:opacity-50 text-white text-[10px] font-bold uppercase tracking-wider rounded-xl transition-colors flex items-center justify-center gap-1.5 border border-slate-600"
                                                                         >

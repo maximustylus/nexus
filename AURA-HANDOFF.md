@@ -111,9 +111,17 @@ Not covered at all: `SmartReportView.jsx`, most of `ConventionalForm.jsx`, the d
 derived metrics, and accessibility beyond live regions. **Absence from the post-mortem is
 not clearance.**
 
+⚠️ **A fourth, added 2026-08-24 with the guardrails.** Ten of the owner's sixteen rules are
+carried by a **prompt**, and a prompt is a request to a language model. `functions/guardrails.test.js`
+asserts that each instruction **reached** the model; nothing in this repository can assert
+that the model **followed** it. Closing that needs a person running real turns and reading
+them. §B of [`AURA-GUARDRAILS.md`](AURA-GUARDRAILS.md) marks every row `CODE`, `PROMPT`,
+`HUMAN` or `NOT ENFORCED`, and **P6 is a declared gap** — AURA is not a data-classification
+control and must not be described as one.
+
 ---
 
-## 4. The ten decisions waiting on the owner
+## 4. The twelve decisions waiting on the owner
 
 Not blocked on engineering time. Several are not code.
 
@@ -129,6 +137,13 @@ Not blocked on engineering time. Several are not code.
 | `AN9` | Is cluster-wide `isSignedIn()` read of the rollup acceptable with suppression as the only control? | grows with onboarding |
 | `AN11` | Should the 09:00 nudge be per-team? | grows with onboarding |
 | `AN12` | Is a model classification an acceptable PDPA *guard*? | ICT-adjacent |
+| P8.7 | Should the **model tier** be routed by the stakes of the task (Rule 16)? Today `resolveModel()` picks one model for every call, from a research review to a category label. | — |
+| P8.8 | Who runs the real turns that would tell us whether AURA **follows** the ten prompt-carried guardrails, and when? | ⚠️ before any claim of compliance |
+
+⚠️ **Ten of these carry a finding id and two do not.** `AURA-TODO.md`'s *"The owner's ten"*
+and `AURA-GOLIVE-GATE.md` both mean the ten with ids, and are still correct as written. The
+last two rows came in with the guardrails on 2026-08-24 and are cited as `AURA-TODO.md` P8.7
+and P8.8, because no post-mortem finding covers either.
 
 ---
 

@@ -126,7 +126,19 @@ const SmartAnalysis = ({ teamData, staffLoads, onClose }) => {
                 // Return a perfectly formatted Marvel Report
                 setResult({
                     private: "## Executive Summary\nPrivate: Peter (JG11) is experiencing severe scope creep and burnout risk. Reallocate his Inpatient Ward duties to Steve to balance clinical load across the department.\n\n## Executive Wins\n- **Steve:** Maintaining 100% on Shield Integration protocols.\n- **Charles:** Successfully securing the Mutant Genome research grant.\n\n## Risk Factors & Strategic Focus\n- **Burnout:** Peter's On-Call frequency has exceeded healthy parameters.\n- **Isolation:** Tony's remote Work-From-Home status is creating a silo effect. Schedule mandatory on-site check-ins.",
-                    public: "## Team Summary\nPublic: The Marvel CEP Team is crushing Q1! Shield Integration is complete, and clinical targets are being met across the board. Excellent cross-departmental collaboration.\n\n## Team Wins\n- **Milestone:** Shield Integration Completed ahead of schedule.\n- **Clinical:** New Web Shooter operational protocols are now fully active.\n\n## Strategic Focus for Q2\n- Maintain clear communication channels during remote work rotations.\n- Continue to monitor high-volume ward capacities during peak periods."
+                    public: "## Team Summary\nPublic: The Marvel CEP Team is crushing Q1! Shield Integration is complete, and clinical targets are being met across the board. Excellent cross-departmental collaboration.\n\n## Team Wins\n- **Milestone:** Shield Integration Completed ahead of schedule.\n- **Clinical:** New Web Shooter operational protocols are now fully active.\n\n## Strategic Focus for Q2\n- Maintain clear communication channels during remote work rotations.\n- Continue to monitor high-volume ward capacities during peak periods.",
+                    /**
+                     * P1, and the sandbox is where it matters most. This report is
+                     * fabricated: Peter, Steve and Charles are not colleagues and the
+                     * figures are invented. Everything on this screen otherwise looks
+                     * exactly like a real analysis, which is the point of a demo and
+                     * also the risk in one, so the artefact says what it is.
+                     */
+                    assumptions: 'SANDBOX. Every name, figure and finding in this report is fabricated sample data. '
+                        + 'No model was called and no departmental record was read. It demonstrates the format of the '
+                        + 'report and nothing about any real person.',
+                    provenanceFooter: 'Not AI-generated. Fixed sample text held in the application, shown because '
+                        + 'the sandbox toggle is on.',
                 });
                 
                 console.log("Mock AI Analysis Generated");
@@ -211,9 +223,24 @@ const SmartAnalysis = ({ teamData, staffLoads, onClose }) => {
                 staffLoads: staffLoads 
             });
 
-            setResult({ 
-                private: response.data.private, 
-                public: response.data.public 
+            setResult({
+                private: response.data.private,
+                public: response.data.public,
+                /**
+                 * P1 and Rule 12 (`AURA-GUARDRAILS.md`). The server always returns
+                 * both: if the model omitted its assumptions block, `assumptions`
+                 * carries `NO_ASSUMPTIONS_DECLARED`, which says the model declared
+                 * nothing rather than claiming there was nothing to declare.
+                 *
+                 * The fallbacks are for a client running against functions deployed a
+                 * few minutes earlier. Hosting and functions do not deploy atomically,
+                 * and an undefined here would render the word "undefined" inside a
+                 * clinical report.
+                 */
+                assumptions: response.data.assumptions
+                    || 'Not returned by the server. This report states no limits on itself; treat its figures as unverified.',
+                provenanceFooter: response.data.provenanceFooter
+                    || 'The responding model was not recorded for this report.',
             });
             console.log("AI Analysis Received");
             
@@ -258,6 +285,15 @@ const SmartAnalysis = ({ teamData, staffLoads, onClose }) => {
             await firestore.setDoc(reportRef, {
                 privateText: result.private,
                 publicText: result.public,
+                /**
+                 * ⚠️ RULE 12: THE PROVENANCE HAS TO SURVIVE THE ARCHIVE, OR IT IS NOT
+                 *    PROVENANCE. `AU16` was that nothing recorded which model answered.
+                 *    Returning it from the callable and then dropping it here would
+                 *    close the finding in the network tab and leave the year-end
+                 *    document exactly as unreproducible as it was.
+                 */
+                assumptionsText: result.assumptions || '',
+                aiProvenance: result.provenanceFooter || '',
                 timestamp: new Date()
             });
 
@@ -340,6 +376,16 @@ const SmartAnalysis = ({ teamData, staffLoads, onClose }) => {
                                 <h3 className="text-xs font-black text-slate-500 mb-2 uppercase">Team Pulse ({targetYear})</h3>
                                 <div className="whitespace-pre-wrap text-sm text-slate-600 dark:text-slate-400 h-48 overflow-y-auto border border-slate-200 dark:border-slate-700 p-4 rounded-lg bg-white dark:bg-slate-900 shadow-inner">{result.public}</div>
                             </div>
+                            {/*
+                              * P1. Not a footnote and not collapsed behind a toggle: the
+                              * rule is that limits are stated in the open, and a
+                              * disclosure nobody opens is the footnote it forbids.
+                              */}
+                            <div className="bg-amber-50 dark:bg-amber-900/20 p-6 rounded-2xl border border-amber-300 dark:border-amber-700">
+                                <h3 className="text-xs font-black text-amber-700 dark:text-amber-400 mb-2 uppercase">Assumptions, gaps and unverified items</h3>
+                                <div className="whitespace-pre-wrap text-sm text-amber-900 dark:text-amber-200">{result.assumptions}</div>
+                            </div>
+                            <p className="text-[11px] leading-relaxed text-slate-500 dark:text-slate-400 px-1">{result.provenanceFooter}</p>
                             <button onClick={handlePublish} className={`w-full py-4 text-white font-black rounded-xl shadow-lg uppercase transition-all ${isDemo ? 'bg-emerald-600 hover:bg-emerald-700' : 'bg-indigo-600 hover:bg-indigo-700'}`}>
                                 PUBLISH TO {targetYear} ARCHIVE
                             </button>
