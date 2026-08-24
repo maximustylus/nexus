@@ -503,3 +503,47 @@ describe('smart_database — every written key is one the rules allow', () => {
         expect(allowed).toContain('aiProvenance');
     });
 });
+
+// ── AU16, the cache half — the fallback is served, never pinned ───────────────
+
+describe('resolveModel — every fallback path clears the cache (AU16)', () => {
+    // Source-level, comments stripped (`codeOnly`): the function is not exported
+    // and importing index.js means importing firebase-admin. What is decidable
+    // statically is exactly the defect: a `return SAFE_FALLBACK_MODEL` reachable
+    // without a preceding `modelResolutionPromise = null` in the same branch.
+    const fn = src.slice(
+        src.indexOf('async function resolveModel'),
+        src.indexOf('const MAX_USER_TEXT'),
+    );
+
+    it('finds the function and its three fallback paths', () => {
+        expect(fn.length).toBeGreaterThan(200);
+        expect((fn.match(/SAFE_FALLBACK_MODEL/g) || []).length).toBeGreaterThanOrEqual(2);
+    });
+
+    it('the non-200 branch resets before returning the fallback', () => {
+        const branch = fn.slice(fn.indexOf('if (!response.ok)'), fn.indexOf('const data ='));
+        expect(branch).toContain('modelResolutionPromise = null');
+        expect(branch.indexOf('modelResolutionPromise = null'))
+            .toBeLessThan(branch.indexOf('return SAFE_FALLBACK_MODEL'));
+    });
+
+    it('the no-match branch resets too', () => {
+        const branch = fn.slice(fn.indexOf('No priority model matched'), fn.indexOf('} catch'));
+        expect(branch).toContain('modelResolutionPromise = null');
+    });
+
+    it('the thrown-error branch kept its reset', () => {
+        const branch = fn.slice(fn.indexOf('} catch'), fn.length);
+        expect(branch).toContain('modelResolutionPromise = null');
+    });
+
+    it('a DISCOVERED model is still cached — the reset must not kill the cache entirely', () => {
+        // The success path returns `match` with no reset: one discovery serves the
+        // container. If someone "fixes" AU16 by clearing unconditionally, every
+        // call pays an extra round trip forever, and this catches it.
+        const branch = fn.slice(fn.indexOf('for (const candidate'), fn.indexOf('No priority model matched'));
+        expect(branch).toContain('return match');
+        expect(branch).not.toContain('modelResolutionPromise = null');
+    });
+});

@@ -31,6 +31,7 @@ const { personaPrompt, LIVE_PERSONA_IDS } = require('./personas.cjs');
  * `aiProvenance` is enforced, the preamble is asked for.
  */
 const guardrails = require('./guardrails.cjs');
+const attachmentRules = require('./attachmentRules.cjs');
 const GUARDRAIL_PREAMBLE = guardrails.GUARDRAIL_PREAMBLE;
 const GUARDRAIL_BRIEF = guardrails.GUARDRAIL_BRIEF;
 
@@ -63,8 +64,24 @@ async function resolveModel() {
                 signal: AbortSignal.timeout(8000),
             });
 
+            /**
+             * ⚠️ `AU16` — SERVE THE FALLBACK, NEVER PIN IT. Only the thrown-error
+             *    path cleared the cache, so a single non-200 from the model list —
+             *    one rate-limited minute at cold start — resolved this promise to
+             *    `gemini-1.5-flash` and every call for the CONTAINER'S LIFE ran on
+             *    the cheapest model, silently. Warm containers live for hours, and
+             *    nothing recorded which model answered (the other half of `AU16`,
+             *    closed by `aiProvenance`), so it was invisible end to end.
+             *
+             *    Every path that cannot return a discovered model now clears the
+             *    cache before returning the fallback: this call degrades, the next
+             *    call re-discovers. In-flight callers awaiting this same promise
+             *    still get the fallback — correct, their turn must not stall — and
+             *    the provenance field on each response says what they got.
+             */
             if (!response.ok) {
-                logger.warn('[NEXUS] Model list returned ' + response.status + '. Using fallback.');
+                logger.warn('[NEXUS] Model list returned ' + response.status + '. Using fallback once, not caching it.');
+                modelResolutionPromise = null;
                 return SAFE_FALLBACK_MODEL;
             }
 
@@ -79,7 +96,11 @@ async function resolveModel() {
                 }
             }
 
-            logger.warn('[NEXUS] No priority model matched. Using fallback.');
+            // A list that answered 200 but names none of our models: also transient
+            // until proven otherwise (partial outages return partial lists). The
+            // cost of re-checking is one fast request per call while it lasts.
+            logger.warn('[NEXUS] No priority model matched. Using fallback once, not caching it.');
+            modelResolutionPromise = null;
         } catch (e) {
             logger.warn('[NEXUS] Model discovery failed: ' + e.message + '. Using fallback.');
             modelResolutionPromise = null;
@@ -153,18 +174,15 @@ function validateChatInput({ userText, history, role, prompt, attachments, perso
                 + '. Known: ' + LIVE_PERSONA_IDS.join(', '));
         }
     }
-    if (attachments !== undefined) {
-        if (!Array.isArray(attachments)) {
-            throw new HttpsError('invalid-argument', 'attachments must be an array.');
-        }
-        if (attachments.length > 5) {
-            throw new HttpsError('invalid-argument', 'Maximum 5 attachments allowed per request.');
-        }
-        for (const att of attachments) {
-            if (!att.mimeType || !att.data) {
-                throw new HttpsError('invalid-argument', 'Attachments must include mimeType and base64 data.');
-            }
-        }
+    /**
+     * `AU15` / `AU17` (the code half). The rules live in `./attachmentRules.cjs` —
+     * pure and unit-tested, like every other boundary in this directory — and its
+     * header carries the reasoning, including what this deliberately is NOT
+     * (a PDPA control; that is the declared P6 gap).
+     */
+    const attachmentCheck = attachmentRules.checkAttachments(attachments);
+    if (!attachmentCheck.ok) {
+        throw new HttpsError('invalid-argument', attachmentCheck.message);
     }
 }
 
@@ -400,6 +418,16 @@ exports.chatWithAura = onCall({
         throw new HttpsError('unauthenticated', 'Sign in to use AURA.');
     }
 
+    // `AU14`. After auth (an anonymous caller is refused outright, never counted)
+    // and before the model call (a refused turn must not cost anything).
+    var chatLimit = await checkStaffAiLimit(getFirestore(), request.auth.uid, 'chatWithAura', Date.now());
+    if (!chatLimit.allowed) {
+        throw new HttpsError(
+            'resource-exhausted',
+            rateLimit.staffRefusalMessage({ retryAfterSeconds: chatLimit.retryAfterSeconds }),
+        );
+    }
+
     if (!API_KEY) throw new HttpsError('failed-precondition', 'AI service is not configured.');
 
     validateChatInput({
@@ -483,7 +511,15 @@ exports.chatWithAura = onCall({
                     }
                 });
             }
-            logger.info('[AURA] Processing ' + attachments.length + ' multimodal attachments.');
+            /**
+             * `AU17` — the log half. Types and sizes, never content: enough for a
+             * reviewer to answer "did files move through this endpoint, when, and
+             * how big", which was previously unanswerable.
+             */
+            logger.info('[AURA] attachments', Object.assign(
+                { uid: request.auth.uid },
+                attachmentRules.attachmentAuditFields(attachments),
+            ));
         }
 
         var trimmedHistory = history.slice(-MAX_HISTORY_LEN).map(function(h) { return { role: h.role, parts: h.parts }; });
@@ -641,6 +677,15 @@ exports.generateSmartAnalysis = onCall({
         throw new HttpsError('permission-denied', 'Only a team lead can generate the wellbeing analysis.');
     }
 
+    // `AU14`. Shares the caller's chat budget on purpose — see STAFF_LIMITS.
+    var analysisLimit = await checkStaffAiLimit(getFirestore(), request.auth.uid, 'generateSmartAnalysis', Date.now());
+    if (!analysisLimit.allowed) {
+        throw new HttpsError(
+            'resource-exhausted',
+            rateLimit.staffRefusalMessage({ retryAfterSeconds: analysisLimit.retryAfterSeconds }),
+        );
+    }
+
     if (!API_KEY) throw new HttpsError('failed-precondition', 'AI service is not configured.');
 
     validateAnalysisInput({ targetYear: targetYear, staffProfiles: staffProfiles, yearData: yearData });
@@ -759,16 +804,42 @@ exports.scheduledPulseNudge = onSchedule({
 
         if (tokens.length === 0) return null;
 
-        var message = {
-            notification: {
-                title: 'Social Battery Check',
-                body: 'Take 30 seconds to log your Energy and Focus levels with AURA Pulse!',
-            },
-            data: { click_action: 'FLUTTER_NOTIFICATION_CLICK', target_tab: 'pulse' },
-            tokens: tokens,
-        };
+        /**
+         * ⚠️ `AN10` — `sendEachForMulticast` REFUSES MORE THAN 500 TOKENS, whole.
+         *    Past 500 registered devices, the 09:00 nudge would not degrade — it
+         *    would THROW, the catch below would swallow it, and every department's
+         *    daily check-in would stop with nothing on any screen. 500 devices is
+         *    not hypothetical at 28 departments; it is about 18 people each.
+         *
+         *    So: chunks of 500, and the RESULT IS READ. `sendEachForMulticast`
+         *    resolves successfully even when every single send inside it failed —
+         *    the per-token errors are in the response — so awaiting it and moving
+         *    on, which is what this did, verifies delivery of nothing.
+         */
+        var FCM_BATCH_LIMIT = 500;
+        var sent = 0;
+        var failed = 0;
+        for (var start = 0; start < tokens.length; start += FCM_BATCH_LIMIT) {
+            var batch = tokens.slice(start, start + FCM_BATCH_LIMIT);
+            var result = await messaging.sendEachForMulticast({
+                notification: {
+                    title: 'Social Battery Check',
+                    body: 'Take 30 seconds to log your Energy and Focus levels with AURA Pulse!',
+                },
+                data: { click_action: 'FLUTTER_NOTIFICATION_CLICK', target_tab: 'pulse' },
+                tokens: batch,
+            });
+            sent += result.successCount;
+            failed += result.failureCount;
+        }
 
-        await messaging.sendEachForMulticast(message);
+        if (failed > 0) {
+            logger.warn('[NEXUS] Pulse nudge partial delivery', {
+                sent: sent, failed: failed, tokens: tokens.length,
+            });
+        } else {
+            logger.info('[NEXUS] Pulse nudge delivered', { sent: sent, tokens: tokens.length });
+        }
         return null;
     } catch (error) {
         console.error('[NEXUS] Critical error sending pulse nudge:', error);
@@ -817,6 +888,17 @@ exports.processFeedPost = onCall({ secrets: ['GEMINI_API_KEY'] }, async (request
         .get();
     if (!memberSnap.exists) {
         throw new HttpsError('permission-denied', 'You are not a member of that team.');
+    }
+
+    // `AU14`. The same per-uid budget as the chat: a feed post costs a Gemini
+    // call, and posting is the one staff surface with a text box and a loop-shaped
+    // temptation (paste, submit, repeat).
+    var feedLimit = await checkStaffAiLimit(getFirestore(), request.auth.uid, 'processFeedPost', Date.now());
+    if (!feedLimit.allowed) {
+        throw new HttpsError(
+            'resource-exhausted',
+            rateLimit.staffRefusalMessage({ retryAfterSeconds: feedLimit.retryAfterSeconds }),
+        );
     }
 
     if (!API_KEY) throw new HttpsError('failed-precondition', 'AI service is not configured.');
@@ -1107,6 +1189,68 @@ const ENFORCE_APP_CHECK = process.env.ENFORCE_APP_CHECK === 'true';
  *    screening, to protect against a cost. It is logged at error level so the
  *    failure is visible rather than silent.
  */
+/**
+ * `AU14` — the staff mirror of `checkRateLimit` below. One budget per UID across
+ * every authenticated Gemini endpoint (`chatWithAura`, `generateSmartAnalysis`,
+ * `processFeedPost`), because authentication is attribution, not restraint: a
+ * signed-in account could loop the billed key exactly as fast as an anonymous
+ * one. Shape and failure mode are copied from the community limiter deliberately —
+ * a Firestore blip ALLOWS the call and logs, because refusing on infrastructure
+ * error turns a blip into an outage to protect against a cost.
+ */
+async function checkStaffAiLimit(db, uid, endpoint, nowMs) {
+    const plan = rateLimit.staffPlanFor({ uid: uid, nowMs: nowMs });
+
+    let verdict = { allowed: true };
+    try {
+        const refs = [
+            db.doc(plan.caller.path.join('/')),
+            db.doc(plan.global.path.join('/')),
+        ];
+        const snaps = await Promise.all(refs.map((ref) => ref.get()));
+
+        const callerVerdict = rateLimit.decide({
+            count: snaps[0].exists ? snaps[0].data().count : 0,
+            limit: plan.caller.limit,
+            nowMs: nowMs,
+        });
+        const globalVerdict = rateLimit.decide({
+            count: snaps[1].exists ? snaps[1].data().count : 0,
+            limit: plan.global.limit,
+            nowMs: nowMs,
+        });
+
+        if (globalVerdict.used >= plan.global.limit * rateLimit.STAFF_LIMITS.globalWarnAt) {
+            logger.warn('[' + endpoint + '] staff global AI window past half', {
+                used: globalVerdict.used, ceiling: plan.global.limit,
+            });
+        }
+
+        verdict = globalVerdict.allowed ? callerVerdict : globalVerdict;
+        verdict.scope = globalVerdict.allowed ? 'caller' : 'global';
+
+        if (verdict.allowed) {
+            // A refused call is not counted, so sitting on the wall does not
+            // extend the window — same reasoning as the community side.
+            await Promise.all(refs.map((ref) => ref.set({
+                count: FieldValue.increment(1),
+                windowIndex: plan.windowIndex,
+                updatedAt: new Date(nowMs).toISOString(),
+            }, { merge: true })));
+        }
+    } catch (error) {
+        logger.error('[' + endpoint + '] staff rate limiter unavailable; allowing the call', error);
+        return { allowed: true, degraded: true };
+    }
+
+    if (!verdict.allowed) {
+        logger.warn('[' + endpoint + '] staff AI ceiling refused a call', {
+            scope: verdict.scope, used: verdict.used, ceiling: verdict.ceiling,
+        });
+    }
+    return verdict;
+}
+
 async function checkRateLimit(db, request, nowMs) {
     const headers = (request.rawRequest && request.rawRequest.headers) || {};
     const key = rateLimit.callerKey(

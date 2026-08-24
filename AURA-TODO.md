@@ -46,13 +46,17 @@ original post-mortems into one. `AU2` means today exactly what it meant when it 
 
 | | Count | Ids |
 |---|---|---|
-| `DONE`, evidenced | **13** | `AU1` `AU2` `AU3` `AU22` `AU23` `AU25` `AU26` `AC1` `AC2` `AC15` `AN1`* `AN2` `AN3` `AN4` |
-| `OPEN`, mine | 30 | everything not listed below |
-| `OPEN`, **owner's decision** | 9 | `AU5` `AU8` `AU11` `AU17` `AC11` `AN7` `AN9` `AN11` `AN12` |
+| `DONE`, evidenced | **24** | `AU1` `AU2` `AU3` `AU6` `AU7` `AU14` `AU15` `AU16` `AU19` `AU20` `AU22` `AU23` `AU25` `AU26` `AU28` `AC1` `AC2` `AC15` `AN1`* `AN2` `AN3` `AN4` `AN10` `AN14` |
+| `OPEN`, mine | 16 | everything not listed below |
+| `OPEN`, **owner's decision** | 9 | `AU5` `AU8` `AU11` `AU17`† `AC11` `AN7` `AN9` `AN11` `AN12` |
 | **`LIVE` right now** | **0 grades · 0 names · 0 emails** | \* `AN1` and `AN14` both closed and verified against `dist/`; `an14.bundle.test.js` keeps it that way |
 
 **53 findings**, not the 51 this file was created with: `AU25` (the go-live gate) and
 `AC15` (fixing `AC1`) were opened on the same day. Neither renumbers anything.
+
+† `AU17`'s **code half** (the audit log of what passes through the attachment path) shipped
+with `AU15`; what stays with the owner is the policy half — what the actual PDPA control on
+attachments is, which no amount of code here can decide.
 
 ## ⚠️ Two new ids, opened by review of the first fix batch
 
@@ -164,10 +168,10 @@ Closes four findings at once, and it is the number the whole instrument reports.
 
 | # | Id | Item | Owner | Status | Evidence |
 |---|---|---|---|---|---|
-| 1.1 | `AU14` | `rateLimit.js` on `chatWithAura` and `generateSmartAnalysis` | me | `OPEN` | — |
-| 1.2 | `AU15` | Byte cap + mimeType allowlist on attachments | me | `OPEN` | — |
-| 1.3 | `AN10` | Chunk `sendEachForMulticast` at 500; surface the failure | me | `OPEN` | — |
-| 1.4 | `AU16` | Reset `modelResolutionPromise` on every non-success; record the model on the response | me | **`HALF DONE`** | **Recording the model is done** (`P8`): `aiProvenance()` returns the responding model id, guardrail version and an ISO timestamp on every `chatWithAura` and `generateSmartAnalysis` call, and it is stamped into the .docx export, the `smart_database` audit row and the archived year-end report. ⚠️ **The cache reset is NOT done.** A transient failure still pins `models/gemini-1.5-flash` for the container's life; what changed is that the artefact now says so instead of being silent about it. |
+| 1.1 | `AU14` | `rateLimit.js` on `chatWithAura` and `generateSmartAnalysis` | me | `DONE` | `aura` branch, 2026-08-24. One per-uid budget (120/hr) across **all three** authenticated Gemini endpoints — `processFeedPost` included, which the item under-scoped — plus a 3,000/hr global alarm-ceiling, scope `staff` in `rate_limits`, uid hashed in the doc id like every other key there. A refused turn is **not counted** and costs nothing (the check runs before the model call). Firestore blip → allow and log, same reasoning as the community side. `staffPlanFor` + `staffRefusalMessage` in `rateLimit.js`, tested. |
+| 1.2 | `AU15` | Byte cap + mimeType allowlist on attachments | me | `DONE` | `functions/attachmentRules.cjs` — pure, unit-tested: 5 files, ~4 MB each / ~8 MB per request (measured in base64, which is what bills), exact-match allowlist of five types (pdf, png, jpeg, webp, plain text; svg and html refused — scriptable), standard-base64 shape check, and an **audit log of count/types/sizes, never content** (the `AU17` log half). No client sends attachments yet, so the contract now exists BEFORE a UI does. ⚠️ Declared plainly in the module: this is a cost bound, **not** a PDPA control — the P6 gap stays declared. |
+| 1.3 | `AN10` | Chunk `sendEachForMulticast` at 500; surface the failure | me | `DONE` | Chunks of 500, and the **result is read**: `sendEachForMulticast` resolves successfully even when every send inside failed, so the old `await`-and-return verified delivery of nothing. Partial delivery now logs `sent`/`failed`/`tokens` at warn. Past 500 devices (~18 people × 28 departments) the old code would have thrown, been swallowed by the catch, and silently ended the daily nudge for everyone. |
+| 1.4 | `AU16` | Reset `modelResolutionPromise` on every non-success; record the model on the response | me | `DONE` | **Both halves.** Recording (`P8`): `aiProvenance()` on every response, stamped into the .docx export, both `smart_database` audit rows and the archived report. Cache reset (2026-08-24): only the *thrown-error* path cleared the cache — a non-200 from the model list, or a 200 naming none of our models, resolved the promise to `gemini-1.5-flash` **for the container's life**. Every fallback path now clears before returning, so the turn degrades and the next call re-discovers; a *discovered* model is still cached, and a test guards both directions. |
 
 ## P2 — What the model may write · `AU3`–`AU7`
 
