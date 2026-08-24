@@ -15,6 +15,7 @@
 
 import { describe, it, expect } from 'vitest';
 import {
+    PERIOD_SHAPE,
     refuseWorkloadWrite,
     canWriteWorkload,
     ALLOWED_WORKLOAD_FIELDS,
@@ -269,5 +270,56 @@ describe('every refusal is a sentence a clinician can act on', () => {
         // record is unchanged, not merely that something went wrong.
         const afterAttempt = refusals.filter((r) => !/valid month|Missing target/i.test(r));
         afterAttempt.forEach((r) => expect(r).toMatch(/not saved|nothing was saved/i));
+    });
+});
+
+// ─── AU4 · the period is a month, not merely a string ─────────────────────────
+
+describe('AU4 — monthly_workload target_doc must be a real mmm_yyyy period', () => {
+    const workloadWrite = (target_doc) => ({
+        target_collection: 'monthly_workload',
+        target_doc,
+        target_field: 'patient_attendance',
+        target_value: 100,
+    });
+
+    it.each([
+        ['jan_2026'], ['feb_2027'], ['dec_1999'],
+        // Case variants pass the GUARD (the caller lowercases before the path);
+        // splitting a month across two documents is prevented one layer down.
+        ['Jan_2026'], ['DEC_2026'],
+    ])('accepts %s', (period) => {
+        expect(refuseWorkloadWrite(workloadWrite(period))).toBeNull();
+    });
+
+    it.each([
+        ['a prose month', 'January 2026'],
+        ['a bare year', '2026'],
+        ['a bare month', 'jan'],
+        ['an invented month', 'xyz_2026'],
+        ['a two-digit year', 'jan_26'],
+        ['a five-digit year', 'jan_20266'],
+        ['hyphenated', 'jan-2026'],
+        ['a month index', '0_2026'],
+        ['whitespace inside', 'jan _2026'],
+    ])('refuses %s with a sentence naming the format', (_label, period) => {
+        const refusal = refuseWorkloadWrite(workloadWrite(period));
+        expect(refusal).toContain('jan_2026');
+        expect(refusal).toContain('Nothing was saved');
+    });
+
+    it('the staff_loads branch is untouched — a display name is not a period', () => {
+        expect(refuseWorkloadWrite({
+            target_collection: 'staff_loads',
+            target_doc: 'Ying Xian',
+            target_field: 'data',
+            target_value: 30,
+            target_month: 4,
+        })).toBeNull();
+    });
+
+    it('PERIOD_SHAPE is anchored — a period inside a longer string is not a period', () => {
+        expect(PERIOD_SHAPE.test('x jan_2026')).toBe(false);
+        expect(PERIOD_SHAPE.test('jan_2026/../etc')).toBe(false);
     });
 });

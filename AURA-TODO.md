@@ -46,8 +46,13 @@ original post-mortems into one. `AU2` means today exactly what it meant when it 
 
 | | Count | Ids |
 |---|---|---|
-| `DONE`, evidenced | **24** | `AU1` `AU2` `AU3` `AU6` `AU7` `AU14` `AU15` `AU16` `AU19` `AU20` `AU22` `AU23` `AU25` `AU26` `AU28` `AC1` `AC2` `AC15` `AN1`* `AN2` `AN3` `AN4` `AN10` `AN14` |
-| `OPEN`, mine | 16 | everything not listed below |
+| `DONE`, evidenced | **29** | `AU1` `AU2` `AU3` `AU4` `AU6` `AU7` `AU9` `AU10` `AU14` `AU15` `AU16` `AU19` `AU20` `AU22` `AU23` `AU24` `AU25` `AU26` `AU27` `AU28` `AC1` `AC2` `AC15` `AN1`* `AN2` `AN3` `AN4` `AN10` `AN14` |
+| `OPEN`, mine | 11 | `AU12` `AC5` `AC6` `AC7` `AC8` `AC9` `AC10` `AC12` `AC13` `AC14` + `AN6` `AN8` `AN13` (three AN in one row of work) |
+
+⚠️ **Six rows in this file said `OPEN` for findings closed days earlier** (`AU6` `AU7` `AU19`
+`AN5` `AU22` `AU23`) — the P-section tracked them separately from the P7 batch that closed
+them, and only one place was updated. Each now cites the commit that closed it. A ledger row
+is a claim like any other; these were false in the safe direction, which is still false.
 | `OPEN`, **owner's decision** | 9 | `AU5` `AU8` `AU11` `AU17`† `AC11` `AN7` `AN9` `AN11` `AN12` |
 | **`LIVE` right now** | **0 grades · 0 names · 0 emails** | \* `AN1` and `AN14` both closed and verified against `dist/`; `an14.bundle.test.js` keeps it that way |
 
@@ -62,7 +67,7 @@ attachments is, which no amount of code here can decide.
 
 | Id | Finding | Severity |
 |---|---|---|
-| `AU27` | `exportToDoc` (`AuraPulseBot.jsx:561`) and `confirmAdminAction` (`:690`) write to `smart_database` with **no `isDemo` guard** — the guard was added to `executeDataEntry` and not to its two siblings, which is this project's defining defect shape. `firestore.rules` is `allow create: if isSignedIn()`, and Demo Mode is reachable **signed out** from the landing page, so a signed-out presenter following `README.md` step 3 gets the `.docx` **and** a red *"check your connection"* banner that is false twice over. Zero-code mitigation: sign in first. | high · **OPEN** |
+| `AU27` | ~~`exportToDoc` and `confirmAdminAction` write to `smart_database` with no `isDemo` guard~~ **CLOSED 2026-08-24 (`aura`).** Both sites now fence: the sandbox downloads the `.docx` (the value the demo shows — it never needed Firestore) and says plainly *"SANDBOX: nothing was saved"*, instead of writing demo fiction into the live audit collection when signed in and showing a false *"check your connection"* banner when signed out. | high · **`DONE`** |
 | `AU26` | `target_doc` — the field that CHOOSES the Firestore document — was the one model-supplied value left to `String()` coercion. `{}` → `"[object Object]"`, `true` → `"true"`, `0` → `"0"`, all ACCEPTED. Contained on `staff_loads` by the `memberUidByName` lookup; **not** contained on `monthly_workload`, where `workloadPath` asserts nothing. Data quality, not disclosure. **Closed** in `c2b45d9`. | medium |
 | `AN14` | ~~`TEAM_DIRECTORY` still ships in the bundle: seven real **names** and seven real **work email addresses**.~~ **CLOSED 2026-08-24, on the `aura` branch.** The bridge only ever needed to RECOGNISE an email it was handed, never to contain one: `src/utils/legacyBridge.js` now does the same job with salted SHA-256 digests, and the directory is deleted. The hunt found **three more copies** beyond the two on this ledger: `ADMIN_EMAILS` in `App.jsx` (two plaintext addresses — the seventh), `LIVE_ROSTER_DEFAULTS.staff` (four names in the roster fallback — the eighth, found by the new bundle tripwire), and `LIVE_MOCK_POSTS` in `FeedsView.jsx` (the ninth, and the worst: **fabricated posts attributed to real colleagues by name and role**, merged into the live feed for every user). All out. `an14.bundle.test.js` greps the BUILT BUNDLE — not the source — for every address and distinctive name and fails CI if any returns; the residual is a membership oracle over guessed inputs (the salt ships), declared in `legacyBridge.js`'s header and dying with the bridge. | medium · **`DONE`** |
 
@@ -178,18 +183,18 @@ Closes four findings at once, and it is the number the whole instrument reports.
 | # | Id | Item | Owner | Status | Evidence |
 |---|---|---|---|---|---|
 | 2.1 | `AU3` | Allowlist `target_field` | me | `DONE` (client) · `OPEN` (rule) | `e3b6bb9`. ⚠️ The `changedKeys().hasOnly` backstop on the workload rule is **not** done — deliberately, because tonight's list touches no rules. |
-| 2.2 | `AU4` | `assertPeriod` on `workloadPath`, matching `assertYear` | me | `OPEN` | — |
-| 2.3 | `AU6` | Make the System Note, MODE 3 and `memberUidByName` agree on ONE key | me | `OPEN` | — |
-| 2.4 | `AU7` | Update the prompt's schema to the post-migration paths | me | `OPEN` | — |
-| 2.5 | `AU19` | Make `requiredFields` enforce; add `db_workload` to the list | me | `OPEN` | — |
+| 2.2 | `AU4` | `assertPeriod` on `workloadPath`, matching `assertYear` | me | `DONE` | Three layers, 2026-08-24: `dataEntryGuard` refuses a non-`mmm_yyyy` period **with a sentence naming the format** (case-insensitive, so `Jan_2026` is not a user-facing failure); the caller lowercases so a case variant lands on the SAME document instead of splitting a month in two; `teamPaths.workloadPath` throws on anything else, exactly like `assertYear`. Twelve real month names, anchored — `xyz_2026` is not a month. Tested both layers. |
+| 2.3 | `AU6` | Make the System Note, MODE 3 and `memberUidByName` agree on ONE key | me | `DONE` | ⚠️ Closed by **P7 item 7.1** (`88af00f`) and this row went stale — the same finding tracked in two places, updated in one. MODE 3 asks for the display name, which is what `memberUidByName` resolves. |
+| 2.4 | `AU7` | Update the prompt's schema to the post-migration paths | me | `DONE` | ⚠️ Closed by **P7 item 7.1** (`88af00f`); stale row. The two names are the wire format `dataEntryGuard` allowlists; `promptContract.test.js` pins prompt-to-guard agreement. |
+| 2.5 | `AU19` | Make `requiredFields` enforce; add `db_workload` to the list | me | `DONE` | ⚠️ Closed by **P7 item 7.3** (`88af00f`); stale row. `parseJsonResponse` throws, `db_workload` is in the list. |
 | 2.6 | `AU5` | **Decide** whether the workload collection should have a reader at all | **OWNER** | `OPEN` | — |
 
 ## P3 — What the model says about a person · `AU8`–`AU12`
 
 | # | Id | Item | Owner | Status | Evidence |
 |---|---|---|---|---|---|
-| 3.1 | `AU9` | Reject `NaN`; record phase/energy disagreement instead of hiding it | me | `OPEN` | — |
-| 3.2 | `AU10` | Refuse a phase outside the four | me | `OPEN` | — |
+| 3.1 | `AU9` | Reject `NaN`; record phase/energy disagreement instead of hiding it | me | `DONE` | `src/utils/wellbeingLog.js` (2026-08-24). `Math.min(79, NaN)` is `NaN`, and that went into the record. An unusable energy now becomes the **band midpoint** flagged `corrected` — not the old 50-then-clamp, which stored 19 for a missing energy on an ILL turn, the least-ill reading the phase allows. A contradiction (energy 85, phase ILL) is clamped **and reported** with the raw value, so a correction no longer looks identical to the model having been right. |
+| 3.2 | `AU10` | Refuse a phase outside the four | me | `DONE` | Same module: an unknown phase (`EXHAUSTED`, a sentence, a number) means **no log card at all**, logged to console — not a record every reader would misread as one of the four. Case and whitespace normalised first, so `" ill "` is not refused. The UI's `PHASE_CONFIG` now derives its bands from the same table, so the badge and the record cannot disagree about where a band starts. |
 | 3.3 | `AU12` | Key the pulse board by uid | me | `OPEN` | — |
 | 3.4 | `AU8` | **Decide** whether "diagnosis_ready" should be content-gated, and whether that field should be called *diagnosis* at all | **OWNER** | `OPEN` | — |
 | 3.5 | `AU11` | **Decide** whether model output should persist as memory and re-enter the prompt | **OWNER** | `OPEN` | — |
@@ -210,7 +215,7 @@ Closes four findings at once, and it is the number the whole instrument reports.
 
 | # | Id | Item | Owner | Status | Evidence |
 |---|---|---|---|---|---|
-| 5.1 | `AN5` | Raise `maxOutputTokens`, or lower the word counts the prompt asks for | me | `OPEN` | — |
+| 5.1 | `AN5` | Raise `maxOutputTokens`, or lower the word counts the prompt asks for | me | `DONE` | ⚠️ Closed by **P7 item 7.5** (`88af00f`); stale row. Both: ask lowered to 600–900 + 200–350 (+ 40–150 assumptions), budget 2,048 → 4,096, with a test computing the worst-case ask from the prompt itself. |
 | 5.2 | `AN6` | Make the client timeout, the function timeout and the fetch abort agree — and tell the user the true number | me | `OPEN` | — |
 | 5.3 | `AN8` | Refuse to render or archive the fallback string as a report | me | `OPEN` | — |
 | 5.4 | `AN13` | Route comments through the PDPA guard, or fence them the way posts are | me | `OPEN` | — |
@@ -325,9 +330,9 @@ MODE 3 is **unverified** — see item 7 of that document's own assumptions block
 
 | # | Id | Item | Owner | Status | Evidence |
 |---|---|---|---|---|---|
-| 6.1 | `AU24` | Tests for `executeDataEntry` and `clampEnergy` — **do this with `AU2` and `AU9`, not after** | me | `OPEN` | — |
-| 6.2 | `AU23` | Correct the README: `auraChat.js`, `personas.js`, the autonomy contradiction, the uncorrected changelog line | me | `OPEN` | — |
-| 6.3 | `AU22` | Make the sandbox emit the live `db_workload` shape, or correct the README test and the comment | me | `OPEN` | — |
+| 6.1 | `AU24` | Tests for `executeDataEntry` and `clampEnergy` — **do this with `AU2` and `AU9`, not after** | me | `DONE` | As instructed, with them: `executeDataEntry`'s refusal logic lives in `dataEntryGuard` (**77 tests** incl. the `AU4` period suite) and `clampEnergy`'s replacement in `wellbeingLog.js` (**29 tests**, incl. band-tiling: the four bands cover 0–100 with no gap and no overlap). `clampEnergy` itself is deleted — the untestable inline version is not kept alongside the tested one. |
+| 6.2 | `AU23` | Correct the README: `auraChat.js`, `personas.js`, the autonomy contradiction, the uncorrected changelog line | me | `DONE` | ⚠️ Closed at `2e88cb3` (with `AU1`); stale row — it is even listed in this file's own *"Closed on 2026-08-23, with evidence"* table. |
+| 6.3 | `AU22` | Make the sandbox emit the live `db_workload` shape, or correct the README test and the comment | me | `DONE` | ⚠️ Closed at `e3b6bb9`; stale row, also already in the closed-with-evidence table above. |
 | 6.4 | `AU18` `AC10` | One shared response parser instead of three copies | me | `OPEN` | — |
 | 6.5 | `AU13` | Rewrite `CP12`'s evidence string to what the grep actually shows; key anon logs deterministically | me | `OPEN` | — |
 | 6.6 | `AU20` `AU21` `AC4` | Project names out of the function; stop forwarding upstream error text; scope the `scoring.js` cap docstring | me | `OPEN` | — |

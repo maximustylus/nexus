@@ -98,6 +98,13 @@ export const ALLOWED_WORKLOAD_FIELDS = Object.freeze(['patient_attendance', 'pat
 export const MAX_MONTHLY_VALUE = 100000;
 
 /**
+ * The `mmm_yyyy` wire format MODE 3's prompt specifies for a team-workload
+ * document id (`AU4`). Anchored, the twelve real months by name — `xyz_2026`
+ * is not a month and a regex like `\w{3}_\d{4}` would accept it.
+ */
+export const PERIOD_SHAPE = /^(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)_\d{4}$/i;
+
+/**
  * `null` when the object is safe to write; otherwise a SENTENCE explaining why not.
  *
  * ⚠️ A SENTENCE, NOT A CODE, and checked BEFORE the write rather than after. The
@@ -205,6 +212,18 @@ export const refuseWorkloadWrite = (workload) => {
             return 'A valid month (e.g. January) is required to update personal workload.';
         }
     } else {
+        /**
+         * ⚠️ `AU4` — ON THIS BRANCH `target_doc` IS THE PERIOD, and nothing checked
+         *    it was one. The prompt asks for `mmm_yyyy` ("jan_2026"); a model that
+         *    emits "January 2026" or "2026" was passing the single-segment check
+         *    above and minting a stray document beside the real months — data
+         *    quality rot that nothing ever cleans up. Case-insensitive here, and
+         *    the caller lowercases before writing, so `Jan_2026` corrects to the
+         *    real document instead of splitting the month across two.
+         */
+        if (!PERIOD_SHAPE.test(workload.target_doc.trim())) {
+            return 'AURA gave a period I do not recognise. It must be a month and year, like jan_2026. Nothing was saved.';
+        }
         /**
          * ⚠️ `AU3`. The workload document's Firestore rule is `allow create, update:
          *    if isLead(teamId)` with no `changedKeys()` constraint, so this

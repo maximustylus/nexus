@@ -53,27 +53,25 @@ import {
 // destroying an un-answered request (M5), and it is correct for any history that
 // still contains one; with no listener here, it behaves as a plain replacement.
 import { resetMessagesPreservingAlerts } from '../utils/auraEngine';
+import { sanitizeWellbeingLog, PHASE_BANDS } from '../utils/wellbeingLog';
 
 // ─── CLOUD FUNCTION LINK ──────────────────────────────────────────────────────
 const functions = getFunctions(undefined, 'us-central1');
 const secureChatWithAura = httpsCallable(functions, 'chatWithAura');
 
 // ─── PHASE CONFIG ─────────────────────────────────────────────────────────────
+// Bands come from `wellbeingLog.js` — the module that decides what may be
+// LOGGED — so the badge a person sees and the record that is written cannot
+// disagree about where a band starts (`AU9`/`AU10`).
 const PHASE_CONFIG = {
-    HEALTHY:  { min: 80, max: 100, badge: 'bg-emerald-50 text-emerald-700 border-emerald-200', icon: '💚', label: 'Healthy' },
-    REACTING: { min: 50, max: 79,  badge: 'bg-yellow-50  text-yellow-700  border-yellow-200',  icon: '⚡', label: 'Reacting' },
-    INJURED:  { min: 20, max: 49,  badge: 'bg-orange-50  text-orange-700  border-orange-200',  icon: '🔶', label: 'Injured' },
-    ILL:      { min: 0,  max: 19,  badge: 'bg-red-50     text-red-700     border-red-200',     icon: '🔴', label: 'Ill' },
+    HEALTHY:  { ...PHASE_BANDS.HEALTHY,  badge: 'bg-emerald-50 text-emerald-700 border-emerald-200', icon: '💚', label: 'Healthy' },
+    REACTING: { ...PHASE_BANDS.REACTING, badge: 'bg-yellow-50  text-yellow-700  border-yellow-200',  icon: '⚡', label: 'Reacting' },
+    INJURED:  { ...PHASE_BANDS.INJURED,  badge: 'bg-orange-50  text-orange-700  border-orange-200',  icon: '🔶', label: 'Injured' },
+    ILL:      { ...PHASE_BANDS.ILL,      badge: 'bg-red-50     text-red-700     border-red-200',     icon: '🔴', label: 'Ill' },
 };
 
 const getPhaseConfig = (phase) => PHASE_CONFIG[phase?.toUpperCase()] ?? {
     badge: 'bg-slate-100 text-slate-600 border-slate-200', icon: '⬜', label: phase ?? 'Unknown',
-};
-
-const clampEnergy = (phase, energy) => {
-    const cfg = PHASE_CONFIG[phase?.toUpperCase()];
-    if (!cfg) return Math.max(0, Math.min(100, energy));
-    return Math.max(cfg.min, Math.min(cfg.max, energy));
 };
 
 const MAX_INPUT       = 500;
@@ -403,12 +401,30 @@ export default function AuraPulseBot({ isOpen, onClose, onOpen: _onOpen, user })
             }]);
 
             if (analysis.mode === 'COACH' && analysis.diagnosis_ready && analysis.phase && analysis.phase !== 'null' && analysis.phase !== 'NULL') {
-                const safeEnergy = clampEnergy(analysis.phase, analysis.energy ?? 50);
-                setPendingLog({
-                    phase:  analysis.phase.toUpperCase(),
-                    energy: safeEnergy,
-                    action: analysis.action ?? '',
-                });
+                /**
+                 * `AU9` / `AU10`. `clampEnergy` used to run here, and it let three
+                 * things through: an invented phase (logged verbatim), a NaN energy
+                 * (Math.min(79, NaN) is NaN, straight into the record), and a silent
+                 * rewrite when the model's energy contradicted its phase. The
+                 * sanitiser refuses the first, repairs the second, and REPORTS the
+                 * third — an unknown phase now means no log card at all rather than
+                 * a record every reader would misread as one of the four.
+                 */
+                const sanitized = sanitizeWellbeingLog({ phase: analysis.phase, energy: analysis.energy });
+                if (!sanitized) {
+                    console.warn('[AURA] Unloggable phase from model, no log offered:', String(analysis.phase).slice(0, 40));
+                } else {
+                    if (sanitized.corrected) {
+                        console.warn('[AURA] Model energy disagreed with its phase; corrected for the record.', {
+                            phase: sanitized.phase, rawEnergy: sanitized.rawEnergy, stored: sanitized.energy,
+                        });
+                    }
+                    setPendingLog({
+                        phase:  sanitized.phase,
+                        energy: sanitized.energy,
+                        action: analysis.action ?? '',
+                    });
+                }
             }
 
         } catch (error) {
@@ -712,23 +728,36 @@ export default function AuraPulseBot({ isOpen, onClose, onOpen: _onOpen, user })
             document.body.removeChild(link);
             URL.revokeObjectURL(url);
 
-            const timestamp   = new Date().toISOString();
-            const displayDate = new Date().toLocaleDateString();
-            const activeUser  = isDemo ? selectedPersona : user;
-            const docId       = `audit_${Date.now()}`; 
+            /**
+             * ⚠️ `AU27` — THE SANDBOX DOES NOT WRITE, AND DID. The `isDemo` fence was
+             *    added to `executeDataEntry` and not to its two siblings — this
+             *    repository's defining defect shape — so Demo Mode wrote demo
+             *    documents into the LIVE `smart_database`. Worse on stage: Demo Mode
+             *    is reachable SIGNED OUT from the landing page, `firestore.rules`
+             *    requires `isSignedIn()`, so a signed-out presenter following README
+             *    step 3 got the `.docx` **and then** a red "check your connection"
+             *    banner — false twice over, on the demo path, from an authorization
+             *    refusal. The .docx download above is untouched: that is the value
+             *    the demo shows, and it never needed Firestore.
+             */
+            if (!isDemo) {
+                const timestamp   = new Date().toISOString();
+                const displayDate = new Date().toLocaleDateString();
+                const docId       = `audit_${Date.now()}`;
 
-            await setDoc(doc(db, 'smart_database', docId), {
-                timestamp, displayDate,
-                author: activeUser?.name || 'Anonymous',
-                role: activeUser?.title || 'Staff',
-                content: text,
-                type: 'AUTO_EXPORTED_DOCX', 
-                isDemo,
-                // Rule 12 again: the audit row is the other copy of this document, and
-                // it was as anonymous as the .docx was.
-                aiProvenance: provenanceFooter || '',
-                silentlyLogged: true 
-            });
+                await setDoc(doc(db, 'smart_database', docId), {
+                    timestamp, displayDate,
+                    author: user?.name || 'Anonymous',
+                    role: user?.title || 'Staff',
+                    content: text,
+                    type: 'AUTO_EXPORTED_DOCX', 
+                    isDemo,
+                    // Rule 12 again: the audit row is the other copy of this document, and
+                    // it was as anonymous as the .docx was.
+                    aiProvenance: provenanceFooter || '',
+                    silentlyLogged: true 
+                });
+            }
 
             setMessages(prev => {
                 const newHistory = [...prev];
@@ -736,7 +765,11 @@ export default function AuraPulseBot({ isOpen, onClose, onOpen: _onOpen, user })
                     newHistory[msgIndex].action = null; 
                 }
                 newHistory.push({
-                    role: 'bot', text: '✅ Document exported successfully with formatted tables.', mode: 'ASSISTANT'
+                    role: 'bot',
+                    text: isDemo
+                        ? '✅ Document exported. SANDBOX: nothing was saved to the Smart Database.'
+                        : '✅ Document exported successfully with formatted tables.',
+                    mode: 'ASSISTANT'
                 });
                 return newHistory;
             });
@@ -747,7 +780,7 @@ export default function AuraPulseBot({ isOpen, onClose, onOpen: _onOpen, user })
                 role: 'bot', text: '⚠️ Document export failed. Please check your connection.', isError: true, mode: 'ASSISTANT'
             }]);
         }
-    }, [isDemo, selectedPersona, user, setMessages]);
+    }, [isDemo, user, setMessages]);
          
     /**
      * ⚠️ `provenanceFooter` IS A PARAMETER HERE FOR THE REASON THE STEWARD FOUND IT
@@ -759,18 +792,41 @@ export default function AuraPulseBot({ isOpen, onClose, onOpen: _onOpen, user })
      */
     const confirmAdminAction = useCallback(async (actionText, msgIndex, provenanceFooter) => {
         if (!actionText) return;
+
+        /**
+         * ⚠️ `AU27`, same fence as `exportToDoc` above and for the same two reasons:
+         *    the sandbox must not write demo fiction into the live audit collection,
+         *    and a SIGNED-OUT demo visitor (Demo Mode is on the landing page) would
+         *    otherwise be told to check their connection when the truth is a rules
+         *    refusal. The card clears and the message says what actually happened.
+         */
+        if (isDemo) {
+            setMessages(prev => {
+                const newHistory = [...prev];
+                if (newHistory[msgIndex]) {
+                    newHistory[msgIndex].action = null;
+                }
+                newHistory.push({
+                    role: 'bot',
+                    text: '✅ SANDBOX: nothing was saved. In Live mode this document would be routed to the Smart Database.',
+                    mode: 'ASSISTANT'
+                });
+                return newHistory;
+            });
+            return;
+        }
+
         setLoading(true);
 
         const timestamp   = new Date().toISOString();
         const displayDate = new Date().toLocaleDateString();
-        const activeUser  = isDemo ? selectedPersona : user;
         const docId       = `doc_${Date.now()}`; 
 
         try {
             await setDoc(doc(db, 'smart_database', docId), {
                 timestamp, displayDate,
-                author: activeUser?.name || 'Anonymous',
-                role: activeUser?.title || 'Staff',
+                author: user?.name || 'Anonymous',
+                role: user?.title || 'Staff',
                 content: actionText,
                 type: 'AURA_GENERATED_DOC',
                 isDemo,
@@ -796,7 +852,7 @@ export default function AuraPulseBot({ isOpen, onClose, onOpen: _onOpen, user })
         } finally {
             setLoading(false);
         }
-    }, [isDemo, selectedPersona, user, setMessages]);
+    }, [isDemo, user, setMessages]);
     
     const executeDataEntry = useCallback(async (workload) => {
         if (!workload || !workload.target_collection) return;
@@ -885,7 +941,9 @@ export default function AuraPulseBot({ isOpen, onClose, onOpen: _onOpen, user })
                 }
                 docRef = doc(db, ...loadPath(teamId, targetUid));
             } else {
-                docRef = doc(db, ...workloadPath(teamId, rawTarget));
+                // `AU4`: the guard accepted the period case-insensitively; lowercase
+                // here so `Jan_2026` lands on the same document as `jan_2026`.
+                docRef = doc(db, ...workloadPath(teamId, rawTarget.toLowerCase()));
             }
 
             let updatedMessage = '';

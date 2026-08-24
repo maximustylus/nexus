@@ -342,7 +342,23 @@ export const PULSE_PERIOD_DAILY = 'daily';
 export const pulsePath = (teamId, period) => under(teamId, TEAM_COLLECTIONS.pulse, period);
 export const loadsPath = (teamId) => under(teamId, TEAM_COLLECTIONS.loads);
 export const loadPath = (teamId, uid) => under(teamId, TEAM_COLLECTIONS.loads, assertUid(uid));
-export const workloadPath = (teamId, period) => under(teamId, TEAM_COLLECTIONS.workload, period);
+/**
+ * `AU4` — the period gets the same treatment as the year, for the same reason:
+ * this id comes ultimately from a MODEL (MODE 3's `target_doc`), and an id
+ * nothing validates is a stray document nothing cleans up. Strictly lowercase
+ * here: `dataEntryGuard` accepts `Jan_2026` case-insensitively and the caller
+ * lowercases before this runs, so by this point a mixed-case period is a coding
+ * error upstream, not a model quirk to tolerate into two documents per month.
+ */
+const assertPeriod = (value) => {
+    if (typeof value !== 'string'
+        || !/^(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)_\d{4}$/.test(value)) {
+        throw new Error(`Invalid workload period: ${JSON.stringify(value)}. Expected mmm_yyyy, e.g. "jan_2026".`);
+    }
+    return value;
+};
+
+export const workloadPath = (teamId, period) => under(teamId, TEAM_COLLECTIONS.workload, assertPeriod(period));
 export const reportPath = (teamId, year) => under(teamId, TEAM_COLLECTIONS.reports, assertYear(year));
 /**
  * Monthly attendance. Was ONE global document, `system_data/monthly_attendance`,
