@@ -332,47 +332,58 @@ describe('formatRosterDateKey', () => {
 
 // ─── 1.4 — leaving demo mode restores the live pool ──────────────────────────
 describe('restoreLiveRosterConfig (ROSTER_QC_AUDIT.md M1)', () => {
-    it('ships exactly the live defaults RosterView used to hardcode', () => {
-        // Behaviour-preserving proof: these are the values from the old
-        // RosterView.jsx:35-40 useState initialiser, verbatim. They are NOT
-        // sourced from TEAM_DIRECTORY — that is P7 and it is blocked.
-        expect(LIVE_ROSTER_DEFAULTS.staff).toEqual([
-            'Brandon',
-            'Ying Xian',
-            'Derlinder',
-            'Fadzlynn',
-        ]);
+    it('ships an EMPTY staff pool — AN14 — and the same tasks as ever', () => {
+        // This pinned the four names the old RosterView useState hardcoded, as a
+        // behaviour-preserving proof. `AN14` ended that: the names shipped in the
+        // public bundle, so the default pool is now empty and the team's member
+        // list is the only source of people. The pin flips to guarding the
+        // ABSENCE — if a name ever returns here, this fails before the bundle
+        // check even runs.
+        expect(LIVE_ROSTER_DEFAULTS.staff).toEqual([]);
         expect(LIVE_ROSTER_DEFAULTS.tasks).toEqual(['EFT', 'IPT+SKG', 'NC', 'FSG+WI']);
         expect(LIVE_ROSTER_DEFAULTS.startDate).toBe('2026-02-01');
         expect(LIVE_ROSTER_DEFAULTS.weeks).toBe(4);
     });
 
-    it('with no argument returns the initial live config', () => {
-        expect(restoreLiveRosterConfig()).toEqual(liveConfig());
+    it('with no argument returns the initial config — empty pool, live tasks', () => {
+        // Was `toEqual(liveConfig())`, the four-name fixture. Post-AN14 the
+        // no-argument call is the no-team case, and it names nobody.
+        expect(restoreLiveRosterConfig()).toEqual(liveConfig({ staff: [] }));
     });
 
-    it('replaces the Marvel staff pool and task list with the live ones', () => {
+    it('purges the Marvel staff pool and task list — M1 blast radius, post-AN14', () => {
         const restored = restoreLiveRosterConfig(demoPoisonedConfig());
 
-        expect(restored.staff).toEqual(['Brandon', 'Ying Xian', 'Derlinder', 'Fadzlynn']);
-        expect(restored.tasks).toEqual(['EFT', 'IPT+SKG', 'NC', 'FSG+WI']);
-
-        // The exact M1 blast radius: none of these five may survive the toggle.
+        // The M1 guarantee, unchanged: not one demo character survives the toggle.
         ['Steve', 'Peter', 'Charles', 'Jean', 'Tony'].forEach((name) => {
             expect(restored.staff).not.toContain(name);
         });
         expect(restored.tasks).not.toContain('Avenger Protocol');
+
+        // What changed with AN14: the pool restores to EMPTY, not to four named
+        // colleagues, because the default no longer names anybody. The team's own
+        // member list is what refills it (RosterView passes it explicitly).
+        expect(restored.staff).toEqual([]);
+        expect(restored.tasks).toEqual(['EFT', 'IPT+SKG', 'NC', 'FSG+WI']);
     });
 
-    it('produces a config that generates the real clinicians, not demo characters', () => {
-        // End to end over the guard chain: reset -> validate -> prepare -> payload.
-        const prepared = prepareRosterWrite(restoreLiveRosterConfig(demoPoisonedConfig()));
-        const leads = new Set(
-            Object.values(prepared.data).flatMap((shifts) => shifts.map((s) => s.lead)),
-        );
+    it('restores the ACTIVE TEAM when one is passed — the live path since v2.0', () => {
+        const restored = restoreLiveRosterConfig(demoPoisonedConfig(), {
+            staff: ['Casey Tan', 'Rio Lim'],
+        });
+        expect(restored.staff).toEqual(['Casey Tan', 'Rio Lim']);
+        ['Steve', 'Peter'].forEach((name) => expect(restored.staff).not.toContain(name));
+    });
 
-        expect(prepared.ok).toBe(true);
-        expect([...leads].sort()).toEqual(['Brandon', 'Derlinder', 'Fadzlynn', 'Ying Xian']);
+    it('refuses to generate from the empty default rather than inventing a roster', () => {
+        // This asserted `ok: true` with four real clinicians as leads. Post-AN14
+        // the no-team fallback cannot generate: an unsaveable roster (rosterPath
+        // throws without a teamId) built from names every visitor downloaded was
+        // the trap, and refusal-with-reason is the fix. The full generate path is
+        // covered by the team-sourced test above plus RosterView's own suites.
+        const prepared = prepareRosterWrite(restoreLiveRosterConfig(demoPoisonedConfig()));
+        expect(prepared.ok).toBe(false);
+        expect(String(prepared.reason || '')).toMatch(/staff/i);
     });
 
     it('preserves an in-progress startDate / weeks edit', () => {
@@ -394,8 +405,18 @@ describe('restoreLiveRosterConfig (ROSTER_QC_AUDIT.md M1)', () => {
         expect(restoreLiveRosterConfig().tasks).not.toContain('Chitauri Triage');
     });
 
-    it('yields a config that is immediately valid', () => {
-        expect(validateRosterConfig(restoreLiveRosterConfig()).valid).toBe(true);
-        expect(validateRosterConfig(restoreLiveRosterConfig(demoPoisonedConfig())).valid).toBe(true);
+    it('is valid the moment a team supplies people, and invalid-with-reason before', () => {
+        // Both calls used to be valid because the fallback named four colleagues.
+        // Post-AN14 the empty default must NOT validate — a valid config with an
+        // empty pool would mean Generate is clickable with nobody to roster —
+        // and the refusal must say why in the word the button shows.
+        const noTeam = validateRosterConfig(restoreLiveRosterConfig());
+        expect(noTeam.valid).toBe(false);
+        expect(String(noTeam.reason || '')).toMatch(/staff/i);
+
+        const withTeam = validateRosterConfig(
+            restoreLiveRosterConfig(demoPoisonedConfig(), { staff: ['Casey Tan', 'Rio Lim'] }),
+        );
+        expect(withTeam.valid).toBe(true);
     });
 });

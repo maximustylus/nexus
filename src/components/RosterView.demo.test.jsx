@@ -2279,9 +2279,15 @@ describe('demo mode: the picker is a profession and a shape', () => {
         // weekday sessions shape is deliberately modelled on the roster owner's OWN
         // department, by its real duty names, so it is the one place where somebody
         // editing in good faith might reach for the real staff list two files away.
+        // `AN14`: this iterated `LIVE_ROSTER_DEFAULTS.staff`, which is now empty —
+        // an empty loop asserts nothing, which is `CP19`'s shape. The names move
+        // into the test itself: test files do not ship, and the check must keep
+        // guarding against exactly the people someone editing this fixture in good
+        // faith might reach for.
+        const REAL_COLLEAGUE_NAMES = ['Brandon', 'Ying Xian', 'Derlinder', 'Fadzlynn'];
         const everyName = DEMO_SHAPES.flatMap((entry) => entry.config.staff.map((person) => person.name));
         expect(everyName.length).toBeGreaterThan(0);
-        for (const colleague of LIVE_ROSTER_DEFAULTS.staff) {
+        for (const colleague of REAL_COLLEAGUE_NAMES) {
             for (const invented of everyName) {
                 expect(invented.toLowerCase()).not.toContain(colleague.toLowerCase());
             }

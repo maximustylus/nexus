@@ -41,7 +41,11 @@ import ConventionalForm from './components/ConventionalForm';
 import ResultPage from './components/ResultPage';
 
 // UTILITIES
-import { STAFF_LIST, STAFF_IDS, MONTHS, checkAccess } from './utils';
+import { MONTHS } from './utils';
+// `AN14`: recognition by digest, not by a shipped directory. `checkAccess` keeps
+// its name and its truthy-means-legacy-member contract; what changed is that the
+// bundle no longer contains anybody's name or address.
+import { checkAccess, isLegacyAdminEmail } from './utils/legacyBridge';
 import AccessGate from './components/AccessGate';
 import LeadRequestsPanel from './components/LeadRequestsPanel';
 import { useTeam } from './context/TeamContext';
@@ -213,8 +217,16 @@ export default function App() {
   const [teamData, setTeamData] = useState([]); 
   const [staffLoads, setStaffLoads] = useState({});
   const [attendanceData, setAttendanceData] = useState({}); 
-  const activeStaffList = isDemo ? MOCK_STAFF_NAMES : STAFF_LIST;
-  const activeStaffIds = isDemo ? MOCK_STAFF_NAMES : STAFF_IDS;
+  /**
+   * `AN14`: these were `isDemo ? MOCK_STAFF_NAMES : STAFF_LIST` — but the live
+   * arm was DEAD. `activeStaffIds` is read nowhere, and the only render that uses
+   * `activeStaffList` (`App.jsx`, clinical cards) sits inside its own `isDemo`
+   * ternary whose live arm reads `members` instead. So seven real names shipped
+   * in the bundle to feed a branch that could never execute. Demo names only now;
+   * the variables keep their names so the dependency array below stays honest.
+   */
+  const activeStaffList = MOCK_STAFF_NAMES;
+  const activeStaffIds = MOCK_STAFF_NAMES;
 
   useEffect(() => {
     let unsubUserDoc = null;
@@ -451,14 +463,16 @@ export default function App() {
    *
    *    `isLead` comes from the membership DOCUMENT — `teams/{id}/members/{uid}.role`
    *    — so onboarding a department's lead is now data, exactly like onboarding
-   *    anybody else. The two addresses stay because they are the owner's and the
-   *    roster master's on the LEGACY directory, and the migration has not run yet;
-   *    they become redundant the moment it does.
+   *    anybody else.
+   *
+   *    `AN14` follow-up: the two addresses were PLAINTEXT here — the SEVENTH
+   *    hardcoded copy of team #1's identity, found while removing the sixth. The
+   *    grant is unchanged (same two people, same disjunct); the addresses now live
+   *    as digests in `legacyBridge.js`, and this clause dies with the bridge.
    */
-  const ADMIN_EMAILS = ['muhammad.alif@kkh.com.sg', 'siti.nur.anisah.nh@kkh.com.sg'];
   const hasAdminAccess = isDemo
     || isLead
-    || (user?.email && ADMIN_EMAILS.includes(user.email.toLowerCase()))
+    || isLegacyAdminEmail(user?.email)
     || user?.role === 'admin';
 
   const unreadCount = notifications.filter(n => !n.read).length;

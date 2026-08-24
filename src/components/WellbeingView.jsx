@@ -7,6 +7,7 @@ import { pulsePath, userPath, PULSE_PERIOD_DAILY } from '../utils/teamPaths';
 
 // --- CONTEXT, DATA & FIREBASE MESSAGING ---
 import { useNexus } from '../context/NexusContext';
+import { isLegacyAdminEmail } from '../utils/legacyBridge';
 import { MOCK_STAFF } from '../data/mockData';
 import { requestForToken } from '../firebase'; // 🛡️ IMPORTING THE HANDSHAKE
 
@@ -330,7 +331,12 @@ const getBatteryIcon = (level) => {
                         const currentEnergy = staffData ? staffData.energy : 0;
                         const currentFocus = staffData ? staffData.focus : 0;
                         
-                        const canEdit = isDemo || user?.role === 'admin' || user?.name === 'Nisa' || user?.name === name;
+                        // `AN14`: this said `user?.name === 'Nisa'` — the roster
+                        // master, by first name, in the public bundle. Same person,
+                        // same grant, no shipped name: her bridge profile's role is
+                        // 'admin', and the email check covers her even where a stale
+                        // `users/{uid}` document says otherwise.
+                        const canEdit = isDemo || user?.role === 'admin' || isLegacyAdminEmail(user?.email) || user?.name === name;
                         
                         return (
                             <div 

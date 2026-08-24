@@ -49,7 +49,7 @@ original post-mortems into one. `AU2` means today exactly what it meant when it 
 | `DONE`, evidenced | **13** | `AU1` `AU2` `AU3` `AU22` `AU23` `AU25` `AU26` `AC1` `AC2` `AC15` `AN1`* `AN2` `AN3` `AN4` |
 | `OPEN`, mine | 30 | everything not listed below |
 | `OPEN`, **owner's decision** | 9 | `AU5` `AU8` `AU11` `AU17` `AC11` `AN7` `AN9` `AN11` `AN12` |
-| **`LIVE` right now** | **0 grades** · names/emails as `AN14` | \* `AN1`'s grade half is closed and verified against `dist/`; `AN14` is the residue |
+| **`LIVE` right now** | **0 grades · 0 names · 0 emails** | \* `AN1` and `AN14` both closed and verified against `dist/`; `an14.bundle.test.js` keeps it that way |
 
 **53 findings**, not the 51 this file was created with: `AU25` (the go-live gate) and
 `AC15` (fixing `AC1`) were opened on the same day. Neither renumbers anything.
@@ -60,7 +60,7 @@ original post-mortems into one. `AU2` means today exactly what it meant when it 
 |---|---|---|
 | `AU27` | `exportToDoc` (`AuraPulseBot.jsx:561`) and `confirmAdminAction` (`:690`) write to `smart_database` with **no `isDemo` guard** — the guard was added to `executeDataEntry` and not to its two siblings, which is this project's defining defect shape. `firestore.rules` is `allow create: if isSignedIn()`, and Demo Mode is reachable **signed out** from the landing page, so a signed-out presenter following `README.md` step 3 gets the `.docx` **and** a red *"check your connection"* banner that is false twice over. Zero-code mitigation: sign in first. | high · **OPEN** |
 | `AU26` | `target_doc` — the field that CHOOSES the Firestore document — was the one model-supplied value left to `String()` coercion. `{}` → `"[object Object]"`, `true` → `"true"`, `0` → `"0"`, all ACCEPTED. Contained on `staff_loads` by the `memberUidByName` lookup; **not** contained on `monthly_workload`, where `workloadPath` asserts nothing. Data quality, not disclosure. **Closed** in `c2b45d9`. | medium |
-| `AN14` | `TEAM_DIRECTORY` still ships in the bundle: seven real **names** and seven real **work email addresses**. Still live via `checkAccess` (`App.jsx:599`, `WelcomeScreen.jsx:170`) and `STAFF_LIST`/`STAFF_IDS`. The **grades** are out; the names and addresses need the legacy auth bridge reworked, which is not a night-before-a-demo change. | medium · **OPEN** |
+| `AN14` | ~~`TEAM_DIRECTORY` still ships in the bundle: seven real **names** and seven real **work email addresses**.~~ **CLOSED 2026-08-24, on the `aura` branch.** The bridge only ever needed to RECOGNISE an email it was handed, never to contain one: `src/utils/legacyBridge.js` now does the same job with salted SHA-256 digests, and the directory is deleted. The hunt found **three more copies** beyond the two on this ledger: `ADMIN_EMAILS` in `App.jsx` (two plaintext addresses — the seventh), `LIVE_ROSTER_DEFAULTS.staff` (four names in the roster fallback — the eighth, found by the new bundle tripwire), and `LIVE_MOCK_POSTS` in `FeedsView.jsx` (the ninth, and the worst: **fabricated posts attributed to real colleagues by name and role**, merged into the live feed for every user). All out. `an14.bundle.test.js` greps the BUILT BUNDLE — not the source — for every address and distinctive name and fails CI if any returns; the residual is a membership oracle over guessed inputs (the salt ships), declared in `legacyBridge.js`'s header and dying with the bridge. | medium · **`DONE`** |
 
 ## ⚠️ What the review of the first batch found in my own work
 

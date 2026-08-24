@@ -1147,11 +1147,10 @@ const RosterView = ({ user }) => {
             // that: this team has both a lead who practises and a lead who does not.
             //
             // ⚠️ WITH A TEAM, THE POOL IS THE TEAM'S — EVEN WHILE IT IS EMPTY. The
-            //    hardcoded fallback in `auraEngine.js` is STALE (four names for a
-            //    five-clinician department), so falling back to it during the moment
-            //    before the members snapshot arrives would let a Generate produce a
-            //    four-person roster that looks entirely plausible. An empty pool
-            //    disables Generate and says why; waiting beats guessing.
+            //    fallback in `auraEngine.js` is EMPTY since `AN14` (the four names
+            //    it held shipped in the public bundle, and were stale anyway), so
+            //    every path without real members lands on the same outcome: an
+            //    empty pool disables Generate and says why. Waiting beats guessing.
             //
             //    Without a team — the pre-migration bridge — there is nobody to ask,
             //    so the fallback is still the right answer and `undefined` requests it.

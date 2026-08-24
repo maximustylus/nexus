@@ -20,12 +20,19 @@ const CATEGORIES = {
     BUSY_BEE: { id: 'BUSY_BEE', label: 'Busy Bee', icon: '🐝', color: 'amber', desc: 'Growth & Upskilling' }
 };
 
-const LIVE_MOCK_POSTS = [
-    { id: 'live1', author: 'Alif', role: 'Lead CEP', timestamp: '1 hour ago', category: 'BOOKWORM', raw_text: "The ACSM just released their updated position stand on resistance training. A must-read as we refine our exercise prescription protocols.", ai_enhancements: { tldr: "Updated ACSM resistance training guidelines published.", tags: ['ACSM', 'CLINICAL'] }, image_url: "https://cdn.fs.pathlms.com/mjxJF5l5R9yASZy09BFC/convert?cache=true&fit=scale&format=jpeg&h=192&quality=100&w=1056", likes: 14, comments: 3 },
-    { id: 'live2', author: 'Nisa', role: 'Admin', timestamp: '3 hours ago', category: 'SOCIAL_BUTTERFLY', raw_text: "Where is your battery at today? Are you thriving or just surviving? Remember to check in with yourselves and your colleagues!", ai_enhancements: { tldr: "Reminder to check in on your emotional and physical social batteries.", tags: ['WELLBEING', 'TEAM CULTURE'] }, image_url: "https://scontent.fsin16-1.fna.fbcdn.net/v/t39.30808-6/491984873_1432622474740958_7072550564777468896_n.jpg?_nc_cat=106&ccb=1-7&_nc_sid=7b2446&_nc_ohc=oSToMNVh2bMQ7kNvwHW3gB0&_nc_oc=Adn-wXZpqFpnoosYvx7nFZARJyn4tQZYnPAQyqo3LPxWV9eNbkFFEDX50eGXiYtpizY&_nc_zt=23&_nc_ht=scontent.fsin16-1.fna&_nc_gid=9-zsViGSoTRHOdmsv6U6sg&_nc_ss=8&oh=00_AfwGc05Ki4j8-cz6KOSHY2314sgveI-WxjZ9yqpE4kPeJA&oe=69BE2F2D", likes: 42, comments: 8 },
-    { id: 'live3', author: 'Linder', role: 'CEP Edu Lead', timestamp: '5 hours ago', category: 'BUSY_BEE', raw_text: "Highly recommend looking into the Active Health Lab's CALM program. Great structured approach we can learn from.", ai_enhancements: { tldr: "Recommendation to review the CALM program.", tags: ['CALM', 'NUTRITION'] }, likes: 21, comments: 4 },
-    { id: 'live4', author: 'A/Prof. Ashik', role: 'HOD / HOS', timestamp: '1 day ago', category: 'BLUE_BEETLE', raw_text: "Anthropic just launched a series of free AI courses on Skilljar. I highly encourage everyone to upskill on prompt engineering.", ai_enhancements: { urgency: 'NORMAL', tldr: "HOD encourages staff to utilize free Anthropic AI courses.", tags: ['AI TRAINING', 'UPSKILLING'] }, likes: 38, comments: 5 }
-];
+/**
+ * `LIVE_MOCK_POSTS` IS GONE — `AN14`, ninth copy, and the worst of the nine.
+ *
+ * Four fabricated posts, ATTRIBUTED BY NAME AND ROLE TO REAL PEOPLE — the lead,
+ * the roster master, the education lead by nickname, and the former Head of
+ * Department with his honorific — were merged into the LIVE feed under every real
+ * team's posts, for every user, indefinitely. Fake words in real colleagues'
+ * mouths, shipped in a public bundle, rendered as though they had posted them.
+ *
+ * The live feed now shows what people actually posted, including showing nothing,
+ * which is the truth on a quiet day. The Marvel demo posts stay: fictional people
+ * are what fiction is for.
+ */
 
 const DEMO_MOCK_POSTS = [
     { id: 'm1', author: 'Tony Stark', role: 'Head of Engineering', timestamp: '1 hour ago', category: 'SOCIAL_BUTTERFLY', raw_text: "Just docked the Disney Adventure! Avengers, assemble at the upper deck for the VIP meet-and-greet at 1800 hrs.", ai_enhancements: { tldr: "Avengers meet-and-greet on the Disney Adventure at 1800 hrs.", tags: ['TEAM EVENT'] }, image_url: "https://cdn1.parksmedia.wdprapps.disney.com/resize/mwImage/1/1000/1000/75/vision-dam/digital/parks-platform/parks-global-assets/disney-cruise-line/ships/adventure/concept-art/Marvel-landing-ca-16x9.jpg?2025-09-30T00:24:43+00:00", likes: 3000, comments: 412 },
@@ -145,7 +152,7 @@ const FeedsView = ({ user }) => {
         return () => unsubscribe();
     }, [teamId]);
 
-    const combinedPosts = [...livePosts.filter(p => p.isDemo === !!isDemo), ...(isDemo ? DEMO_MOCK_POSTS : LIVE_MOCK_POSTS)];
+    const combinedPosts = [...livePosts.filter(p => p.isDemo === !!isDemo), ...(isDemo ? DEMO_MOCK_POSTS : [])];
     const displayPosts = activeFilter === 'ALL' ? combinedPosts : combinedPosts.filter(post => post.category === activeFilter);
 
     useEffect(() => {
