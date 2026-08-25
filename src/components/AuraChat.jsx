@@ -43,16 +43,24 @@ const communityAck = httpsCallable(functions, 'communityAck');
 // domain, the answer and the prior answers, and receives one sentence back.
 
 // ─── DOMAIN CONFIGURATION ─────────────────────────────────────────────────────
-// Each step declares its clinical domain for badge display and progress colouring.
+// Each step declares its screening domain for badge display and progress colouring.
+/*
+  ⚠️ BADGES ARE LAY LANGUAGE, ON PURPOSE. They used to read "ACSM PAVS · Q1 of
+     2", "SDOH · Psychological", "Clinical Safety Screen" — instrument acronyms
+     shown to the public mid-question, which nobody outside a health system
+     reads. The instrument citations live on the PDF's governance page, where
+     they belong; here the person answering sees plain words. The word
+     "clinical" is banned from every public-facing surface.
+*/
 const DOMAIN_CONFIG = [
-  { key: 'pavs_days',    badge: '🏃 ACSM PAVS · Q1 of 2',       group: 'pavs'     }, // 0
-  { key: 'pavs_mins',    badge: '⏱️ ACSM PAVS · Q2 of 2',       group: 'pavs'     }, // 1
-  { key: 'strength',     badge: '💪 SPAG Strength Screen',        group: 'pavs'     }, // 2
-  { key: 'medical',      badge: '🩺 Clinical Safety Screen',      group: 'clinical' }, // 3
-  { key: 'barriers',     badge: '🔑 SDOH · Financial & Access',  group: 'sdoh'     }, // 4
-  { key: 'social',       badge: '🤝 SDOH · Social Support',      group: 'sdoh'     }, // 5
-  { key: 'food_insecurity', badge: '🥗 SDOH · Food Security',      group: 'sdoh'     }, // 6
-  { key: 'wellbeing',    badge: '🧠 SDOH · Psychological',       group: 'sdoh'     }, // 7
+  { key: 'pavs_days',    badge: '🏃 Physical Activity · Q1 of 2', group: 'pavs'   }, // 0
+  { key: 'pavs_mins',    badge: '⏱️ Physical Activity · Q2 of 2', group: 'pavs'   }, // 1
+  { key: 'strength',     badge: '💪 Strength Training',           group: 'pavs'   }, // 2
+  { key: 'medical',      badge: '🩺 Health & Safety Check',       group: 'safety' }, // 3
+  { key: 'barriers',     badge: '🔑 Cost & Access',               group: 'sdoh'   }, // 4
+  { key: 'social',       badge: '🤝 Social Support',              group: 'sdoh'   }, // 5
+  { key: 'food_insecurity', badge: '🥗 Food Security',            group: 'sdoh'   }, // 6
+  { key: 'wellbeing',    badge: '🧠 Mood & Wellbeing',            group: 'sdoh'   }, // 7
   { key: 'demographics', badge: '👤 Your Profile',               group: 'admin'    }, // 8
   { key: 'ethnicity',    badge: '🌍 Cultural Background',        group: 'admin'    }, // 9 
   { key: 'housing_type', badge: '🏢 Housing Environment',        group: 'admin'    }, // 10 
@@ -72,7 +80,7 @@ const DOMAIN_CONFIG = [
     not a missing one — it still feeds the risk score.
   */
   {
-    key: 'falls', badge: '\u{1F9B5} Falls & Function (60+)', group: 'clinical', // 13
+    key: 'falls', badge: '\u{1F9B5} Falls & Function (60+)', group: 'safety', // 13
     /**
      * 60+ only. A Regional Health System reviewer's point: for somebody being
      * considered for an Active Ageing Centre, falls history matters more than a
@@ -99,10 +107,10 @@ const TOTAL_STEPS = DOMAIN_CONFIG.length; // 13
 
 // Progress segment colour by group
 const GROUP_COLOURS = {
-  pavs:     'bg-emerald-500',
-  clinical: 'bg-amber-500',
-  sdoh:     'bg-violet-500',
-  admin:    'bg-slate-400',
+  pavs:   'bg-emerald-500',
+  safety: 'bg-amber-500',
+  sdoh:   'bg-violet-500',
+  admin:  'bg-slate-400',
 };
 
 // ─── TIERED CTA LIBRARY ───────────────────────────────────────────────────────
@@ -126,7 +134,7 @@ const CTA = {
     primaryStep:
       'Enrol in the "Manage Metabolic Health" programme at Woodlands Active Health Lab — 7 structured sessions, from SGD 48, with healthcare professional supervision.',
     healthierSG:
-      'Book your next Healthier SG annual check-in (FREE) and share your PAVS result. Your GP can issue a direct referral to the Active Health Lab.',
+      'Book your next Healthier SG annual check-in (FREE) and share your activity result. Your GP can issue a direct referral to the Active Health Lab.',
     resources: [
       '📱 Book Active Health Lab: activesg.gov.sg → Woodlands Sport Centre',
       '💳 CHAS subsidies may apply: chas.sg to check eligibility',
@@ -195,7 +203,7 @@ const CTA = {
     resources: [
       '📱 Healthy 365: free on App Store and Google Play',
       '🏋️ Active Health Lab, Woodlands: Balance & Muscular Fitness from SGD 6 per session',
-      '📋 Print or screenshot your PAVS result and bring it to your next GP visit as your activity baseline',
+      '📋 Print or screenshot your activity result and bring it to your next GP visit as your starting point',
     ],
   },
   active_health_lab: {
@@ -794,7 +802,7 @@ const DomainBadge = ({ step }) => {
   if (!domain) return null;
   const colourMap = {
     pavs:     'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-800',
-    clinical: 'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/40 dark:text-amber-300 dark:border-amber-800',
+    safety: 'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/40 dark:text-amber-300 dark:border-amber-800',
     sdoh:     'bg-violet-50 text-violet-700 border-violet-200 dark:bg-violet-950/40 dark:text-violet-300 dark:border-violet-800',
     admin:    'bg-slate-50 text-slate-600 border-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700',
   };
@@ -1003,7 +1011,7 @@ const AuraChatbot = () => {
         setIsComplete(true);
         setMessages(prev => [...prev, {
           sender: 'bot',
-          text: 'Here is your personalised community health plan based on your PAVS score and health profile. Save or screenshot this screen, then tap anywhere to continue.',
+          text: 'Here is your personalised community health plan based on your activity level and health profile. Save or screenshot this screen, then tap anywhere to continue.',
           step: TOTAL_STEPS - 1,
           ctaData,
         }]);
