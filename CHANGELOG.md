@@ -49,6 +49,54 @@ not changed by this release.
 
 ## [Unreleased]
 
+## [2.1.2] - 2026-08-25
+
+A patch release: three rendering fixes in the exported two-page report, and nothing
+else. **No new features, no Firestore shape change, no data migration.** The AURA
+engine stays at `v2.3` — it is not touched by this release.
+
+*One commit since `v2.1.1` (`a4c126c`, merged as `eef154d`), classified by reading the
+diff. Its subject is conventional (`fix(...)`) rather than this repository's historical
+`Update <file>.jsx`, and the diff agrees with it: every hunk is presentation — flex
+styling, paddings, an image import and a column width. No props are read from stored
+data that were not read before, so nothing here can change what a deployed client can
+parse.*
+
+### Fixed
+
+- **Page 1's header strip printed at ~57px while page 2's kept 130px.** The page
+  wrapper is a fixed-height flex column, and **a fixed height does not stop a flex item
+  shrinking** — when page 1's content ran long the browser compressed the header and
+  footer strips to make room, so the two pages of one report carried visibly different
+  headers. Both strips are now `flexShrink: 0`; the content area takes `minHeight: 0`
+  and `overflow: hidden` so it absorbs the excess instead, and page paddings and gaps
+  are tightened so the fullest report (Red tier, previous ID, three SDOH bullets, six
+  resources) fits without overflowing. Measured after the fix: both pages exactly
+  794×1123, 130px headers, 44px footers, zero content overflow.
+
+  ⚠️ This is the same defect class the v2.1.1 entry below claimed to have closed. That
+  release gave both strips *fixed heights* and clamped the wrappers, which is necessary
+  but not sufficient: a fixed height is still shrinkable under flex. The strips only
+  stop moving once they are also unshrinkable.
+
+- **The header logo printed with a dark N.** The N strokes in `nexus.png` are
+  transparent cut-outs, so against the dark header strip the background showed through
+  and the wordmark inverted. On a light page the same file looks white, **which is why
+  it passed review** — the artwork is only wrong on the one background the PDF uses.
+  The header now draws a bundled copy (`src/assets/nexus-logo.png`) with white baked
+  into the interior transparency and the exterior corners still transparent, imported
+  through Vite so it ships content-hashed. That also closes a second hole: the previous
+  code fetched `/nexus.png` by URL, so a browser holding an older cached copy drew
+  **whatever the cache held** into the export rather than what the repo ships.
+
+- **"Psychological Wellbeing" broke the evidence column's alignment.** The label was
+  wider than the column's `minWidth: 110`, so that row widened and its description
+  started at a different x from every other row. The label column is now an exact
+  `width`, so a long label wraps to a second line instead of pushing its description
+  out. Also on page 2: partner-site lines no longer break mid-word (`break-all` →
+  `overflowWrap: break-word`, so URLs still split when they must and prose never does),
+  and the last evidence row no longer draws a stray border below itself.
+
 ## [2.1.1] - 2026-08-24
 
 A patch release: four fixes and one documentation correction. **No new features, no

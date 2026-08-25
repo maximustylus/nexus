@@ -1,6 +1,6 @@
-# NEXUS: Smart Operations Dashboard v2.1.1 [BETA]
+# NEXUS: Smart Operations Dashboard v2.1.2 [BETA]
 
-![Version](https://img.shields.io/badge/Version-v2.1.1-blue) ![Status](https://img.shields.io/badge/Status-Beta%20Phase-emerald) ![Teams](https://img.shields.io/badge/Multi--Team-28%20AHP%20professions-indigo) ![Tech](https://img.shields.io/badge/AI-Gemini%20Powered-purple) ![AURA](https://img.shields.io/badge/AURA-v2.3%20Engine-blue) ![PWA](https://img.shields.io/badge/PWA-Native%20Push%20Enabled-blue) ![CI/CD](https://img.shields.io/badge/CI%2FCD-GitHub%20Actions-2ea44f)
+![Version](https://img.shields.io/badge/Version-v2.1.2-blue) ![Status](https://img.shields.io/badge/Status-Beta%20Phase-emerald) ![Teams](https://img.shields.io/badge/Multi--Team-28%20AHP%20professions-indigo) ![Tech](https://img.shields.io/badge/AI-Gemini%20Powered-purple) ![AURA](https://img.shields.io/badge/AURA-v2.3%20Engine-blue) ![PWA](https://img.shields.io/badge/PWA-Native%20Push%20Enabled-blue) ![CI/CD](https://img.shields.io/badge/CI%2FCD-GitHub%20Actions-2ea44f)
 
 **NEXUS** (formerly IDC App) is a clinician-led innovation platform designed to revolutionise workload management, optimise skill-mix routing, and actively protect staff wellbeing at the Sport and Exercise Medicine Centre. 
 
@@ -196,7 +196,11 @@ Beta testers should utilise Demo Mode to verify system integrity:
 > also lists the **known issues that are documented but not yet fixed**. The summaries
 > below are narrative highlights; where the two disagree, `CHANGELOG.md` is correct.
 
-### NEXUS v2.1.1 [Current Beta]
+### NEXUS v2.1.2 [Current Beta]
+
+A patch release: three fixes to the exported two-page report, no new features and no data change. The **page-1 header strip printed at ~57px while page 2's kept 130px** — v2.1.1 gave both strips fixed heights, but a fixed height is still shrinkable inside a flex column, so a long page 1 squeezed its own header; both strips are now unshrinkable and the content area absorbs the excess. The header **logo printed with a dark N**, because the N strokes in `nexus.png` are transparent cut-outs that let the dark header show through — the PDF now uses a bundled, content-hashed asset with white baked into the interior. And "Psychological Wellbeing" was wider than its label column, pushing its description out of the alignment every other row shared.
+
+### NEXUS v2.1.1
 
 A patch release: four fixes, no new features and no data change. **Firebase Hosting never re-served `index.html`** — `firebase.json` declared no `headers` at all, so the one file that must never be cached was cached, and every deploy this project has ever made was invisible to returning browsers until the cache expired. It surfaced now only because v2.1.0 was the first release where somebody went looking for a specific new control. Also: the dashboard's Individual Clinical Load panel showed **one department's ten staff to every team, with every bar at zero** (a uid-vs-directory-id key mismatch left over from the multi-team rewire); the sign-in screen's "Enterprise / Scale Unit" signpost pointed a department head at a **disabled** button when the path they wanted had worked since v2.0.0; and the exported two-page traffic light report now has identical header/footer strips on both pages and real, clickable PDF link annotations.
 
