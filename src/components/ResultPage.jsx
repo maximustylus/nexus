@@ -12,6 +12,15 @@ import { recordTelemetry } from '../utils/telemetry';
 import { readTheme, writeTheme } from '../utils/theme';
 import { readLanguage, writeLanguage, applyDocumentLanguage } from '../utils/language';
 import { getSessionId, saveResult, loadResult } from '../utils/assessmentSession';
+/*
+  ⚠️ BUNDLED, NOT FETCHED FROM `/nexus.png`. The PDF header used to load the
+     public-folder copy by URL, and a browser holding a cached older file drew
+     the WRONG LOGO into the exported report — the artwork on the page was
+     whatever the cache held, not what the repo ships. Importing it through
+     Vite gives the file a content-hashed name, so a stale cache can never
+     answer for it.
+*/
+import nexusLogo from '../assets/nexus-logo.png';
 import { clusterForSector } from '../utils/singapore/communityServices';
 import { sectorInfo } from '../utils/singapore/postalSectors';
 import HandoverSlip from './HandoverSlip';
@@ -334,6 +343,11 @@ const generateActionPlan = (riskTier, ctaTier, data, postalSector) => {
 const PDF_HEADER_STYLE = {
   background: '#0f172a',
   height: 130,
+  // ⚠️ LOAD-BEARING. The page wrapper is a fixed-height flex column, and a
+  //    flex item's fixed height is still shrinkable: when page 1's content ran
+  //    long, the browser compressed this strip to ~57px while page 2 kept the
+  //    full 130px — the exact mismatch this style exists to prevent.
+  flexShrink: 0,
   boxSizing: 'border-box',
   padding: '0 40px',
   display: 'flex',
@@ -341,11 +355,11 @@ const PDF_HEADER_STYLE = {
   alignItems: 'center',
 };
 
-const PdfHeader = ({ baseUrl, subtitle, t, formattedDate, activeSessionId, previousSessionId, postalSector }) => (
+const PdfHeader = ({ subtitle, t, formattedDate, activeSessionId, previousSessionId, postalSector }) => (
   <div style={PDF_HEADER_STYLE}>
     {/* data-pdf-link becomes a real link annotation in the exported PDF. */}
     <div data-pdf-link={NEXUS_URL} style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-      <img src={`${baseUrl}/nexus.png`} alt="NEXUS" crossOrigin="anonymous" style={{ width: 36, height: 36, objectFit: 'contain' }} />
+      <img src={nexusLogo} alt="NEXUS" crossOrigin="anonymous" style={{ width: 36, height: 36, objectFit: 'contain' }} />
       <div>
         <div style={{ color: 'white', fontWeight: 900, fontSize: 20, letterSpacing: 6 }}>NEXUS</div>
         <div style={{ color: '#94a3b8', fontWeight: 700, fontSize: 9, letterSpacing: 4, marginTop: 2 }}>{subtitle}</div>
@@ -371,6 +385,7 @@ const PdfHeader = ({ baseUrl, subtitle, t, formattedDate, activeSessionId, previ
 const PDF_FOOTER_STYLE = {
   background: '#0f172a',
   height: 44,
+  flexShrink: 0, // see PDF_HEADER_STYLE — the same squeeze applies here
   boxSizing: 'border-box',
   padding: '0 40px',
   display: 'flex',
@@ -879,13 +894,18 @@ export default function ResultPage() {
 
           <PdfHeader subtitle={t.reportTitle} {...headerProps} />
 
-          {/* Content area — flex: 1 pushes footer to bottom */}
-          <div style={{ padding: '28px 40px', display: 'flex', flexDirection: 'column', gap: 20, flex: 1 }}>
+          {/*
+            Content area — flex: 1 pushes the footer to the bottom. `minHeight: 0`
+            + `overflow: hidden` make THIS box absorb any excess instead of the
+            fixed header/footer strips, and the tightened padding/gap keep the
+            fullest page (Red tier, three SDOH bullets, six resources) inside it.
+          */}
+          <div style={{ padding: '16px 40px', display: 'flex', flexDirection: 'column', gap: 10, flex: 1, minHeight: 0, overflow: 'hidden' }}>
 
             {/* Risk Tier */}
-            <div style={{ background: th.printBg, borderRadius: 12, padding: '24px 28px' }}>
-              <div style={{ color: 'white', fontWeight: 900, fontSize: 24, marginBottom: 8 }}>{tierLabel}</div>
-              <div style={{ color: 'rgba(255,255,255,0.9)', fontWeight: 700, fontSize: 12, lineHeight: 1.6, marginBottom: 12 }}>{tierDesc}</div>
+            <div style={{ background: th.printBg, borderRadius: 12, padding: '16px 24px' }}>
+              <div style={{ color: 'white', fontWeight: 900, fontSize: 24, marginBottom: 6 }}>{tierLabel}</div>
+              <div style={{ color: 'rgba(255,255,255,0.9)', fontWeight: 700, fontSize: 12, lineHeight: 1.6, marginBottom: 8 }}>{tierDesc}</div>
               {(data.sdohFinancial || data.sdohSocial || hasPsycho) && (
                 <div style={{ borderTop: '1px solid rgba(255,255,255,0.25)', paddingTop: 10, display: 'flex', flexDirection: 'column', gap: 4 }}>
                   {data.sdohFinancial && <div style={{ color: 'white', fontSize: 11, fontWeight: 700 }}>• {t.sdohFinText}</div>}
@@ -897,8 +917,8 @@ export default function ResultPage() {
 
             {/* PAVS Metrics */}
             {data?.pavsScore != null && (
-              <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 12, padding: '16px 24px' }}>
-                <div style={{ fontWeight: 900, fontSize: 10, color: '#64748b', textTransform: 'uppercase', letterSpacing: 3, marginBottom: 12 }}>{t.pavsTitle}</div>
+              <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 12, padding: '12px 20px' }}>
+                <div style={{ fontWeight: 900, fontSize: 10, color: '#64748b', textTransform: 'uppercase', letterSpacing: 3, marginBottom: 10 }}>{t.pavsTitle}</div>
                 <div style={{ display: 'flex', gap: 12 }}>
                   {[
                     { value: data.pavsScore,           label: t.pavsWeekly },
@@ -921,8 +941,8 @@ export default function ResultPage() {
             )}
 
             {/* Primary Action Banner */}
-            <div style={{ background: '#f0fdfa', border: '1px solid #99f6e4', borderRadius: 12, padding: '16px 24px' }}>
-              <div style={{ fontWeight: 900, fontSize: 10, color: '#0f766e', textTransform: 'uppercase', letterSpacing: 3, marginBottom: 8 }}>{t.primaryAction}</div>
+            <div style={{ background: '#f0fdfa', border: '1px solid #99f6e4', borderRadius: 12, padding: '12px 20px' }}>
+              <div style={{ fontWeight: 900, fontSize: 10, color: '#0f766e', textTransform: 'uppercase', letterSpacing: 3, marginBottom: 6 }}>{t.primaryAction}</div>
               <div style={{ fontWeight: 700, fontSize: 12, color: '#134e4a', lineHeight: 1.6 }}>
                 {ctaBanner.emoji} {ctaBanner.action[lang] || ctaBanner.action.en}
               </div>
@@ -931,12 +951,12 @@ export default function ResultPage() {
 
             {/* Resources Grid */}
             <div>
-              <div style={{ fontWeight: 900, fontSize: 11, color: '#0f172a', textTransform: 'uppercase', letterSpacing: 3, borderBottom: '2px solid #e2e8f0', paddingBottom: 8, marginBottom: 14 }}>{t.resources}</div>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+              <div style={{ fontWeight: 900, fontSize: 11, color: '#0f172a', textTransform: 'uppercase', letterSpacing: 3, borderBottom: '2px solid #e2e8f0', paddingBottom: 6, marginBottom: 10 }}>{t.resources}</div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
                 {suggestedResources.map((resource) => {
                   const c = resource[lang] || resource.en;
                   return (
-                    <div key={resource.id} style={{ border: '1px solid #e2e8f0', borderRadius: 10, padding: '12px 14px', background: '#f8fafc', display: 'flex', flexDirection: 'column', gap: 6 }}>
+                    <div key={resource.id} style={{ border: '1px solid #e2e8f0', borderRadius: 10, padding: '10px 12px', background: '#f8fafc', display: 'flex', flexDirection: 'column', gap: 5 }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                         <div data-pdf-link={resource.url} style={{ width: 32, height: 32, flexShrink: 0, background: 'white', border: '1px solid #e2e8f0', borderRadius: 6, overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                           <img src={`${baseUrl}${resource.logo}`} alt="" crossOrigin="anonymous" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
@@ -954,7 +974,7 @@ export default function ResultPage() {
             </div>
 
             {/* QR + Assessment ID footer area */}
-            <div style={{ borderTop: '1px solid #e2e8f0', paddingTop: 16, display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 'auto' }}>
+            <div style={{ borderTop: '1px solid #e2e8f0', paddingTop: 12, display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 'auto' }}>
               <div data-pdf-link={nexusUrl} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                 <img src={qrCodeUrl} alt="QR" crossOrigin="anonymous" style={{ width: 60, height: 60, border: '1px solid #e2e8f0', borderRadius: 6, padding: 3 }} />
                 <div>
@@ -978,7 +998,7 @@ export default function ResultPage() {
           {/* Same subtitle source as page 1, so the two headers are identical. */}
           <PdfHeader subtitle={t.reportTitle} {...headerProps} />
 
-          <div style={{ padding: '28px 40px', display: 'flex', flexDirection: 'column', gap: 20, flex: 1 }}>
+          <div style={{ padding: '16px 40px', display: 'flex', flexDirection: 'column', gap: 10, flex: 1, minHeight: 0, overflow: 'hidden' }}>
 
             {/* Medical Disclaimer */}
             <div style={{ background: '#fff1f2', border: '1px solid #fecdd3', borderRadius: 12, padding: '18px 24px' }}>
@@ -1031,8 +1051,14 @@ export default function ResultPage() {
                   ['Financial Adequacy', 'Self-guided pathway: 3-level screen adapted from the Duke-NUS Perceived Income Adequacy Scale. Chat pathway: NOT asked; inferred from reported access barriers.'],
                   ['Housing Risk', 'Self-reported HDB flat type, used as a social-risk proxy. Flat type is asked; tenure (rented or owned) is not.'],
                 ].map(([label, text], i) => (
-                  <div key={i} style={{ display: 'flex', gap: 10, paddingBottom: 5, borderBottom: i < 7 ? '1px solid #f1f5f9' : 'none' }}>
-                    <div style={{ fontWeight: 800, fontSize: 9, color: '#0d9488', minWidth: 110, paddingTop: 1, textTransform: 'uppercase', letterSpacing: 0.5, flexShrink: 0 }}>{label}</div>
+                  <div key={i} style={{ display: 'flex', gap: 10, paddingBottom: 5, borderBottom: i < 6 ? '1px solid #f1f5f9' : 'none' }}>
+                    {/*
+                      EXACT width, not minWidth: "Psychological Wellbeing" grew
+                      past 110px and pushed its description out of the column
+                      every other row aligned to. A long label now wraps to a
+                      second line instead of widening its row.
+                    */}
+                    <div style={{ fontWeight: 800, fontSize: 9, color: '#0d9488', width: 110, paddingTop: 1, textTransform: 'uppercase', letterSpacing: 0.5, flexShrink: 0 }}>{label}</div>
                     <div style={{ fontSize: 10, color: '#475569', lineHeight: 1.6 }}>{text}</div>
                   </div>
                 ))}
@@ -1071,7 +1097,8 @@ export default function ResultPage() {
                 ].map((item, i) => (
                   <div key={i} data-pdf-link={item.url} style={{ display: 'flex', alignItems: 'flex-start', gap: 6 }}>
                     <img src={baseUrl + item.logo} alt="" crossOrigin="anonymous" style={{ width: 14, height: 14, objectFit: 'contain', flexShrink: 0, marginTop: 1 }} />
-                    <span style={{ fontWeight: 600, fontSize: 9, color: '#0f766e', wordBreak: 'break-all', lineHeight: 1.5 }}>{item.text}</span>
+                    {/* break-word, not break-all: URLs may split when they must, prose words never split mid-word */}
+                    <span style={{ fontWeight: 600, fontSize: 9, color: '#0f766e', overflowWrap: 'break-word', lineHeight: 1.5 }}>{item.text}</span>
                   </div>
                 ))}
               </div>
