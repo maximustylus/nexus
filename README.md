@@ -1,6 +1,6 @@
-# NEXUS: Smart Operations Dashboard v2.1.2 [BETA]
+# NEXUS: Smart Operations Dashboard v2.1.3 [BETA]
 
-![Version](https://img.shields.io/badge/Version-v2.1.2-blue) ![Status](https://img.shields.io/badge/Status-Beta%20Phase-emerald) ![Teams](https://img.shields.io/badge/Multi--Team-28%20AHP%20professions-indigo) ![Tech](https://img.shields.io/badge/AI-Gemini%20Powered-purple) ![AURA](https://img.shields.io/badge/AURA-v2.3%20Engine-blue) ![PWA](https://img.shields.io/badge/PWA-Native%20Push%20Enabled-blue) ![CI/CD](https://img.shields.io/badge/CI%2FCD-GitHub%20Actions-2ea44f)
+![Version](https://img.shields.io/badge/Version-v2.1.3-blue) ![Status](https://img.shields.io/badge/Status-Beta%20Phase-emerald) ![Teams](https://img.shields.io/badge/Multi--Team-28%20AHP%20professions-indigo) ![Tech](https://img.shields.io/badge/AI-Gemini%20Powered-purple) ![AURA](https://img.shields.io/badge/AURA-v2.3%20Engine-blue) ![PWA](https://img.shields.io/badge/PWA-Native%20Push%20Enabled-blue) ![CI/CD](https://img.shields.io/badge/CI%2FCD-GitHub%20Actions-2ea44f)
 
 **NEXUS** (formerly IDC App) is a clinician-led innovation platform designed to revolutionise workload management, optimise skill-mix routing, and actively protect staff wellbeing at the Sport and Exercise Medicine Centre. 
 
@@ -196,7 +196,11 @@ Beta testers should utilise Demo Mode to verify system integrity:
 > also lists the **known issues that are documented but not yet fixed**. The summaries
 > below are narrative highlights; where the two disagree, `CHANGELOG.md` is correct.
 
-### NEXUS v2.1.2 [Current Beta]
+### NEXUS v2.1.3 [Current Beta]
+
+A patch release: the public answering surfaces now speak lay language, no new features and no data change. People filling in the chat and the form were shown **instrument acronyms mid-question** — `ACSM PAVS`, `SPAG`, `SDOH`, `PHQ-2`, `LSNS-6`, `BPS-RS II` — vocabulary that means nothing outside a health system, at the moment they are trying to answer. Badges, step titles and footnotes now read as plain words (*Physical Activity*, *Strength Training*, *Health & Safety Check*, *Mood & Wellbeing*), and a footnote describes its question rather than citing it. The full instrument citations are **not** lost: they remain, expanded on first use, on the PDF report's governance page, where an auditor looks for them. Separately, the word **"clinical" is gone from every public-facing string** in all four languages — including the Malay *klinikal* and Chinese *临床* — because this portal must not present itself as a clinical service; staff-side copy is untouched, since *Clinical Exercise Physiologist* is a real job title. The chat's internal `clinical` group key became `safety`, which is a **presentation key that never leaves the browser** — the persisted `key` fields are unchanged, so a cached client reads stored responses exactly as before. Release tags can now also be cut from a `workflow_dispatch` (`.github/workflows/tag-release.yml`), build tooling only.
+
+### NEXUS v2.1.2
 
 A patch release: three fixes to the exported two-page report, no new features and no data change. The **page-1 header strip printed at ~57px while page 2's kept 130px** — v2.1.1 gave both strips fixed heights, but a fixed height is still shrinkable inside a flex column, so a long page 1 squeezed its own header; both strips are now unshrinkable and the content area absorbs the excess. The header **logo printed with a dark N**, because the N strokes in `nexus.png` are transparent cut-outs that let the dark header show through — the PDF now uses a bundled, content-hashed asset with white baked into the interior. And "Psychological Wellbeing" was wider than its label column, pushing its description out of the alignment every other row shared.
 

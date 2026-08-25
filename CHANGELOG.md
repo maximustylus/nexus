@@ -49,6 +49,62 @@ not changed by this release.
 
 ## [Unreleased]
 
+## [2.1.3] - 2026-08-25
+
+A patch release: the public answering surfaces now speak lay language, and the word
+"clinical" is gone from public-facing copy. **No new features, no Firestore shape
+change, no data migration.** The AURA engine stays at `v2.3` — it is not touched by
+this release.
+
+*Two commits since `v2.1.2`, merged as `2ba1c15`, classified by reading the diffs.
+Their subjects are conventional (`fix(...)`, `ci:`) rather than this repository's
+historical `Update <file>.jsx`, and the diffs agree with them: every hunk in the app
+change is a display string or a presentation-only key. The CI commit adds a workflow
+file and touches nothing the app ships.*
+
+### Fixed
+
+- **People answering the assessment were shown instrument acronyms mid-question.**
+  The chat's domain badges and the form's step titles, progress subtitles, section
+  badges and footnotes carried `ACSM PAVS`, `SPAG`, `SDOH`, `PHQ-2`, `LSNS-6` and
+  `BPS-RS II` — vocabulary that means nothing outside a health system, shown to a
+  member of the public at the moment they are trying to answer. They now read as plain
+  words: *Physical Activity*, *Strength Training*, *Health & Safety Check*, *Cost &
+  Access*, *Social Support*, *Food Security*, *Mood & Wellbeing*. Footnotes describe
+  the question instead of citing it — "Based on a standard two-week mood question used
+  in health screening" rather than "Aligned with BPS-RS II P22 (PHQ-2 based…)".
+  **The precise instrument citations are not lost**: they remain, expanded on first
+  use, on the PDF report's governance page, which is where an auditor looks for them.
+- **The word "clinical" appeared throughout public-facing copy**, in a portal that
+  must not present itself as a clinical service. Removed from every public surface in
+  all four languages, including the Malay *klinikal* and Chinese *临床* wordings —
+  "Clinical Safety Screen" is now "Health & Safety Check", and the Demo Mode card
+  offers analytics "without processing live health data". The result page's
+  `pavsTitle` reads "Your Physical Activity Check" instead of "ACSM Physical Activity
+  Vital Sign", `pavsLabel` reads "Activity Score" instead of "PAVS Score", and SPAG
+  thresholds read "National guideline".
+
+  Staff-side surfaces are deliberately untouched — *Clinical Exercise Physiologist* is
+  a real job title, not portal copy.
+
+### Changed
+
+- **The chat's internal domain group key `clinical` is renamed `safety`** in
+  `AuraChat.jsx` (`DOMAIN_CONFIG`, `GROUP_COLOURS` and the badge `colourMap`).
+  **This is not a data change.** The `group` field never leaves the browser — it
+  selects a progress-bar colour and a badge palette, and is read only through
+  `GROUP_COLOURS[domain?.group]` and `colourMap[domain.group]`. The identifiers that
+  *are* persisted are the `key` fields (`pavs_days`, `medical`, `falls`, …), and every
+  one of them is unchanged, so a client already in someone's service-worker cache
+  parses stored responses exactly as before.
+- **Release tags can now be created from a `workflow_dispatch`**
+  (`.github/workflows/tag-release.yml`). Build tooling only; nothing the app ships.
+  It exists because a cloud session's git credentials can push branches but not tags,
+  so the tag is created inside Actions where `GITHUB_TOKEN` carries `contents:write`.
+  The workflow refuses any tag name that is not `vX.Y.Z`, and it takes an explicit
+  SHA — the release commit's — so the repo's rule that **a tag points at a commit
+  whose tree already carries its own version** is preserved through the new path.
+
 ## [2.1.2] - 2026-08-25
 
 A patch release: three rendering fixes in the exported two-page report, and nothing
