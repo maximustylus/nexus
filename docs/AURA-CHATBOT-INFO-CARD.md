@@ -6,7 +6,7 @@ data is handled, and how to raise a concern.**
 | | |
 |---|---|
 | **Card status** | ⚠️ **DRAFT — not yet in effect.** Per `AURA-GUARDRAILS.md` Rule 12, no controlled document enters effect without its named sign-off, and this card has none yet. Approver: Muhammad Alif (owner). |
-| **Card version** | 0.2 (draft) |
+| **Card version** | 0.3 (draft) |
 | **Last updated** | 2026-08-27 |
 | **Describes** | NEXUS **v2.1.0** (app) · AURA engine tier **v2.3** · guardrails **v1.0** |
 | **Framework** | Structured after the **IMDA Transparency Guidelines for Generative AI Chatbots** (Infocomm Media Development Authority, Singapore, published 20 July 2026), Annex B sample format. The guidelines are voluntary; NEXUS adopts them as its transparency baseline. |
@@ -163,7 +163,10 @@ guardrail (fail loud, never silent).*
   ceiling rather than an unbounded bill.
 - **Effectiveness, honestly:** the audit's reachable-and-dangerous list is empty as of
   2026-08-24, with the ledger (`AURA-TODO.md`) holding pasted evidence per closed finding.
-  Feed **comments** are not screened (`AN13` — accepted, documented). No red-team exercise
+  Feed **comments** are not routed through the model guard that posts get; they are fenced
+  in `firestore.rules` against NRIC/FIN-shaped tokens — one identifier class, not PDPA
+  compliance (`AN13`, closed 2026-08-24; an earlier draft called this an accepted gap,
+  understating a shipped control and misstating a ledger status). No red-team exercise
   has been run against the deployed prompts.
 - **What you can do:** report anything harmful or wrong through the channels in §5 — the
   reporting path exists precisely because no filter is complete.
@@ -171,8 +174,10 @@ guardrail (fail loud, never silent).*
 ### Emotional safety (staff wellbeing coach)
 
 - **Safeguards:** the coach is deliberately framed as a productivity-adjacent wellbeing
-  check-in, not a companion; chat history lives only in memory and is gone when the panel
-  closes, which also limits the depth of para-social attachment the surface can sustain.
+  check-in, not a companion; chat history lives only in memory and is never written to a
+  database. *(An earlier draft added "and is gone when the panel closes" and built an
+  attachment-limiting argument on it — steward review found both false; see §4 for what
+  actually clears the history.)*
 - **Effectiveness, honestly:** there is **no coded detection of distress or self-harm
   expressions and no automatic crisis routing** in the staff assistant. This is a known
   property of the current build, not an oversight this card is smoothing over.
@@ -187,8 +192,14 @@ guardrail (fail loud, never silent).*
 
 **Staff assistant:**
 
-- **Chat history is held in memory only.** It is not stored in any database and does not
-  survive closing the panel — deliberate, for shared clinic terminals.
+- **Chat history is held in memory only.** It is never written to any database. ⚠️ Said
+  plainly after steward review found the first draft's claim false: closing the panel does
+  **not** clear it, and neither does signing out — it is cleared only by reloading the
+  page, closing the tab, or the panel's "Clear Conversation" button. On a **shared clinic
+  terminal**, a colleague who signs in after you in the same tab can reopen the panel and
+  see your transcript until one of those happens. Clearing session state on sign-out is a
+  logged defect awaiting the owner's decision (`AU29`); until it is fixed, use "Clear
+  Conversation" or reload before handing over a shared machine.
 - What you type (and attach) is sent to Google's Gemini API to generate the reply.
   Attachments are forwarded within the coded bounds described in §2; their contents are
   not inspected first.
@@ -198,9 +209,11 @@ guardrail (fail loud, never silent).*
 
 **Public health screening:**
 
-- The assessment record is **de-identified by design**: no name, no NRIC, no contact
+- The assessment record is **de-identified by construction**: no name, no NRIC, no contact
   details, and no browser fingerprint (the one telemetry field that undermined this,
-  `clientReference: navigator.userAgent`, was found in audit and removed — `CP3`).
+  `clientReference: navigator.userAgent`, was found in audit and removed — `CP3`). Said
+  precisely: this is a property of what the current screens write, not a schema the
+  database enforces against a future caller.
 - **Records are deleted automatically after 24 months**, and that sentence is enforced by a
   scheduled sweep in code (`functions/retention.cjs`), not just stated. A notice appears
   before the assessment starts and in full with the result.
@@ -216,8 +229,10 @@ card will not offer it.
 ### Who has access
 
 - Team data is partitioned by membership: `firestore.rules` requires a membership document,
-  and a member of one team reads nothing of another's (91 emulator checks assert this).
-  Year-end analysis is lead-only.
+  and a member of one team reads nothing of another's (140 emulator checks, last recorded
+  run 2026-08-24, 0 failed — `AURA-TODO.md`; an earlier draft cited 91, a count the
+  repository itself had superseded twice). Year-end analysis is lead-only, enforced
+  server-side.
 - Message content is processed by **Google** (Gemini API) as the model provider, and the
   application runs on **Firebase** (Google Cloud). No other third party receives chat
   content. Data is not sold.
@@ -303,6 +318,55 @@ reports enter that same pipeline.
    staff addresses out of the public bundle this card ships in. The working public channel
    is the in-app reporter; publishing a dedicated (non-personal) support address would
    resolve the conflict and is the owner's call.
+10. **Staff chat history survives sign-out** (`AU29`, found by steward review of this
+   card's own first draft): nothing clears the in-memory transcript when a user signs out,
+   so on a shared terminal the next signed-in colleague can reopen it. §4 states the
+   working mitigations; the fix touches app-root state and awaits the owner's decision
+   rather than a rushed edit.
+11. **The public first-use statement is bypassable by deep link.** It lives on the pathway
+   selection screen; a person handed `/individuals/chat` directly reaches the chat with
+   only the header's info icon. Known, disclosed, and on the ledger (`AURA-TODO.md` 9.2).
+12. **Three claims in this card's first draft were wrong and are corrected in place**, per
+   the same rule the guardrails document follows: the panel-close history claim (item 10),
+   a stale "91 emulator checks" citation, and `AN13` described as an accepted gap after it
+   had closed. They were found by steward review, not by a test — the argument for reading
+   this card adversarially rather than trusting it.
+
+---
+
+## Source table
+
+*Required of controlled documents by guardrail P3 (claim, source, verification status).
+Verification: an independent steward audit on 2026-08-27 checked every row below against
+source, re-ran the cited tests, and rebuilt the bundle from scratch before checking it.
+"Confirmed" means checked against the named source on that date — not permanently true;
+the update triggers below exist because these facts move.*
+
+| Claim (§) | Source | Status |
+|---|---|---|
+| Chat history in memory only, never written to a database (§4) | `src/context/NexusContext.jsx`, `src/components/AuraPulseBot.jsx` | Confirmed 2026-08-27 — after the first draft's "cleared on panel close" half was found **false** and corrected (`AU29`, gap 10) |
+| Human click gates every write; proposal validated in code first (§1, §2) | `src/components/AuraPulseBot.jsx` (`onClick` is the only path), `src/utils/dataEntryGuard.js` | Confirmed 2026-08-27 |
+| 82 passing validation tests (§1) | `src/utils/dataEntryGuard.test.js` | Confirmed 2026-08-27 — re-run by the steward, 82 |
+| Assistant cannot touch the roster (§2) | `dataEntryGuard.js` collection/field allowlists | Confirmed 2026-08-27 |
+| Model list and `gemini-1.5-flash` fallback (§1) | `functions/index.js` `MODEL_PRIORITY`, `SAFE_FALLBACK_MODEL` | Confirmed 2026-08-27 |
+| Provenance (model id, guardrail version, timestamp) stamped and rendered (§1, §4) | `functions/index.js`, `AuraPulseBot.jsx`, `SmartReportView.jsx` | Confirmed 2026-08-27 |
+| Attachment bounds: 5 files, ~4 MB each, ~8 MB total, five formats, logged (§2) | `functions/attachmentRules.cjs`, `functions/index.js` (logger) | Confirmed 2026-08-27 |
+| No attachment content inspection; no client UI sends attachments (§2, gap 4) | `attachmentRules.cjs` header and code | Confirmed 2026-08-27 |
+| Public acknowledgement capped at 200 tokens, no caller-supplied prompt (§1, §3) | `functions/index.js` `communityAck` | Confirmed 2026-08-27 |
+| 24-month deletion enforced by a real scheduled job (§4) | `functions/index.js` `expireCommunityAssessments` (daily, `Asia/Singapore`), `functions/retention.cjs` | Confirmed 2026-08-27 |
+| Rate ceilings, per-caller and global, on both endpoints (§3) | `functions/rateLimit.js` and its call sites | Confirmed 2026-08-27 |
+| Year-end payload carries names, titles, workload, band — never grade (§4) | `src/components/SmartAnalysis.jsx`, `SmartAnalysis.publish.test.jsx` (8 passed) | Confirmed 2026-08-27 |
+| Analysis is lead-only, server-side (§4) | `functions/index.js` `generateSmartAnalysis` membership re-read | Confirmed 2026-08-27 |
+| Team partitioning: 140 emulator checks (§4) | `AURA-TODO.md` `AU3` row; `scripts/firestore-rules-verify.mjs` | Corrected 2026-08-27 (draft cited a superseded 91), then confirmed against the ledger record |
+| Feed posts screened server-side; clients cannot create (§3) | `firestore.rules` (`allow create: if false`) | Confirmed 2026-08-27 |
+| Comments fenced against NRIC/FIN tokens, not model-screened (§3) | `firestore.rules` comment fence; `AN13` closed | Corrected 2026-08-27 (draft called it an accepted gap), then confirmed |
+| No coded crisis routing in the staff assistant (§2, §3) | Zero matches for crisis/self-harm/escalation terms across the assistant's code | Confirmed 2026-08-27 |
+| Demo sandbox sends nothing to any model (§1) | `src/utils/demoAura.js` — no network call of any kind | Confirmed 2026-08-27 |
+| Medical disclaimer quoted verbatim; Red/Amber/Green tiers (§2, §3) | `src/components/ResultPage.jsx` | Confirmed 2026-08-27 |
+| Community record de-identified by construction; fingerprint removed (§4) | `src/utils/telemetry.js`, `CP3` | Confirmed 2026-08-27, with the "construction, not schema" hedge the audit asked for |
+| Versions: app 2.1.0, engine v2.3, guardrails 1.0 (header) | `package.json`, `AURA-CHANGELOG.md`, `functions/guardrails.cjs` | Confirmed 2026-08-27 |
+| Model follows its prompt-carried rules (§3) | — | **Unverifiable from source**, stated as such; gated on the 20-turn read (`P8.8`) |
+| Google's internal data handling (§4) | Google's API terms | **Not independently verified**, stated as such (gap 6) |
 
 ---
 
@@ -319,5 +383,6 @@ single authoritative app version.
 
 | Card version | Date | Change |
 |---|---|---|
+| 0.3 (draft) | 2026-08-27 | Steward audit corrections before sign-off: the false panel-close history claim replaced with the true clearing behaviour and the `AU29` shared-terminal caveat; "91 emulator checks" corrected to the current 140; `AN13` corrected from "accepted gap" to its shipped NRIC/FIN fence; "by design" hedged to "by construction"; gap items 10–12 added. 21 other load-bearing claims steward-CONFIRMED against source. |
 | 0.2 (draft) | 2026-08-27 | Surfaced in-app: served at `/aura-info` from this file verbatim, first-use safety statements on both chat surfaces, persistent header links. The security contact address was replaced with a reference to `SECURITY.md` — the `AN14` bundle control refused the literal address in the public bundle, and the conflict is declared as gap item 9. |
 | 0.1 (draft) | 2026-08-27 | First draft, structured after IMDA Annex B. Not yet signed off, not yet surfaced in-app. |

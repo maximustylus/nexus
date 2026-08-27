@@ -141,6 +141,18 @@ conflict is the card's own gap item 9, and the decision (a dedicated public supp
 or the in-app reporter as the only public channel) is `AURA-TODO.md` 9.5. The test was not
 weakened.
 
+**Steward audit of the batch, same day (card → v0.3):** 21 load-bearing card claims
+CONFIRMED against source; three documentation errors found and corrected in place — the
+card claimed chat history dies on panel close (**false**: nothing clears it, not even
+sign-out — opened as **`AU29`**, high, owner's queue, and the card now states the true
+behaviour and the shared-terminal mitigation); a "91 emulator checks" citation the repo had
+superseded twice (now 140, in the card and the README both); and `AN13` described as an
+accepted gap after it had closed (now described as the NRIC/FIN fence it is). Two Evidence
+columns in P9 gained honest caveats: the `/aura-info` route registration is hand-verified,
+not regression-guarded, and a `/individuals/chat` deep link bypasses the public first-use
+statement. The card also gained the guardrail-P3 source table (claim, source, verification
+status) so the 9.1 sign-off reads over pre-verified claims.
+
 ### What would justify a real v2.4, if the owner decides them that way
 
 - `AU8` — content-gated assessment instead of turn-count-gated

@@ -53,11 +53,12 @@ original post-mortems into one. `AU2` means today exactly what it meant when it 
 `AN5` `AU22` `AU23`) — the P-section tracked them separately from the P7 batch that closed
 them, and only one place was updated. Each now cites the commit that closed it. A ledger row
 is a claim like any other; these were false in the safe direction, which is still false.
-| `OPEN`, **owner's decision** | 9 | `AU5` `AU8` `AU11` `AU17`† `AC11` `AN7` `AN9` `AN11` `AN12` |
+| `OPEN`, **owner's decision** | 10 | `AU5` `AU8` `AU11` `AU17`† `AC11` `AN7` `AN9` `AN11` `AN12` `AU29` |
 | **`LIVE` right now** | **0 grades · 0 names · 0 emails** | \* `AN1` and `AN14` both closed and verified against `dist/`; `an14.bundle.test.js` keeps it that way |
 
-**53 findings**, not the 51 this file was created with: `AU25` (the go-live gate) and
-`AC15` (fixing `AC1`) were opened on the same day. Neither renumbers anything.
+**54 findings**, not the 51 this file was created with: `AU25` (the go-live gate) and
+`AC15` (fixing `AC1`) were opened on the same day, and `AU29` (chat history survives
+sign-out) was opened 2026-08-27 by the steward audit of P9. Neither renumbers anything.
 
 † `AU17`'s **code half** (the audit log of what passes through the attachment path) shipped
 with `AU15`; what stays with the owner is the policy half — what the actual PDPA control on
@@ -367,14 +368,26 @@ remains *"NEXUS will align"*, never *"NEXUS complies"*.
 | # | Item | Owner | Status | Evidence |
 |---|---|---|---|---|
 | 9.1 | **Sign off the info card** — the card is a controlled document with no named approval (Rule 12); review every factual claim against source before it takes effect | **OWNER** | `OPEN` | — |
-| 9.2 | **Surface at first use** — a substantive safety statement (not "we take safety seriously") with a clearly identifiable link to the card, at first use of `AuraPulseBot` and of the `/individuals` conversational pathway | me | `DONE` | Staff assistant: a dismissible banner naming the two real caveats (wrong-but-confident output, unverified references) with a `/aura-info` link, shown until dismissed, dismissal persisted per browser (`aura_infocard_notice_v1`). Public: the statement joined the collection notice on `PathwaySelection` — the last screen common to both pathways — naming the AI (Gemini), that scoring is fixed rules, and not-medical-advice. **`AuraPulseBot.infocard.test.jsx` — 4 passed** (statement + link on first open; dismissal hides and survives a remount; persona grid intact; header link outlives the notice). **`PathwaySelection.infocard.test.jsx` — 3 passed** (names the AI, the fixed scoring and the caveat; links `/aura-info` in a new tab; the collection notice it joined still renders). |
-| 9.3 | **Persistent access point** — the card reachable from within each chat surface (an information icon is sufficient per the guidelines; the card itself can stay a hosted page) | me | `DONE` | Info icons in both chat headers link `/aura-info`, which renders `docs/AURA-CHATBOT-INFO-CARD.md` **verbatim via `?raw` import** — one source, no second copy to drift (`AuraInfoCard.jsx`; the route is public on purpose). **`AuraInfoCard.test.jsx` — 4 passed**, including that the REAL controlled document loads and renders all four disclosure areas, repo-relative citations never become dead anchors, and GFM tables render (new dep `remark-gfm@^4`). **`AuraChat.infocard.test.js` — 3 passed** (source-scan, limit stated in its header: `AuraChat` is never mounted by any test — the `AC5` jsPDF chain — so this proves the link is wired, not rendered). Bundle: the card ships as its own lazy chunk (`dist/assets/AURA-CHATBOT-INFO-CARD-*.js`) and **`an14.bundle.test.js` — 18 passed against the fresh `dist/`** after the 9.5 fix below. |
+| 9.2 | **Surface at first use** — a substantive safety statement (not "we take safety seriously") with a clearly identifiable link to the card, at first use of `AuraPulseBot` and of the `/individuals` conversational pathway | me | `DONE` | Staff assistant: a dismissible banner naming the two real caveats (wrong-but-confident output, unverified references) with a `/aura-info` link, shown until dismissed, dismissal persisted per browser (`aura_infocard_notice_v1`). Public: the statement joined the collection notice on `PathwaySelection` — the last screen common to both pathways — naming the AI (Gemini), that scoring is fixed rules, and not-medical-advice. **`AuraPulseBot.infocard.test.jsx` — 4 passed** (statement + link on first open; dismissal hides and survives a remount; persona grid intact; header link outlives the notice). **`PathwaySelection.infocard.test.jsx` — 3 passed** (names the AI, the fixed scoring and the caveat; links `/aura-info` in a new tab; the collection notice it joined still renders). ⚠️ Steward correction: **a deep link straight to `/individuals/chat` bypasses the statement** — the route has no guard, and the person gets only the header's info icon. Mitigated, not closed; disclosed on the card (gap 11). |
+| 9.3 | **Persistent access point** — the card reachable from within each chat surface (an information icon is sufficient per the guidelines; the card itself can stay a hosted page) | me | `DONE` | Info icons in both chat headers link `/aura-info`, which renders `docs/AURA-CHATBOT-INFO-CARD.md` **verbatim via `?raw` import** — one source, no second copy to drift (`AuraInfoCard.jsx`; the route is public on purpose). **`AuraInfoCard.test.jsx` — 4 passed**: three rendering-rule tests (citations never become dead anchors, external links new-tab, GFM tables — new dep `remark-gfm@^4`) run against a **fixture**; one test loads the REAL controlled document and asserts its headings. **`AuraChat.infocard.test.js` — 3 passed** (source-scan, limit stated in its header: `AuraChat` is never mounted by any test — the `AC5` jsPDF chain — so this proves the link is wired, not rendered). Bundle: the card ships as its own lazy chunk (`dist/assets/AURA-CHATBOT-INFO-CARD-*.js`) and **`an14.bundle.test.js` — 18 passed against the fresh `dist/`** after the 9.5 fix below. ⚠️ Steward correction: **the `/aura-info` route registration itself is verified by hand, not by a regression test** — every suite asserts `href`s or renders the page component directly; deleting the `<Route>` in `App.jsx` would 404 all four links and stay green. Hand evidence: `/aura-info` present in both bundle chunks, `firebase.json` rewrites `**` to `/index.html`. A route-level test is deferred, knowingly. |
 | 9.4 | **Keep the card current** — update on a `resolveModel()` list change, a guardrail revision, a new AURA capability or a newly identified risk; review annually even without one. The guardrail version already stamped into every provenance record is the drift detector | standing | `OPEN` | — |
 
 Dependencies the card inherits rather than owns: `P8.8` (the 20-turn read — the card's
 effectiveness statements stay qualitative and hedged until it runs), `AU17` (the
 attachment control decision — the card currently discloses the gap), `CD10`/`CD13` (the
 clinical and translation reviews of the public-pathway wording the card quotes).
+
+### New on 2026-08-27, by steward audit of the P9 batch
+
+| Id | What | Severity |
+|---|---|---|
+| `AU29` | **Staff chat history and session state survive sign-out.** `auraHistory` lives in the root `NexusContext` provider (`src/context/NexusContext.jsx:12`), the panel is permanently mounted (`src/App.jsx`, `isOpen` toggles visibility only), and `handleLogout` (`src/App.jsx:563-573`) resets user, notifications and view — **not** the transcript, the persona or the panel view; nothing anywhere calls the history clear except the manual button. On a shared clinic terminal the next signed-in colleague can reopen the previous person's wellbeing conversation. Found because the card's first draft claimed the opposite ("does not survive closing the panel") and the steward checked. The card now states the true behaviour and mitigations (v0.3, gap 10). **The fix — clearing `auraHistory`, `view`, `selectedPersona` on sign-out — touches app-root state used by every view and has no test today; it is a deliberate change for the owner's queue, not a quick edit.** | high · **owner** |
+
+The same audit steward-CONFIRMED 21 of the card's load-bearing claims against source and
+found three documentation errors, all corrected in card v0.3 (see its gap item 12 and
+changelog): the false panel-close claim above, a stale "91 emulator checks" citation (now
+140, per this file's `AU3` row), and `AN13` described as an accepted gap after it closed.
+The README carried the same stale 91 and is corrected alongside.
 
 ⚠️ **9.5, found by the `AN14` bundle test during 9.2/9.3, and an owner decision:** the
 card now ships in the public bundle (its own lazy chunk), and its first draft reproduced

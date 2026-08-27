@@ -344,7 +344,7 @@ Beta testers should utilise Demo Mode to verify system integrity:
 
 NEXUS was built for one ten-person department, with every collection at the root of the database and the team itself hardcoded in **six** separate places — including one array that had quietly gone stale and stopped describing the department it named. It now serves a team per department per institution: Respiratory Therapy at KKH and Respiratory Therapy at SGH are different teams, rostering differently, and structurally unable to see each other.
 
-Onboarding a clinician is a lead adding a member document — **zero code edits, zero deploys, zero rules changes**. `firestore.rules` asks the database whether a membership exists rather than consulting a list it carries itself, and 91 emulator checks assert that a member of one team gets nothing from another.
+Onboarding a clinician is a lead adding a member document — **zero code edits, zero deploys, zero rules changes**. `firestore.rules` asks the database whether a membership exists rather than consulting a list it carries itself, and the emulator suite asserts that a member of one team gets nothing from another — 91 checks at this release, 140 as of 2026-08-24 (`scripts/firestore-rules-verify.mjs`; `firestore.rules.README.md` tracks the current count).
 
 ⚠️ **This is a breaking data change with a cutover order** — the migration runs BEFORE the merge, not after. See [`RELEASE-v2.0.0.md`](RELEASE-v2.0.0.md) for the full procedure, the rollback, and who loses access.
 
