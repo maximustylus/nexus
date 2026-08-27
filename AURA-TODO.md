@@ -348,6 +348,35 @@ MODE 3 is **unverified** — see item 7 of that document's own assumptions block
 
 ---
 
+## P9 — IMDA transparency alignment · **2026-08-27**
+
+NEXUS will align with the IMDA *Transparency Guidelines for Generative AI Chatbots*
+(published 20 July 2026). The vehicle is the chatbot info card the guidelines describe:
+[`docs/AURA-CHATBOT-INFO-CARD.md`](docs/AURA-CHATBOT-INFO-CARD.md), drafted 2026-08-27
+after the Annex B sample, covering the four disclosure areas (capabilities and
+prohibitions, safety and reliability, data practices, reporting) for the three generative
+surfaces. The roster engine is deliberately out of scope — it contains no model, and
+putting it on the card would re-make `AU1` in a compliance document.
+
+⚠️ **A drafted card is not a met minimum.** The guidelines' encouraged minimum has three
+parts, and only the first exists: the card itself. The other two are product work, listed
+below and open. Until 9.1–9.3 close, the accurate claim is *"NEXUS will align"*, never
+*"NEXUS complies"*.
+
+| # | Item | Owner | Status | Evidence |
+|---|---|---|---|---|
+| 9.1 | **Sign off the info card** — the card is a controlled document with no named approval (Rule 12); review every factual claim against source before it takes effect | **OWNER** | `OPEN` | — |
+| 9.2 | **Surface at first use** — a substantive safety statement (not "we take safety seriously") with a clearly identifiable link to the card, at first use of `AuraPulseBot` and of the `/individuals` conversational pathway | me | `OPEN` | — |
+| 9.3 | **Persistent access point** — the card reachable from within each chat surface (an information icon is sufficient per the guidelines; the card itself can stay a hosted page) | me | `OPEN` | — |
+| 9.4 | **Keep the card current** — update on a `resolveModel()` list change, a guardrail revision, a new AURA capability or a newly identified risk; review annually even without one. The guardrail version already stamped into every provenance record is the drift detector | standing | `OPEN` | — |
+
+Dependencies the card inherits rather than owns: `P8.8` (the 20-turn read — the card's
+effectiveness statements stay qualitative and hedged until it runs), `AU17` (the
+attachment control decision — the card currently discloses the gap), `CD10`/`CD13` (the
+clinical and translation reviews of the public-pathway wording the card quotes).
+
+---
+
 ## The owner's ten, in one place
 
 These are not blocked on engineering time and several are not code at all.

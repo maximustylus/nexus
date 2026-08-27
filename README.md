@@ -256,6 +256,28 @@ This application is an operational and workload management tool. It is not a cli
    screened (`AN13`).
 3. **Demo isolation (client-side):** Demo Mode injects `MOCK_TEAM_DATA` and the roster path writes nothing — three separate latches short-circuit before `setDoc`, and the sandbox roster is generated in the browser and lost on reload. ⚠️ **There are no separate demo collections**, so this is a guard in the code rather than a boundary in the database; and it is not total — `FeedsView.jsx:158` calls `processFeedPost` with `isDemo` and no short-circuit, so a demo feed post does reach the production `feed_posts` collection and is hidden from live users by a **client-side** filter (`FeedsView.jsx:136`). *(Corrected 2026-08-15: previously claimed "strictly isolated Firebase collections".)*
 
+### Transparency: alignment with IMDA's guidelines for generative AI chatbots
+
+**NEXUS will align with the IMDA *Transparency Guidelines for Generative AI Chatbots*
+(Infocomm Media Development Authority, Singapore, published 20 July 2026)** for its
+generative AI surfaces — the staff assistant, the public `/individuals` screening and the
+year-end analysis. The vehicle is the **chatbot info card** the guidelines describe:
+[`docs/AURA-CHATBOT-INFO-CARD.md`](docs/AURA-CHATBOT-INFO-CARD.md) covers, in one place,
+what AURA can and cannot do, how reliable and safe it is, how data is handled, and how to
+report issues — including the gaps this repository already documents rather than smoothing
+them over.
+
+Two things, stated per this file's own rules:
+
+1. **The card is a draft.** It has no named sign-off yet and is not in effect until the
+   owner approves it (guardrail Rule 12). The in-app work the guidelines' minimum expects —
+   a safety statement and link to the card at first use, and a persistent access point in
+   the chat UI — is **not built**; both are open items in
+   [`AURA-TODO.md`](AURA-TODO.md) §P9.
+2. **The roster engine is outside the card's scope on purpose.** The guidelines cover
+   generative AI chatbots; the roster engine contains no model. Putting it on the card
+   would re-make the `AU1` misdescription in a compliance document.
+
 ### Known Limitations
 * **Workload Commit Verification:** AURA can format a database write, but a **human-in-the-loop
   physical click** executes the final `setDoc`. This is the accurate description of AURA's
@@ -285,6 +307,7 @@ The audit-and-remediation record and the go-live material live beside the code:
 | [`AURA-GUARDRAILS.md`](AURA-GUARDRAILS.md) | The owner's sixteen working rules, verbatim, with the honest conformance table — what is CODE, what is only asked of a model |
 | [`AURA-GOLIVE-GATE.md`](AURA-GOLIVE-GATE.md) | The five go-live gates: failed 2026-08-23, all passing on re-run 2026-08-24 |
 | [`AURA-VERIFICATION-TURNS.md`](AURA-VERIFICATION-TURNS.md) | The 20 real turns the owner reads before the guardrail prompts ship |
+| [`docs/AURA-CHATBOT-INFO-CARD.md`](docs/AURA-CHATBOT-INFO-CARD.md) | The IMDA-aligned chatbot info card for AURA's generative surfaces — draft, pending owner sign-off |
 | `docs/NEXUS-roster-walkthrough.pptx` | The AHP walkthrough deck — real screenshots, desktop and mobile |
 | `docs/CLAUDE-DESIGN-PROMPTS.md` | The prompt pack for restyling the walkthrough in Claude Design |
 | `docs/CD13-translation-review.xlsx` | The native-speaker review workbook for the 19 machine-translated strings |

@@ -22,7 +22,7 @@ refers to.
 
 ---
 
-## Unreleased — **v2.3.1**, not v2.4 · 2026-08-23 → 2026-08-24
+## Unreleased — **v2.3.1**, not v2.4 · 2026-08-23 → 2026-08-27
 
 ⚠️ **This section said *"Nothing yet. Every row is `OPEN`"* until 2026-08-24, by which point
 two days of remediation had shipped.** A changelog that is not written when the work lands is
@@ -116,6 +116,19 @@ the owner's 20-turn read. Nothing above is live until the merge.
 caller's own team), `AN4` (the analysis endpoint was unauthenticated), `AU2` `AU3` `AU22`
 `AU25`, `AC1` `AC2` `AC15` (the PAVS parser). Evidence for each is in
 [`AURA-TODO.md`](AURA-TODO.md).
+
+### Transparency — the IMDA chatbot info card · 2026-08-27
+
+**Still v2.3.1-equivalent: documentation, not capability.** NEXUS will align with the IMDA
+*Transparency Guidelines for Generative AI Chatbots* (published 20 July 2026), and the
+first artefact is drafted: [`docs/AURA-CHATBOT-INFO-CARD.md`](docs/AURA-CHATBOT-INFO-CARD.md),
+a consolidated card for the three generative surfaces after the guidelines' Annex B sample —
+capabilities and prohibitions, safety and reliability (qualitative only; nothing quantitative
+exists to cite), data practices per surface, and reporting channels, with the known gaps
+(`AU17`, `P8.8`, no age assurance, no in-app surfacing yet) declared in the card body rather
+than omitted. The card is a **draft pending owner sign-off**, and the in-app work the
+guidelines' minimum expects is `AURA-TODO.md` §P9. The roster engine is deliberately outside
+the card: no model, no card row, per `AU1`.
 
 ### What would justify a real v2.4, if the owner decides them that way
 

@@ -27,6 +27,17 @@ If you discover a security vulnerability within NEXUS, please send a direct emai
 
 All security reports will be treated with the highest priority. You can expect an acknowledgement of your report within 24 hours, followed by a remediation timeline and an immediate hotfix deployment if the live environment is compromised.
 
+## Transparency
+
+NEXUS will align with the IMDA *Transparency Guidelines for Generative AI Chatbots*
+(Infocomm Media Development Authority, Singapore, published 20 July 2026) for its
+generative AI surfaces. The chatbot info card the guidelines describe is
+[`docs/AURA-CHATBOT-INFO-CARD.md`](docs/AURA-CHATBOT-INFO-CARD.md) — what AURA can and
+cannot do, how it is kept safe, how data is handled (including what reaches Google's
+Gemini API), and how to report issues. The card is currently a draft pending the owner's
+sign-off; the open work to meet the guidelines' encouraged minimum is tracked in
+[`AURA-TODO.md`](AURA-TODO.md) §P9.
+
 ## Data Governance Reminder
 
 As a strict operational policy, live production data is strictly segregated from the Demo Sandbox environment. **As of v2.0.0 that segregation is structural rather than procedural:** a sandbox visitor belongs to no team, so there is no path for the sandbox to write to. Before v2.0.0 demo sessions appended to the production anonymous wellbeing log and painted names onto the production pulse board. At no point should Protected Health Information (PHI) or specific patient identifiers be entered into the NEXUS system or processed by the AURA intelligence engine. Please utilise anonymous placeholders for all clinical logging.
