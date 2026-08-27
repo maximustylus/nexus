@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { recordTelemetry } from '../utils/telemetry';
 import { calculateRiskScore } from '../utils/scoring';
-import { ChevronLeft, Send, Sun, Moon, ExternalLink, CheckCircle, BrainCircuit } from 'lucide-react';
+import { ChevronLeft, Send, Sun, Moon, ExternalLink, CheckCircle, BrainCircuit, Info as InfoIcon } from 'lucide-react';
 import { getFunctions, httpsCallable } from 'firebase/functions';
 import { readTheme, writeTheme } from '../utils/theme';
 
@@ -1044,15 +1044,32 @@ const AuraChatbot = () => {
             </div>
           </div>
         </div>
-        <button
-          onClick={toggleTheme}
-          className="p-2 rounded-full bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-400 shadow-sm hover:scale-105 active:scale-95 transition-all"
-          aria-label="Toggle theme"
-        >
-          {isDark
-            ? <Sun size={17} className="text-amber-400" />
-            : <Moon size={17} />}
-        </button>
+        <div className="flex items-center gap-2">
+          {/*
+            The persistent access point to the chatbot info card (`AURA-TODO.md`
+            P9.3) — an info icon is sufficient per the IMDA guidelines, and the
+            card itself is a hosted page. New tab, so the assessment in progress
+            is not abandoned by reading about the assistant running it.
+          */}
+          <a
+            href="/aura-info"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="p-2 rounded-full bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-400 shadow-sm hover:scale-105 active:scale-95 transition-all"
+            aria-label="About this AI assistant: Chatbot Info Card"
+          >
+            <InfoIcon size={17} />
+          </a>
+          <button
+            onClick={toggleTheme}
+            className="p-2 rounded-full bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-400 shadow-sm hover:scale-105 active:scale-95 transition-all"
+            aria-label="Toggle theme"
+          >
+            {isDark
+              ? <Sun size={17} className="text-amber-400" />
+              : <Moon size={17} />}
+          </button>
+        </div>
       </header>
 
       {/* ── PROGRESS BAR ── */}

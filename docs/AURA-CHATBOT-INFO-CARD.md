@@ -6,7 +6,7 @@ data is handled, and how to raise a concern.**
 | | |
 |---|---|
 | **Card status** | ⚠️ **DRAFT — not yet in effect.** Per `AURA-GUARDRAILS.md` Rule 12, no controlled document enters effect without its named sign-off, and this card has none yet. Approver: Muhammad Alif (owner). |
-| **Card version** | 0.1 (draft) |
+| **Card version** | 0.2 (draft) |
 | **Last updated** | 2026-08-27 |
 | **Describes** | NEXUS **v2.1.0** (app) · AURA engine tier **v2.3** · guardrails **v1.0** |
 | **Framework** | Structured after the **IMDA Transparency Guidelines for Generative AI Chatbots** (Infocomm Media Development Authority, Singapore, published 20 July 2026), Annex B sample format. The guidelines are voluntary; NEXUS adopts them as its transparency baseline. |
@@ -248,9 +248,12 @@ does not claim to have.
 - **In the app:** the built-in feedback reporter, which writes to a `beta_feedback`
   collection. Use it for wrong or harmful AURA output, incorrect screening behaviour, and
   bugs.
-- **Security and data concerns:** email the lead developer directly at
-  **muhammad.alif@kkh.com.sg** (see `SECURITY.md`). Do not raise security issues in public
-  issue trackers.
+- **Security and data concerns:** email the lead developer directly at the address
+  published in the repository's security policy (`SECURITY.md`). Do not raise security
+  issues in public issue trackers. ⚠️ The address is deliberately not reproduced here:
+  this card ships in the public application bundle, and a standing control (`AN14`)
+  keeps staff email addresses out of that bundle. Whether to publish a dedicated
+  public contact address on this card is an open owner decision (§6).
 
 ### What you can report
 
@@ -275,10 +278,11 @@ reports enter that same pipeline.
 
 1. **This card is a draft with no named sign-off**, and per Rule 12 it is not in effect
    until the owner approves it.
-2. **The card is not yet surfaced in the product.** The IMDA minimum expects a high-level
-   safety statement and a clearly identifiable link to this card **at first use**, and a
-   persistent access point from within the chatbot. Neither exists in the UI today; both
-   are open items in `AURA-TODO.md` (P9).
+2. **The card is surfaced in the product, but not yet in force.** The app serves this
+   document at `/aura-info`, shows a safety statement with a link at first use of the
+   staff assistant and before the public pathways, and keeps a persistent info icon in
+   both chat headers (`AURA-TODO.md` 9.2/9.3, closed with test evidence). What that
+   surfacing presents is still a draft until item 1 closes.
 3. **Prompt-carried safeguards are unverified in production.** The 20-turn read that would
    verify them (`P8.8`) has not been run.
 4. **No attachment content inspection exists** (`AU17`): count, size and type are bounded
@@ -294,6 +298,11 @@ reports enter that same pipeline.
    and 19 machine-translated strings await native-speaker review (`CD13`).
 8. **No quantitative safety metrics exist.** Every effectiveness statement above is
    qualitative by necessity, not by preference.
+9. **No public contact email appears on this card**, by design conflict rather than
+   oversight: the IMDA guidelines suggest a support address, and the `AN14` control keeps
+   staff addresses out of the public bundle this card ships in. The working public channel
+   is the in-app reporter; publishing a dedicated (non-personal) support address would
+   resolve the conflict and is the owner's call.
 
 ---
 
@@ -310,4 +319,5 @@ single authoritative app version.
 
 | Card version | Date | Change |
 |---|---|---|
+| 0.2 (draft) | 2026-08-27 | Surfaced in-app: served at `/aura-info` from this file verbatim, first-use safety statements on both chat surfaces, persistent header links. The security contact address was replaced with a reference to `SECURITY.md` — the `AN14` bundle control refused the literal address in the public bundle, and the conflict is declared as gap item 9. |
 | 0.1 (draft) | 2026-08-27 | First draft, structured after IMDA Annex B. Not yet signed off, not yet surfaced in-app. |

@@ -359,21 +359,32 @@ surfaces. The roster engine is deliberately out of scope — it contains no mode
 putting it on the card would re-make `AU1` in a compliance document.
 
 ⚠️ **A drafted card is not a met minimum.** The guidelines' encouraged minimum has three
-parts, and only the first exists: the card itself. The other two are product work, listed
-below and open. Until 9.1–9.3 close, the accurate claim is *"NEXUS will align"*, never
-*"NEXUS complies"*.
+parts: the card, the first-use safety statement with a link, and the persistent in-app
+access point. The product halves (9.2, 9.3) are closed with evidence below; **what the
+surfacing presents is still an unsigned draft**, so until 9.1 closes the accurate claim
+remains *"NEXUS will align"*, never *"NEXUS complies"*.
 
 | # | Item | Owner | Status | Evidence |
 |---|---|---|---|---|
 | 9.1 | **Sign off the info card** — the card is a controlled document with no named approval (Rule 12); review every factual claim against source before it takes effect | **OWNER** | `OPEN` | — |
-| 9.2 | **Surface at first use** — a substantive safety statement (not "we take safety seriously") with a clearly identifiable link to the card, at first use of `AuraPulseBot` and of the `/individuals` conversational pathway | me | `OPEN` | — |
-| 9.3 | **Persistent access point** — the card reachable from within each chat surface (an information icon is sufficient per the guidelines; the card itself can stay a hosted page) | me | `OPEN` | — |
+| 9.2 | **Surface at first use** — a substantive safety statement (not "we take safety seriously") with a clearly identifiable link to the card, at first use of `AuraPulseBot` and of the `/individuals` conversational pathway | me | `DONE` | Staff assistant: a dismissible banner naming the two real caveats (wrong-but-confident output, unverified references) with a `/aura-info` link, shown until dismissed, dismissal persisted per browser (`aura_infocard_notice_v1`). Public: the statement joined the collection notice on `PathwaySelection` — the last screen common to both pathways — naming the AI (Gemini), that scoring is fixed rules, and not-medical-advice. **`AuraPulseBot.infocard.test.jsx` — 4 passed** (statement + link on first open; dismissal hides and survives a remount; persona grid intact; header link outlives the notice). **`PathwaySelection.infocard.test.jsx` — 3 passed** (names the AI, the fixed scoring and the caveat; links `/aura-info` in a new tab; the collection notice it joined still renders). |
+| 9.3 | **Persistent access point** — the card reachable from within each chat surface (an information icon is sufficient per the guidelines; the card itself can stay a hosted page) | me | `DONE` | Info icons in both chat headers link `/aura-info`, which renders `docs/AURA-CHATBOT-INFO-CARD.md` **verbatim via `?raw` import** — one source, no second copy to drift (`AuraInfoCard.jsx`; the route is public on purpose). **`AuraInfoCard.test.jsx` — 4 passed**, including that the REAL controlled document loads and renders all four disclosure areas, repo-relative citations never become dead anchors, and GFM tables render (new dep `remark-gfm@^4`). **`AuraChat.infocard.test.js` — 3 passed** (source-scan, limit stated in its header: `AuraChat` is never mounted by any test — the `AC5` jsPDF chain — so this proves the link is wired, not rendered). Bundle: the card ships as its own lazy chunk (`dist/assets/AURA-CHATBOT-INFO-CARD-*.js`) and **`an14.bundle.test.js` — 18 passed against the fresh `dist/`** after the 9.5 fix below. |
 | 9.4 | **Keep the card current** — update on a `resolveModel()` list change, a guardrail revision, a new AURA capability or a newly identified risk; review annually even without one. The guardrail version already stamped into every provenance record is the drift detector | standing | `OPEN` | — |
 
 Dependencies the card inherits rather than owns: `P8.8` (the 20-turn read — the card's
 effectiveness statements stay qualitative and hedged until it runs), `AU17` (the
 attachment control decision — the card currently discloses the gap), `CD10`/`CD13` (the
 clinical and translation reviews of the public-pathway wording the card quotes).
+
+⚠️ **9.5, found by the `AN14` bundle test during 9.2/9.3, and an owner decision:** the
+card now ships in the public bundle (its own lazy chunk), and its first draft reproduced
+the security contact address from `SECURITY.md` — which `an14.bundle.test.js` correctly
+refused, since it guards all seven staff addresses out of `dist/`. The card now points to
+`SECURITY.md` instead of embedding the address, and declares the conflict in its own gaps
+block (item 9). The IMDA guidelines suggest a support address on the card; `AN14` keeps
+staff addresses out of the bundle. **Resolving it means publishing a dedicated,
+non-personal support address (and adding it to the card), or accepting the in-app
+reporter as the only public channel.** Owner's call; the test was not weakened.
 
 ---
 

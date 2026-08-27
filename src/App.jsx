@@ -39,6 +39,7 @@ import LanguageGate from './components/LanguageGate';
 import PathwaySelection from './components/PathwaySelection';
 import ConventionalForm from './components/ConventionalForm';
 import ResultPage from './components/ResultPage';
+import AuraInfoCard from './components/AuraInfoCard';
 
 // UTILITIES
 import { MONTHS } from './utils';
@@ -888,6 +889,15 @@ export default function App() {
         <Route path="/individuals/form" element={<ConventionalForm />} />
         <Route path="/individuals/chat" element={<AuraChat />} />
         <Route path="/individuals/result" element={<ResultPage />} />
+
+        {/*
+          The chatbot info card (`AURA-TODO.md` P9.2/P9.3) — public on purpose,
+          like `/individuals`: the IMDA guidelines expect it reachable before and
+          without signing in. It renders `docs/AURA-CHATBOT-INFO-CARD.md`
+          verbatim; see the header of `AuraInfoCard.jsx` for why relative links
+          become citations rather than anchors.
+        */}
+        <Route path="/aura-info" element={<AuraInfoCard />} />
 
         {/*
           The catch-all. It must stay LAST — react-router picks the best match, but

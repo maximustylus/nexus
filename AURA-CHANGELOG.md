@@ -125,10 +125,21 @@ first artefact is drafted: [`docs/AURA-CHATBOT-INFO-CARD.md`](docs/AURA-CHATBOT-
 a consolidated card for the three generative surfaces after the guidelines' Annex B sample —
 capabilities and prohibitions, safety and reliability (qualitative only; nothing quantitative
 exists to cite), data practices per surface, and reporting channels, with the known gaps
-(`AU17`, `P8.8`, no age assurance, no in-app surfacing yet) declared in the card body rather
-than omitted. The card is a **draft pending owner sign-off**, and the in-app work the
-guidelines' minimum expects is `AURA-TODO.md` §P9. The roster engine is deliberately outside
-the card: no model, no card row, per `AU1`.
+(`AU17`, `P8.8`, no age assurance) declared in the card body rather than omitted. The card
+is a **draft pending owner sign-off** (`AURA-TODO.md` 9.1). The roster engine is
+deliberately outside the card: no model, no card row, per `AU1`.
+
+**Surfaced the same day (P9.2/P9.3, closed with evidence in `AURA-TODO.md`):** the app
+serves the document verbatim at `/aura-info` (a `?raw` import of the markdown — one source,
+its own lazy chunk), a dismissible first-use safety banner in the staff assistant, the
+public safety statement beside `PathwaySelection`'s collection notice, and persistent info
+icons in both chat headers. 14 new tests across four files. ⚠️ The first cut of the card
+reproduced the `SECURITY.md` contact address, and **`an14.bundle.test.js` refused the
+bundle** — the seven staff addresses are guarded out of `dist/`, and a transparency page is
+not an exemption. The card now cites `SECURITY.md` instead of embedding the address, the
+conflict is the card's own gap item 9, and the decision (a dedicated public support address,
+or the in-app reporter as the only public channel) is `AURA-TODO.md` 9.5. The test was not
+weakened.
 
 ### What would justify a real v2.4, if the owner decides them that way
 

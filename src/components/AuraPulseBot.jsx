@@ -5,8 +5,8 @@ import {
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { 
   Bug, X, Send, BrainCircuit, Shield, Ghost, Users, Zap, RefreshCw,
-  AlertTriangle, WifiOff, FileText, CheckCircle, Database, Trash2, Download, 
-  Mic, ChevronLeft, CalendarCheck, Maximize2, Minimize2, Minus 
+  AlertTriangle, WifiOff, FileText, CheckCircle, Database, Trash2, Download,
+  Mic, ChevronLeft, CalendarCheck, Maximize2, Minimize2, Minus, Info
 } from 'lucide-react';
 import { DEMO_PERSONAS, LIVE_PERSONAS } from '../config/personas';
 import { respondAsDemoAura } from '../utils/demoAura';
@@ -84,6 +84,16 @@ const SEND_COOLDOWN_MS = 2000;
 // `onOpen` is bound as `_onOpen`: the prop is still part of this component's
 // accepted shape (App.jsx passes it) but nothing in here calls it — see the note
 // beside the refs below.
+/*
+ * The IMDA first-use notice (`AURA-TODO.md` P9.2): a safety statement with a
+ * link to the chatbot info card, surfaced until the person dismisses it, then
+ * never again on this browser. Keyed with a version suffix so a materially
+ * revised card can re-surface the notice by bumping the key — the same reason
+ * the card itself carries a version. The header's info icon (P9.3) is the
+ * persistent access point and has no key: it never goes away.
+ */
+const INFO_NOTICE_KEY = 'aura_infocard_notice_v1';
+
 export default function AuraPulseBot({ isOpen, onClose, onOpen: _onOpen, user }) {
     const { isDemo, auraHistory, setAuraHistory } = useNexus();
     // WHOSE wellbeing record. Null in the sandbox and for a signed-in account with
@@ -98,6 +108,12 @@ export default function AuraPulseBot({ isOpen, onClose, onOpen: _onOpen, user })
     const [loading,          setLoading]          = useState(false);
     const [isSending,        setIsSending]        = useState(false);
     const [pendingLog,       setPendingLog]       = useState(null);
+    // Guarded read: a browser that refuses storage (private mode) gets the notice
+    // every session, which errs toward showing a safety statement, not hiding it.
+    const [showInfoNotice,   setShowInfoNotice]   = useState(() => {
+        try { return localStorage.getItem(INFO_NOTICE_KEY) !== 'seen'; }
+        catch { return true; }
+    });
     const [isOnline,         setIsOnline]         = useState(navigator.onLine);
     const [liveMemory,       setLiveMemory]       = useState(null);
     const [isListening,      setIsListening]      = useState(false);
@@ -1117,7 +1133,20 @@ export default function AuraPulseBot({ isOpen, onClose, onOpen: _onOpen, user })
                                     )}
 
                                     {chatSize !== 'minimized' && (
-                                        <button 
+                                        <a
+                                            href="/aura-info"
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            title="About AURA: Chatbot Info Card"
+                                            aria-label="About AURA: Chatbot Info Card"
+                                            className="p-1.5 hover:bg-white/20 rounded-lg transition-all text-white/80 hover:text-white"
+                                        >
+                                            <Info size={14} />
+                                        </a>
+                                    )}
+
+                                    {chatSize !== 'minimized' && (
+                                        <button
                                             onClick={() => {
                                                 window.dispatchEvent(new CustomEvent('open-bug-report'));
                                                 if (onClose) onClose(); 
@@ -1174,6 +1203,40 @@ export default function AuraPulseBot({ isOpen, onClose, onOpen: _onOpen, user })
                             listener whose failure this banner reported is there,
                             and so is the message. Nothing about a shift swap is
                             reported in this panel any more. */}
+
+                        {/* The IMDA first-use safety statement (P9.2). Substantive
+                            rather than "we take safety seriously": the two caveats
+                            are the two the info card leads with. Dismissal persists
+                            per browser; the header's info icon remains after it. */}
+                        {showInfoNotice && chatSize !== 'minimized' && (
+                            <div className="shrink-0 flex items-start gap-2 px-4 py-2.5 bg-indigo-50 dark:bg-indigo-950/40 border-b border-indigo-200 dark:border-indigo-900">
+                                <Info size={13} className="text-indigo-500 mt-0.5 shrink-0" />
+                                <p className="flex-1 text-[10px] font-semibold text-indigo-900 dark:text-indigo-200 leading-relaxed">
+                                    AURA is an AI assistant. It can state wrong information confidently, and
+                                    every reference it offers is unverified. Verify anything important, and
+                                    never enter patient-identifiable data.{' '}
+                                    <a
+                                        href="/aura-info"
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="underline underline-offset-2 font-black hover:text-indigo-700 dark:hover:text-indigo-100"
+                                    >
+                                        Chatbot Info Card
+                                    </a>
+                                </p>
+                                <button
+                                    onClick={() => {
+                                        setShowInfoNotice(false);
+                                        try { localStorage.setItem(INFO_NOTICE_KEY, 'seen'); }
+                                        catch { /* storage refused: it returns next session, which is the safe direction */ }
+                                    }}
+                                    aria-label="Dismiss AI safety notice"
+                                    className="p-1 text-indigo-400 hover:text-indigo-600 dark:hover:text-indigo-300 shrink-0 transition-colors"
+                                >
+                                    <X size={12} />
+                                </button>
+                            </div>
+                        )}
 
                         {chatSize !== 'minimized' && (
                             <div className="flex-1 overflow-y-auto p-5 bg-slate-50 dark:bg-slate-950/50 scroll-smooth">

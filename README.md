@@ -269,10 +269,13 @@ them over.
 
 Two things, stated per this file's own rules:
 
-1. **The card is a draft.** It has no named sign-off yet and is not in effect until the
-   owner approves it (guardrail Rule 12). The in-app work the guidelines' minimum expects —
-   a safety statement and link to the card at first use, and a persistent access point in
-   the chat UI — is **not built**; both are open items in
+1. **The card is a draft, and it is already surfaced.** The app serves the document
+   verbatim at **`/aura-info`** (one source — the route renders the markdown file, so the
+   page cannot drift from it), shows a first-use safety statement with a link on the staff
+   assistant and before the public pathways, and keeps a persistent info icon in both chat
+   headers (`AURA-TODO.md` 9.2/9.3, closed with test evidence). The card has no named
+   sign-off yet and is not in effect until the owner approves it (guardrail Rule 12) —
+   that, and the public support-address decision (9.5), are what remain in
    [`AURA-TODO.md`](AURA-TODO.md) §P9.
 2. **The roster engine is outside the card's scope on purpose.** The guidelines cover
    generative AI chatbots; the roster engine contains no model. Putting it on the card
