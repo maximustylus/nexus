@@ -71,7 +71,9 @@ describe('nextUsable — the best model that has not refused', () => {
     it('returns null only when every model including the fallback has refused', () => {
         const d = createDemotions();
         for (const m of MODEL_PRIORITY) d.demote('models/' + m, NOW);
-        // The fallback is the last priority model; everything is demoted.
+        // The premise this test leans on, asserted rather than assumed: the
+        // fallback IS the last priority model, so demoting the list demotes it.
+        expect(SAFE_FALLBACK_MODEL).toBe('models/' + MODEL_PRIORITY[MODEL_PRIORITY.length - 1]);
         expect(nextUsable(d, NOW)).toBe(null);
     });
 });
