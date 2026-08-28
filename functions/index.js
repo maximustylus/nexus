@@ -44,13 +44,16 @@ if (!API_KEY) {
     console.warn('[NEXUS] GEMINI_API_KEY not in environment. Normal during local deploy analysis.');
 }
 
-const MODEL_PRIORITY = [
-    'gemini-2.5-pro',
-    'gemini-2.0-flash',
-    'gemini-1.5-pro',
-    'gemini-1.5-flash',
-];
-const SAFE_FALLBACK_MODEL = 'models/gemini-1.5-flash';
+/**
+ * `AU30` — the list and the quota logic live in `modelQuota.cjs` (pure, tested)
+ * after a free-tier key resolved to `gemini-2.5-pro`, a model ListModels shows
+ * to every key but the free tier may generate with NEVER (`limit: 0`), and
+ * every call 500'd for the container's life. See that module's header.
+ */
+const modelQuota = require('./modelQuota.cjs');
+const MODEL_PRIORITY = modelQuota.MODEL_PRIORITY;
+const SAFE_FALLBACK_MODEL = modelQuota.SAFE_FALLBACK_MODEL;
+const modelDemotions = modelQuota.createDemotions();
 
 let modelResolutionPromise = null;
 
@@ -90,6 +93,13 @@ async function resolveModel() {
 
             for (const candidate of MODEL_PRIORITY) {
                 const match = available.find(name => name === 'models/' + candidate);
+                // `AU30`: visible is not usable. A model that refused for quota is
+                // skipped for DEMOTION_TTL_MS — ListModels would happily offer
+                // `gemini-2.5-pro` to a free-tier key forever.
+                if (match && modelDemotions.isDemoted(match, Date.now())) {
+                    logger.warn('[NEXUS] Skipping quota-demoted model: ' + match);
+                    continue;
+                }
                 if (match) {
                     logger.info('[NEXUS] Model resolved: ' + match);
                     return match;
@@ -109,6 +119,77 @@ async function resolveModel() {
     })();
 
     return modelResolutionPromise;
+}
+
+/** One generateContent request, no policy: fetch and parse, nothing else. */
+async function geminiGenerateOnce(modelName, bodyString, timeoutMs) {
+    var url = 'https://generativelanguage.googleapis.com/v1beta/' + modelName
+            + ':generateContent?key=' + API_KEY;
+    var response = await fetch(url, {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        signal:  AbortSignal.timeout(timeoutMs),
+        body:    bodyString,
+    });
+    var data = await response.json();
+    return { response: response, data: data };
+}
+
+/**
+ * `AU30` — the one generate path all four callables use. Policy lives here so
+ * it cannot diverge per endpoint:
+ *
+ *   - a quota refusal (429 / RESOURCE_EXHAUSTED) demotes the model for this
+ *     container, clears the resolution cache, and retries the SAME body ONCE
+ *     on the next usable model — one retry, because a second refusal means the
+ *     tier is the problem and more attempts are latency, not recovery;
+ *   - a 404 clears the resolution cache (the pre-existing behaviour, now in
+ *     one place instead of four);
+ *   - any remaining failure is logged in full server-side and thrown as an
+ *     `HttpsError` whose message is `modelQuota.clientMessage()` — NEVER the
+ *     upstream text, which carried quota metrics and billing URLs to the
+ *     browser console (row 6.6's middle item, seen live 2026-08-28).
+ *
+ * Returns `{ modelName, data }` — `modelName` is whichever model actually
+ * answered, which is what `aiProvenance` must record (Rule 12).
+ */
+async function geminiGenerate(bodyString, timeoutMs, label) {
+    var modelName = await resolveModel();
+    var attempt = await geminiGenerateOnce(modelName, bodyString, timeoutMs);
+
+    if (modelQuota.isQuotaExhausted(attempt.response.status, attempt.data)) {
+        modelDemotions.demote(modelName, Date.now());
+        modelResolutionPromise = null;
+        var retryModel = modelQuota.nextUsable(modelDemotions, Date.now());
+        logger.warn(label + ' quota exhausted', {
+            model:   modelName,
+            message: attempt.data && attempt.data.error && attempt.data.error.message,
+            retryOn: retryModel,
+        });
+        if (retryModel && retryModel !== modelName) {
+            modelName = retryModel;
+            attempt = await geminiGenerateOnce(modelName, bodyString, timeoutMs);
+        }
+    }
+
+    if (attempt.response.status === 404) {
+        logger.warn('[NEXUS] Model 404 — clearing cache for re-discovery.');
+        modelResolutionPromise = null;
+    }
+
+    if (!attempt.response.ok) {
+        logger.error(label + ' API failure', {
+            status:  attempt.response.status,
+            message: attempt.data && attempt.data.error && attempt.data.error.message,
+            model:   modelName,
+        });
+        throw new HttpsError(
+            attempt.response.status === 429 ? 'resource-exhausted' : 'internal',
+            modelQuota.clientMessage(attempt.response.status),
+        );
+    }
+
+    return { modelName: modelName, data: attempt.data };
 }
 
 const MAX_USER_TEXT    = 500;
@@ -436,8 +517,6 @@ exports.chatWithAura = onCall({
     });
 
     try {
-        var modelName = await resolveModel();
-        var url = 'https://generativelanguage.googleapis.com/v1beta/' + modelName + ':generateContent?key=' + API_KEY;
         var turnIndex      = history.length;
         var diagnosisReady = turnIndex >= 4;
 
@@ -524,11 +603,7 @@ exports.chatWithAura = onCall({
 
         var trimmedHistory = history.slice(-MAX_HISTORY_LEN).map(function(h) { return { role: h.role, parts: h.parts }; });
 
-        var response = await fetch(url, {
-            method:  'POST',
-            headers: { 'Content-Type': 'application/json' },
-            signal:  AbortSignal.timeout(90000),
-            body: JSON.stringify({
+        var requestBody = JSON.stringify({
                 systemInstruction: {
                     /**
                      * The persona is an INSTRUCTION and belongs here — `AU28`. An
@@ -561,24 +636,13 @@ exports.chatWithAura = onCall({
                     maxOutputTokens:  8192,
                     responseMimeType: 'application/json',
                 },
-            }),
         });
 
-        var data = await response.json();
-
-        if (response.status === 404) {
-            logger.warn('[NEXUS] Model 404 — clearing cache for re-discovery.');
-            modelResolutionPromise = null;
-        }
-
-        if (!response.ok) {
-            logger.error('[AURA] API Failure', {
-                status:  response.status,
-                message: data.error && data.error.message,
-                model:   modelName,
-            });
-            throw new Error((data.error && data.error.message) || 'API Error');
-        }
+        // `AU30`: quota fallback, 404 cache-clear and the clean client error all
+        // live in `geminiGenerate`; `modelName` is whichever model ANSWERED.
+        var gen = await geminiGenerate(requestBody, 90000, '[AURA]');
+        var modelName = gen.modelName;
+        var data = gen.data;
 
         var rawText = extractText(data);
 
@@ -691,9 +755,6 @@ exports.generateSmartAnalysis = onCall({
     validateAnalysisInput({ targetYear: targetYear, staffProfiles: staffProfiles, yearData: yearData });
 
     try {
-        var modelName = await resolveModel();
-        var url = 'https://generativelanguage.googleapis.com/v1beta/' + modelName + ':generateContent?key=' + API_KEY;
-
         var promptText = 'TEAM IDENTITY: ' + teamName + '\n' +
         'Generate a comprehensive staff wellbeing audit report for the year ' + targetYear + ' for the team identified above.\n\n' +
         'STAFF PROFILES (' + staffProfiles.length + ' records):\n' +
@@ -713,29 +774,25 @@ exports.generateSmartAnalysis = onCall({
         '- All three fields are REQUIRED. If you cannot produce one, return it as a short honest sentence rather than omitting it.\n\n' +
         'Return ONLY the JSON object. No markdown.';
 
-        var response = await fetch(url, {
-            method:  'POST',
-            headers: { 'Content-Type': 'application/json' },
-            signal:  AbortSignal.timeout(30000),
-            body: JSON.stringify({
-                systemInstruction: {
-                    parts: [{ text: GUARDRAIL_PREAMBLE }, { text: SMART_ANALYSIS_SYSTEM_PROMPT }],
-                },
-                contents: [{
-                    role:  'user',
-                    parts: [{ text: promptText }],
-                }],
-                generationConfig: {
-                    temperature:      0.2,
-                    maxOutputTokens:  4096,
-                    responseMimeType: 'application/json',
-                },
-            }),
+        var requestBody = JSON.stringify({
+            systemInstruction: {
+                parts: [{ text: GUARDRAIL_PREAMBLE }, { text: SMART_ANALYSIS_SYSTEM_PROMPT }],
+            },
+            contents: [{
+                role:  'user',
+                parts: [{ text: promptText }],
+            }],
+            generationConfig: {
+                temperature:      0.2,
+                maxOutputTokens:  4096,
+                responseMimeType: 'application/json',
+            },
         });
 
-        var genData = await response.json();
-
-        if (!response.ok) throw new Error((genData.error && genData.error.message) || 'Audit API Error');
+        // `AU30`: quota fallback and the clean client error live in `geminiGenerate`.
+        var gen = await geminiGenerate(requestBody, 30000, '[SMART_ANALYSIS]');
+        var modelName = gen.modelName;
+        var genData = gen.data;
 
         var rawText = extractText(genData);
         /**
@@ -973,16 +1030,9 @@ exports.processFeedPost = onCall({ secrets: ['GEMINI_API_KEY'] }, async (request
     ].join('\n');
 
     try {
-        var modelName = await resolveModel();
-        var url = 'https://generativelanguage.googleapis.com/v1beta/' + modelName + ':generateContent?key=' + API_KEY;
-
         var userContent = rawText ? rawText : '[Image Post with no text]';
 
-        var response = await fetch(url, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            signal: AbortSignal.timeout(30000),
-            body: JSON.stringify({
+        var requestBody = JSON.stringify({
                 /**
                  * ⚠️ THE BRIEF PREAMBLE IS HERE FOR ONE LINE OF IT: RULE 15. This
                  *    function feeds a staff-authored post to a model and acts on the
@@ -997,15 +1047,11 @@ exports.processFeedPost = onCall({ secrets: ['GEMINI_API_KEY'] }, async (request
                     temperature: 0.2,
                     responseMimeType: 'application/json',
                 },
-            }),
         });
 
-        var genData = await response.json();
-
-        if (!response.ok) {
-            console.error('[AURA GUARD API Error]', genData);
-            throw new Error((genData.error && genData.error.message) || 'AURA API Error');
-        }
+        // `AU30`: quota fallback and the clean client error live in `geminiGenerate`.
+        var gen = await geminiGenerate(requestBody, 30000, '[AURA GUARD]');
+        var genData = gen.data;
 
         var rawResponseText = extractText(genData);
         var analysisResult = parseJsonResponse(rawResponseText, ['is_approved']);
@@ -1395,17 +1441,9 @@ exports.communityAck = onCall({
     if (!checked.ok) throw new HttpsError('invalid-argument', checked.message);
 
     try {
-        const modelName = await resolveModel();
-        const url = 'https://generativelanguage.googleapis.com/v1beta/' + modelName
-                  + ':generateContent?key=' + API_KEY;
-
         const turn = communityAckRules.buildAckTurn(checked);
 
-        const response = await fetch(url, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            signal: AbortSignal.timeout(20000),
-            body: JSON.stringify({
+        const requestBody = JSON.stringify({
                 // The brief variant, not the full one: this endpoint returns one
                 // sentence under a 200-token ceiling, and prefixing it with four
                 // hundred words on citation practice would be padding on a public,
@@ -1418,23 +1456,14 @@ exports.communityAck = onCall({
                     // a 40-word acknowledgement is two orders of magnitude of slack.
                     maxOutputTokens: 200,
                 },
-            }),
         });
 
-        const data = await response.json();
-        if (response.status === 404) {
-            logger.warn('[NEXUS] Model 404 — clearing cache for re-discovery.');
-            modelResolutionPromise = null;
-        }
-        if (!response.ok) {
-            logger.error('[communityAck] API failure', {
-                status: response.status,
-                message: data.error && data.error.message,
-            });
-            throw new Error((data.error && data.error.message) || 'API Error');
-        }
+        // `AU30`: quota fallback, 404 cache-clear and the clean client error all
+        // live in `geminiGenerate` — this public endpoint most of all must not
+        // forward upstream billing text to an anonymous browser.
+        const gen = await geminiGenerate(requestBody, 20000, '[communityAck]');
 
-        return { text: String(extractText(data) || '').trim() };
+        return { text: String(extractText(gen.data) || '').trim() };
 
     } catch (error) {
         if (error instanceof HttpsError) throw error;

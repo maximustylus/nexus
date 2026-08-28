@@ -6,7 +6,7 @@ data is handled, and how to raise a concern.**
 | | |
 |---|---|
 | **Card status** | ✅ **In effect.** Approved 2026-08-28 by **Muhammad Alif (owner)** — the named sign-off `AURA-GUARDRAILS.md` Rule 12 requires. The owner read draft v0.3 in full and approved it as written; the same session's `AU29` fix and 9.5 decision are folded into this version, recorded in the changelog below. |
-| **Card version** | 1.0 |
+| **Card version** | 1.1 |
 | **Last updated** | 2026-08-28 |
 | **Describes** | NEXUS **v2.1.0** (app) · AURA engine tier **v2.3** · guardrails **v1.0** |
 | **Framework** | Structured after the **IMDA Transparency Guidelines for Generative AI Chatbots** (Infocomm Media Development Authority, Singapore, published 20 July 2026), Annex B sample format. The guidelines are voluntary; NEXUS adopts them as its transparency baseline. |
@@ -57,8 +57,11 @@ for its lead.
 AURA's generative surfaces are built on **Google Gemini** models, reached over the Gemini
 API from Firebase Cloud Functions. The specific model is resolved at runtime from a
 configured list (currently `gemini-2.5-pro`, `gemini-2.0-flash`, `gemini-1.5-pro`,
-`gemini-1.5-flash`, with `gemini-1.5-flash` as the safe fallback), and **which model
-answered is recorded** — every assistant and analysis response carries a provenance record
+`gemini-1.5-flash`, with `gemini-1.5-flash` as the safe fallback); a model the service
+lists but refuses for quota is set aside for a period and the request retried once on the
+next model in the list, so a quota problem degrades the model tier rather than the
+service (`AU30`). **Which model answered is recorded** —
+every assistant and analysis response carries a provenance record
 (model id, guardrail version, timestamp) that is stamped into `.docx` exports, audit rows
 and archived reports. The models are Google's; what is NEXUS's own is the prompting,
 validation and scaffolding around them.
@@ -386,6 +389,7 @@ single authoritative app version.
 
 | Card version | Date | Change |
 |---|---|---|
+| 1.1 | 2026-08-28 | §1 updated after a live failure the same day (`AU30`): model selection is now quota-aware — a model the key can see but not use is set aside and the call retried once on the next in the list — and API failures reach the browser as a clean sentence, never the upstream quota/billing text. No other content change; approval stands. |
 | **1.0** | 2026-08-28 | **Signed off by the owner (Muhammad Alif) and in effect** — approval given against draft v0.3, read in full. Folded into this version, from the same session: `AU29` fixed (sign-out and identity change now clear the AURA session; 4 tests), §3/§4 rewritten to the fixed behaviour, and the 9.5 decision recorded (a dedicated non-personal support address will be published here once created; in-app reporter until then). |
 | 0.3 (draft) | 2026-08-27 | Steward audit corrections before sign-off: the false panel-close history claim replaced with the true clearing behaviour and the `AU29` shared-terminal caveat; "91 emulator checks" corrected to the current 140; `AN13` corrected from "accepted gap" to its shipped NRIC/FIN fence; "by design" hedged to "by construction"; gap items 10–12 added. 21 other load-bearing claims steward-CONFIRMED against source. |
 | 0.2 (draft) | 2026-08-27 | Surfaced in-app: served at `/aura-info` from this file verbatim, first-use safety statements on both chat surfaces, persistent header links. The security contact address was replaced with a reference to `SECURITY.md` — the `AN14` bundle control refused the literal address in the public bundle, and the conflict is declared as gap item 9. |

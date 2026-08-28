@@ -46,7 +46,7 @@ original post-mortems into one. `AU2` means today exactly what it meant when it 
 
 | | Count | Ids |
 |---|---|---|
-| `DONE`, evidenced | **46** | `AU1` `AU2` `AU3` `AU4` `AU6` `AU7` `AU9` `AU10` `AU12` `AU14`–`AU16` `AU19` `AU20` `AU22`–`AU29` `AC1` `AC2` `AC5`–`AC10` `AC12`–`AC16` `AN1`* `AN2`–`AN4` `AN6` `AN8` `AN10` `AN13` `AN14` + `AN12` (code half) — `AU3` now both halves, emulator-verified; `AU29` closed 2026-08-28 |
+| `DONE`, evidenced | **47** | `AU1` `AU2` `AU3` `AU4` `AU6` `AU7` `AU9` `AU10` `AU12` `AU14`–`AU16` `AU19` `AU20` `AU22`–`AU30` `AC1` `AC2` `AC5`–`AC10` `AC12`–`AC16` `AN1`* `AN2`–`AN4` `AN6` `AN8` `AN10` `AN13` `AN14` + `AN12` (code half) — `AU3` now both halves, emulator-verified; `AU29` and `AU30` closed 2026-08-28 |
 | `OPEN`, mine | **0** | The engineering queue is genuinely empty as of 2026-08-24: `AU3`'s rules backstop and `AC16`'s latch — the two residuals the previous version of this row disclosed — are closed above, both with evidence. What remains is the owner's column and the standing verification work (`P8.8`, `CD13`). |
 
 ⚠️ **Six rows in this file said `OPEN` for findings closed days earlier** (`AU6` `AU7` `AU19`
@@ -56,9 +56,10 @@ is a claim like any other; these were false in the safe direction, which is stil
 | `OPEN`, **owner's decision** | 9 | `AU5` `AU8` `AU11` `AU17`† `AC11` `AN7` `AN9` `AN11` `AN12` — `AU29` was here for one day; closed 2026-08-28 with evidence, on the owner's instruction |
 | **`LIVE` right now** | **0 grades · 0 names · 0 emails** | \* `AN1` and `AN14` both closed and verified against `dist/`; `an14.bundle.test.js` keeps it that way |
 
-**54 findings**, not the 51 this file was created with: `AU25` (the go-live gate) and
-`AC15` (fixing `AC1`) were opened on the same day, and `AU29` (chat history survives
-sign-out) was opened 2026-08-27 by the steward audit of P9. Neither renumbers anything.
+**55 findings**, not the 51 this file was created with: `AU25` (the go-live gate) and
+`AC15` (fixing `AC1`) were opened on the same day; `AU29` (chat history survives
+sign-out) was opened 2026-08-27 by the steward audit of P9; `AU30` (model selected by
+visibility, not usability) was found live on 2026-08-28. None of it renumbers anything.
 
 † `AU17`'s **code half** (the audit log of what passes through the attachment path) shipped
 with `AU15`; what stays with the owner is the policy half — what the actual PDPA control on
@@ -342,7 +343,7 @@ MODE 3 is **unverified** — see item 7 of that document's own assumptions block
 | 6.3 | `AU22` | Make the sandbox emit the live `db_workload` shape, or correct the README test and the comment | me | `DONE` | ⚠️ Closed at `e3b6bb9`; stale row, also already in the closed-with-evidence table above. |
 | 6.4 | `AU18` `AC10` | One shared response parser instead of three copies | me | `OPEN` | — |
 | 6.5 | `AU13` | Rewrite `CP12`'s evidence string to what the grep actually shows; key anon logs deterministically | me | `OPEN` | — |
-| 6.6 | `AU20` `AU21` `AC4` | Project names out of the function; stop forwarding upstream error text; scope the `scoring.js` cap docstring | me | `OPEN` | — |
+| 6.6 | `AU20` `AU21` `AC4` | Project names out of the function; ~~stop forwarding upstream error text~~; scope the `scoring.js` cap docstring | me | `OPEN` | The middle element closed 2026-08-28 via `AU30`: all four callables route API failures through `geminiGenerate`, which logs the upstream detail server-side and throws `modelQuota.clientMessage()` to the client — asserted by `modelQuota.test.js` (the old `throw new Error((data.error…` pattern greps to zero). The other two elements remain open. |
 | 6.7 | `AU1` | How AURA is described | **OWNER** → done | `DONE` | `README.md` — a *What NEXUS actually is* section separating the deterministic roster engine from the Gemini assistant, with the old claim quoted and struck through rather than deleted. Badges split: `Roster engine — deterministic` and `AURA assistant — Gemini`. |
 | 6.9 | `AU23` | README describes a codebase that has moved | me | `DONE` | Every path in the tree verified against the repo — `auraChat.js` and `useWindowSize.js` were listed and **deleted**; `auraEngine.js` was captioned *"Core LLM prompt structures"* and is roster code; the community portal, `TeamContext`, `firestore.rules` and `functions/` were all missing. The uncorrected autonomy claim in Release History now carries the same correction its Pillar A twin got on 2026-08-15. |
 | 6.8 | `AU17` | **Decide** what the PDPA control actually is, given `AU15` | **OWNER** | `OPEN` | The README no longer *claims* a control it does not have — it now says plainly that the attachment path accepts five files of any size and type with no scan and no log, and that "we tell staff not to" is the current control. The **decision** is still yours. |
@@ -377,6 +378,12 @@ Dependencies the card inherits rather than owns: `P8.8` (the 20-turn read — th
 effectiveness statements stay qualitative and hedged until it runs), `AU17` (the
 attachment control decision — the card currently discloses the gap), `CD10`/`CD13` (the
 clinical and translation reviews of the public-pathway wording the card quotes).
+
+### New on 2026-08-28, found live on the owner's screen
+
+| Id | What | Severity |
+|---|---|---|
+| `AU30` | ~~**`resolveModel()` selects by visibility, not usability — and the raw quota refusal reached the browser.**~~ **CLOSED same day.** The live app 500'd on every `chatWithAura` call: the Gemini key is on the free tier, ListModels shows `gemini-2.5-pro` to every key, but the free tier grants it **zero** generate quota (`limit: 0` — none at all, not exhausted-today), so resolution picked a model no call could use and cached it for the container's life. The upstream refusal — quota metric names, billing URLs — was concatenated into the `HttpsError` and shipped to the browser console, which is row 6.6's *"stop forwarding upstream error text"*, demonstrated in production. Fix: `functions/modelQuota.cjs` (pure: quota detection, per-container demotion with a 30-minute TTL, next-usable selection, the client-facing sentence) + one `geminiGenerate` helper in `index.js` that **all four callables** route through — on a quota refusal it demotes the model, clears the resolution cache, and retries the same body once on the next usable model; `resolveModel` skips demoted models; every remaining failure is logged in full server-side and thrown with clean client text. Provenance records whichever model actually answered. **`functions/modelQuota.test.js` — 17 passed**, including source-scans that all four call sites route through the helper, the old `throw new Error((data.error…` pattern is gone, and the retry is single-shot. Full functions suite 440 passed. **The 6.6 element "stop forwarding upstream error text" is closed by this; 6.6 stays open for its other parts.** ⚠️ What this does NOT fix: the free tier itself. The fallback lands the app on flash models with modest free quotas — workable for the 20-turn read after deploy; a paid tier is the owner's decision for real usage. | high · **`DONE`** |
 
 ### New on 2026-08-27, by steward audit of the P9 batch
 

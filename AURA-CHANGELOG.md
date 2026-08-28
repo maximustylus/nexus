@@ -164,6 +164,19 @@ direction (a dedicated non-personal support address; mailbox pending) and left o
 exactly that. The IMDA encouraged minimum is met in the codebase; it reaches users at
 deploy.
 
+**2026-08-28, later the same day — `AU30`, found live on the owner's screen.** Every
+`chatWithAura` call was 500ing in production: the Gemini key is free-tier, ListModels
+shows `gemini-2.5-pro` to every key, and the free tier grants that model **zero** generate
+quota — so `resolveModel()` picked a model no call could use and cached it, and the raw
+upstream refusal (quota metrics, billing URLs) was forwarded to the browser console (row
+6.6's middle element, demonstrated in production). Fixed the same day: `modelQuota.cjs`
+(pure — quota detection, per-container demotion with a 30-minute TTL, next-usable
+selection, the clean client sentence) and one `geminiGenerate` helper that all four
+callables route through, retrying a quota-refused request once on the next usable model.
+Provenance records whichever model answered. 17 new tests; functions suite 440 passing.
+Card updated to v1.1 (§1 only). The free tier itself is untouched — the fallback lands on
+flash models with modest free quotas, and a paid tier remains the owner's decision.
+
 ### What would justify a real v2.4, if the owner decides them that way
 
 - `AU8` — content-gated assessment instead of turn-count-gated
