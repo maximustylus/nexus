@@ -701,7 +701,7 @@ const WelcomeScreen = (props) => {
                                 </div>
                                 <h2 className="text-3xl font-black text-slate-900 dark:text-white mb-4">Demo Mode</h2>
                                 <p className="text-slate-600 dark:text-slate-400 mb-10 leading-relaxed text-sm font-medium">
-                                    Experience the NEXUS architecture in a sandboxed environment. Access analytics and triage tools without processing live clinical data.
+                                    Experience the NEXUS architecture in a sandboxed environment. Access analytics and triage tools without processing live health data.
                                 </p>
                                 <button 
                                     onClick={handleDemoEnter} 
