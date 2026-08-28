@@ -2,23 +2,19 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { recordTelemetry } from '../utils/telemetry';
 import { calculateRiskScore } from '../utils/scoring';
-import { ChevronLeft, Send, Sun, Moon, ExternalLink, CheckCircle, BrainCircuit } from 'lucide-react';
+import { ChevronLeft, Send, Sun, Moon, ExternalLink, CheckCircle, BrainCircuit, Info as InfoIcon } from 'lucide-react';
 import { getFunctions, httpsCallable } from 'firebase/functions';
 import { readTheme, writeTheme } from '../utils/theme';
-import { toSector } from '../utils/singapore/postalSectors';
+
 import { nextActiveStep, activeStepCount, activeStepPosition } from '../utils/chatSteps';
-// ⚠️ Word-bounded matchers, not raw substring regexes. `/low/` used to fire inside
-// "slowly", "follow" and "allow", flagging psychological distress on somebody
-// saying they felt fine. See `src/utils/clinicalFlags.js`.
-import {
-  matchesSymptom, matchesCondition, matchesFinancialBarrier, matchesSocialIsolation,
-  matchesPsychologicalDistress, matchesCaregiverStrain, matchesFoodInsecurity,
-  isSixtyPlus, parseAgeBand,
-  matchesFemale, matchesMale,
-  isNoPreviousId, parseFallsAnswer, parseHealthierSg,
-} from '../utils/clinicalFlags';
+// The word-level matchers moved with the parser into `clinicalParse.js` (`AC5`);
+// what stays is the one gate this component evaluates itself.
+import { isSixtyPlus } from '../utils/clinicalFlags';
 import { readLanguage, applyDocumentLanguage } from '../utils/language';
 import { getSessionId, saveProgress, loadProgress, clearProgress } from '../utils/assessmentSession';
+// `AC5` — the parser lives in its own tested module now; see its header.
+import { parseClinicalData } from '../utils/clinicalParse';
+import { FALLS_CHIPS, HSG_CHIPS } from '../data/screeningChips';
 
 // ── Cloud Function — same pattern as AuraPulseBot.jsx ────────────────────────
 // Gemini API key is secured in Firebase Cloud Functions (never client-side)
@@ -103,7 +99,13 @@ const DOMAIN_CONFIG = [
   },
 ];
 
-const TOTAL_STEPS = DOMAIN_CONFIG.length; // 13
+// `AC14`: `TOTAL_STEPS` lived here with a comment saying "// 13" while the
+// array held 15 — `CP26` appended `falls` and `healthier_sg` and the comment
+// kept its old count. Its only two uses were `step: TOTAL_STEPS - 1` on the
+// completion and error messages, which badged the final plan with whatever
+// domain happens to be last (`healthier_sg`) — so those messages carry no
+// `step` now, and the constant had no remaining reader. Deleted rather than
+// corrected: a count nothing consumes is a comment waiting to go stale again.
 
 // Progress segment colour by group
 const GROUP_COLOURS = {
@@ -373,8 +375,8 @@ const DICTIONARY = {
       */
       ['Other / Type my own'],
       /* 12 previous_id    */ ['No previous ID'],
-      /* 13 falls           */ ['No falls', 'One fall', 'Two or more falls', 'A fall, and I now avoid some activities'],
-      /* 14 healthier_sg    */ ['Yes, I am enrolled', 'No, not enrolled', 'I am not sure'],
+      /* 13 falls           */ FALLS_CHIPS.en,
+      /* 14 healthier_sg    */ HSG_CHIPS.en,
     ],
   },
 
@@ -405,6 +407,8 @@ const DICTIONARY = {
       'Apakah jenis perumahan yang anda diami? (cth. HDB 3-Bilik, Kondo)',
       'Apakah dua digit pertama poskod anda supaya saya boleh mencari sumber berdekatan?',
       'Soalan terakhir — adakah anda mempunyai ID Penilaian NEXUS yang sebelumnya? Jika ya, tampal di bawah. Jika tidak, pilih Tiada.',
+      /* 13 falls          */ 'Dua soalan ringkas tentang keseimbangan. Dalam 12 bulan yang lalu, pernahkah anda jatuh — termasuk tergelincir atau tersandung sehingga anda terjatuh ke lantai?',
+      /* 14 healthier_sg   */ 'Yang terakhir — adakah anda berdaftar dengan doktor Healthier SG? Ia menentukan program mana yang boleh dirujuk kepada anda.',
     ],
     reflections: [
       (input) => { const n = parseInt((input.match(/\d+/) || ['0'])[0], 10); return n === 0 ? 'Memulakan dari sifar adalah normal. ' : 'Permulaan yang baik. '; },
@@ -448,6 +452,20 @@ const DICTIONARY = {
       */
       ['Lain-lain / Taip sendiri'],
       ['Tiada ID'],
+      /*
+        ⚠️ APPENDED AT INDEX 13 AND 14 TO MATCH `DOMAIN_CONFIG`, never inserted.
+           `prompts`, `quickReplies` and `reflections` are parallel arrays across
+           four dictionaries; `chatSteps.js` reads a step by ABSOLUTE index, and a
+           renumber to close a gap is how a question goes missing in one language.
+
+        ⚠️ THE CHIP TEXT IS PARSER INPUT, NOT ONLY READER TEXT. `parseFallsAnswer`
+           and `parseHealthierSg` match tokens in `clinicalFlags.js`, and every
+           token below is registered there. `clinicalFlags.i18n.test.js` asserts
+           chip-for-chip parity with English — a chip changed here without its
+           token fails that test rather than silently mis-flagging somebody.
+      */
+      /* 13 falls          */ FALLS_CHIPS.ms,
+      /* 14 healthier_sg   */ HSG_CHIPS.ms,
     ],
   },
 
@@ -478,6 +496,8 @@ const DICTIONARY = {
       '您居住的房屋类型是什么？（例如：HDB 3房式，公寓等）',
       '您的邮政编码前两位数是什么？这样我可以为您找到附近的资源。',
       '最后一个问题 — 您是否有之前的 NEXUS 评估 ID？如有，请粘贴在下方；如没有，请选择"没有"。',
+      /* 13 falls          */ '关于平衡的两个简短问题。在过去 12 个月里，您跌倒过吗？包括滑倒或绊倒而摔在地上的情况。',
+      /* 14 healthier_sg   */ '最后一个问题 — 您是否已向 Healthier SG 家庭医生登记？这会影响您可以被转介到哪些计划。',
     ],
     reflections: [
       (input) => { const n = parseInt((input.match(/\d+/) || ['0'])[0], 10); return n === 0 ? '从零开始完全正常。' : '这是一个很好的起点。'; },
@@ -521,6 +541,20 @@ const DICTIONARY = {
       */
       ['其他 / 手动输入'],
       ['没有之前的 ID'],
+      /*
+        ⚠️ APPENDED AT INDEX 13 AND 14 TO MATCH `DOMAIN_CONFIG`, never inserted.
+           `prompts`, `quickReplies` and `reflections` are parallel arrays across
+           four dictionaries; `chatSteps.js` reads a step by ABSOLUTE index, and a
+           renumber to close a gap is how a question goes missing in one language.
+
+        ⚠️ THE CHIP TEXT IS PARSER INPUT, NOT ONLY READER TEXT. `parseFallsAnswer`
+           and `parseHealthierSg` match tokens in `clinicalFlags.js`, and every
+           token below is registered there. `clinicalFlags.i18n.test.js` asserts
+           chip-for-chip parity with English — a chip changed here without its
+           token fails that test rather than silently mis-flagging somebody.
+      */
+      /* 13 falls          */ FALLS_CHIPS.zh,
+      /* 14 healthier_sg   */ HSG_CHIPS.zh,
     ],
   },
 
@@ -551,6 +585,8 @@ const DICTIONARY = {
       'நீங்கள் எந்த வகையான வீட்டில் வசிக்கிறீர்கள்? (எ.கா. HDB 3-அறை, காண்டோ)',
       'உங்கள் தபால் குறியீட்டின் முதல் இரண்டு இலக்கங்கள் என்ன?',
       'கடைசி கேள்வி — உங்களிடம் ஏற்கனவே NEXUS மதிப்பீட்டு ID உள்ளதா? இருந்தால் கீழே ஒட்டவும்; இல்லையெனில் "இல்லை" என்பதைத் தேர்ந்தெடுக்கவும்.',
+      /* 13 falls          */ 'சமநிலை குறித்த இரண்டு சிறிய கேள்விகள். கடந்த 12 மாதங்களில் நீங்கள் விழுந்ததுண்டா — வழுக்கியோ இடறியோ தரையில் விழுந்தது உட்பட?',
+      /* 14 healthier_sg   */ 'கடைசியாக — நீங்கள் Healthier SG மருத்துவரிடம் பதிவு செய்துள்ளீர்களா? இது உங்களை எந்தத் திட்டங்களுக்குப் பரிந்துரைக்க முடியும் என்பதை மாற்றும்.',
     ],
     reflections: [
       (input) => { const n = parseInt((input.match(/\d+/) || ['0'])[0], 10); return n === 0 ? 'சூன்யத்திலிருந்து தொடங்குவது முற்றிலும் சாதாரணமானது. ' : 'இது ஒரு சிறந்த தொடக்கம். '; },
@@ -594,121 +630,22 @@ const DICTIONARY = {
       */
       ['மற்றவை / தட்டச்சு செய்கிறேன்'],
       ['முந்தைய ID இல்லை'],
+      /*
+        ⚠️ APPENDED AT INDEX 13 AND 14 TO MATCH `DOMAIN_CONFIG`, never inserted.
+           `prompts`, `quickReplies` and `reflections` are parallel arrays across
+           four dictionaries; `chatSteps.js` reads a step by ABSOLUTE index, and a
+           renumber to close a gap is how a question goes missing in one language.
+
+        ⚠️ THE CHIP TEXT IS PARSER INPUT, NOT ONLY READER TEXT. `parseFallsAnswer`
+           and `parseHealthierSg` match tokens in `clinicalFlags.js`, and every
+           token below is registered there. `clinicalFlags.i18n.test.js` asserts
+           chip-for-chip parity with English — a chip changed here without its
+           token fails that test rather than silently mis-flagging somebody.
+      */
+      /* 13 falls          */ FALLS_CHIPS.ta,
+      /* 14 healthier_sg   */ HSG_CHIPS.ta,
     ],
   },
-};
-
-// ─── CLINICAL DATA PARSER ─────────────────────────────────────────────────────
-const parseClinicalData = (raw) => {
-  // PAVS — Q0 days, Q1 minutes
-  const daysStr  = (raw.pavs_days || '').toLowerCase();
-  const minsStr  = (raw.pavs_mins  || '').toLowerCase();
-
-  const daysN = daysStr.includes('0 day') || daysStr === '0' ? 0
-              : daysStr.match(/5.?7|5\+|every day/i)         ? 6
-              : daysStr.match(/3.?4/i)                        ? 3.5
-              : daysStr.match(/1.?2/i)                        ? 1.5
-              : parseInt((daysStr.match(/\d+/) || ['0'])[0], 10);
-
-  const minsN = minsStr.includes('60+') || minsStr.includes('60 min') ? 65
-              : minsStr.match(/45.?60|45–60/i)                         ? 52
-              : minsStr.match(/30.?45|30–45/i)                         ? 37
-              : minsStr.match(/20.?30|20–30/i)                         ? 25
-              : minsStr.includes('less') || minsStr.includes('20')     ? 15
-              : parseInt((minsStr.match(/\d+/) || ['0'])[0], 10);
-
-  const pavsScore    = Math.round(daysN * minsN); 
-  const pavsDays     = daysN;
-  const pavsMinutes  = daysN === 0 ? 0 : minsN;
-
-  // Strength
-  const strStr      = (raw.strength || '').toLowerCase();
-  const strengthDays = strStr.includes('3+') ? 3
-                     : strStr.includes('2')   ? 2
-                     : strStr.includes('1')   ? 1
-                     : 0;
-
-  // Medical safety
-  const medStr      = (raw.medical || '').toLowerCase();
-  const symptomFlag = matchesSymptom(medStr);
-  const medFlag     = matchesCondition(medStr);
-
-  // SDOH — Financial
-  const barrStr      = (raw.barriers || '').toLowerCase();
-  const sdohFinancial = matchesFinancialBarrier(barrStr);
-
-  // SDOH — Social 
-  const socialStr    = (raw.social || '').toLowerCase();
-  const sdohSocial   = matchesSocialIsolation(socialStr);
-
-  // SDOH — Psychological 
-  const wellStr      = (raw.wellbeing || '').toLowerCase();
-  const sdohPsychological = matchesPsychologicalDistress(wellStr);
-  // Its own domain as well as a distress signal — see `matchesCaregiverStrain`.
-  const caregiverStrain   = matchesCaregiverStrain(wellStr);
-
-  // Falls & function — asked of the 60+ cohort only, so `asked: false` here means
-  // "not applicable or not translated", NEVER "no falls".
-  const falls = parseFallsAnswer(raw.falls);
-  // `null` for both "not sure" and "not asked" — the portal does not know, and
-  // that must not be read as "not enrolled".
-  const healthierSgEnrolled = parseHealthierSg(raw.healthier_sg);
-
-  // Demographics
-  const demoStr = (raw.demographics || '').toLowerCase();
-  let gender = 'Unknown';
-  // Female is tested first because `male` is a substring of `female`; the
-  // matchers are word-bounded now, but the order is load-bearing for the
-  // non-Latin terms and is kept deliberately.
-  if (matchesFemale(demoStr))       gender = 'Female';
-  else if (matchesMale(demoStr))    gender = 'Male';
-
-  // ⚠️ ONE PARSER, SHARED WITH THE FALLS GATE AND THE FORM. This was three
-  //    `includes` calls that only recognised the chip text, so a typed age became
-  //    `Unknown` — losing the falls screen AND both 60+ CTA tiers, since
-  //    `selectCTA` branches on this value.
-  const age = parseAgeBand(demoStr);
-
-  // NEW: Ethnicity & Housing Type
-  const ethnicity = raw.ethnicity || 'Unknown';
-  const housingType = raw.housing_type || 'Unknown';
-  /**
-   * ⚠️ THE FORM DERIVED THIS AND THE CHAT DID NOT — and nothing consumed it in
-   *    either. The evidence page tells the public that housing is used as a social
-   *    risk proxy ("1–2 Room HDB"), so it was a claim with no mechanism behind it,
-   *    the same shape as the retention notice before `expireCommunityAssessments`.
-   *    Now derived in both pathways and routed in `communityServices.js`.
-   */
-  const sdohHousing = /1-2 room|1–2 room/i.test(housingType);
-
-  // Location
-  // ⚠️ A REAL SECTOR OR `null` — NEVER '00'. `toSector` validates against the 81
-  //    live Singapore sectors and rejects anything that is not a postal code, so a
-  //    chip label, a typo or a refusal all come back as `null` and stay unknown all
-  //    the way to the result. The old code produced the string '00', which is not a
-  //    sector, and the cluster lookup resolved it to one particular cluster as
-  //    though it were a place.
-  const postalSector = toSector(raw.postal_code);
-
-  // Continuity
-  const foodStr        = (raw.food_insecurity || '').toLowerCase();
-  const sdohFoodInsecure = matchesFoodInsecurity(foodStr);
-
-  const prevStr    = (raw.previous_id || '');
-  const isNoId     = isNoPreviousId(prevStr);
-  const previousId = isNoId ? null : prevStr.trim().toUpperCase();
-
-  return {
-    pavsScore, pavsDays, pavsMinutes, strengthDays,
-    symptomFlag, medFlag,
-    sdohFinancial, sdohSocial, sdohPsychological, sdohFoodInsecure,
-    caregiverStrain, sdohHousing,
-    fallsCount: falls.falls, fallsRisk: falls.fallsRisk,
-    fearOfFalling: falls.avoidsActivity, fallsAsked: falls.asked,
-    healthierSgEnrolled,
-    gender, age, ethnicity, housingType, postalSector, previousId,
-    psychoFlag: sdohPsychological,
-  };
 };
 
 // ─── AURA AVATAR ──────────────────────────────────────────────────────────────
@@ -826,6 +763,17 @@ const AuraChatbot = () => {
   const navigate                    = useNavigate();
   const chatEndRef                  = useRef(null);
   const inputRef                    = useRef(null);
+  /**
+   * `AC16` — the completion latch. Between `setIsTyping(false)` on the final
+   * step and the `setIsComplete(true)` that only fires inside a 1,200 ms
+   * timeout, the submission guard used to be OPEN: a second tap re-entered the
+   * completion branch and produced a second telemetry row under the same
+   * sessionId and a second navigate. A REF, not state, because the second tap
+   * can land in the same tick as the first and a `setState` latch is not yet
+   * visible to it. Cleared only on a FAILED completion, so the person can
+   * answer again; a successful one stays latched until the navigate.
+   */
+  const concludingRef               = useRef(false);
 
   const [lang]      = useState(() => applyDocumentLanguage(readLanguage()));
   const langData    = DICTIONARY[lang] || DICTIONARY.en;
@@ -888,10 +836,23 @@ const AuraChatbot = () => {
     }, 850);
   };
 
+  /**
+   * `AC8`, resolved by CORRECTING THE FINDING rather than shipping its fix. The
+   * ledger asked for "one AbortSignal" on this window so a discarded reply stops
+   * billing. It would not: `httpsCallable` carries no signal, and — the part
+   * that matters — aborting the HTTP request does not stop a Cloud Function
+   * mid-execution. The server runs `communityAck` to completion and the Gemini
+   * call bills identically whether the client is still listening or not. The
+   * real cost controls are server-side and already in place: `maxOutputTokens:
+   * 200`, a 20s timeout, and the `CP7` rate limits. What the window governs is
+   * only whether a paid-for reply is USED — widening it would use more of them
+   * at the price of rewriting text under the reader, which is `AC11` and the
+   * owner's call.
+   */
   const AI_UPGRADE_WINDOW_MS = 1500;
 
   const handleUserSubmission = (text) => {
-    if (!text.trim() || isTyping || isComplete) return;
+    if (!text.trim() || isTyping || isComplete || concludingRef.current) return;
 
     setMessages(prev => [...prev, { sender: 'user', text }]);
     setUserInput('');
@@ -950,23 +911,19 @@ const AuraChatbot = () => {
         clearTimeout(upgradeTimer);
         if (upgradeExpired) return;
 
-        // `communityAck` returns plain text — the server prompt asks for a sentence,
-        // not JSON. The fence-strip and the brace-scan stay as tolerance for a model
-        // that wraps it anyway; they are no longer the expected path.
-        var raw      = (result.data && result.data.text) ? result.data.text : '';
-        var stripped = raw.replace(/```json|```/g, '').trim();
-        var isErr    = !stripped || /fallback|missing.api|api.key|error|unauthorized|unavailable/i.test(stripped);
-        if (isErr) return;
-
-        var aiAck = '';
-        try {
-          var s = stripped.indexOf('{'); var e = stripped.lastIndexOf('}') + 1;
-          if (s !== -1 && e > s) { var p = JSON.parse(stripped.substring(s, e)); aiAck = (p.reply || '').trim(); }
-        } catch(ex) {
-          // Ignored on purpose: plain text is now the expected shape. `aiAck` stays
-          // empty and the stripped text is used as the acknowledgement below.
-        }
-        if (!aiAck) aiAck = stripped;
+        /**
+         * `AC9` + `AC10`. Two layers of dead tolerance are gone. The error-word
+         * screen — an unanchored substring test discarding any acknowledgement
+         * containing "error" or "unavailable" ("if your usual class is
+         * unavailable, the centre can suggest another"), the pattern this file
+         * has had removed from it four times, with an unescaped `.` in
+         * `/missing.api/` for good measure. And the THIRD copy of the
+         * fence-strip-and-brace-scan, parsing JSON out of an endpoint whose own
+         * server prompt says "No JSON, no preamble, no quotes" and whose errors
+         * arrive as THROWN HttpsErrors (the .catch below), never as prose. What
+         * a successful reply needs is exactly one check: that it is not empty.
+         */
+        var aiAck = String((result.data && result.data.text) || '').trim();
         if (!aiAck) return;
 
         setMessages(function(prev) {
@@ -980,7 +937,10 @@ const AuraChatbot = () => {
       var closing = (staticAck ? staticAck + ' ' : '') + 'I have mapped your full profile. Generating your personalised plan now…';
       setMessages(prev => [...prev, { sender: 'bot', text: closing, step: currentStep }]);
       setIsTyping(false);
-      concludeTriage(updatedData);
+      concludingRef.current = true; // `AC16` — see the ref's declaration
+      // `AC6`: the body traps its own throws now, but a promise rejection from
+      // the async machinery itself must not become an unhandled rejection.
+      concludeTriage(updatedData).catch((err) => console.error('[AuraChat] concludeTriage rejected:', err));
     }
   };
   
@@ -990,14 +950,37 @@ const AuraChatbot = () => {
   };
 
   const concludeTriage = async (finalData) => {
-    // The conversation has become a result; the in-progress copy is no longer the
-    // live one and keeping it would resume a completed assessment.
-    clearProgress();
-    const parsed    = parseClinicalData(finalData);
-    const riskScore = calculateRiskScore(parsed);
-    const ctaData   = selectCTA(parsed);
-
+    /**
+     * ⚠️ `AC6` / `AC7` — THE TRY USED TO GUARD THE ONE CALL THAT CANNOT THROW.
+     *    `clearProgress()` ran on line one, then `parseClinicalData`,
+     *    `calculateRiskScore` and `selectCTA` all ran OUTSIDE the try, and the
+     *    only thing inside it was `recordTelemetry` — which catches everything
+     *    and returns false by design (`telemetry.js`), so the catch was
+     *    unreachable. A throw in any of the three real computations was an
+     *    unhandled rejection: the visitor sat on "Generating your personalised
+     *    plan now…" forever, and their answers were already gone, so even a
+     *    refresh could not resume.
+     *
+     *    Now: everything that can throw is inside the try; the catch shows the
+     *    error sentence (`AC7`: alive, and the only outcome for a failure); and
+     *    `clearProgress()` runs only once there is a computed result to replace
+     *    the in-progress copy — a failed COMPUTATION leaves the answers intact,
+     *    so the person can answer the last question again instead of starting
+     *    a 15-step screening from nothing.
+     *
+     * ⚠️ SCOPE OF THAT SENTENCE, precisely: it covers a THROW. A failed
+     *    telemetry WRITE is a different case — `recordTelemetry` swallows its
+     *    errors and returns `false` by design, so a Firestore outage still
+     *    falls through to `clearProgress()` and the person still gets their
+     *    plan (correct: their result must not be hostage to our analytics),
+     *    but the answers are gone and no record was stored. That trade is
+     *    telemetry.js's documented decision, not an accident of this try.
+     */
     try {
+      const parsed    = parseClinicalData(finalData);
+      const riskScore = calculateRiskScore(parsed);
+      const ctaData   = selectCTA(parsed);
+
       await recordTelemetry(parsed.postalSector, {
         event: 'aura_triage_complete_v2',
         sessionId,
@@ -1006,6 +989,10 @@ const AuraChatbot = () => {
         computedRisk: riskScore,
         ctaTier: ctaData.tier,
       });
+
+      // The conversation has become a result; the in-progress copy is no longer
+      // the live one and keeping it would resume a completed assessment.
+      clearProgress();
 
       setTimeout(() => {
         setIsComplete(true);
@@ -1030,9 +1017,13 @@ const AuraChatbot = () => {
         }, 5000);
       }, 1200);
 
-    } catch {
+    } catch (err) {
+      console.error('[AuraChat] completion failed; progress kept for resume:', err);
+      // `AC16`: a FAILED completion unlatches, so the person can answer the
+      // last question again — the same reasoning as keeping their progress.
+      concludingRef.current = false;
       setTimeout(() => {
-        setMessages(prev => [...prev, { sender: 'bot', text: langData.error, step: TOTAL_STEPS - 1 }]);
+        setMessages(prev => [...prev, { sender: 'bot', text: langData.error }]);
       }, 1000);
     }
   };
@@ -1062,15 +1053,32 @@ const AuraChatbot = () => {
             </div>
           </div>
         </div>
-        <button
-          onClick={toggleTheme}
-          className="p-2 rounded-full bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-400 shadow-sm hover:scale-105 active:scale-95 transition-all"
-          aria-label="Toggle theme"
-        >
-          {isDark
-            ? <Sun size={17} className="text-amber-400" />
-            : <Moon size={17} />}
-        </button>
+        <div className="flex items-center gap-2">
+          {/*
+            The persistent access point to the chatbot info card (`AURA-TODO.md`
+            P9.3) — an info icon is sufficient per the IMDA guidelines, and the
+            card itself is a hosted page. New tab, so the assessment in progress
+            is not abandoned by reading about the assistant running it.
+          */}
+          <a
+            href="/aura-info"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="p-2 rounded-full bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-400 shadow-sm hover:scale-105 active:scale-95 transition-all"
+            aria-label="About this AI assistant: Chatbot Info Card"
+          >
+            <InfoIcon size={17} />
+          </a>
+          <button
+            onClick={toggleTheme}
+            className="p-2 rounded-full bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-400 shadow-sm hover:scale-105 active:scale-95 transition-all"
+            aria-label="Toggle theme"
+          >
+            {isDark
+              ? <Sun size={17} className="text-amber-400" />
+              : <Moon size={17} />}
+          </button>
+        </div>
       </header>
 
       {/* ── PROGRESS BAR ── */}
@@ -1086,9 +1094,21 @@ const AuraChatbot = () => {
       />
 
       {/* ── CHAT AREA ── */}
-      <div className="flex-1 overflow-y-auto px-4 py-4 space-y-4">
+      {/*
+        `AC12`. The staff roster announces its state changes with two polite live
+        regions; the public screening — the surface `CP17` fixed `<html lang>` and
+        pinch-zoom for BECAUSE its users are elderly — announced nothing: every
+        question, the typing indicator and the final plan arrived silently to a
+        screen reader. `role="log"` implies polite announcements of additions,
+        stated explicitly for the older screen-reader/browser pairs this audience
+        actually uses.
+      */}
+      <div className="flex-1 overflow-y-auto px-4 py-4 space-y-4" role="log" aria-live="polite">
         {messages.map((msg, idx) => (
-          <div key={idx} className={`flex gap-2 ${msg.sender === 'user' ? 'justify-end' : 'justify-start'}`}>
+          // `AC13`: `_id` was added precisely so the upgrade handler could find a
+          // message; the key never moved to it. Index stays as the fallback for
+          // messages minted before `_id` existed (greetings, restored progress).
+          <div key={msg._id ?? idx} className={`flex gap-2 ${msg.sender === 'user' ? 'justify-end' : 'justify-start'}`}>
 
             {/* Bot avatar */}
             {msg.sender === 'bot' && <AuraAvatar size="sm" />}
@@ -1141,9 +1161,9 @@ const AuraChatbot = () => {
               {langData.hintText}
             </p>
             <div className="flex flex-wrap gap-2">
-              {langData.quickReplies[currentStep].map((reply, idx) => (
+              {langData.quickReplies[currentStep].map((reply) => (
                 <button
-                  key={idx}
+                  key={reply}
                   onClick={() => handleUserSubmission(reply)}
                   className="px-3 py-1.5 text-xs font-medium bg-teal-50 dark:bg-teal-500/10 text-teal-700 dark:text-teal-300 border border-teal-200 dark:border-teal-500/30 rounded-full hover:bg-teal-100 dark:hover:bg-teal-500/20 active:scale-95 transition-all text-left"
                 >

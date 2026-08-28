@@ -18,7 +18,7 @@ import {
 import { doc, setDoc } from 'firebase/firestore';
 import { db } from '../firebase';
 import { useNexus } from '../context/NexusContext';
-import { checkAccess } from '../utils';
+import { checkAccess } from '../utils/legacyBridge';
 import { useDomainAllowlist } from '../hooks/useDomainAllowlist';
 import {
     isAllowedEmail,
@@ -165,15 +165,23 @@ const WelcomeScreen = (props) => {
                     throw new Error("VERIFICATION REQUIRED: We just sent a fresh verification link to your email. Please click it before logging in.");
                 }
 
-                // A known face keeps their directory profile; anyone else is handed the
-                // authenticated user and routed by their access state, not by this list.
+                // A known face keeps their bridge role and title; anyone else is
+                // handed the authenticated user and routed by their access state.
+                //
+                // `AN14`: the bridge profile no longer carries a name or an email —
+                // those came out of the bundle — so the base object is built for
+                // EVERYONE from the person's own credential and the profile is
+                // spread over it. Same outcome for a legacy member as before
+                // (role/title from the bridge, their own identity), with nothing
+                // shipped to make it so.
                 const knownProfile = checkAccess(email);
-                if (onAuthSuccess) onAuthSuccess(knownProfile || {
+                if (onAuthSuccess) onAuthSuccess({
                     id: userCredential.user.uid,
                     uid: userCredential.user.uid,
                     name: userCredential.user.displayName || email.split('@')[0],
                     email: email.toLowerCase(),
                     role: 'staff',
+                    ...(knownProfile || {}),
                 });
 
             } else {

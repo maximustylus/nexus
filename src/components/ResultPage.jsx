@@ -1236,6 +1236,9 @@ export default function ResultPage() {
               score={score} riskTier={riskTier} data={data}
               postalSector={postalSector} sessionId={activeSessionId}
               formattedDate={formattedDate}
+              /* The person's chosen language, for the second line of each reported
+                 flag. The slip stays English-first — see `slipFlagLines.js`. */
+              language={lang}
             />
 
             <div className="pt-4 border-t border-slate-100 dark:border-slate-800 flex justify-between items-center">

@@ -155,7 +155,21 @@ const SmartReportView = ({ year, teamData, staffLoads, user, forceAdminView }) =
             const data = reportSnap.data();
             setReports({
                 private: parseAI(data.privateText),
-                public: parseAI(data.publicText)
+                public: parseAI(data.publicText),
+                /**
+                 * ⚠️ WRITTEN AND NEVER READ IS NOT A RECORD. `SmartAnalysis.jsx`
+                 *    archives `assumptionsText` (P1) and `aiProvenance` (Rule 12)
+                 *    with every report, and this reader rendered neither, so the
+                 *    year-end document a lead actually opens was as silent about its
+                 *    own limits and its own author as it was before the guardrails.
+                 *    Rule 12's test is whether the DOCUMENT is reproducible from
+                 *    itself, not whether the field exists in Firestore.
+                 *
+                 *    Empty for every report archived before 2026-08-24, which is why
+                 *    the panels below are conditional rather than showing a blank box.
+                 */
+                assumptions: data.assumptionsText || '',
+                provenance: data.aiProvenance || ''
             });
           } else {
             const emptyState = {
@@ -371,6 +385,15 @@ const SmartReportView = ({ year, teamData, staffLoads, user, forceAdminView }) =
              <div className="text-slate-700 dark:text-slate-300 leading-relaxed font-medium">
               {formatAIText(activeReport?.fullText)}
             </div>
+            {reports?.assumptions && (
+              <div className="mt-8 p-5 rounded-2xl bg-amber-50 dark:bg-amber-900/20 border border-amber-300 dark:border-amber-700">
+                <h4 className="text-xs font-black text-amber-700 dark:text-amber-400 mb-2 uppercase tracking-wide">Assumptions, gaps and unverified items</h4>
+                <div className="whitespace-pre-wrap text-sm text-amber-900 dark:text-amber-200">{reports.assumptions}</div>
+              </div>
+            )}
+            {reports?.provenance && (
+              <p className="mt-4 text-[11px] leading-relaxed text-slate-500 dark:text-slate-400">{reports.provenance}</p>
+            )}
             </div>
             
             <div className="p-6 bg-slate-50 dark:bg-slate-800/50 text-center border-t border-slate-100 dark:border-slate-800 shrink-0">

@@ -214,6 +214,27 @@ export default function PathwaySelection() {
             used only to map you to nearby services. Records are deleted automatically after{' '}
             <strong>24 months</strong>. You will get your result either way.
           </p>
+          {/*
+            The IMDA first-use safety statement (`AURA-TODO.md` P9.2), on the same
+            screen as the collection notice and for the same reason: this is the
+            last point common to both pathways before the first question. English
+            only, knowingly, like the paragraph above it — the same `CD10` gap.
+            AuraChat's header carries the persistent link (P9.3) once inside.
+          */}
+          <p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed mt-3 pt-3 border-t border-slate-200 dark:border-slate-800">
+            The AuraChat pathway is guided by <strong>AURA, a generative AI assistant</strong>{' '}
+            (Google Gemini). The AI phrases the conversation; your result is calculated by fixed
+            scoring rules, not by the AI, and it is <strong>not medical advice or a diagnosis</strong>.
+            What AURA can and cannot do, and how your data is handled, is set out in the{' '}
+            <a
+              href="/aura-info"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="font-black underline underline-offset-2 text-indigo-600 dark:text-indigo-400 hover:text-indigo-800 dark:hover:text-indigo-300"
+            >
+              Chatbot Info Card
+            </a>.
+          </p>
         </div>
       </div>
 

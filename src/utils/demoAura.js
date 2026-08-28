@@ -77,7 +77,48 @@ const has = (text, words) => {
  * "log 35 patients for January" behaves the way the live prompt promises.
  */
 export const selectDemoMode = (userText) => {
-    if (has(userText, ['log ', 'record ', 'update my', 'patients for', 'workload for', 'add to database'])) {
+    /*
+     * ⚠️ `'patients in'` IS HERE BECAUSE THE README'S DEMO SCRIPT SAYS IT.
+     *
+     *    `README.md:186` — "The Data Entry Test" — instructs the presenter to tell
+     *    AURA *"I saw 145 patients in June."* This list matched `'patients for'`
+     *    and not `'patients in'`, so the exact sentence a stakeholder demo is
+     *    scripted to use fell through to COACH, and AURA answered a database
+     *    request with motivational interviewing: *"Being junior staff carries a
+     *    load that is easy to normalise."*
+     *
+     *    Found by the go-live gate walking the README step by step, not by any
+     *    test — every test here used a sentence that already worked.
+     */
+    /*
+     * ⚠️ `'i saw '` WAS HERE FOR ELEVEN MINUTES AND IT WAS WORSE THAN THE BUG IT
+     *    FIXED. DATA_ENTRY is tested FIRST, so a two-word prefix that common beat
+     *    COACH, ASSISTANT and RESEARCH. Measured over a corpus of plausible
+     *    sentences, twelve routings changed, including:
+     *
+     *      "I saw 3 arrests back to back and I am wrung out"   COACH -> DATA_ENTRY
+     *      "I saw so many patients today that I did not eat"   COACH -> DATA_ENTRY
+     *      "I saw a guideline on falls prevention"          RESEARCH -> DATA_ENTRY
+     *
+     *    A clinician describing distress would have been answered by the wellbeing
+     *    tool with *"Logged 3 against your workload record for January"* and a green
+     *    commit card. `'patients this'` and `'patients last'` went with it: they
+     *    bought nothing the README needed and widened the same net.
+     *
+     *    The original commit claimed "all four other routings are unchanged" — true
+     *    of the four exact README sentences and of nothing else. That is the `AU13`
+     *    corollary again: evidence scoped narrower than the claim it sits under.
+     *
+     * ⚠️ AND THE FIRST REPLACEMENT, A BARE `'patients in'`, WAS STILL TOO BROAD. It
+     *    caught *"I am exhausted, 12 patients in a morning is too many"* — distress,
+     *    routed to a database write, which is the same failure one notch quieter.
+     *    A keyword cannot tell "patients in June" from "patients in a morning";
+     *    only the MONTH can, so `MONTH_QUALIFIED` requires one.
+     */
+    if (has(userText, [
+        'log ', 'record ', 'update my', 'add to database',
+        'patients for', 'workload for', 'workload in',
+    ]) || MONTH_QUALIFIED.test(String(userText || ''))) {
         return 'DATA_ENTRY';
     }
     if (has(userText, ['memo', 'draft', 'letter', 'email', 'agenda', 'minutes', 'roster note', 'write me'])) {
@@ -97,8 +138,65 @@ export const selectDemoMode = (userText) => {
  *    Affirmations, Reflective listening, Summaries — so a demo that dispensed tips
  *    would misrepresent the tool to the person deciding whether to adopt it.
  */
+/**
+ * `"…patients in June"` — a figure explicitly attached to a month.
+ *
+ * ⚠️ THE MONTH IS WHAT MAKES IT A LOGGING REQUEST. `'patients in'` as a bare
+ *    keyword also matches "12 patients in a morning is too many", which is somebody
+ *    telling a wellbeing tool they are overloaded. The distinction is not the verb
+ *    or the noun — it is whether a PERIOD is named, and a period is what a workload
+ *    record is keyed by.
+ */
+const MONTH_QUALIFIED = /\b(?:patients?|cases?|sessions?)\s+(?:in|for|during)\s+(?:january|february|march|april|may|june|july|august|september|october|november|december)\b/i;
+
+/** Month names, for the demo's own echo and for `target_month`. */
+const MONTH_NAMES = Object.freeze([
+    'January', 'February', 'March', 'April', 'May', 'June',
+    'July', 'August', 'September', 'October', 'November', 'December',
+]);
+
+/**
+ * The month a demo sentence names, or January when it names none.
+ *
+ * Deliberately simple: this is the sandbox, and the live path parses nothing —
+ * `executeDataEntry` reads `target_month` from the model. A demo that guessed
+ * cleverly would be demonstrating a capability the live system does not have.
+ */
+const demoMonthIndex = (userText) => {
+    const text = String(userText || '').toLowerCase();
+    /**
+     * ⚠️ A PREPOSITION IS REQUIRED, AND A WORD BOUNDARY WAS NOT ENOUGH.
+     *
+     *    The first draft used `text.includes(month)`, so *"log 20 patients, I may
+     *    have miscounted"* resolved to **May** and *"march the patients through"*
+     *    to **March** — the unanchored-substring trap, written into the fix for
+     *    `AC1`, which is the same trap.
+     *
+     *    The obvious repair, `\bmay\b`, DOES NOT WORK: "may" in "I may have
+     *    miscounted" is a genuine word with genuine boundaries, and so is "march"
+     *    as a verb. Three of the twelve month names are ordinary English words
+     *    (may, march, august). What actually disambiguates them is the preposition
+     *    a person uses when they mean the month — "for June", "in March" — so that
+     *    is what is matched. A bare month name is left unresolved rather than
+     *    guessed at.
+     */
+    const found = MONTH_NAMES.findIndex(
+        (m) => new RegExp(`\\b(?:for|in|during|of)\\s+${m}\\b`, 'i').test(text),
+    );
+    return found === -1 ? null : found;
+};
+
 const COACH_TURNS = [
-    (p) => `Thank you for saying that plainly. Being ${p.title.toLowerCase()} carries a load that is easy to normalise. What has this week asked of you that last week did not?`,
+    /*
+     * ⚠️ `p.title` IS OPTIONAL-CHAINED — `AU25`. `respondAsDemoAura`'s fallback
+     *    substitutes a whole persona only when one is entirely absent, so a persona
+     *    object present but missing `title` reached `.toLowerCase()` on `undefined`
+     *    and threw, taking the sandbox chat down. All six `DEMO_PERSONAS` carry a
+     *    title, so it is unreachable through the UI today — which is exactly why it
+     *    would have surfaced first in front of an audience, on a persona somebody
+     *    added in a hurry. Found by the go-live gate.
+     */
+    (p) => `Thank you for saying that plainly. Being ${(p?.title || 'a clinician').toLowerCase()} carries a load that is easy to normalise. What has this week asked of you that last week did not?`,
     () => 'That lands. You are describing effort that does not show up anywhere on a rota. On a scale of nothing-left to plenty-in-reserve, where would you put yourself right now?',
     () => 'I hear the pace more than the volume — it is the not-stopping rather than the amount. What would a genuinely restorative hour look like, if it were available?',
 ];
@@ -142,16 +240,58 @@ export const respondAsDemoAura = ({ userText, persona, turnIndex = 0 }) => {
     const mode = selectDemoMode(userText);
 
     if (mode === 'DATA_ENTRY') {
-        // The live MODE 3 writes through the client; the demo shows the same card
-        // and writes nothing, which is what `isDemo` already does for every other
-        // Firestore path in `App.jsx`.
+        /*
+         * ⚠️ THE SHAPE IS THE LIVE SHAPE, AND IT USED NOT TO BE — `AU22`.
+         *
+         *    This returned `{ value, period, written }` while the card's render gate
+         *    at `AuraPulseBot.jsx:1093` requires `target_collection`. So the green
+         *    DATA_ENTRY block **never appeared in Demo Mode** — the one mode a
+         *    stakeholder is walked through — even though this module's own comment
+         *    claimed "the demo shows the same card", and `README.md:186` scripts a
+         *    presenter to demonstrate exactly that block.
+         *
+         *    `COMMUNITY_TODO.md` P0.2's evidence listed which cards still worked
+         *    after the sandbox went local and correctly did NOT include this one, so
+         *    the gap was known at the ledger while the comment here contradicted it.
+         *
+         * ⚠️ NOTHING IS WRITTEN, AND THAT IS UNCHANGED. The card's button calls
+         *    `executeDataEntry`, whose FIRST check is `isDemo` — it refuses before it
+         *    looks at a team or a path. Matching the live shape makes the card
+         *    render; it does not make the sandbox write. `written: false` is kept
+         *    alongside so a reader of the object can see that at a glance.
+         */
         const matched = String(userText || '').match(/(\d+)/);
+        const monthIndex = demoMonthIndex(userText);
+        if (!matched) {
+            return {
+                mode: 'DATA_ENTRY',
+                reply: 'I can log a figure against your workload record — tell me the number and the period, for example "log 35 patients for January".',
+            };
+        }
         return {
             mode: 'DATA_ENTRY',
-            reply: matched
-                ? `Logged ${matched[1]} against your workload record for this period. In the live system this writes straight to the department dataset; in the sandbox it is displayed only.`
-                : 'I can log a figure against your workload record — tell me the number and the period, for example "log 35 patients for January".',
-            db_workload: matched ? { value: Number(matched[1]), period: 'demo', written: false } : undefined,
+            reply: monthIndex === null
+                ? `Logged ${matched[1]} against your workload record. Tell me which month and I will place it. `
+                  + 'In the live system this writes straight to the department dataset; in the sandbox it is displayed only.'
+                : `Logged ${matched[1]} against your workload record for ${MONTH_NAMES[monthIndex]}. `
+                  + 'In the live system this writes straight to the department dataset; in the sandbox it is displayed only.',
+            db_workload: {
+                target_collection: 'staff_loads',
+                target_doc: who.name,
+                target_field: 'data',
+                target_value: Number(matched[1]),
+                /**
+                 * ⚠️ `null`, NOT `0`, WHEN NO MONTH WAS NAMED. Defaulting to January
+                 *    invents a fact — it is `AU2`'s `Number(null) === 0` wearing a
+                 *    different hat, and the live guard now refuses a null month
+                 *    rather than guessing, so the sandbox must not model something
+                 *    the live path would reject.
+                 */
+                target_month: monthIndex,
+                value: Number(matched[1]),
+                period: 'demo',
+                written: false,
+            },
         };
     }
 

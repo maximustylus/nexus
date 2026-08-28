@@ -1,57 +1,206 @@
 # Translation brief — NEXUS Community (`CD10`)
 
-Everything below exists in **English only**. The portal serves four languages, so
-each item needs **three** translations: **Bahasa Melayu (`ms`)**, **中文 (`zh`)**,
-**தமிழ் (`ta`)**.
+The portal serves four languages, so each item needs **three** translations:
+**Bahasa Melayu (`ms`)**, **中文 (`zh`)**, **தமிழ் (`ta`)**.
 
-## Why this is a brief and not a pull request
+## Status
 
-I have not machine-translated any of it, and I am not going to. Three of the four
-groups below are **clinical instructions to a member of the public** — when to see
-a GP, when to call 995, what a risk band does and does not mean. A paraphrase that
-reads fluently and shifts the clinical meaning is worse than an English string,
-because nobody will notice it.
+| Group | What it is | State |
+|---|---|---|
+| **1** — the two new questions | 9 strings | ✅ **shipped**, machine-translated, **unreviewed** |
+| **2** — in-chat action cards | 49 strings | ⬜ English only |
+| **3** — the notices | 6 blocks | ⬜ English only |
+| **4** — the printed handover slip | 24 strings | 🟡 **the 10 flag lines shipped**, bilingual; the other 14 English only |
 
-Group 1 is different in kind: it is a **question**. An untranslated question does
-not produce a missing answer — the person answers it anyway and it feeds
-`calculateRiskScore`. `src/utils/chatSteps.js` therefore **skips** any question the
-active language cannot render, so nobody is currently asked something they cannot
-read. The cost is that a Malay, Chinese or Tamil speaker gets a *shorter*
-assessment than an English speaker.
+## What changed about the position, and why
 
-## How to return it
+⚠️ **This file used to say "I have not machine-translated any of it, and I am not
+going to." That is no longer true of Group 1, by the owner's decision, and the
+reasoning is worth keeping rather than quietly overwriting.**
+
+The original argument was that a paraphrase which reads fluently and shifts the
+clinical meaning is worse than an English string, because nobody will notice it.
+That argument still holds — and it is why Groups 2, 3 and 4 are still English only.
+Group 2 in particular contains the URGENT tier: the text somebody reads immediately
+after reporting chest pain.
+
+Group 1 is different in kind, and the difference is not "it is less important":
+
+- These are **questions**, not instructions. A question read slightly oddly is
+  recoverable by the person answering it; *"call 995 if symptoms are severe"* read
+  slightly oddly is not.
+- The **status quo was already a failure**, not a safe default. `chatSteps.js` skips
+  an untranslated question, so a Malay, Chinese or Tamil speaker was never asked
+  about falls or Healthier SG at all — in the 60+ cohort the falls screen exists to
+  protect, and among the less English-dominant residents an Active Ageing Centre
+  referral targets. Every day it stayed English-only cost data that cannot be
+  recovered later.
+- The risk is **carried by a test, not by confidence**. See the Group 1 section: the
+  danger turned out not to be the prose at all.
+
+## The review debt
+
+⚠️ **Everything shipped so far is machine-translated and unreviewed.** Two models
+were involved and that is *not* a second opinion — neither can read back what it
+wrote, so this is one debt covering both sets:
+
+| Set | Strings | Translator |
+|---|---|---|
+| Group 1 — falls & Healthier SG chips and prompts | 9 × 3 | Claude |
+| Group 4 — the ten reported-flag lines | 10 × 3 | Google Gemini 3.1 Pro |
+
+A native speaker of each language should read the back-translations and confirm
+**four** things. The rest is prose that can be corrected later; these change a value
+or a clinical meaning:
+
+1. `falls.chip1` cannot be read as *"I fell"* — it is the safest answer and it
+   shares a stem with the riskiest one in every language.
+2. `hsg.chip3` cannot be read as *"no"* — *"not sure"* must stay `null`, because
+   `false` tells the person they are not enrolled with a Healthier SG GP.
+3. `falls.chip4` conveys **avoiding activity out of fear**, not merely doing less.
+4. On the printed slip, that each flag line reads as something a person would accept
+   being said about them to a stranger. They are printed for a third party, so the
+   register matters as much as the meaning.
+
+**This is a ten-minute job for somebody who reads the language, and it is the only
+thing between the current state and being able to say the portal is translated.**
+
+## How to return the rest
 
 Anything readable — a table, a spreadsheet, three columns in a message. Keep the
 **IDs**; they are how each string finds its slot. Wiring each one in is a one-line
 change and I will do it.
 
-**Order of value, if you only get some of it done:** Group 1, then Group 2, then
+**Order of value, if you only get some of it done:** Group 2, then the rest of
 Group 4, then Group 3.
 
 ---
 
-## Group 1 — the two new questions · 9 strings · **highest value**
+## Group 1 — the two new questions · 9 strings · ✅ **SHIPPED, UNREVIEWED**
 
-`src/components/AuraChat.jsx`. Until these land, Malay, Chinese and Tamil speakers
-are never asked either question, so falls risk and Healthier SG enrolment are
-simply unknown for them — including for the 60+ cohort the falls question exists
-to protect.
+`src/data/screeningChips.js` (chips) and `src/components/AuraChat.jsx` (prompts).
+All four languages now ask both questions. **Please review the back-translations
+below** — they are machine translations and nobody who reads Tamil, Chinese or
+Malay has checked them.
 
-| ID | English |
-|---|---|
-| `falls.prompt` | Two quick questions about steadiness. In the past 12 months, have you had a fall — including a slip or trip where you ended up on the ground? |
-| `falls.chip1` | No falls |
-| `falls.chip2` | One fall |
-| `falls.chip3` | Two or more falls |
-| `falls.chip4` | A fall, and I now avoid some activities |
-| `hsg.prompt` | Last one — are you enrolled with a Healthier SG GP? It changes which programmes you can be referred to. |
-| `hsg.chip1` | Yes, I am enrolled |
-| `hsg.chip2` | No, not enrolled |
-| `hsg.chip3` | I am not sure |
+### ⚠️ What this group turned out to actually be
 
-**Note on `falls.chip1`.** It must not be translatable as anything containing the
-word for "fall" on its own — the parser tests the negative first precisely because
-*"No falls"* contains *"fall"*, and the same trap exists in every language.
+Translating these chips is **not** a text change, and the brief was wrong to imply
+it was. `parseFallsAnswer` and `parseHealthierSg` match TOKEN LISTS in
+`src/utils/clinicalFlags.js`, and those lists were English-only:
+
+```
+matchesNoFalls    = ['no falls', 'none', 'no']
+matchesEnrolledNo = ['no', 'not enrolled']
+```
+
+`"Tiada jatuh"` matches nothing in the first, so the parser falls through to
+`falls = 1, fallsRisk = true`. **Shipping the translations alone would have
+recorded every Malay, Chinese and Tamil speaker who had never fallen as having
+fallen** — scored for it, shown it on their result, and printed it on a handover
+slip to a community centre as fact. Missing data would have become wrong data,
+which is the exact trade the step-skip rule exists to refuse.
+
+The matcher lists are extended, and `src/utils/clinicalFlags.i18n.test.js` (33
+tests) asserts chip-for-chip parity: chip *n* in any language must parse to what
+chip *n* in English parses to. Reverting the matchers to their English-only state
+fails **12** of those tests, so it is load-bearing rather than decorative.
+
+**Two phrasings are constrained by the parser, not by the language:**
+
+- `falls.chip3` in Tamil reads *"இரண்டு முறை அல்லது அதிகமாக"* rather than the more
+  natural *"இரண்டு அல்லது அதற்கு மேற்பட்ட"*. அல்லது ("or") begins with அல்ல, a
+  Tamil negator; Tamil negation is postfix, so the parser read it as denying the
+  "இரண்டு" beside it and the chip counted as **one** fall. Only the parity test saw
+  this — the sentence is correct Tamil.
+- `hsg.chip2` matches the enrolment verb in its negative form in each language
+  (`tidak berdaftar`, `没有登记`, `செய்யவில்லை`) rather than the bare word for "no".
+  Malay is why: *"Saya tidak pasti"* ("I am not sure") contains `tidak`, and
+  `matchesEnrolledNo` is tested first — so a bare token would have turned *"the
+  portal does not know"* into *"this person is not enrolled"*, silently, for every
+  Malay speaker who was unsure. `CP26` separated those two values on purpose.
+
+### The strings, with back-translations to check
+
+**`falls.prompt`** — EN: *Two quick questions about steadiness. In the past 12
+months, have you had a fall — including a slip or trip where you ended up on the
+ground?*
+
+| | Translation | Back-translation |
+|---|---|---|
+| `ms` | Dua soalan ringkas tentang keseimbangan. Dalam 12 bulan yang lalu, pernahkah anda jatuh — termasuk tergelincir atau tersandung sehingga anda terjatuh ke lantai? | Two brief questions about balance. In the past 12 months, have you ever fallen — including slipping or tripping so that you fell to the floor? |
+| `zh` | 关于平衡的两个简短问题。在过去 12 个月里，您跌倒过吗？包括滑倒或绊倒而摔在地上的情况。 | Two brief questions about balance. In the past 12 months, have you fallen? Including cases of slipping or tripping and falling to the ground. |
+| `ta` | சமநிலை குறித்த இரண்டு சிறிய கேள்விகள். கடந்த 12 மாதங்களில் நீங்கள் விழுந்ததுண்டா — வழுக்கியோ இடறியோ தரையில் விழுந்தது உட்பட? | Two small questions regarding balance. In the past 12 months have you fallen — including slipping or tripping and falling on the ground? |
+
+**`falls.chip1`** — EN: *No falls* · ⚠️ must parse as zero falls in every language
+
+| | Translation | Back-translation |
+|---|---|---|
+| `ms` | Tiada jatuh | No falls |
+| `zh` | 没有跌倒 | Have not fallen |
+| `ta` | விழுந்ததில்லை | Have not fallen |
+
+**`falls.chip2`** — EN: *One fall*
+
+| | Translation | Back-translation |
+|---|---|---|
+| `ms` | Jatuh satu kali | Fell one time |
+| `zh` | 跌倒一次 | Fell once |
+| `ta` | ஒரு முறை விழுந்தேன் | I fell one time |
+
+**`falls.chip3`** — EN: *Two or more falls* · ⚠️ Tamil phrasing constrained, see above
+
+| | Translation | Back-translation |
+|---|---|---|
+| `ms` | Jatuh dua kali atau lebih | Fell two times or more |
+| `zh` | 跌倒两次或以上 | Fell twice or more |
+| `ta` | இரண்டு முறை அல்லது அதிகமாக | Two times or more |
+
+**`falls.chip4`** — EN: *A fall, and I now avoid some activities*
+
+| | Translation | Back-translation |
+|---|---|---|
+| `ms` | Pernah jatuh, dan kini saya mengelak sesetengah aktiviti | Have fallen, and now I avoid some activities |
+| `zh` | 曾经跌倒，现在会避免某些活动 | Have fallen before, now avoid certain activities |
+| `ta` | விழுந்தேன், இப்போது சில செயல்களைத் தவிர்க்கிறேன் | I fell, now I avoid some activities |
+
+**`hsg.prompt`** — EN: *Last one — are you enrolled with a Healthier SG GP? It
+changes which programmes you can be referred to.*
+
+| | Translation | Back-translation |
+|---|---|---|
+| `ms` | Yang terakhir — adakah anda berdaftar dengan doktor Healthier SG? Ia menentukan program mana yang boleh dirujuk kepada anda. | The last one — are you registered with a Healthier SG doctor? It determines which programmes you can be referred to. |
+| `zh` | 最后一个问题 — 您是否已向 Healthier SG 家庭医生登记？这会影响您可以被转介到哪些计划。 | Last question — have you registered with a Healthier SG family doctor? This affects which programmes you can be referred to. |
+| `ta` | கடைசியாக — நீங்கள் Healthier SG மருத்துவரிடம் பதிவு செய்துள்ளீர்களா? இது உங்களை எந்தத் திட்டங்களுக்குப் பரிந்துரைக்க முடியும் என்பதை மாற்றும். | Lastly — have you registered with a Healthier SG doctor? This will change which programmes you can be referred to. |
+
+**`hsg.chip1`** — EN: *Yes, I am enrolled*
+
+| | Translation | Back-translation |
+|---|---|---|
+| `ms` | Ya, saya berdaftar | Yes, I am registered |
+| `zh` | 是的，我已登记 | Yes, I have registered |
+| `ta` | ஆம், நான் பதிவு செய்துள்ளேன் | Yes, I have registered |
+
+**`hsg.chip2`** — EN: *No, not enrolled* · ⚠️ must parse `false`, never `null`
+
+| | Translation | Back-translation |
+|---|---|---|
+| `ms` | Tidak, saya tidak berdaftar | No, I am not registered |
+| `zh` | 没有登记 | Not registered |
+| `ta` | இல்லை, பதிவு செய்யவில்லை | No, have not registered |
+
+**`hsg.chip3`** — EN: *I am not sure* · ⚠️ must parse `null`, **never** `false`
+
+| | Translation | Back-translation |
+|---|---|---|
+| `ms` | Saya tidak pasti | I am not certain |
+| `zh` | 我不确定 | I am not certain |
+| `ta` | எனக்குத் தெரியவில்லை | I do not know |
+
+**What a reviewer should check, in priority order:** that `falls.chip1` cannot be
+read as *"I fell"*; that `hsg.chip3` cannot be read as *"no"*; that `falls.chip4`
+conveys **avoiding activity out of fear** rather than merely doing less; and that
+the two prompts read as questions a 70-year-old would answer rather than as forms.
 
 ---
 
@@ -211,11 +360,63 @@ shortened.
 | `slip.footRetention` | Not a referral · no record is held that can be retrieved · the anonymous assessment behind this page is deleted after 24 months. |
 | `ui.printButton` | Print summary |
 
-Plus the nine reported-flag lines (`Chest pain or dizziness on exertion`,
-`Ongoing health condition reported`, `Fall in the past 12 months`, `Fall in the
-past 12 months, and now avoiding some activities`, `Unpaid caregiving strain`,
-`Psychological distress`, `Limited social support`, `Cost or distance is a
-barrier`, `Food insecurity reported`, `Not enrolled with a Healthier SG GP`).
+### ✅ The ten reported-flag lines — SHIPPED, bilingual
+
+Supplied by the owner as a spreadsheet and wired into `src/data/slipFlagLines.js`.
+These are the only strings in Group 4 that are done.
+
+**⚠️ The slip is BILINGUAL rather than translated, and that is a reversal of how
+every other surface in the portal works.** Each line prints English first with the
+person's language beneath it. The reasoning is this file's own note, two sections
+up: *"the reader may be a staff member rather than the resident"*.
+
+- **Translated only** → handed across a counter at an Active Ageing Centre where
+  the working language is English, and the receiving service cannot read the page.
+  The document would be least usable exactly where it has to work, and the person
+  carrying it would have no way to know.
+- **English only** → these lines are assertions *about* the person — *"Psychological
+  distress"*, *"Food insecurity reported"* — printed for a stranger to read. Somebody
+  who cannot read them cannot check them, correct them, or decline to hand the page
+  over. That is a dignity problem before it is a translation one.
+
+English leads so the sheet stays fully readable to counter staff even when the
+second line is a script they do not read.
+
+**⚠️ It costs paper, measured rather than assumed.** In headless Chromium under
+print emulation, A4 with 12mm margins and six services listed:
+
+| flags | 4 | 5 | 6 | 7 | 9 |
+|---|---|---|---|---|---|
+| English only | 1pg | 1pg | 1pg | 1pg | 2pg |
+| bilingual | 1pg | 1pg | **2pg** | 2pg | 2pg |
+
+From six reported flags the slip runs to two sheets, where English-only reached
+eight. Both pages carry real content — this is not the `CP21` defect, which was
+seven *blank* pages — but somebody with six or more flags is the person most likely
+to be handed one, and they now get two sheets. Taken deliberately.
+
+**Provenance: Google Gemini 3.1 Pro**, via the owner. Machine translation, no
+native-speaker review — the same state as Group 1, which is mine. See *The review
+debt* below.
+
+**One query, raised and settled — leave it as it is.** `fallsAvoiding.ta` ends
+*"…செயல்பாடுகளைத் **தவிர்க்கிறது**"*: the third-person **neuter** verb ("it avoids")
+where the honorific `தவிர்க்கிறார்` would be the expected form for describing a
+person. The English is a participle with no explicit subject, so the compression may
+be deliberate. **Owner's decision: kept.** Recorded here and in `slipFlagLines.js`
+so it is not re-discovered and "fixed" by somebody who also cannot read Tamil.
+
+### ⬜ Still English only, in this group
+
+`slip.title`, `slip.sub`, `slip.notice`, the six `slip.label.*`, `slip.notProvided`,
+`slip.nothingFlagged`, `slip.bandCaveat`, `slip.servicesHeading`,
+`slip.footDisclaimer`, `slip.footRetention`, `ui.printButton`.
+
+⚠️ **`slip.notice` is the load-bearing one and is deliberately still English.** It is
+the sentence that stops the page being read as a referral, and under the bilingual
+model above the receiving service is its primary reader — so English is where it has
+to be correct first. A translation should be **added beneath** it, exactly like the
+flag lines, not substituted for it.
 
 ---
 

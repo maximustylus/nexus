@@ -125,7 +125,17 @@ describe('where each field is saved', () => {
         await save();
 
         expect(pathsWritten()).toContain(`teams/${TEAM_ID}/grades/${USER.uid}`);
-        expect(payloadFor('/grades/')).toEqual({ grade: 'AH16' });
+        /**
+         * ⚠️ `setBy: 'self'` MATTERS HERE AND IS NOT DECORATION. A lead can set this
+         *    person's grade from the TEAM tab, which stamps `'lead'` so the app can
+         *    tell them a grade they never chose is deciding which shifts they lead.
+         *    `merge: true` KEEPS an omitted field, so a self-correction that did not
+         *    stamp `'self'` would leave the screen insisting a lead had set it.
+         */
+        const gradePayload = payloadFor('/grades/');
+        expect(gradePayload.grade).toBe('AH16');
+        expect(gradePayload.setBy).toBe('self');
+        expect(typeof gradePayload.updatedAt).toBe('string');
         expect(pathsWritten().some((path) => path.includes('/members/'))).toBe(false);
     });
 

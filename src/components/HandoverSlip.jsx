@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import { sectorInfo } from '../utils/singapore/postalSectors';
 import { servicesForSector } from '../utils/singapore/communityServices';
 import { RETENTION_MONTHS_LABEL } from '../utils/retentionLabel';
+import { slipFlagLine } from '../data/slipFlagLines';
 
 /**
  * ==============================================================================
@@ -49,23 +50,31 @@ const Row = ({ label, children }) => (
   </div>
 );
 
-const HandoverSlip = ({ score, riskTier, data = {}, postalSector, sessionId, formattedDate }) => {
+const HandoverSlip = ({
+  score, riskTier, data = {}, postalSector, sessionId, formattedDate, language = 'en',
+}) => {
   const place = sectorInfo(postalSector);
   const { services } = servicesForSector(postalSector, data);
 
+  /*
+   * ⚠️ IDS, NOT SENTENCES. This was an array of English strings rendered with
+   *    `key={f}` — so the text was simultaneously the content, the identity and
+   *    the React key, and there was nowhere for a translation to attach. Rewording
+   *    a line silently changed its identity.
+   *
+   * The set and the conditions are UNCHANGED; only the representation moved.
+   */
   const flags = [
-    data.symptomFlag       && 'Chest pain or dizziness on exertion',
-    data.medFlag           && 'Ongoing health condition reported',
-    data.fallsRisk         && (data.fearOfFalling
-                                ? 'Fall in the past 12 months, and now avoiding some activities'
-                                : 'Fall in the past 12 months'),
-    data.caregiverStrain   && 'Unpaid caregiving strain',
-    data.sdohPsychological && 'Psychological distress',
-    data.sdohSocial        && 'Limited social support',
-    data.sdohFinancial     && 'Cost or distance is a barrier',
-    data.sdohFoodInsecure  && 'Food insecurity reported',
-    data.healthierSgEnrolled === false && 'Not enrolled with a Healthier SG GP',
-  ].filter(Boolean);
+    data.symptomFlag       && 'symptoms',
+    data.medFlag           && 'condition',
+    data.fallsRisk         && (data.fearOfFalling ? 'fallsAvoiding' : 'falls'),
+    data.caregiverStrain   && 'caregiver',
+    data.sdohPsychological && 'psychological',
+    data.sdohSocial        && 'social',
+    data.sdohFinancial     && 'financial',
+    data.sdohFoodInsecure  && 'food',
+    data.healthierSgEnrolled === false && 'notEnrolledHsg',
+  ].filter(Boolean).map((id) => slipFlagLine(id, language)).filter(Boolean);
 
   /*
    * ⚠️ PORTALLED TO `document.body`, AND THAT IS A PRINTING FIX, NOT A REFACTOR.
@@ -134,8 +143,30 @@ const HandoverSlip = ({ score, riskTier, data = {}, postalSector, sessionId, for
           {riskTier} ({score} points) — an internal banding, not a diagnosis
         </Row>
         <Row label="Reported">
+          {/*
+            ⚠️ BILINGUAL, AND ENGLISH LEADS. This is the only output that leaves
+            with the person and is handed to somebody ELSE — the brief's own note
+            is that "the reader may be a staff member rather than the resident".
+            A slip rendered only in Tamil is handed across a counter where the
+            working language is English, so translating it outright would make the
+            page least usable exactly where it has to work.
+
+            English only is not the answer either: these lines are assertions
+            ABOUT the person, printed for a stranger. Somebody who cannot read
+            them cannot check them, correct them, or decline to hand the page
+            over. So both, English first. See `src/data/slipFlagLines.js`.
+          */}
           {flags.length > 0
-            ? <ul className="slip-list">{flags.map((f) => <li key={f}>{f}</li>)}</ul>
+            ? (
+              <ul className="slip-list">
+                {flags.map((f) => (
+                  <li key={f.id}>
+                    {f.en}
+                    {f.translated && <span className="slip-flag-alt">{f.translated}</span>}
+                  </li>
+                ))}
+              </ul>
+            )
             : 'Nothing flagged'}
         </Row>
       </section>

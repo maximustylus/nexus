@@ -59,9 +59,27 @@
  *
  * The mitigation is HONESTY AT THE POINT OF CHOOSING rather than a permission:
  * `describeGrade` returns the band and, in plain words, what it means for duties,
- * so somebody selecting a principal grade reads "leads shifts" beside it. The
- * second half is that a lead sees every grade in the Configure staff table — at
- * the moment a wrong one would actually matter — and can correct it there.
+ * so somebody selecting a principal grade reads "leads shifts" beside it.
+ *
+ * ⚠️ THE SECOND HALF OF THAT MITIGATION DID NOT EXIST, AND THIS COMMENT USED TO
+ *    CLAIM IT DID. It said a lead "sees every grade in the Configure staff table
+ *    and can correct it there". A lead does see them — `useTeamGrades` feeds
+ *    `staffRowsFromMembers` — but those rows are DERIVED and read-only, so there
+ *    was no correction path anywhere in the app. Nobody but the person themselves
+ *    could set a grade, which also meant a department could not start rostering
+ *    until every member had been chased for one: the exact cost the self-set
+ *    decision was taken to avoid.
+ *
+ *    A lead now sets and corrects both fields from the TEAM tab
+ *    (`TeamMembersPanel`), one member at a time. `firestore.rules` already allowed
+ *    it — `allow create, update: if isSelf(memberUid) || isLead(teamId)` — so this
+ *    was a missing screen rather than a missing permission.
+ *
+ * ⚠️ AND A GRADE SOMEBODY ELSE SET IS RECORDED AS SUCH, in `setBy`. Not WHO set it
+ *    — a named log of who changed a colleague's pay grade is a second sensitive
+ *    artefact, and the reason this document carries no history. Just `'self'` or
+ *    `'lead'`, which is enough for the profile screen to tell somebody why a grade
+ *    they never chose is deciding which shifts they lead.
  */
 
 import { GRADE_SCALE, DEFAULT_GRADE_BANDS, bandOfGrade } from './rosterEngineV2';
@@ -164,13 +182,23 @@ export const buildMemberProfileUpdate = ({ profession }, current = {}) => {
  * `setDoc(..., { merge: true })` territory: the document does not exist until
  * somebody first chooses a grade, so there is nothing to seed and nothing to
  * migrate. `updatedAt` is written so a lead correcting a grade can see when it
- * last moved; the value itself carries no history, deliberately — a log of who
+ * last moved, and `setBy` records WHETHER it was the person or a lead — never
+ * which lead. The value itself carries no history, deliberately: a log of who
  * changed a colleague's pay grade and when is a second sensitive artefact.
  */
-export const buildGradeUpdate = (grade, current = null, now = null) => {
+export const buildGradeUpdate = (grade, current = null, now = null, setBy = null) => {
     if (!isValidGrade(grade)) return null;
     if (grade === (current ?? '')) return null;
-    return now ? { grade, updatedAt: now } : { grade };
+    const update = { grade };
+    if (now) update.updatedAt = now;
+    /**
+     * ⚠️ `setBy` IS WRITTEN ONLY WHEN A CALLER STATES IT, and never inferred here.
+     *    This module cannot see who is signed in, and a default of `'self'` would
+     *    quietly mislabel every lead correction as the person's own choice — which
+     *    is precisely the fact the field exists to carry.
+     */
+    if (setBy === 'self' || setBy === 'lead') update.setBy = setBy;
+    return update;
 };
 
 /**

@@ -135,7 +135,51 @@ body {
 
   .slip-h2       { font-size: 11pt; font-weight: 700; margin: 12pt 0 5pt; text-transform: uppercase; letter-spacing: 0.5pt; }
   .slip-list     { margin: 0; padding-left: 14pt; }
-  .slip-list li  { margin-bottom: 5pt; }
+  .slip-list li  { margin-bottom: 3pt; }
+
+  /*
+    The person's own language, under the English of each reported flag. See
+    `src/data/slipFlagLines.js` for why the slip is the one bilingual surface in
+    the portal: it is handed to a stranger, so the receiving service has to be
+    able to read it AND the person has to be able to check what it says of them.
+
+    ⚠️ NOT GREY, AND NOT BELOW 8.5pt. The obvious styling for a secondary line —
+       7pt, #999 — is wrong on this page twice over: it goes to a community
+       centre's office laser printer, where light grey breaks up, and its reader
+       is frequently an older person for whom small type is the barrier the whole
+       slip exists to route around. It is set apart by style, indent and a rule,
+       which cost no legibility, rather than by contrast, which does.
+
+    ⚠️ AND THIS COMMENT SAID "NOT SMALLER THAN 9pt" UNTIL THE SHEET WAS MEASURED.
+       A second line per flag is not free. Measured in headless Chromium under
+       print emulation, A4 with 12mm margins, six services listed:
+
+         flags:            4     5     6     7     9
+         English only     1pg   1pg   1pg   1pg   2pg
+         bilingual @9pt   1pg   2pg   2pg   2pg   2pg
+         bilingual @8.5   1pg   1pg   2pg   2pg   2pg
+
+       Half a point bought back a whole sheet for the five-flag case, and 8.5pt is
+       already the size `.slip-url` prints at on the same page — so the 9pt claim
+       was a preference stated as a rule. What remains true is the floor: 8.5pt,
+       black, generous leading.
+
+    ⚠️ RESIDUAL, STATED RATHER THAN LEFT TO BE DISCOVERED: from SIX reported flags
+       the slip runs to two sheets, where English-only reached eight. Both pages
+       carry real content — this is not the `CP21` defect, which was seven BLANK
+       pages — but a person with six or more flags is precisely the person most
+       likely to be handed this, and they now get two sheets. That is the price of
+       the second language and it was taken deliberately, not overlooked.
+  */
+  .slip-flag-alt {
+    display: block;
+    font-size: 8.5pt;
+    font-style: italic;
+    line-height: 1.25;
+    margin-top: 0;
+    padding-left: 6pt;
+    border-left: 1pt solid #666;
+  }
   /* URLs are printed in full: on paper a link is only useful if it can be typed. */
   .slip-url      { font-size: 8.5pt; word-break: break-all; }
 

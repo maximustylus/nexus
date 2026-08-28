@@ -28,7 +28,7 @@ One page, because reconstructing this from three files is what prompted it.
 
 | Prefix | Kind | Means | Lives in |
 |---|---|---|---|
-| **`P`**n | plan phase | A **phase** of work. `P0`–`P8` were the roster remediation; `P9` is the multi-team stress findings; the community ledger has its own `P0`–`P7`. **Not "protocol".** | `ROSTER_TODO.md`, `COMMUNITY_TODO.md` |
+| **`P`**n | plan phase | A **phase** of work, **scoped to its own file** — see the warning below. **Not "protocol".** | `ROSTER_TODO.md`, `COMMUNITY_TODO.md`, `AURA-TODO.md` |
 | **`Q`**n | decision | A **question for the owner**. Renamed from the old `D`n-for-decisions precisely to end the collision below. The series runs `Q1`–`Q8` and `Q10`–`Q13` — **there is no `Q9`** | `ROSTER_HANDOFF.md` §5 |
 | **`A`**–**`E`**n | defect | A defect inside a post-mortem **block**: **A** schema split-brain · **B** time and dates · **C** persistence and configuration · **D** verification infrastructure · **E** documentation | `ROSTER_POSTMORTEM.md` |
 | **`A-RC`**n | *neither* | A **root cause** of Block A — an explanation, not a work item | `ROSTER_POSTMORTEM.md` |
@@ -36,6 +36,31 @@ One page, because reconstructing this from three files is what prompted it.
 | **`CP`**n | defect | **C**ommunity **P**ortal defect. Numbers track the community post-mortem's `§3.x` one-for-one, so `CP9` is `§3.9` | `COMMUNITY_TODO.md` |
 | **`CD`**n | decision | **C**ommunity **D**ecision — the owner's | `COMMUNITY_TODO.md` |
 | **`T`**n | defect | Multi-**T**eam rebuild defect, opened by the pre-merge stress test | `ROSTER_TODO.md` §P9 |
+| **`AN`**n | defect | **AN**alytics defect — the derived-insight layer: the year-end analysis, the population rollup, the coverage watcher, the nudge, the PDPA guard. Opened 2026-08-23 | `AURA-POSTMORTEM.md` |
+| **`AC`**n | defect | **A**URA **C**hat defect — the public conversational screening (`AuraChat.jsx`) and the parser behind it. Opened 2026-08-23. Distinct from `CP`n, which covers the portal around it; `AC` is the chat component itself | `AURA-POSTMORTEM.md` |
+| **`AU`**n | defect | **AU**RA defect — the AI surfaces and what they are trusted to write. Opened 2026-08-23. **`AU`, not `AI`**: `A` already means three things in this set and a fourth reading of the same letter is exactly the failure the rules below exist to prevent | `AURA-POSTMORTEM.md` |
+
+---
+
+## ⚠️ `P`n is FILE-SCOPED, and `P7` now means three different things
+
+`P` numbers phases, and each ledger numbers its own from zero. That was already true of two
+files; a third opened on 2026-08-23. **Always check which file a `P`n came from before acting
+on it.**
+
+| File | Range | `P7` there means |
+|---|---|---|
+| [`ROSTER_TODO.md`](ROSTER_TODO.md) | `P0`–`P9` | *Persistence, config source, security rules* — Block C |
+| [`COMMUNITY_TODO.md`](COMMUNITY_TODO.md) | `P0`–`P7` | *Found by the pre-merge stress test* — `CP22`–`CP26` |
+| [`AURA-TODO.md`](AURA-TODO.md) | `P0`–`P8` | *The prompts themselves* — `AU7` `AU19` `AU20` `AU28` `AN5` `AN7` `AN12` `AU8`. **`P8` added 2026-08-24: the owner's sixteen guardrails** — `AU16`, and [`AURA-GUARDRAILS.md`](AURA-GUARDRAILS.md) |
+
+⚠️ **The `AURA-TODO.md` series was opened without a row here, which rule 2 below requires in
+the same commit.** Recorded on 2026-08-23 after somebody asked *"what's P7?"* and the answer
+turned out to be three answers. Writing it down is the whole of the fix — the numbers stay,
+because renumbering is what rule 1 forbids — but it is the second time this document set has
+grown an ambiguous prefix, and the first one (`D`) is the reason this file exists.
+
+The unambiguous way to cite one is **file-first**: *"`AURA-TODO.md` P7"*, never a bare `P7`.
 
 ---
 
@@ -54,6 +79,27 @@ bottom:
 So `D3` appears in one file meaning *a decision* in one place and *a defect* in
 another. When you meet a bare `D`n, check which document it came from before acting
 on it.
+
+---
+
+## ⚠️ `AU`, `AC` and `AN` were merged, and NOT renumbered
+
+The three AURA post-mortems written on 2026-08-23 — `POSTMORTEM-AURA.md`,
+`POSTMORTEM-AURA-CHAT.md` and `POSTMORTEM-AURA-INTELLIGENCE.md` — are now one document,
+[`AURA-POSTMORTEM.md`](AURA-POSTMORTEM.md). **Every id survived the merge unchanged.**
+`AU2` means today exactly what it meant when it was written, and the three series stay
+distinct because they name three different surfaces:
+
+| Series | Surface |
+|---|---|
+| `AU`n | the staff assistant and the AI plumbing |
+| `AC`n | the public screening chat |
+| `AN`n | the intelligence layer — analysis, rollup, nudge, PDPA guard |
+
+⚠️ **The roster engine was deliberately NOT merged in.** `ROSTER_POSTMORTEM.md`'s `A`–`E`,
+`A-RC` and `M` ids are cited **by number in released CHANGELOG entries** — *"post-mortem
+D3"*, *"audit M6"*, *"A-RC1"* — so absorbing that corpus would mean renumbering it, which
+is what rule 1 below forbids. `AURA-POSTMORTEM.md` §7 is the bridge instead.
 
 ---
 

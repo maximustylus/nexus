@@ -14,96 +14,48 @@ export const MONTHS = [
 ];
 
 // ==========================================
-// 2. THE VIP LIST (TEAM_DIRECTORY)
+// 2. WHERE THE VIP LIST USED TO BE
 // ==========================================
 //
-// ⚠️ THIS LIST IS ON ITS WAY OUT. Under the multi-team model a team's people live in
-//    `teams/{teamId}/members/{uid}`, which a lead maintains themselves. What survives
-//    here is a BRIDGE, used by `App.jsx` to let the people already using NEXUS
-//    straight through until `scripts/migrate-to-teams.cjs` has run and given them
-//    real memberships. Delete it — and the bridge — at that point; leaving it would
-//    mean a handful of named email addresses permanently bypass membership checks.
-//
-// ── EVELYN, ASHIK AND MINI WERE REMOVED, AND IT IS A REVOCATION ──────────────
-//
-// The owner's decision for team #1, recorded in `scripts/team-one-manifest.cjs`
-// with the full reasoning. They are dropped from this list as well as from the
-// manifest for a specific reason: the bridge in `App.jsx` waves anyone it still
-// recognises into the app shell, and somebody in the bridge but NOT in a team would
-// land on a roster with nobody in it, an empty wellbeing panel and a blank feed —
-// which is exactly the "looks broken" failure `AccessGate` exists to prevent.
-//
-// Removed from both, they instead see "nobody has added you to a team yet", which
-// is true and tells them who to ask. Their existing records are untouched; a lead
-// can invite them back without a deploy.
-export const TEAM_DIRECTORY = [
-  // --- LEADERSHIP & ADMINS ---
-  { 
-    id: 'alif', // Matches Firestore ID 'alif'
-    name: 'Alif', 
-    email: 'muhammad.alif@kkh.com.sg', 
-    role: 'admin',
-    title: 'Lead and Sr. CEP (JG14)'
-  },
-  { 
-    id: 'nisa', // Matches Firestore ID 'nisa'
-    name: 'Nisa', 
-    email: 'siti.nur.anisah.nh@kkh.com.sg', 
-    role: 'admin',
-    // ROSTER MASTER — she builds the roster every week. In the new model that is
-    // `role: 'lead'` with `rostered: false`; see `scripts/team-one-manifest.cjs`.
-    title: 'Administrator & Roster Master'
-  },
-  // --- MEDICAL & NURSING LEADS (VIEWERS) ---
-  { 
-    id: 'benny', 
-    name: 'Benny', 
-    email: 'benny.loo.k.g.@singhealth.com.sg', 
-    role: 'viewer', 
-    title: 'Head of Service'
-  },
-
-  // --- CLINICAL EXERCISE PHYSIOLOGISTS (STAFF) ---
-  { 
-    id: 'brandon', // Matches Firestore ID 'brandon'
-    name: 'Brandon', 
-    email: 'brandon.feng.gg@kkh.com.sg', 
-    role: 'staff',
-    title: 'CEP (JG11)'
-  },
-  { 
-    id: 'ying_xian', // 🛡️ FIXED: Replaced space with underscore to perfectly match Firestore
-    name: 'Ying Xian', 
-    email: 'lim.ying.xian@kkh.com.sg', 
-    role: 'staff',
-    title: 'CEP (JG12)'
-  },
-  { 
-    id: 'derlinder', // Matches Firestore ID 'derlinder'
-    name: 'Derlinder', 
-    email: 'derlinder.kaur@kkh.com.sg', 
-    role: 'staff',
-    title: 'CEP (JG12)'
-  },
-  { 
-    id: 'fadzlynn', // Matches Firestore ID 'fadzlynn'
-    name: 'Fadzlynn', 
-    email: 'fadzlynn.mohamad.fadzully@kkh.com.sg', 
-    role: 'staff',
-    title: 'CEP (JG13)'
-  }
-];
-
-// ==========================================
-// 3. HELPER EXPORTS (Backward Compatibility)
-// ==========================================
-
-export const STAFF_IDS = TEAM_DIRECTORY.map(person => person.id);
-export const STAFF_LIST = TEAM_DIRECTORY.map(person => person.name);
-export const checkAccess = (email) => {
-  if (!email) return null;
-  return TEAM_DIRECTORY.find(p => p.email.toLowerCase() === email.toLowerCase());
-};
+// Three people — Evelyn, Ashik and Mini — were removed from the directory before
+// it was deleted, as a REVOCATION the owner decided and `scripts/team-one-manifest.cjs`
+// records with the full reasoning. That history matters and stays; the bridge in
+// `legacyBridge.js` recognises only the seven who remained.
+/**
+ * ==============================================================================
+ * `TEAM_DIRECTORY` IS GONE, AND THIS COMMENT IS ITS HEADSTONE — `AN14`
+ * ==============================================================================
+ *
+ * Seven real people lived here as a module-level constant: full name, work email
+ * address, role, title — and until `AN1`, job grade. One SPA bundle serves every
+ * route, including `/individuals`, the community screening a member of the public
+ * opens with no sign-in, so all of it was downloadable as part of the page by
+ * anybody, with no Firestore read for any rule to stop.
+ *
+ * It was kept, post-`AN1`, for exactly one job: `checkAccess(email)` recognising
+ * a legacy member so the access-gate bridge in `App.jsx` waves them through until
+ * the owner verifies their migrated `teamIds` in production. Recognition never
+ * needed the plaintext. `src/utils/legacyBridge.js` now does the same job with
+ * salted digests — the bundle can prove an email it is HANDED belongs to a legacy
+ * member, and can no longer tell anybody who those members are.
+ *
+ * `STAFF_IDS` and `STAFF_LIST`, derived here, went with it. Their only live
+ * consumer was a pair of `activeStaff*` variables in `App.jsx` whose non-demo arm
+ * was dead code — the render that used them sits inside its own `isDemo` ternary.
+ * Seven names shipped to feed a branch that could not execute.
+ *
+ * Where each field went:
+ *   recognition       → `legacyBridge.checkAccess` (digest lookup, same contract)
+ *   admin gate        → `legacyBridge.isLegacyAdminEmail` (replaces `ADMIN_EMAILS`
+ *                        in `App.jsx` and the `'Nisa'` name check in `WellbeingView`)
+ *   name              → the person's own auth `displayName` / `users/{uid}` doc
+ *   title, role       → the bridge profile (badge-level, names nobody)
+ *   the team itself   → `teams/{id}/members/*`, where it has lived since v2.0
+ *
+ * ⚠️ DO NOT REINTRODUCE A NAMED DIRECTORY HERE, in any shape, for any deadline.
+ *    `an14.bundle.test.js` greps the BUILT BUNDLE for the identities this file
+ *    used to ship and fails the suite if any returns.
+ */
 
 // ==========================================
 // 4. APP CONFIG (Upgraded)

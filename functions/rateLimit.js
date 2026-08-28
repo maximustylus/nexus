@@ -90,6 +90,65 @@ const LIMITS = Object.freeze({
 const CALLS_PER_ASSESSMENT = 13;
 
 /**
+ * ==============================================================================
+ * THE STAFF SIDE — `AU14`, closed with the same machinery
+ * ==============================================================================
+ *
+ * `chatWithAura`, `generateSmartAnalysis` and `processFeedPost` are authenticated,
+ * which made them LOOK safer than `communityAck` while being the opposite: any
+ * single signed-in account could loop the billed Gemini key as fast as promises
+ * resolve, and `AU14` recorded that nothing bounded it. Authentication is
+ * attribution, not restraint.
+ *
+ * The shape differs from the public side in one load-bearing way: the bucket is
+ * the UID, not the address. A uid cannot be spoofed by a header, does not put a
+ * roadshow crowd behind one key, and is already the identity every other limit in
+ * this app hangs off. The NAT reasoning above simply does not apply.
+ *
+ * ⚠️ ONE BUDGET ACROSS ALL THREE ENDPOINTS, deliberately. Splitting per endpoint
+ *    would triple the effective allowance of a caller who rotates, and no honest
+ *    use rotates: a human in the chat makes a few calls a minute at most, and the
+ *    analysis is a couple of clicks a year. 120/hour supports a two-hour
+ *    conversation with AURA answering every thirty seconds, which nobody has ever
+ *    had, while a loop hits the wall inside two minutes.
+ *
+ * ⚠️ THE GLOBAL CEILING IS AN ALARM HERE TOO. Twenty-eight departments of real
+ *    staff produce nowhere near 3,000 AI calls an hour; a bill does.
+ */
+const STAFF_LIMITS = Object.freeze({
+    perUser: 120,
+    global: 3000,
+    globalWarnAt: 0.5,
+});
+
+const staffPlanFor = ({ uid, nowMs, salt }) => ({
+    caller: {
+        // A uid is not a secret the way an address is, but the doc id is hashed
+        // anyway: one convention for every key in `rate_limits`, and no reader of
+        // that collection learns who chats with AURA and when.
+        attributable: typeof uid === 'string' && uid !== '',
+        limit: STAFF_LIMITS.perUser,
+        path: counterPath('staff', (typeof uid === 'string' && uid) || UNKNOWN_CALLER, windowIndex(nowMs), salt),
+    },
+    global: {
+        limit: STAFF_LIMITS.global,
+        path: counterPath('staff_global', 'all', windowIndex(nowMs), salt),
+    },
+    windowIndex: windowIndex(nowMs),
+});
+
+/**
+ * Staff wording, not the roadshow wording: no shared-wifi story, because the
+ * bucket is personal, and it says plainly that the ceiling exists to bound cost.
+ */
+const staffRefusalMessage = ({ retryAfterSeconds }) => {
+    const minutes = Math.max(1, Math.ceil(retryAfterSeconds / 60));
+    return 'AURA has hit the hourly usage ceiling for your account, which exists to '
+        + 'bound the cost of the AI service. Nothing is wrong with your access. Please '
+        + `try again in about ${minutes} minute${minutes === 1 ? '' : 's'}.`;
+};
+
+/**
  * The caller's address, reduced to something worth counting.
  *
  * ⚠️ `x-forwarded-for` IS A LIST, AND ONLY ONE ENTRY IS TRUSTWORTHY. Cloud
@@ -298,6 +357,7 @@ module.exports = {
     hashKey,
     WINDOW_MS,
     LIMITS,
+    STAFF_LIMITS,
     CALLS_PER_ASSESSMENT,
     UNKNOWN_CALLER,
     callerKey,
@@ -305,5 +365,7 @@ module.exports = {
     counterPath,
     decide,
     planFor,
+    staffPlanFor,
     refusalMessage,
+    staffRefusalMessage,
 };

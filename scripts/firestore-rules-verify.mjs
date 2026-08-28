@@ -588,6 +588,93 @@ await env.withSecurityRulesDisabled(async (c) => {
         assertFails(setDoc(doc(brandon, 'system_data/roster_2026'), { x: 1 })));
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// SECTION: the AU3 workload backstop — the model's field choice, fenced
+// ─────────────────────────────────────────────────────────────────────────────
+//
+// The client's `ALLOWED_WORKLOAD_FIELDS` was "the only thing standing between a
+// model-chosen string and a key on that document". This is the standing behind
+// it. `hasOnly` permits a subset, so partial updates pass; anything the model
+// invents fails the WHOLE write. The field list here must mirror
+// `src/utils/dataEntryGuard.js` exactly.
+console.log('\nAU3 — the workload document accepts only its own fields:');
+await seed();
+{
+    const alif = as(ALIF);       // a lead — the only role that may write at all
+    const brandon = as(BRANDON); // staff
+    const wdoc = (client) => doc(client, `teams/${TEAM_A}/workload/jan_2026`);
+    const audit = { last_updated_by: 'Alif', last_updated_at: '2026-08-24T00:00:00Z' };
+
+    await check('a lead writes patient_attendance with the audit fields',
+        assertSucceeds(setDoc(wdoc(alif), { patient_attendance: 120, ...audit })));
+    await check('a lead updates just patient_load — hasOnly permits a subset',
+        assertSucceeds(setDoc(wdoc(alif), { patient_load: 80, ...audit }, { merge: true })));
+    await check('staff may not write it at all',
+        assertFails(setDoc(wdoc(brandon), { patient_attendance: 5, ...audit })));
+    await check('a model-invented field fails the whole write',
+        assertFails(setDoc(wdoc(alif), { patient_attendance: 120, engagement_score: 9, ...audit })));
+    await check('a field-name typo fails rather than minting a key',
+        assertFails(setDoc(wdoc(alif), { patient_attendence: 120, ...audit })));
+    await check('a string count is refused — the guard requires a number',
+        assertFails(setDoc(wdoc(alif), { patient_attendance: '120', ...audit })));
+    await check('a negative count is refused',
+        assertFails(setDoc(wdoc(alif), { patient_load: -5, ...audit })));
+    await check('the collection stays unreadable, even to the lead who wrote it',
+        assertFails(getDoc(wdoc(alif))));
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// SECTION: the AN13 comments fence — the REAL RE2, not a JS mirror
+// ─────────────────────────────────────────────────────────────────────────────
+//
+// ⚠️ THIS SECTION EXISTS BECAUSE A JS MIRROR LIED ONCE. `nric.test.js` asserts
+//    the fence's pattern with a JavaScript regex, and its first draft passed the
+//    `s` flag unconditionally — building a MORE permissive mirror than the RE2
+//    engine these rules actually run (RE2's `.` does not match `\n` by default),
+//    so an NRIC mid-way through a multi-line comment sailed past the deployed
+//    fence while all 19 mirror cases passed. The fix was `(?s)` in the pattern;
+//    the ACCEPTANCE for that fix is this section, against the emulator's real
+//    engine. The mirror is a fast regression check; this is the truth.
+console.log('\nAN13 — the comments NRIC fence, against the real RE2:');
+await seed();
+{
+    const brandon = as(BRANDON);
+    const comment = (text) => addDoc(
+        collection(brandon, `teams/${TEAM_A}/feed/post-1/comments`),
+        { author: 'Brandon', text, timestamp: serverTimestamp() },
+    );
+
+    await check('an ordinary comment is allowed',
+        assertSucceeds(comment('great session everyone, see you thursday')));
+    await check('multi-line plain text is allowed',
+        assertSucceeds(comment('line one\nline two\nline three')));
+    await check('the asked-for shortened form ("ending 567D") is allowed',
+        assertSucceeds(comment('patient ending 567D')));
+    await check('an ops code (NS1234567X) is allowed — letters run on',
+        assertSucceeds(comment('ref NS1234567X checked')));
+    await check('a phone number is allowed',
+        assertSucceeds(comment('call me at 91234567')));
+
+    await check('a bare NRIC is refused',
+        assertFails(comment('S1234567D')));
+    await check('a lowercase NRIC in a sentence is refused',
+        assertFails(comment('patient s1234567d came in today')));
+    await check('a FIN (M-series) is refused',
+        assertFails(comment('M1234567W')));
+    await check('a bracketed NRIC is refused',
+        assertFails(comment('the patient (S1234567D) asked about results')));
+
+    // The four arrangements the un-flagged pattern let through:
+    await check('an NRIC mid multi-line text is refused',
+        assertFails(comment('line one\nsee id S1234567D')));
+    await check('an NRIC before a newline is refused',
+        assertFails(comment('S1234567D was here\nsecond line')));
+    await check('an NRIC after a blank line is refused',
+        assertFails(comment('ward round\n\nS1234567D discharged today')));
+    await check('an NRIC in the middle of a handover note is refused',
+        assertFails(comment('Handover notes:\npatient S1234567D for review\nthanks')));
+}
+
 await env.cleanup();
 console.log(`\n${'═'.repeat(64)}\n  ${pass} passed, ${fail} failed\n${'═'.repeat(64)}`);
 process.exit(fail === 0 ? 0 : 1);

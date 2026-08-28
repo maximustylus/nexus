@@ -455,7 +455,26 @@ service cloud.firestore {
         // until something actually reads it, rather than pre-granting access to a
         // collection whose consumers are unknown.
         allow read: if false;
-        allow create, update: if isLead(teamId);
+        // ⚠️ THE `AU3` BACKSTOP, the deferred half of that finding. The client's
+        //    `ALLOWED_WORKLOAD_FIELDS` allowlist was, by row 2.1's own words,
+        //    "the only thing standing between a model-chosen string and a key on
+        //    that document" — and a client-side allowlist stands nowhere once the
+        //    client is modified. The two counter fields mirror
+        //    `dataEntryGuard.js`'s allowlist EXACTLY; change either and the
+        //    emulator suite (`firestore-rules-verify.mjs`, AU3 section) fails.
+        //    `hasOnly` permits a subset, so a write updating one counter plus the
+        //    two audit fields passes; a model-invented key fails the whole write.
+        allow create, update: if isLead(teamId)
+                      && request.resource.data.keys().hasOnly([
+                           'patient_attendance', 'patient_load',
+                           'last_updated_by', 'last_updated_at'
+                         ])
+                      && (!('patient_attendance' in request.resource.data)
+                          || (request.resource.data.patient_attendance is number
+                              && request.resource.data.patient_attendance >= 0))
+                      && (!('patient_load' in request.resource.data)
+                          || (request.resource.data.patient_load is number
+                              && request.resource.data.patient_load >= 0));
         allow delete: if false;
       }
 
@@ -484,11 +503,32 @@ service cloud.firestore {
 
         match /comments/{commentId} {
           allow get, list: if isMember(teamId);
+          // ⚠️ THE NRIC/FIN LINE IS THE `AN13` FENCE, and it is deliberately the
+          //    same SHAPE the client checks (`src/utils/nric.js`) — S/T/F/G/M,
+          //    seven digits, a letter. Rules cannot compute the checksum, so the
+          //    client does not either: a stricter client in front of a looser
+          //    fence would make the difference a bypass. RE2 has no lookarounds,
+          //    so the boundary here is "not preceded/followed by alphanumerics"
+          //    spelled as alternation with start/end. Posts get the model-based
+          //    guard in `processFeedPost`; comments get this. It is ONE identifier
+          //    class, not PDPA compliance, and the file says so where it is
+          //    enforced rather than implying more.
+          //
+          // ⚠️ `(?s)` IS LOAD-BEARING, AND ITS ABSENCE SHIPPED ONCE. RE2's `.`
+          //    does not match a newline by default, so without the flag the
+          //    leading `(.*[^A-Za-z0-9])?` could only absorb text back to the
+          //    NEAREST newline — an NRIC in the middle of a multi-line handover
+          //    note sailed past the fence while the single-line test cases all
+          //    passed. Found by review, not by the parity test, because the test
+          //    had built its JS mirror with the `s` flag RE2 does not have —
+          //    asserting 19 cases against a pattern that was not the deployed
+          //    one. The mirror now derives its flag FROM this pattern.
           allow create: if isMember(teamId)
                         && request.resource.data.keys().hasOnly(['author', 'text', 'timestamp'])
                         && request.resource.data.text is string
                         && request.resource.data.text.size() > 0
                         && request.resource.data.text.size() <= 5000
+                        && !request.resource.data.text.matches('(?s)(.*[^A-Za-z0-9])?[STFGMstfgm][0-9]{7}[A-Za-z]([^A-Za-z0-9].*)?')
                         && request.resource.data.timestamp == request.time;
           // ⚠️ `author` IS NO LONGER PINNED TO THE CALLER'S NAME, and that is a
           //    deliberate loosening with a reason. The old rule required
@@ -685,10 +725,23 @@ service cloud.firestore {
     // granted.
     match /smart_database/{docId} {
       allow read: if false;
+      // ⚠️ `aiProvenance` ADDED 2026-08-24 WITH THE GUARDRAILS (`AURA-TODO.md` P8),
+      //    AND THE DEPLOY ORDER IS NOT OPTIONAL: **rules first, then hosting.**
+      //    `hasOnly` permits a SUBSET, so the currently deployed bundle keeps
+      //    working the moment these rules land. The reverse order denies every
+      //    export for as long as the gap lasts, and the client's catch says
+      //    "Please check your connection" — the exact failure this file's header
+      //    predicted twenty lines above.
+      //
+      //    It is here rather than dropped from the client because this row is the
+      //    second copy of a document that left the building as a .docx. Rule 12
+      //    asks whether the record says which model produced it; an audit sink
+      //    that cannot answer that is the finding (`AU16`), not the fix.
       allow create: if isSignedIn()
                     && request.resource.data.keys().hasOnly([
                          'timestamp', 'displayDate', 'author', 'role',
-                         'content', 'type', 'isDemo', 'silentlyLogged'
+                         'content', 'type', 'isDemo', 'silentlyLogged',
+                         'aiProvenance'
                        ])
                     && request.resource.data.content is string
                     && request.resource.data.content.size() <= 100000;
