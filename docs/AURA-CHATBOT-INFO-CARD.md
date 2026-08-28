@@ -8,7 +8,7 @@ data is handled, and how to raise a concern.**
 | **Card status** | ✅ **In effect.** Approved 2026-08-28 by **Muhammad Alif (owner)** — the named sign-off `AURA-GUARDRAILS.md` Rule 12 requires. The owner read draft v0.3 in full and approved it as written; the same session's `AU29` fix and 9.5 decision are folded into this version, recorded in the changelog below. |
 | **Card version** | 1.1 |
 | **Last updated** | 2026-08-28 |
-| **Describes** | NEXUS **v2.1.0** (app) · AURA engine tier **v2.3** · guardrails **v1.0** |
+| **Describes** | NEXUS **v2.1.3** (app) · AURA engine tier **v2.3** · guardrails **v1.0** |
 | **Framework** | Structured after the **IMDA Transparency Guidelines for Generative AI Chatbots** (Infocomm Media Development Authority, Singapore, published 20 July 2026), Annex B sample format. The guidelines are voluntary; NEXUS adopts them as its transparency baseline. |
 
 > **This is a consolidated card for a family of AURA surfaces** (the guidelines allow one
@@ -370,7 +370,7 @@ the update triggers below exist because these facts move.*
 | Demo sandbox sends nothing to any model (§1) | `src/utils/demoAura.js` — no network call of any kind | Confirmed 2026-08-27 |
 | Medical disclaimer quoted verbatim; Red/Amber/Green tiers (§2, §3) | `src/components/ResultPage.jsx` | Confirmed 2026-08-27 |
 | Community record de-identified by construction; fingerprint removed (§4) | `src/utils/telemetry.js`, `CP3` | Confirmed 2026-08-27, with the "construction, not schema" hedge the audit asked for |
-| Versions: app 2.1.0, engine v2.3, guardrails 1.0 (header) | `package.json`, `AURA-CHANGELOG.md`, `functions/guardrails.cjs` | Confirmed 2026-08-27 |
+| Versions: app 2.1.3, engine v2.3, guardrails 1.0 (header) | `package.json`, `AURA-CHANGELOG.md`, `functions/guardrails.cjs` | Confirmed 2026-08-27 at 2.1.0; app version re-checked 2026-08-28 after merging main's v2.1.1–v2.1.3 patch releases |
 | Model follows its prompt-carried rules (§3) | — | **Unverifiable from source**, stated as such; gated on the 20-turn read (`P8.8`) |
 | Google's internal data handling (§4) | Google's API terms | **Not independently verified**, stated as such (gap 6) |
 

@@ -5,7 +5,7 @@ tier. It moves independently of the app version in `package.json` and is **not**
 an app release. `CHANGELOG.md:12` is the source of that rule; this file is the history it
 refers to.
 
-**Currently `v2.3`.** The app is `v2.1.0`.
+**Currently `v2.3`.** The app is `v2.1.3`.
 
 > ### ⚠️ How to read this file
 >
