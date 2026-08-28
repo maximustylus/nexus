@@ -20,9 +20,9 @@ description of NEXUS as *"a proprietary, autonomous AI agent"* (`AU1`) — which
 month because a cluster-level rostering ICT is asking what NEXUS is.
 
 **Updated 2026-08-24, end of the closing sweep:** `AC16` and the guardrail work's `P8`
-items joined the ledger since the paragraph above was written, and **45 findings are now
+items joined the ledger since the paragraph above was written, and **46 findings are now
 closed with evidence — the engineering queue is empty** (`AURA-TODO.md`'s status table is
-the authoritative count). What remains is the owner's column: nine
+the authoritative count; `AU29` and the IMDA info card joined and closed 2026-08-28). What remains is the owner's column: nine
 decisions, the model-routing and real-turns items (`AURA-TODO.md` P8.7/P8.8), the
 20-turn read (`AURA-VERIFICATION-TURNS.md`) that gates the merge, the three
 native-speaker reviews (`docs/CD13-translation-review.xlsx` is the instrument), and

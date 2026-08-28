@@ -44,6 +44,8 @@ G5 suite / lint / build green                    ✅ PASS
   Gemini assistant beside it.
 - **G5** — 3,232 tests / 86 files, lint 0, build clean; plus the rules emulator
   at **140 passed, 0 failed** (`firestore-rules-verify.mjs`, AU3 + AN13 sections).
+  *Re-verified 2026-08-28 after folding in the info-card branch and `main`'s
+  v2.1.1–v2.1.3 releases: **3,250 tests / 91 files**, lint 0, build clean.*
 
 ⚠️ **The gates pass on the `aura` BRANCH. The live site still runs `main`** until
 the post-demo merge; the deploy order is rules → functions → hosting, and the

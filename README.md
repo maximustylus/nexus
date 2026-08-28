@@ -307,7 +307,7 @@ The audit-and-remediation record and the go-live material live beside the code:
 
 | Document | What it is |
 |---|---|
-| [`AURA-POSTMORTEM.md`](AURA-POSTMORTEM.md) · [`AURA-TODO.md`](AURA-TODO.md) · [`AURA-CHANGELOG.md`](AURA-CHANGELOG.md) · [`AURA-HANDOFF.md`](AURA-HANDOFF.md) | The AURA audit: 58 findings, 45 closed with evidence; the engineering queue is empty and the remainder is the owner's column |
+| [`AURA-POSTMORTEM.md`](AURA-POSTMORTEM.md) · [`AURA-TODO.md`](AURA-TODO.md) · [`AURA-CHANGELOG.md`](AURA-CHANGELOG.md) · [`AURA-HANDOFF.md`](AURA-HANDOFF.md) | The AURA audit ledger — 46 findings closed with evidence, the engineering queue empty, the remainder the owner's column (the TODO's status table is the authoritative count) |
 | [`AURA-GUARDRAILS.md`](AURA-GUARDRAILS.md) | The owner's sixteen working rules, verbatim, with the honest conformance table — what is CODE, what is only asked of a model |
 | [`AURA-GOLIVE-GATE.md`](AURA-GOLIVE-GATE.md) | The five go-live gates: failed 2026-08-23, all passing on re-run 2026-08-24 |
 | [`AURA-VERIFICATION-TURNS.md`](AURA-VERIFICATION-TURNS.md) | The 20 real turns the owner reads before the guardrail prompts ship |
@@ -315,6 +315,7 @@ The audit-and-remediation record and the go-live material live beside the code:
 | `docs/NEXUS-roster-walkthrough.pptx` | The AHP walkthrough deck — real screenshots, desktop and mobile |
 | `docs/CLAUDE-DESIGN-PROMPTS.md` | The prompt pack for restyling the walkthrough in Claude Design |
 | `docs/CD13-translation-review.xlsx` | The native-speaker review workbook for the 19 machine-translated strings |
+| [`docs/AURA-CHATBOT-INFO-CARD.md`](docs/AURA-CHATBOT-INFO-CARD.md) | The IMDA-aligned chatbot info card, v1.0, owner-approved — served in-app at `/aura-info` |
 
 ## Interactive Demo Mode and Smoke Testing
 
