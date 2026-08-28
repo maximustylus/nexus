@@ -12,12 +12,6 @@ jobs:
       
       - name: Install Frontend Dependencies
         run: npm install
-        
-      - name: Test Frontend
-        run: npm test
-
-      - name: Lint Frontend
-        run: npm run lint
 
       # `VITE_APPCHECK_SITE_KEY` is the CLIENT half of `CP7`. Absent, the App Check
       # block in `src/firebase.js` does nothing and the app behaves exactly as it
@@ -25,10 +19,24 @@ jobs:
       # safe. A site key is NOT a secret (it is served to every browser), so it is a
       # repository VARIABLE rather than a secret; an unset variable is an empty
       # string, which is falsy, which is the inert path.
+      #
+      # ⚠️ BUILD COMES BEFORE TEST, AND A TEST ENFORCES IT. `an14.bundle.test.js`
+      # layer 2 scans `dist/` for staff identities — the check against the artefact
+      # people actually download — and in CI it FAILS when there is no bundle to
+      # scan rather than silently passing on nothing. This workflow ran test-first
+      # and went red on the first main push that carried that test (run 934,
+      # 2026-08-28). Testing after building also means the suite scans the exact
+      # bundle the hosting step then ships, not a sibling of it.
       - name: Build Frontend
         run: npm run build
         env:
           VITE_APPCHECK_SITE_KEY: '${{ vars.VITE_APPCHECK_SITE_KEY }}'
+
+      - name: Test Frontend
+        run: npm test
+
+      - name: Lint Frontend
+        run: npm run lint
 
       - name: Install Backend Dependencies
         working-directory: ./functions
