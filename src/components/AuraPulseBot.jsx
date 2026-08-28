@@ -114,6 +114,26 @@ export default function AuraPulseBot({ isOpen, onClose, onOpen: _onOpen, user })
         try { return localStorage.getItem(INFO_NOTICE_KEY) !== 'seen'; }
         catch { return true; }
     });
+
+    /*
+     * `AU29`, the in-place half: a CHANGE of signed-in identity while this
+     * component stays mounted resets the session — transcript, persona, panel
+     * view, draft input, pending write. `handleLogout` in App.jsx clears the
+     * transcript for the unmount path; this covers a user switch React performs
+     * without unmounting. The ref starts at the current uid so mounting alone
+     * never wipes a session.
+     */
+    const activeUid = user?.uid ?? null;
+    const prevUidRef = useRef(activeUid);
+    useEffect(() => {
+        if (prevUidRef.current === activeUid) return;
+        prevUidRef.current = activeUid;
+        setAuraHistory([]);
+        setView('SELECT');
+        setSelectedPersona(null);
+        setInput('');
+        setPendingLog(null);
+    }, [activeUid, setAuraHistory]);
     const [isOnline,         setIsOnline]         = useState(navigator.onLine);
     const [liveMemory,       setLiveMemory]       = useState(null);
     const [isListening,      setIsListening]      = useState(false);

@@ -123,7 +123,7 @@ const CustomBarTooltip = ({ active, payload, label }) => {
 };
 
 export default function App() {
-  const { isDemo, toggleDemo } = useNexus();
+  const { isDemo, toggleDemo, setAuraHistory } = useNexus();
 
   const [currentView, setCurrentView] = useState(() => {
       if (typeof window !== 'undefined') {
@@ -567,10 +567,18 @@ export default function App() {
     } catch (e) {
         console.error("Logout error", e);
     }
-    setUser(null); 
+    setUser(null);
     setNotifications([]);
-    setIsAdminOpen(false); 
-    setCurrentView('pulse'); 
+    setIsAdminOpen(false);
+    setCurrentView('pulse');
+    /*
+     * `AU29` — the AURA transcript lives in the ROOT provider, not in the panel,
+     * so it outlives this component tree: without this line, the next colleague
+     * to sign in on a shared terminal could reopen the previous person's
+     * wellbeing conversation. The panel's own state dies with its unmount here;
+     * this is the half that would not.
+     */
+    setAuraHistory([]);
   };
   
   const renderCustomizedLabel = ({ cx, cy, midAngle, innerRadius, outerRadius, percent }) => {

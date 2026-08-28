@@ -46,14 +46,14 @@ original post-mortems into one. `AU2` means today exactly what it meant when it 
 
 | | Count | Ids |
 |---|---|---|
-| `DONE`, evidenced | **45** | `AU1` `AU2` `AU3` `AU4` `AU6` `AU7` `AU9` `AU10` `AU12` `AU14`–`AU16` `AU19` `AU20` `AU22`–`AU28` `AC1` `AC2` `AC5`–`AC10` `AC12`–`AC16` `AN1`* `AN2`–`AN4` `AN6` `AN8` `AN10` `AN13` `AN14` + `AN12` (code half) — `AU3` now both halves, emulator-verified |
+| `DONE`, evidenced | **46** | `AU1` `AU2` `AU3` `AU4` `AU6` `AU7` `AU9` `AU10` `AU12` `AU14`–`AU16` `AU19` `AU20` `AU22`–`AU29` `AC1` `AC2` `AC5`–`AC10` `AC12`–`AC16` `AN1`* `AN2`–`AN4` `AN6` `AN8` `AN10` `AN13` `AN14` + `AN12` (code half) — `AU3` now both halves, emulator-verified; `AU29` closed 2026-08-28 |
 | `OPEN`, mine | **0** | The engineering queue is genuinely empty as of 2026-08-24: `AU3`'s rules backstop and `AC16`'s latch — the two residuals the previous version of this row disclosed — are closed above, both with evidence. What remains is the owner's column and the standing verification work (`P8.8`, `CD13`). |
 
 ⚠️ **Six rows in this file said `OPEN` for findings closed days earlier** (`AU6` `AU7` `AU19`
 `AN5` `AU22` `AU23`) — the P-section tracked them separately from the P7 batch that closed
 them, and only one place was updated. Each now cites the commit that closed it. A ledger row
 is a claim like any other; these were false in the safe direction, which is still false.
-| `OPEN`, **owner's decision** | 10 | `AU5` `AU8` `AU11` `AU17`† `AC11` `AN7` `AN9` `AN11` `AN12` `AU29` |
+| `OPEN`, **owner's decision** | 9 | `AU5` `AU8` `AU11` `AU17`† `AC11` `AN7` `AN9` `AN11` `AN12` — `AU29` was here for one day; closed 2026-08-28 with evidence, on the owner's instruction |
 | **`LIVE` right now** | **0 grades · 0 names · 0 emails** | \* `AN1` and `AN14` both closed and verified against `dist/`; `an14.bundle.test.js` keeps it that way |
 
 **54 findings**, not the 51 this file was created with: `AU25` (the go-live gate) and
@@ -359,15 +359,16 @@ prohibitions, safety and reliability, data practices, reporting) for the three g
 surfaces. The roster engine is deliberately out of scope — it contains no model, and
 putting it on the card would re-make `AU1` in a compliance document.
 
-⚠️ **A drafted card is not a met minimum.** The guidelines' encouraged minimum has three
-parts: the card, the first-use safety statement with a link, and the persistent in-app
-access point. The product halves (9.2, 9.3) are closed with evidence below; **what the
-surfacing presents is still an unsigned draft**, so until 9.1 closes the accurate claim
-remains *"NEXUS will align"*, never *"NEXUS complies"*.
+**The guidelines' encouraged minimum is met in the codebase as of 2026-08-28**: the card
+(signed off, v1.0, in effect — 9.1), the first-use safety statement with a link (9.2), and
+the persistent in-app access point (9.3), each closed with evidence below. Two accuracy
+notes on that sentence: it reaches actual users only when the branch carrying it
+**deploys**, and 9.5 (the public support address, direction decided, mailbox pending) is
+an open refinement beyond the minimum, not a hole in it.
 
 | # | Item | Owner | Status | Evidence |
 |---|---|---|---|---|
-| 9.1 | **Sign off the info card** — the card is a controlled document with no named approval (Rule 12); review every factual claim against source before it takes effect | **OWNER** | `OPEN` | — |
+| 9.1 | **Sign off the info card** — the card is a controlled document with no named approval (Rule 12); review every factual claim against source before it takes effect | **OWNER** | `DONE` | The owner read draft v0.3 in full and approved it as written on 2026-08-28, in session — after the steward audit had checked every source-table row, which is what made a read-over a sufficient review. Card stamped **v1.0, in effect**, approver and date in its header; the same-day `AU29` fix and 9.5 decision are folded in and recorded in the card's changelog. |
 | 9.2 | **Surface at first use** — a substantive safety statement (not "we take safety seriously") with a clearly identifiable link to the card, at first use of `AuraPulseBot` and of the `/individuals` conversational pathway | me | `DONE` | Staff assistant: a dismissible banner naming the two real caveats (wrong-but-confident output, unverified references) with a `/aura-info` link, shown until dismissed, dismissal persisted per browser (`aura_infocard_notice_v1`). Public: the statement joined the collection notice on `PathwaySelection` — the last screen common to both pathways — naming the AI (Gemini), that scoring is fixed rules, and not-medical-advice. **`AuraPulseBot.infocard.test.jsx` — 4 passed** (statement + link on first open; dismissal hides and survives a remount; persona grid intact; header link outlives the notice). **`PathwaySelection.infocard.test.jsx` — 3 passed** (names the AI, the fixed scoring and the caveat; links `/aura-info` in a new tab; the collection notice it joined still renders). ⚠️ Steward correction: **a deep link straight to `/individuals/chat` bypasses the statement** — the route has no guard, and the person gets only the header's info icon. Mitigated, not closed; disclosed on the card (gap 11). |
 | 9.3 | **Persistent access point** — the card reachable from within each chat surface (an information icon is sufficient per the guidelines; the card itself can stay a hosted page) | me | `DONE` | Info icons in both chat headers link `/aura-info`, which renders `docs/AURA-CHATBOT-INFO-CARD.md` **verbatim via `?raw` import** — one source, no second copy to drift (`AuraInfoCard.jsx`; the route is public on purpose). **`AuraInfoCard.test.jsx` — 4 passed**: three rendering-rule tests (citations never become dead anchors, external links new-tab, GFM tables — new dep `remark-gfm@^4`) run against a **fixture**; one test loads the REAL controlled document and asserts its headings. **`AuraChat.infocard.test.js` — 3 passed** (source-scan, limit stated in its header: `AuraChat` is never mounted by any test — the `AC5` jsPDF chain — so this proves the link is wired, not rendered). Bundle: the card ships as its own lazy chunk (`dist/assets/AURA-CHATBOT-INFO-CARD-*.js`) and **`an14.bundle.test.js` — 18 passed against the fresh `dist/`** after the 9.5 fix below. ⚠️ Steward correction: **the `/aura-info` route registration itself is verified by hand, not by a regression test** — every suite asserts `href`s or renders the page component directly; deleting the `<Route>` in `App.jsx` would 404 all four links and stay green. Hand evidence: `/aura-info` present in both bundle chunks, `firebase.json` rewrites `**` to `/index.html`. A route-level test is deferred, knowingly. |
 | 9.4 | **Keep the card current** — update on a `resolveModel()` list change, a guardrail revision, a new AURA capability or a newly identified risk; review annually even without one. The guardrail version already stamped into every provenance record is the drift detector | standing | `OPEN` | — |
@@ -381,7 +382,7 @@ clinical and translation reviews of the public-pathway wording the card quotes).
 
 | Id | What | Severity |
 |---|---|---|
-| `AU29` | **Staff chat history and session state survive sign-out.** `auraHistory` lives in the root `NexusContext` provider (`src/context/NexusContext.jsx:12`), the panel is permanently mounted (`src/App.jsx`, `isOpen` toggles visibility only), and `handleLogout` (`src/App.jsx:563-573`) resets user, notifications and view — **not** the transcript, the persona or the panel view; nothing anywhere calls the history clear except the manual button. On a shared clinic terminal the next signed-in colleague can reopen the previous person's wellbeing conversation. Found because the card's first draft claimed the opposite ("does not survive closing the panel") and the steward checked. The card now states the true behaviour and mitigations (v0.3, gap 10). **The fix — clearing `auraHistory`, `view`, `selectedPersona` on sign-out — touches app-root state used by every view and has no test today; it is a deliberate change for the owner's queue, not a quick edit.** | high · **owner** |
+| `AU29` | ~~**Staff chat history and session state survive sign-out.**~~ **CLOSED 2026-08-28, on the owner's instruction, the day after it was opened.** The finding: `auraHistory` lives in the root `NexusContext` provider, and `handleLogout` reset user, notifications and view — not the transcript, persona or panel view — so on a shared clinic terminal the next signed-in colleague could reopen the previous person's wellbeing conversation. Found because the card's first draft claimed the opposite and the steward checked. The fix has two halves, both asserted: `handleLogout` now clears the root-provider history (the unmount path), and the panel resets its whole session — transcript, persona, view, draft input, pending write — on any change of `user.uid` while mounted, via a ref-guarded effect that never fires on mount. **`AuraPulseBot.au29.test.jsx` — 4 passed**: a different uid clears the transcript and B's fresh session cannot resurface A's line; uid→null (sign-out) wipes the same way; the SAME uid re-rendering wipes nothing; and the `handleLogout` clear is asserted at source. Card v1.0 §4 describes the fixed behaviour; its gap 10 is struck through, not deleted. | high · **`DONE`** |
 
 The same audit steward-CONFIRMED 21 of the card's load-bearing claims against source and
 found three documentation errors, all corrected in card v0.3 (see its gap item 12 and
@@ -397,7 +398,11 @@ refused, since it guards all seven staff addresses out of `dist/`. The card now 
 block (item 9). The IMDA guidelines suggest a support address on the card; `AN14` keeps
 staff addresses out of the bundle. **Resolving it means publishing a dedicated,
 non-personal support address (and adding it to the card), or accepting the in-app
-reporter as the only public channel.** Owner's call; the test was not weakened.
+reporter as the only public channel.** The test was not weakened. **Decision 2026-08-28:
+the owner chose the dedicated non-personal address — the industry-standard resolution.
+The row stays `OPEN` on the one thing left: the mailbox does not exist yet. When it does,
+add it to the card (a card update, and a deliberate, documented `AN14` allowlist
+adjustment for that one address), and close this row with the card diff as evidence.**
 
 ---
 

@@ -5,9 +5,9 @@ data is handled, and how to raise a concern.**
 
 | | |
 |---|---|
-| **Card status** | ⚠️ **DRAFT — not yet in effect.** Per `AURA-GUARDRAILS.md` Rule 12, no controlled document enters effect without its named sign-off, and this card has none yet. Approver: Muhammad Alif (owner). |
-| **Card version** | 0.3 (draft) |
-| **Last updated** | 2026-08-27 |
+| **Card status** | ✅ **In effect.** Approved 2026-08-28 by **Muhammad Alif (owner)** — the named sign-off `AURA-GUARDRAILS.md` Rule 12 requires. The owner read draft v0.3 in full and approved it as written; the same session's `AU29` fix and 9.5 decision are folded into this version, recorded in the changelog below. |
+| **Card version** | 1.0 |
+| **Last updated** | 2026-08-28 |
 | **Describes** | NEXUS **v2.1.0** (app) · AURA engine tier **v2.3** · guardrails **v1.0** |
 | **Framework** | Structured after the **IMDA Transparency Guidelines for Generative AI Chatbots** (Infocomm Media Development Authority, Singapore, published 20 July 2026), Annex B sample format. The guidelines are voluntary; NEXUS adopts them as its transparency baseline. |
 
@@ -192,14 +192,14 @@ guardrail (fail loud, never silent).*
 
 **Staff assistant:**
 
-- **Chat history is held in memory only.** It is never written to any database. ⚠️ Said
-  plainly after steward review found the first draft's claim false: closing the panel does
-  **not** clear it, and neither does signing out — it is cleared only by reloading the
-  page, closing the tab, or the panel's "Clear Conversation" button. On a **shared clinic
-  terminal**, a colleague who signs in after you in the same tab can reopen the panel and
-  see your transcript until one of those happens. Clearing session state on sign-out is a
-  logged defect awaiting the owner's decision (`AU29`); until it is fixed, use "Clear
-  Conversation" or reload before handing over a shared machine.
+- **Chat history is held in memory only.** It is never written to any database, and it is
+  cleared when you **sign out** or when a **different account signs in** — as well as by
+  reloading the page, closing the tab, or the panel's "Clear Conversation" button. Closing
+  the panel alone does **not** clear it: your conversation is still there when you reopen
+  it in the same signed-in session, by design. *(History: this card's first draft claimed
+  panel-close clearing that never existed, and until 2026-08-28 sign-out did not clear the
+  transcript either — found by steward review of the draft, opened as `AU29`, and fixed
+  with tests the next day.)*
 - What you type (and attach) is sent to Google's Gemini API to generate the reply.
   Attachments are forwarded within the coded bounds described in §2; their contents are
   not inspected first.
@@ -291,13 +291,13 @@ reports enter that same pipeline.
 
 *Required by guardrail P1; deliberately in the body of the card, not a footnote.*
 
-1. **This card is a draft with no named sign-off**, and per Rule 12 it is not in effect
-   until the owner approves it.
-2. **The card is surfaced in the product, but not yet in force.** The app serves this
-   document at `/aura-info`, shows a safety statement with a link at first use of the
+1. ~~**This card is a draft with no named sign-off**~~ — **signed off 2026-08-28** by
+   Muhammad Alif (owner) as v1.0; the card is in effect. Struck through, not deleted.
+2. **The card is surfaced in the product and in force in the codebase.** The app serves
+   this document at `/aura-info`, shows a safety statement with a link at first use of the
    staff assistant and before the public pathways, and keeps a persistent info icon in
-   both chat headers (`AURA-TODO.md` 9.2/9.3, closed with test evidence). What that
-   surfacing presents is still a draft until item 1 closes.
+   both chat headers (`AURA-TODO.md` 9.2/9.3, closed with test evidence). It reaches
+   users when the branch carrying it deploys.
 3. **Prompt-carried safeguards are unverified in production.** The 20-turn read that would
    verify them (`P8.8`) has not been run.
 4. **No attachment content inspection exists** (`AU17`): count, size and type are bounded
@@ -313,16 +313,19 @@ reports enter that same pipeline.
    and 19 machine-translated strings await native-speaker review (`CD13`).
 8. **No quantitative safety metrics exist.** Every effectiveness statement above is
    qualitative by necessity, not by preference.
-9. **No public contact email appears on this card**, by design conflict rather than
+9. **No public contact email appears on this card yet**, by design conflict rather than
    oversight: the IMDA guidelines suggest a support address, and the `AN14` control keeps
-   staff addresses out of the public bundle this card ships in. The working public channel
-   is the in-app reporter; publishing a dedicated (non-personal) support address would
-   resolve the conflict and is the owner's call.
-10. **Staff chat history survives sign-out** (`AU29`, found by steward review of this
-   card's own first draft): nothing clears the in-memory transcript when a user signs out,
-   so on a shared terminal the next signed-in colleague can reopen it. §4 states the
-   working mitigations; the fix touches app-root state and awaits the owner's decision
-   rather than a rushed edit.
+   staff addresses out of the public bundle this card ships in. **Decision 2026-08-28:**
+   the owner opted for the industry-standard resolution — a dedicated, non-personal
+   support address. That mailbox does not exist yet; until it is created and published
+   here in a card update, the in-app reporter is the public channel. Ledger row 9.5 stays
+   open on exactly that.
+10. ~~**Staff chat history survives sign-out**~~ — **fixed 2026-08-28** (`AU29`, found by
+   steward review of this card's own first draft): sign-out and any identity change now
+   clear the transcript, persona and panel state, asserted by 4 tests
+   (`AuraPulseBot.au29.test.jsx`), including that a re-render under the same account
+   clears nothing. Kept struck through rather than deleted — this list is also the record
+   of what was wrong.
 11. **The public first-use statement is bypassable by deep link.** It lives on the pathway
    selection screen; a person handed `/individuals/chat` directly reaches the chat with
    only the header's info icon. Known, disclosed, and on the ledger (`AURA-TODO.md` 9.2).
@@ -344,7 +347,7 @@ the update triggers below exist because these facts move.*
 
 | Claim (§) | Source | Status |
 |---|---|---|
-| Chat history in memory only, never written to a database (§4) | `src/context/NexusContext.jsx`, `src/components/AuraPulseBot.jsx` | Confirmed 2026-08-27 — after the first draft's "cleared on panel close" half was found **false** and corrected (`AU29`, gap 10) |
+| Chat history in memory only, never written to a database; cleared on sign-out and identity change (§4) | `src/context/NexusContext.jsx`, `src/components/AuraPulseBot.jsx`, `src/App.jsx` (`handleLogout`) | Confirmed 2026-08-27 (memory-only half); the first draft's "cleared on panel close" was found **false**, opened as `AU29`, and the sign-out clear was **built and tested 2026-08-28** — `AuraPulseBot.au29.test.jsx`, 4 passed |
 | Human click gates every write; proposal validated in code first (§1, §2) | `src/components/AuraPulseBot.jsx` (`onClick` is the only path), `src/utils/dataEntryGuard.js` | Confirmed 2026-08-27 |
 | 82 passing validation tests (§1) | `src/utils/dataEntryGuard.test.js` | Confirmed 2026-08-27 — re-run by the steward, 82 |
 | Assistant cannot touch the roster (§2) | `dataEntryGuard.js` collection/field allowlists | Confirmed 2026-08-27 |
@@ -383,6 +386,7 @@ single authoritative app version.
 
 | Card version | Date | Change |
 |---|---|---|
+| **1.0** | 2026-08-28 | **Signed off by the owner (Muhammad Alif) and in effect** — approval given against draft v0.3, read in full. Folded into this version, from the same session: `AU29` fixed (sign-out and identity change now clear the AURA session; 4 tests), §3/§4 rewritten to the fixed behaviour, and the 9.5 decision recorded (a dedicated non-personal support address will be published here once created; in-app reporter until then). |
 | 0.3 (draft) | 2026-08-27 | Steward audit corrections before sign-off: the false panel-close history claim replaced with the true clearing behaviour and the `AU29` shared-terminal caveat; "91 emulator checks" corrected to the current 140; `AN13` corrected from "accepted gap" to its shipped NRIC/FIN fence; "by design" hedged to "by construction"; gap items 10–12 added. 21 other load-bearing claims steward-CONFIRMED against source. |
 | 0.2 (draft) | 2026-08-27 | Surfaced in-app: served at `/aura-info` from this file verbatim, first-use safety statements on both chat surfaces, persistent header links. The security contact address was replaced with a reference to `SECURITY.md` — the `AN14` bundle control refused the literal address in the public bundle, and the conflict is declared as gap item 9. |
 | 0.1 (draft) | 2026-08-27 | First draft, structured after IMDA Annex B. Not yet signed off, not yet surfaced in-app. |

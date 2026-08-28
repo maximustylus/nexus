@@ -34,9 +34,9 @@ NEXUS will align with the IMDA *Transparency Guidelines for Generative AI Chatbo
 generative AI surfaces. The chatbot info card the guidelines describe is
 [`docs/AURA-CHATBOT-INFO-CARD.md`](docs/AURA-CHATBOT-INFO-CARD.md) — what AURA can and
 cannot do, how it is kept safe, how data is handled (including what reaches Google's
-Gemini API), and how to report issues. The card is currently a draft pending the owner's
-sign-off; the open work to meet the guidelines' encouraged minimum is tracked in
-[`AURA-TODO.md`](AURA-TODO.md) §P9.
+Gemini API), and how to report issues. The card was signed off by the owner on 2026-08-28
+(v1.0, in effect); the remaining refinement — a dedicated public support address — is
+tracked in [`AURA-TODO.md`](AURA-TODO.md) §P9 (9.5).
 
 ## Data Governance Reminder
 

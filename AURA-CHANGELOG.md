@@ -22,7 +22,7 @@ refers to.
 
 ---
 
-## Unreleased — **v2.3.1**, not v2.4 · 2026-08-23 → 2026-08-27
+## Unreleased — **v2.3.1**, not v2.4 · 2026-08-23 → 2026-08-28
 
 ⚠️ **This section said *"Nothing yet. Every row is `OPEN`"* until 2026-08-24, by which point
 two days of remediation had shipped.** A changelog that is not written when the work lands is
@@ -152,6 +152,17 @@ columns in P9 gained honest caveats: the `/aura-info` route registration is hand
 not regression-guarded, and a `/individuals/chat` deep link bypasses the public first-use
 statement. The card also gained the guardrail-P3 source table (claim, source, verification
 status) so the 9.1 sign-off reads over pre-verified claims.
+
+**2026-08-28 — the card signed off, and `AU29` closed the next day it existed.** The owner
+read draft v0.3 in full and approved it; the card is **v1.0, in effect**, with the named
+sign-off Rule 12 requires. On the owner's instruction the same session closed `AU29`:
+`handleLogout` now clears the root-provider transcript, and the panel resets its whole
+session on any change of signed-in identity (ref-guarded so mounting and same-uid
+re-renders never wipe) — 4 tests in `AuraPulseBot.au29.test.jsx`, including that a
+colleague's fresh session cannot resurface the previous person's line. 9.5 decided in
+direction (a dedicated non-personal support address; mailbox pending) and left open on
+exactly that. The IMDA encouraged minimum is met in the codebase; it reaches users at
+deploy.
 
 ### What would justify a real v2.4, if the owner decides them that way
 
