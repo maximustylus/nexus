@@ -5,15 +5,16 @@ import {
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { 
   Bug, X, Send, BrainCircuit, Shield, Ghost, Users, Zap, RefreshCw,
-  AlertTriangle, WifiOff, FileText, CheckCircle, Database, Trash2, Download, 
-  Mic, ChevronLeft, CalendarCheck, Maximize2, Minimize2, Minus 
+  AlertTriangle, WifiOff, FileText, CheckCircle, Database, Trash2, Download,
+  Mic, ChevronLeft, CalendarCheck, Maximize2, Minimize2, Minus, Info
 } from 'lucide-react';
 import { DEMO_PERSONAS, LIVE_PERSONAS } from '../config/personas';
 import { respondAsDemoAura } from '../utils/demoAura';
 import { db } from '../firebase'; 
 import { getFunctions, httpsCallable } from 'firebase/functions';
-import { doc, setDoc, getDoc, updateDoc, arrayUnion } from 'firebase/firestore';
+import { doc, setDoc, getDoc, updateDoc, arrayUnion, deleteField } from 'firebase/firestore';
 import { useNexus } from '../context/NexusContext';
+import { refuseWorkloadWrite, TARGET_LOADS } from '../utils/dataEntryGuard';
 import { useTeam } from '../context/TeamContext';
 import {
     wellbeingDocPath,
@@ -52,27 +53,26 @@ import {
 // destroying an un-answered request (M5), and it is correct for any history that
 // still contains one; with no listener here, it behaves as a plain replacement.
 import { resetMessagesPreservingAlerts } from '../utils/auraEngine';
+import { sanitizeWellbeingLog, PHASE_BANDS } from '../utils/wellbeingLog';
+import { legacyPulseKeys } from '../utils/pulseKeys';
 
 // ─── CLOUD FUNCTION LINK ──────────────────────────────────────────────────────
 const functions = getFunctions(undefined, 'us-central1');
 const secureChatWithAura = httpsCallable(functions, 'chatWithAura');
 
 // ─── PHASE CONFIG ─────────────────────────────────────────────────────────────
+// Bands come from `wellbeingLog.js` — the module that decides what may be
+// LOGGED — so the badge a person sees and the record that is written cannot
+// disagree about where a band starts (`AU9`/`AU10`).
 const PHASE_CONFIG = {
-    HEALTHY:  { min: 80, max: 100, badge: 'bg-emerald-50 text-emerald-700 border-emerald-200', icon: '💚', label: 'Healthy' },
-    REACTING: { min: 50, max: 79,  badge: 'bg-yellow-50  text-yellow-700  border-yellow-200',  icon: '⚡', label: 'Reacting' },
-    INJURED:  { min: 20, max: 49,  badge: 'bg-orange-50  text-orange-700  border-orange-200',  icon: '🔶', label: 'Injured' },
-    ILL:      { min: 0,  max: 19,  badge: 'bg-red-50     text-red-700     border-red-200',     icon: '🔴', label: 'Ill' },
+    HEALTHY:  { ...PHASE_BANDS.HEALTHY,  badge: 'bg-emerald-50 text-emerald-700 border-emerald-200', icon: '💚', label: 'Healthy' },
+    REACTING: { ...PHASE_BANDS.REACTING, badge: 'bg-yellow-50  text-yellow-700  border-yellow-200',  icon: '⚡', label: 'Reacting' },
+    INJURED:  { ...PHASE_BANDS.INJURED,  badge: 'bg-orange-50  text-orange-700  border-orange-200',  icon: '🔶', label: 'Injured' },
+    ILL:      { ...PHASE_BANDS.ILL,      badge: 'bg-red-50     text-red-700     border-red-200',     icon: '🔴', label: 'Ill' },
 };
 
 const getPhaseConfig = (phase) => PHASE_CONFIG[phase?.toUpperCase()] ?? {
     badge: 'bg-slate-100 text-slate-600 border-slate-200', icon: '⬜', label: phase ?? 'Unknown',
-};
-
-const clampEnergy = (phase, energy) => {
-    const cfg = PHASE_CONFIG[phase?.toUpperCase()];
-    if (!cfg) return Math.max(0, Math.min(100, energy));
-    return Math.max(cfg.min, Math.min(cfg.max, energy));
 };
 
 const MAX_INPUT       = 500;
@@ -84,6 +84,16 @@ const SEND_COOLDOWN_MS = 2000;
 // `onOpen` is bound as `_onOpen`: the prop is still part of this component's
 // accepted shape (App.jsx passes it) but nothing in here calls it — see the note
 // beside the refs below.
+/*
+ * The IMDA first-use notice (`AURA-TODO.md` P9.2): a safety statement with a
+ * link to the chatbot info card, surfaced until the person dismisses it, then
+ * never again on this browser. Keyed with a version suffix so a materially
+ * revised card can re-surface the notice by bumping the key — the same reason
+ * the card itself carries a version. The header's info icon (P9.3) is the
+ * persistent access point and has no key: it never goes away.
+ */
+const INFO_NOTICE_KEY = 'aura_infocard_notice_v1';
+
 export default function AuraPulseBot({ isOpen, onClose, onOpen: _onOpen, user }) {
     const { isDemo, auraHistory, setAuraHistory } = useNexus();
     // WHOSE wellbeing record. Null in the sandbox and for a signed-in account with
@@ -98,6 +108,32 @@ export default function AuraPulseBot({ isOpen, onClose, onOpen: _onOpen, user })
     const [loading,          setLoading]          = useState(false);
     const [isSending,        setIsSending]        = useState(false);
     const [pendingLog,       setPendingLog]       = useState(null);
+    // Guarded read: a browser that refuses storage (private mode) gets the notice
+    // every session, which errs toward showing a safety statement, not hiding it.
+    const [showInfoNotice,   setShowInfoNotice]   = useState(() => {
+        try { return localStorage.getItem(INFO_NOTICE_KEY) !== 'seen'; }
+        catch { return true; }
+    });
+
+    /*
+     * `AU29`, the in-place half: a CHANGE of signed-in identity while this
+     * component stays mounted resets the session — transcript, persona, panel
+     * view, draft input, pending write. `handleLogout` in App.jsx clears the
+     * transcript for the unmount path; this covers a user switch React performs
+     * without unmounting. The ref starts at the current uid so mounting alone
+     * never wipes a session.
+     */
+    const activeUid = user?.uid ?? null;
+    const prevUidRef = useRef(activeUid);
+    useEffect(() => {
+        if (prevUidRef.current === activeUid) return;
+        prevUidRef.current = activeUid;
+        setAuraHistory([]);
+        setView('SELECT');
+        setSelectedPersona(null);
+        setInput('');
+        setPendingLog(null);
+    }, [activeUid, setAuraHistory]);
     const [isOnline,         setIsOnline]         = useState(navigator.onLine);
     const [liveMemory,       setLiveMemory]       = useState(null);
     const [isListening,      setIsListening]      = useState(false);
@@ -295,6 +331,16 @@ export default function AuraPulseBot({ isOpen, onClose, onOpen: _onOpen, user })
 
             let analysis;
 
+            /**
+             * Rule 12 (`AURA-GUARDRAILS.md`). `AU16`: which model answered was
+             * recorded nowhere, and `resolveModel()` picks between four models at
+             * runtime and falls back to a fifth, so it was not recoverable after the
+             * fact either. It rides on the message because the .docx export is
+             * per-message, and a grant draft leaving the building with no record of
+             * what produced it is the case Rule 12 is written about.
+             */
+            let provenanceFooter = '';
+
             if (isDemo) {
                 // ⚠️ THE SANDBOX ANSWERS LOCALLY, AND THAT IS THE WHOLE POINT.
                 //
@@ -321,13 +367,35 @@ export default function AuraPulseBot({ isOpen, onClose, onOpen: _onOpen, user })
                     persona: selectedPersona,
                     turnIndex: messages.filter(m => m.role === 'user').length,
                 });
+                provenanceFooter = 'Not AI-generated. Fixed sample text held in the application, '
+                    + 'shown because the sandbox toggle is on.';
             } else {
+                /**
+                 * ⚠️ THE PERSONA IS NO LONGER SENT AS TEXT — `AU28`. This appended
+                 *    `selectedPersona.prompt`, every one of which began with the
+                 *    literal words "System Override:", and the server prefixed the
+                 *    whole thing `CONTEXT/OVERRIDE:` into the USER TURN. The
+                 *    application taught the model, on every persona switch, that
+                 *    user-turn text can relabel it.
+                 *
+                 *    An **id** goes now. The text lives in `functions/personas.cjs`
+                 *    and reaches the model as a `systemInstruction`, where an
+                 *    instruction belongs.
+                 *
+                 * ⚠️ AND THE NAME. `user.name` was never here, but the DISPLAY NAME
+                 *    is what `executeDataEntry` resolves a personal-load write by
+                 *    (`memberUidByName`), while this line told the model its "exact
+                 *    database ID" was `user.id` — a uid since the migration. MODE 3
+                 *    then asked for that id as `target_doc`, and the lookup failed
+                 *    for everybody who did not happen to be called by their uid
+                 *    (`AU6`). The prompt now asks for the display name and this
+                 *    sends the display name.
+                 */
                 const contextPrompt = [
-                    `System Note: The user's exact database ID is '${user?.id}'.`,
-                    user?.title ? `This staff member is a ${user.title} at KKH/SingHealth.` : '',
+                    user?.name ? `System Note: The user's display name is "${user.name}". Use this exact spelling for target_doc.` : '',
+                    user?.title ? `This staff member is a ${user.title}.` : '',
                     user?.department ? `Department: ${user.department}.` : '',
                     liveMemory ? `Prior session note: "${liveMemory}".` : 'This is their first session with AURA.',
-                    selectedPersona?.prompt ? `\n\n${selectedPersona.prompt}` : '' 
                   ].filter(Boolean).join('\n');
 
                 const result = await secureChatWithAura({
@@ -335,6 +403,7 @@ export default function AuraPulseBot({ isOpen, onClose, onOpen: _onOpen, user })
                     history,
                     role:   selectedPersona?.title ?? user?.title ?? 'Staff',
                     prompt: contextPrompt,
+                    personaId: selectedPersona?.id,
                 });
 
                 try {
@@ -347,27 +416,52 @@ export default function AuraPulseBot({ isOpen, onClose, onOpen: _onOpen, user })
                 } catch {
                     throw new Error('AURA returned an unreadable format. Please try again.');
                 }
+
+                // Absent when the client is a few minutes ahead of the functions:
+                // hosting and functions do not deploy atomically. An unrecorded model
+                // is stated as unrecorded rather than left blank.
+                provenanceFooter = result.data?.provenanceFooter
+                    || 'The responding model was not recorded for this document.';
             }
 
             if (!analysis || !analysis.reply) {
                 throw new Error('Incomplete response from AURA.');
             }
 
-            setMessages(prev => [...prev, { 
-                role: 'bot', 
+            setMessages(prev => [...prev, {
+                role: 'bot',
                 text: analysis.reply,
                 mode: analysis.mode || 'COACH',
                 action: analysis.action,
-                db_workload: analysis.db_workload 
+                db_workload: analysis.db_workload,
+                provenanceFooter,
             }]);
 
             if (analysis.mode === 'COACH' && analysis.diagnosis_ready && analysis.phase && analysis.phase !== 'null' && analysis.phase !== 'NULL') {
-                const safeEnergy = clampEnergy(analysis.phase, analysis.energy ?? 50);
-                setPendingLog({
-                    phase:  analysis.phase.toUpperCase(),
-                    energy: safeEnergy,
-                    action: analysis.action ?? '',
-                });
+                /**
+                 * `AU9` / `AU10`. `clampEnergy` used to run here, and it let three
+                 * things through: an invented phase (logged verbatim), a NaN energy
+                 * (Math.min(79, NaN) is NaN, straight into the record), and a silent
+                 * rewrite when the model's energy contradicted its phase. The
+                 * sanitiser refuses the first, repairs the second, and REPORTS the
+                 * third — an unknown phase now means no log card at all rather than
+                 * a record every reader would misread as one of the four.
+                 */
+                const sanitized = sanitizeWellbeingLog({ phase: analysis.phase, energy: analysis.energy });
+                if (!sanitized) {
+                    console.warn('[AURA] Unloggable phase from model, no log offered:', String(analysis.phase).slice(0, 40));
+                } else {
+                    if (sanitized.corrected) {
+                        console.warn('[AURA] Model energy disagreed with its phase; corrected for the record.', {
+                            phase: sanitized.phase, rawEnergy: sanitized.rawEnergy, stored: sanitized.energy,
+                        });
+                    }
+                    setPendingLog({
+                        phase:  sanitized.phase,
+                        energy: sanitized.energy,
+                        action: analysis.action ?? '',
+                    });
+                }
             }
 
         } catch (error) {
@@ -460,7 +554,34 @@ export default function AuraPulseBot({ isOpen, onClose, onOpen: _onOpen, user })
                 // dual-keying the inventory found. Two documents for one person, one
                 // of them never read, and a profile edit that appeared to do nothing.
                 await setDoc(doc(db, ...wellbeingDocPath(teamId, user.uid)), { logs: arrayUnion(logData) }, { merge: true });
-                await setDoc(doc(db, ...pulsePath(teamId, PULSE_PERIOD_DAILY)), { [user.name]: heatmapPayload }, { merge: true });
+                /**
+                 * `AU12` — uid key, and the same self-migrating write as the
+                 * wellbeing board: this line was the one the v2.0 uid conversion
+                 * missed (the comment above it is ABOUT that conversion), so two
+                 * clinicians sharing a display name overwrote each other's pulse
+                 * status, second writer silently winning. Deleting the legacy
+                 * name key in the same call keeps `calculateStats` from counting
+                 * one person twice during the transition.
+                 */
+                /**
+                 * ⚠️ THE BOT READS THE DOCUMENT BEFORE CLEANING IT. Unlike the
+                 *    wellbeing board, this writer has no live copy of the pulse
+                 *    map, and deleting only the exact-case `user.name` key left
+                 *    a case-variant legacy entry in place — which the board's
+                 *    tolerant reader then displayed alongside the new uid entry,
+                 *    counting the person twice. One `getDoc` per confirmed
+                 *    wellbeing log is the price of deleting the same set the
+                 *    reader resolves from (`legacyPulseKeys`).
+                 */
+                const pulseRef = doc(db, ...pulsePath(teamId, PULSE_PERIOD_DAILY));
+                const pulseSnap = await getDoc(pulseRef);
+                const pulseWrite = { [user.uid]: heatmapPayload };
+                for (const staleKey of legacyPulseKeys(
+                    pulseSnap.exists() ? pulseSnap.data() : {}, user.name, user.uid,
+                )) {
+                    pulseWrite[staleKey] = deleteField();
+                }
+                await setDoc(pulseRef, pulseWrite, { merge: true });
                 await setDoc(doc(db, ...userPath(user.uid)), {
                     aura_last_phase:    pendingLog.phase,
                     aura_memory:        pendingLog.action,
@@ -557,7 +678,7 @@ export default function AuraPulseBot({ isOpen, onClose, onOpen: _onOpen, user })
         }]);
     }, [setMessages]);
 
-    const exportToDoc = useCallback(async (text, msgIndex) => {
+    const exportToDoc = useCallback(async (text, msgIndex, provenanceFooter) => {
         if (!text) return;
 
         try {
@@ -635,6 +756,25 @@ export default function AuraPulseBot({ isOpen, onClose, onOpen: _onOpen, user })
                 }));
             }
 
+            /**
+             * ⚠️ RULE 12, AND IT HAS TO BE IN THE FILE. This document leaves the
+             *    application as a .docx and is edited, mailed and submitted
+             *    elsewhere: a grant's specific aims, a memo, a literature review.
+             *    A provenance record held in React state does not travel with it, and
+             *    Rule 12's test is whether the DOCUMENT is reproducible from itself.
+             *
+             *    The stated fallback is deliberate. A missing footer would read as a
+             *    human-written document, which is the claim P7 exists to stop.
+             */
+            docChildren.push(new Paragraph({ text: '' }));
+            docChildren.push(new Paragraph({
+                children: [new TextRun({
+                    text: provenanceFooter || 'Drafted with AI assistance. The responding model was not recorded.',
+                    italics: true,
+                    size: 16,
+                })],
+            }));
+
             const wordDoc = new Document({
                 sections: [{
                     properties: {},
@@ -652,20 +792,36 @@ export default function AuraPulseBot({ isOpen, onClose, onOpen: _onOpen, user })
             document.body.removeChild(link);
             URL.revokeObjectURL(url);
 
-            const timestamp   = new Date().toISOString();
-            const displayDate = new Date().toLocaleDateString();
-            const activeUser  = isDemo ? selectedPersona : user;
-            const docId       = `audit_${Date.now()}`; 
+            /**
+             * ⚠️ `AU27` — THE SANDBOX DOES NOT WRITE, AND DID. The `isDemo` fence was
+             *    added to `executeDataEntry` and not to its two siblings — this
+             *    repository's defining defect shape — so Demo Mode wrote demo
+             *    documents into the LIVE `smart_database`. Worse on stage: Demo Mode
+             *    is reachable SIGNED OUT from the landing page, `firestore.rules`
+             *    requires `isSignedIn()`, so a signed-out presenter following README
+             *    step 3 got the `.docx` **and then** a red "check your connection"
+             *    banner — false twice over, on the demo path, from an authorization
+             *    refusal. The .docx download above is untouched: that is the value
+             *    the demo shows, and it never needed Firestore.
+             */
+            if (!isDemo) {
+                const timestamp   = new Date().toISOString();
+                const displayDate = new Date().toLocaleDateString();
+                const docId       = `audit_${Date.now()}`;
 
-            await setDoc(doc(db, 'smart_database', docId), {
-                timestamp, displayDate,
-                author: activeUser?.name || 'Anonymous',
-                role: activeUser?.title || 'Staff',
-                content: text,
-                type: 'AUTO_EXPORTED_DOCX', 
-                isDemo,
-                silentlyLogged: true 
-            });
+                await setDoc(doc(db, 'smart_database', docId), {
+                    timestamp, displayDate,
+                    author: user?.name || 'Anonymous',
+                    role: user?.title || 'Staff',
+                    content: text,
+                    type: 'AUTO_EXPORTED_DOCX', 
+                    isDemo,
+                    // Rule 12 again: the audit row is the other copy of this document, and
+                    // it was as anonymous as the .docx was.
+                    aiProvenance: provenanceFooter || '',
+                    silentlyLogged: true 
+                });
+            }
 
             setMessages(prev => {
                 const newHistory = [...prev];
@@ -673,7 +829,11 @@ export default function AuraPulseBot({ isOpen, onClose, onOpen: _onOpen, user })
                     newHistory[msgIndex].action = null; 
                 }
                 newHistory.push({
-                    role: 'bot', text: '✅ Document exported successfully with formatted tables.', mode: 'ASSISTANT'
+                    role: 'bot',
+                    text: isDemo
+                        ? '✅ Document exported. SANDBOX: nothing was saved to the Smart Database.'
+                        : '✅ Document exported successfully with formatted tables.',
+                    mode: 'ASSISTANT'
                 });
                 return newHistory;
             });
@@ -684,25 +844,57 @@ export default function AuraPulseBot({ isOpen, onClose, onOpen: _onOpen, user })
                 role: 'bot', text: '⚠️ Document export failed. Please check your connection.', isError: true, mode: 'ASSISTANT'
             }]);
         }
-    }, [isDemo, selectedPersona, user, setMessages]);
+    }, [isDemo, user, setMessages]);
          
-    const confirmAdminAction = useCallback(async (actionText, msgIndex) => {
+    /**
+     * ⚠️ `provenanceFooter` IS A PARAMETER HERE FOR THE REASON THE STEWARD FOUND IT
+     *    MISSING: this is the SECOND of two `smart_database` writes, and the first
+     *    draft of the guardrail work stamped provenance onto one of them. Same model
+     *    output, same document, two sinks, one record. That is this repository's
+     *    signature defect — a change applied to two of three call sites — reproduced
+     *    inside the change whose commit message cites it.
+     */
+    const confirmAdminAction = useCallback(async (actionText, msgIndex, provenanceFooter) => {
         if (!actionText) return;
+
+        /**
+         * ⚠️ `AU27`, same fence as `exportToDoc` above and for the same two reasons:
+         *    the sandbox must not write demo fiction into the live audit collection,
+         *    and a SIGNED-OUT demo visitor (Demo Mode is on the landing page) would
+         *    otherwise be told to check their connection when the truth is a rules
+         *    refusal. The card clears and the message says what actually happened.
+         */
+        if (isDemo) {
+            setMessages(prev => {
+                const newHistory = [...prev];
+                if (newHistory[msgIndex]) {
+                    newHistory[msgIndex].action = null;
+                }
+                newHistory.push({
+                    role: 'bot',
+                    text: '✅ SANDBOX: nothing was saved. In Live mode this document would be routed to the Smart Database.',
+                    mode: 'ASSISTANT'
+                });
+                return newHistory;
+            });
+            return;
+        }
+
         setLoading(true);
 
         const timestamp   = new Date().toISOString();
         const displayDate = new Date().toLocaleDateString();
-        const activeUser  = isDemo ? selectedPersona : user;
         const docId       = `doc_${Date.now()}`; 
 
         try {
             await setDoc(doc(db, 'smart_database', docId), {
                 timestamp, displayDate,
-                author: activeUser?.name || 'Anonymous',
-                role: activeUser?.title || 'Staff',
+                author: user?.name || 'Anonymous',
+                role: user?.title || 'Staff',
                 content: actionText,
                 type: 'AURA_GENERATED_DOC',
-                isDemo
+                isDemo,
+                aiProvenance: provenanceFooter || ''
             });
 
             setMessages(prev => {
@@ -724,7 +916,7 @@ export default function AuraPulseBot({ isOpen, onClose, onOpen: _onOpen, user })
         } finally {
             setLoading(false);
         }
-    }, [isDemo, selectedPersona, user, setMessages]);
+    }, [isDemo, user, setMessages]);
     
     const executeDataEntry = useCallback(async (workload) => {
         if (!workload || !workload.target_collection) return;
@@ -754,23 +946,56 @@ export default function AuraPulseBot({ isOpen, onClose, onOpen: _onOpen, user })
             // this", which reads as a fault in their account rather than as the
             // sandbox behaving correctly. `isDemo` is the reason for the refusal
             // whenever it is true, so it is the reason that gets named.
+            /**
+             * ⚠️ THE SANDBOX REFUSAL IS AN EXPLANATION, NOT AN ERROR, AND IT USED TO
+             *    RENDER AS ONE. It threw, so the `catch` below painted a red
+             *    `isError: true` banner reading "⚠️ Write failed: Sandbox mode does
+             *    not write to the database."
+             *
+             *    That was invisible until `AU22` was fixed — before it, the card
+             *    never rendered, so the button did not exist and nobody could press
+             *    it. `README.md:186` scripts a presenter to demonstrate this exact
+             *    card and promises "a button to push to Firestore", without saying
+             *    "do not press it". Fixing the card created the failure banner and
+             *    put it in front of an audience.
+             *
+             *    Refusing to write is the sandbox working. It says so, calmly, and
+             *    returns.
+             */
             if (isDemo) {
-                throw new Error("Sandbox mode does not write to the database.");
+                setMessages(prev => [...prev, {
+                    role: 'bot',
+                    text: 'Sandbox: nothing was written. In live mode this commits '
+                        + 'the figure to your department record.',
+                    mode: 'DATA_ENTRY',
+                }]);
+                return;
             }
             if (!teamId) {
                 throw new Error("No team is selected, so there is nowhere to write this.");
             }
 
-            const TARGET_LOADS = 'staff_loads';
-            const TARGET_WORKLOAD = 'monthly_workload';
-            if (![TARGET_LOADS, TARGET_WORKLOAD].includes(workload.target_collection)) {
-                throw new Error("AURA asked to write somewhere I do not recognise. Nothing was saved.");
-            }
+            /**
+             * ⚠️ ONE GUARD, IN ONE PLACE, AND IT IS PURE — see
+             *    `src/utils/dataEntryGuard.js`. The collection allowlist and the
+             *    empty-target check used to live here as inline `if`s, and two
+             *    checks that should have been beside them did not exist at all:
+             *
+             *      `AU2`  `target_value` was consumed with a bare `Number()`, so the
+             *             `null` the prompt's own schema permits became a written
+             *             ZERO and the clinician was told the save succeeded.
+             *      `AU3`  `target_field` was model-chosen with nothing constraining
+             *             it, and the Firestore rule has no `changedKeys()` backstop.
+             *
+             *    Moving the decision out is what made it testable — `AU24`:
+             *    `executeDataEntry` had no tests, against a suite of 2,744, because
+             *    reaching it needs a React tree, a Firestore mock and a team context.
+             *    The judgement is now a function; the effects stay here.
+             */
+            const refusal = refuseWorkloadWrite(workload);
+            if (refusal) throw new Error(refusal);
 
-            const rawTarget = String(workload.target_doc || '').trim();
-            if (rawTarget === '' || rawTarget.toLowerCase() === 'null') {
-                 throw new Error("Missing target document. Please ask AURA to clarify who this is for.");
-            }
+            const rawTarget = String(workload.target_doc).trim();
 
             let docRef;
             if (workload.target_collection === TARGET_LOADS) {
@@ -780,16 +1005,17 @@ export default function AuraPulseBot({ isOpen, onClose, onOpen: _onOpen, user })
                 }
                 docRef = doc(db, ...loadPath(teamId, targetUid));
             } else {
-                docRef = doc(db, ...workloadPath(teamId, rawTarget));
+                // `AU4`: the guard accepted the period case-insensitively; lowercase
+                // here so `Jan_2026` lands on the same document as `jan_2026`.
+                docRef = doc(db, ...workloadPath(teamId, rawTarget.toLowerCase()));
             }
 
             let updatedMessage = '';
 
             if (workload.target_collection === TARGET_LOADS) {
-                const monthIndex = parseInt(workload.target_month);
-                if (isNaN(monthIndex) || monthIndex < 0 || monthIndex > 11) {
-                    throw new Error("A valid month (e.g., January) is required to update personal workload.");
-                }
+                // Range already proven by `refuseWorkloadWrite`; this is the read,
+                // not a second opinion about whether the month is valid.
+                const monthIndex = Number(workload.target_month);
 
                 const docSnap = await getDoc(docRef);
                 let currentData = Array(12).fill(0);
@@ -927,7 +1153,20 @@ export default function AuraPulseBot({ isOpen, onClose, onOpen: _onOpen, user })
                                     )}
 
                                     {chatSize !== 'minimized' && (
-                                        <button 
+                                        <a
+                                            href="/aura-info"
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            title="About AURA: Chatbot Info Card"
+                                            aria-label="About AURA: Chatbot Info Card"
+                                            className="p-1.5 hover:bg-white/20 rounded-lg transition-all text-white/80 hover:text-white"
+                                        >
+                                            <Info size={14} />
+                                        </a>
+                                    )}
+
+                                    {chatSize !== 'minimized' && (
+                                        <button
                                             onClick={() => {
                                                 window.dispatchEvent(new CustomEvent('open-bug-report'));
                                                 if (onClose) onClose(); 
@@ -984,6 +1223,40 @@ export default function AuraPulseBot({ isOpen, onClose, onOpen: _onOpen, user })
                             listener whose failure this banner reported is there,
                             and so is the message. Nothing about a shift swap is
                             reported in this panel any more. */}
+
+                        {/* The IMDA first-use safety statement (P9.2). Substantive
+                            rather than "we take safety seriously": the two caveats
+                            are the two the info card leads with. Dismissal persists
+                            per browser; the header's info icon remains after it. */}
+                        {showInfoNotice && chatSize !== 'minimized' && (
+                            <div className="shrink-0 flex items-start gap-2 px-4 py-2.5 bg-indigo-50 dark:bg-indigo-950/40 border-b border-indigo-200 dark:border-indigo-900">
+                                <Info size={13} className="text-indigo-500 mt-0.5 shrink-0" />
+                                <p className="flex-1 text-[10px] font-semibold text-indigo-900 dark:text-indigo-200 leading-relaxed">
+                                    AURA is an AI assistant. It can state wrong information confidently, and
+                                    every reference it offers is unverified. Verify anything important, and
+                                    never enter patient-identifiable data.{' '}
+                                    <a
+                                        href="/aura-info"
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="underline underline-offset-2 font-black hover:text-indigo-700 dark:hover:text-indigo-100"
+                                    >
+                                        Chatbot Info Card
+                                    </a>
+                                </p>
+                                <button
+                                    onClick={() => {
+                                        setShowInfoNotice(false);
+                                        try { localStorage.setItem(INFO_NOTICE_KEY, 'seen'); }
+                                        catch { /* storage refused: it returns next session, which is the safe direction */ }
+                                    }}
+                                    aria-label="Dismiss AI safety notice"
+                                    className="p-1 text-indigo-400 hover:text-indigo-600 dark:hover:text-indigo-300 shrink-0 transition-colors"
+                                >
+                                    <X size={12} />
+                                </button>
+                            </div>
+                        )}
 
                         {chatSize !== 'minimized' && (
                             <div className="flex-1 overflow-y-auto p-5 bg-slate-50 dark:bg-slate-950/50 scroll-smooth">
@@ -1057,7 +1330,7 @@ export default function AuraPulseBot({ isOpen, onClose, onOpen: _onOpen, user })
                                                                 <div className="flex flex-col gap-2">
                                                                     <div className="grid grid-cols-2 gap-2">
                                                                         <button 
-                                                                            onClick={() => confirmAdminAction(m.action, i)}
+                                                                            onClick={() => confirmAdminAction(m.action, i, m.provenanceFooter)}
                                                                             disabled={loading}
                                                                             className="py-2 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white text-[10px] font-bold uppercase tracking-wider rounded-xl transition-colors flex items-center justify-center gap-1.5"
                                                                         >
@@ -1066,7 +1339,7 @@ export default function AuraPulseBot({ isOpen, onClose, onOpen: _onOpen, user })
                                                                         </button>
 
                                                                         <button 
-                                                                            onClick={() => exportToDoc(m.action, i)}
+                                                                            onClick={() => exportToDoc(m.action, i, m.provenanceFooter)}
                                                                             disabled={loading}
                                                                             className="py-2 bg-slate-700 hover:bg-slate-600 disabled:opacity-50 text-white text-[10px] font-bold uppercase tracking-wider rounded-xl transition-colors flex items-center justify-center gap-1.5 border border-slate-600"
                                                                         >

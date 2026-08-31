@@ -32,12 +32,25 @@
  *    lead OF THAT TEAM — that refusal is the control.
  */
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { getFunctions, httpsCallable } from 'firebase/functions';
+import { doc, updateDoc, setDoc } from 'firebase/firestore';
 import {
     UserPlus, Trash2, Loader2, AlertCircle, CheckCircle2, Users, ShieldCheck, Eye, Stethoscope,
+    Pencil, X, Lock,
 } from 'lucide-react';
 import { useTeam } from '../context/TeamContext';
+import {
+    GRADE_OPTIONS,
+    professionLabel,
+    buildMemberProfileUpdate,
+    buildGradeUpdate,
+    validateMemberProfile,
+} from '../utils/memberProfile';
+import { MOH_PROFESSION_OPTIONS } from '../data/mockData';
+import { useMemberGrade } from '../hooks/useMemberGrade';
+import { memberPath, gradePath } from '../utils/teamPaths';
+import { db } from '../firebase';
 import { useNexus } from '../context/NexusContext';
 
 // Pinned region, as at every other call site (`AuraChat.jsx`, `FeedsView.jsx`,
@@ -84,6 +97,59 @@ const TeamMembersPanel = () => {
     const [removingUid, setRemovingUid] = useState('');
     const [error, setError] = useState('');
     const [notice, setNotice] = useState('');
+
+    /**
+     * ── THE PER-MEMBER EDITOR ────────────────────────────────────────────────
+     *
+     * Which member is open, and the two draft values. `''` is closed, and closed
+     * is what clears the grade out of this component's state — see the hook.
+     */
+    const [editingUid, setEditingUid] = useState('');
+    const [draftProfession, setDraftProfession] = useState('');
+    const [draftGrade, setDraftGrade] = useState('');
+    /**
+     * Whether a human has touched the grade select since this editor opened.
+     *
+     * ⚠️ THIS IS THE GUARD, AND `gradeLoading` ALONE WAS NOT ENOUGH. The first
+     *    version seeded whenever the read finished and `loading` went false — which
+     *    is precisely the moment a choice made DURING the read gets overwritten. The
+     *    select is `disabled` while loading, so a browser would have hidden the
+     *    defect and a test caught it; a disabled attribute is presentation and the
+     *    next person to make the field editable-while-loading would have shipped a
+     *    control that silently reverts what it was told.
+     */
+    const [gradeTouched, setGradeTouched] = useState(false);
+    const [savingEdit, setSavingEdit] = useState(false);
+
+    /**
+     * ⚠️ ONE MEMBER'S GRADE, AND ONLY WHILE THEIR EDITOR IS OPEN.
+     *
+     *    `useTeamGrades` — the roster's hook — reads the whole department. Using it
+     *    here would load every colleague's pay grade into a component that ALSO
+     *    renders for a non-lead, which is one careless prop away from a screen that
+     *    must never show a grade column. `editingUid` is `''` until a lead opens an
+     *    editor, and the hook returns nothing until it is not.
+     */
+    const {
+        grade: storedGrade,
+        setBy: gradeSetBy,
+        loading: gradeLoading,
+        denied: gradeDenied,
+    } = useMemberGrade(teamId, editingUid);
+
+    /**
+     * Seed the draft from the document once it lands.
+     *
+     * ⚠️ GUARDED ON BOTH `gradeLoading` AND `gradeTouched`, AND IT NEEDS BOTH. The
+     *    hook starts at `grade: ''` before the read resolves, so an unguarded effect
+     *    seeds `''` and then the real value lands. `gradeLoading` alone still loses
+     *    a choice made while the read was in flight, because the overwrite happens
+     *    at exactly the moment loading turns false.
+     */
+    useEffect(() => {
+        if (!editingUid || gradeLoading || gradeTouched) return;
+        setDraftGrade(storedGrade);
+    }, [editingUid, gradeLoading, gradeTouched, storedGrade]);
 
     const sorted = useMemo(
         () => [...members].sort((a, b) => String(a.displayName || '').localeCompare(String(b.displayName || ''))),
@@ -172,6 +238,88 @@ const TeamMembersPanel = () => {
             setError(readError(err));
         } finally {
             setRemovingUid('');
+        }
+    };
+
+    /**
+     * ── OPEN, CLOSE, SAVE ────────────────────────────────────────────────────
+     *
+     * `firestore.rules` has permitted this since grades were split out —
+     * `allow create, update: if isSelf(memberUid) || isLead(teamId)` on the grade
+     * document, and `profession` sits in the lead's membership allowlist. What did
+     * not exist was anywhere to do it. A grade could only ever be set by the person
+     * themselves, so a department could not roster until every member had been
+     * chased for one, and a wrong grade — which decides who leads a shift — could
+     * not be corrected by anybody.
+     */
+    const openEditor = (member) => {
+        setError('');
+        setNotice('');
+        setDraftProfession(member.profession || '');
+        setDraftGrade('');
+        setGradeTouched(false);
+        setEditingUid(member.uid);
+    };
+
+    const closeEditor = () => {
+        setEditingUid('');
+        setDraftProfession('');
+        setDraftGrade('');
+        setGradeTouched(false);
+    };
+
+    const handleSaveMember = async (member) => {
+        setError('');
+        setNotice('');
+        if (!guard()) return;
+
+        const complaint = validateMemberProfile({ grade: draftGrade, profession: draftProfession });
+        if (complaint) { setError(complaint); return; }
+
+        /**
+         * ⚠️ A REFUSED READ IS A REFUSAL TO WRITE. `gradeDenied` means this caller
+         *    could not read the grade — so `storedGrade` is `''` for a reason that
+         *    has nothing to do with the person's grade, and saving would write the
+         *    draft over a value never seen. The rules would refuse the write anyway;
+         *    this is the sentence that explains it instead of `permission-denied`.
+         */
+        if (gradeDenied) {
+            setError('Their grade could not be read, so it cannot be changed from here. '
+                + 'Only a lead of this team can set somebody else\'s grade.');
+            return;
+        }
+
+        const memberUpdate = buildMemberProfileUpdate({ profession: draftProfession }, member);
+        /**
+         * `setBy: 'lead'` whenever this screen writes — including when a lead edits
+         * their OWN row, which is true and harmless. What it is NOT is a log of WHO:
+         * the grade document deliberately carries no history, and a named record of
+         * who changed a colleague's pay grade is a second sensitive artefact.
+         */
+        const gradeUpdate = buildGradeUpdate(draftGrade, storedGrade, new Date().toISOString(), 'lead');
+
+        if (!memberUpdate && !gradeUpdate) { closeEditor(); return; }
+
+        setSavingEdit(true);
+        try {
+            /**
+             * ⚠️ TWO DOCUMENTS, AND THE GRADE ONE IS `setDoc` RATHER THAN
+             *    `updateDoc`. The membership always exists — a Cloud Function
+             *    created it — but the grade document does not exist until somebody
+             *    first chooses a grade, and `updateDoc` on a missing document fails.
+             */
+            if (memberUpdate) {
+                await updateDoc(doc(db, ...memberPath(teamId, member.uid)), memberUpdate);
+            }
+            if (gradeUpdate) {
+                await setDoc(doc(db, ...gradePath(teamId, member.uid)), gradeUpdate, { merge: true });
+            }
+            setNotice(`${member.displayName || member.email || 'That member'} was updated.`);
+            closeEditor();
+        } catch (err) {
+            setError(readError(err));
+        } finally {
+            setSavingEdit(false);
         }
     };
 
@@ -327,11 +475,13 @@ const TeamMembersPanel = () => {
             <ul className="space-y-2">
                 {sorted.map((member) => {
                     const blocked = blockedReason(member);
+                    const isOpen = editingUid === member.uid;
                     return (
                         <li
                             key={member.uid}
-                            className="flex items-center gap-3 p-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800/60"
+                            className="p-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800/60"
                         >
+                            <div className="flex items-center gap-3">
                             <div className="min-w-0 flex-1">
                                 <p className="text-sm font-bold text-slate-800 dark:text-slate-100 truncate">
                                     {member.displayName || member.email || member.uid}
@@ -340,24 +490,161 @@ const TeamMembersPanel = () => {
                                     {member.role || 'staff'}
                                     {member.rostered === false ? ' · not rostered' : ''}
                                 </p>
+                                {/*
+                                  * ⚠️ GRADE IS DELIBERATELY NOT IN THIS ROW, AND IT WAS.
+                                  *
+                                  *    An earlier version printed "AH15 · principal"
+                                  *    beside each name so a lead could spot a wrong
+                                  *    self-set grade. It came out for two reasons.
+                                  *    The smaller one is cost: grades are separate
+                                  *    documents, so rendering them here is one extra
+                                  *    read per member on a screen that does not need
+                                  *    them. The real one is that this component also
+                                  *    renders read-only for a NON-lead — every rule
+                                  *    that guards this data would still hold, but the
+                                  *    component would be one prop away from showing a
+                                  *    column it must never show.
+                                  *
+                                  *    ⚠️ THIS COMMENT USED TO END "a lead sees every
+                                  *    grade in the Configure staff table and can
+                                  *    correct it there". A lead does SEE them, but
+                                  *    those rows are derived and read-only, so there
+                                  *    was no correction path anywhere in the app.
+                                  *    There is one now — the editor below — and it is
+                                  *    inside `isLead && isOpen`, so a grade still
+                                  *    never reaches the list a non-lead renders.
+                                  */}
+                                <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-1 truncate">
+                                    {member.profession
+                                        ? (professionLabel(member.profession) || member.profession)
+                                        : <span className="italic text-slate-400">no profession set</span>}
+                                </p>
                             </div>
 
                             {isLead && (
-                                blocked ? (
-                                    <span className="text-[10px] text-slate-400 max-w-[14rem] text-right leading-snug">{blocked}</span>
-                                ) : (
+                                <div className="flex items-center gap-1 shrink-0">
                                     <button
                                         type="button"
-                                        onClick={() => handleRemove(member)}
-                                        disabled={removingUid === member.uid}
-                                        aria-label={`Remove ${member.displayName || member.email || member.uid}`}
-                                        className="p-2 rounded-lg text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-900/20 disabled:opacity-50 transition-colors"
+                                        onClick={() => (isOpen ? closeEditor() : openEditor(member))}
+                                        aria-label={`Edit profession and grade for ${member.displayName || member.email || member.uid}`}
+                                        aria-expanded={isOpen}
+                                        className="p-2 rounded-lg text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors"
                                     >
-                                        {removingUid === member.uid
-                                            ? <Loader2 size={15} className="animate-spin" />
-                                            : <Trash2 size={15} />}
+                                        {isOpen ? <X size={15} /> : <Pencil size={15} />}
                                     </button>
-                                )
+
+                                    {blocked ? (
+                                        <span className="text-[10px] text-slate-400 max-w-[12rem] text-right leading-snug">{blocked}</span>
+                                    ) : (
+                                        <button
+                                            type="button"
+                                            onClick={() => handleRemove(member)}
+                                            disabled={removingUid === member.uid}
+                                            aria-label={`Remove ${member.displayName || member.email || member.uid}`}
+                                            className="p-2 rounded-lg text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-900/20 disabled:opacity-50 transition-colors"
+                                        >
+                                            {removingUid === member.uid
+                                                ? <Loader2 size={15} className="animate-spin" />
+                                                : <Trash2 size={15} />}
+                                        </button>
+                                    )}
+                                </div>
+                            )}
+                            </div>
+
+                            {/* ── THE EDITOR ──────────────────────────────────────
+                              *
+                              * Rendered ONLY inside `isLead && isOpen`, and that is
+                              * the placement rather than a style choice: it is the
+                              * only branch of this component a grade appears in, so
+                              * the list itself can never grow a grade column by
+                              * somebody adding a field to the row above.
+                              */}
+                            {isLead && isOpen && (
+                                <div className="mt-3 pt-3 border-t border-slate-200 dark:border-slate-700 space-y-3">
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                        <div className="space-y-1.5">
+                                            <label htmlFor={`member-profession-${member.uid}`} className="text-[10px] font-black text-slate-500 uppercase tracking-widest">
+                                                Profession
+                                            </label>
+                                            <select
+                                                id={`member-profession-${member.uid}`}
+                                                value={draftProfession}
+                                                onChange={(e) => setDraftProfession(e.target.value)}
+                                                className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 text-sm outline-none text-slate-800 dark:text-slate-200"
+                                            >
+                                                <option value="">Not set</option>
+                                                {MOH_PROFESSION_OPTIONS.map((entry) => (entry.kind === 'group' ? (
+                                                    <optgroup key={entry.groupId} label={entry.label}>
+                                                        {entry.options.map((leaf) => (
+                                                            <option key={leaf.id} value={leaf.id}>{leaf.name}</option>
+                                                        ))}
+                                                    </optgroup>
+                                                ) : (
+                                                    <option key={entry.id} value={entry.id}>{entry.name}</option>
+                                                )))}
+                                            </select>
+                                        </div>
+
+                                        <div className="space-y-1.5">
+                                            <label htmlFor={`member-grade-${member.uid}`} className="text-[10px] font-black text-slate-500 uppercase tracking-widest flex items-center gap-1">
+                                                <Lock size={10} /> Job grade
+                                            </label>
+                                            <select
+                                                id={`member-grade-${member.uid}`}
+                                                value={draftGrade}
+                                                disabled={gradeLoading || gradeDenied}
+                                                onChange={(e) => { setGradeTouched(true); setDraftGrade(e.target.value); }}
+                                                className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 text-sm outline-none text-slate-800 dark:text-slate-200 disabled:opacity-50"
+                                            >
+                                                <option value="">{gradeLoading ? 'Reading…' : 'Not set'}</option>
+                                                {GRADE_OPTIONS.map((grade) => (
+                                                    <option key={grade} value={grade}>{grade}</option>
+                                                ))}
+                                            </select>
+                                        </div>
+                                    </div>
+
+                                    {gradeDenied ? (
+                                        <p className="text-[11px] text-amber-600 dark:text-amber-400 leading-relaxed">
+                                            Their grade could not be read. Only a lead of this team can see or set
+                                            somebody else&apos;s grade.
+                                        </p>
+                                    ) : (
+                                        <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-relaxed">
+                                            {/* ⚠️ NO BAND NAME AND NO "leads shifts" SENTENCE HERE, unlike the
+                                                person's own profile screen. `describeGrade` needs the team's
+                                                band boundaries, this panel does not read the roster settings,
+                                                and a department can move its senior line — so naming a band
+                                                from the defaults would be confidently wrong on exactly the
+                                                team that had changed it. The boundary is named where it is
+                                                actually set instead. */}
+                                            <span className="font-bold">Only you and they can see this.</span>{' '}
+                                            Grade decides which shifts the roster will let them lead — where this
+                                            department draws its senior line is set in Configure.
+                                            {gradeSetBy === 'lead' && ' This grade was last set by a lead, not by them.'}
+                                        </p>
+                                    )}
+
+                                    <div className="flex items-center gap-2">
+                                        <button
+                                            type="button"
+                                            onClick={() => handleSaveMember(member)}
+                                            disabled={savingEdit || gradeLoading}
+                                            className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white text-[10px] font-black uppercase tracking-widest flex items-center gap-2 transition-colors"
+                                        >
+                                            {savingEdit && <Loader2 size={13} className="animate-spin" />}
+                                            {savingEdit ? 'Saving…' : 'Save'}
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={closeEditor}
+                                            className="px-4 py-2 rounded-xl text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-700 text-[10px] font-black uppercase tracking-widest transition-colors"
+                                        >
+                                            Cancel
+                                        </button>
+                                    </div>
+                                </div>
                             )}
                         </li>
                     );

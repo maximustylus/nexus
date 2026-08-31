@@ -126,22 +126,45 @@ FORMATTING RULES FOR SYSTEM OUTPUT
 - Place the entire drafted Markdown text strictly inside the "action" field. Avoid escaping quotes incorrectly.
 `.trim();
 
+/**
+ * ==============================================================================
+ * ⚠️ LIVE PERSONA PROMPT TEXT MOVED TO THE SERVER — `AU28`
+ * ==============================================================================
+ *
+ * `LIVE_PERSONAS` used to carry a `prompt` for each entry, every one of them
+ * beginning with the literal words **`System Override:`**, and `AuraPulseBot` sent
+ * that text to the callable in the `prompt` field — where the server prefixed it
+ * `CONTEXT/OVERRIDE:` and put it in the **user turn**.
+ *
+ * So the application demonstrated, on every persona switch, that text in a user
+ * turn can relabel the assistant. `MAX_PROMPT_LEN` is 8,000 characters.
+ *
+ * The text now lives in `functions/personas.cjs` and goes into the model's
+ * `systemInstruction`. The client sends an **id**. What is left here is what a
+ * client legitimately needs: a name, a title and a colour to render a chip.
+ *
+ * ⚠️ `METHODOLOGIST_PROMPT` AND `HUGE_GRANT_PROMPT` STAY IN THIS FILE, UNUSED BY
+ *    THE CHAT. They are long-form briefs the owner also uses by hand, and deleting
+ *    a document somebody pastes into other tools is not a security fix. Nothing
+ *    imports them; `personas.test.js` asserts no persona object references them.
+ */
+
 // ─── DEMO MODE ROSTER (Simulated Users) ───────────────────────────────────────
 export const DEMO_PERSONAS = [
-    { id: 'peter', name: 'Peter', title: 'Junior Staff', color: 'bg-blue-500', baseEnergy: 65, prompt: 'Peter is a junior staff member: eager but overwhelmed by his clinical rotation workload. Struggling with pacing and documentation speed.' },
-    { id: 'steve', name: 'Steve', title: 'Senior Clinician', color: 'bg-indigo-500', baseEnergy: 55, prompt: 'Steve is a veteran senior clinician facing compassion fatigue from sustained high patient volume. He needs peer-level validation, not top-down advice.' },
-    { id: 'tony', name: 'Tony', title: 'Team Lead', color: 'bg-slate-700', baseEnergy: 42, prompt: 'Tony is a team lead under heavy strategic planning pressure. He is experiencing decision fatigue and struggling to delegate effectively.' },
-    { id: 'charles', name: 'Charles', title: 'Deptartment Head', color: 'bg-amber-600', baseEnergy: 38, prompt: 'Charles is a department head balancing compliance demands with dropping staff morale. He feels isolated at the top of decision-making.' },
-    { id: 'jean', name: 'Jean', title: 'Research Lead', color: 'bg-pink-600', baseEnergy: 48, prompt: 'Jean is a research lead under intense grant deadline pressure. Cognitive fatigue is building and her sleep hygiene has been disrupted by late writing sessions.' },
-    { id: 'anon', name: 'Anonymous', title: 'Ghost Protocol', color: 'bg-purple-600', baseEnergy: 50, prompt: 'This is an anonymous Ghost Protocol session. The user has requested strict confidentiality. Do not ask for identifying details. Prioritise psychological safety above all else.' },
+    { id: 'peter', name: 'Peter', title: 'Junior Staff', color: 'bg-blue-500', baseEnergy: 65 },
+    { id: 'steve', name: 'Steve', title: 'Senior Clinician', color: 'bg-indigo-500', baseEnergy: 55 },
+    { id: 'tony', name: 'Tony', title: 'Team Lead', color: 'bg-slate-700', baseEnergy: 42 },
+    { id: 'charles', name: 'Charles', title: 'Deptartment Head', color: 'bg-amber-600', baseEnergy: 38 },
+    { id: 'jean', name: 'Jean', title: 'Research Lead', color: 'bg-pink-600', baseEnergy: 48 },
+    { id: 'anon', name: 'Anonymous', title: 'Ghost Protocol', color: 'bg-purple-600', baseEnergy: 50 },
 ];
 
 // ─── LIVE MODE ROSTER (Specialised AI Agents) ─────────────────────────────────
 export const LIVE_PERSONAS = [
-    { id: 'well_well', name: 'Well Well', title: 'Wellbeing Coach', color: 'bg-emerald-500', baseEnergy: 100, prompt: 'System Override: You are Well Well, a dedicated psychological safety coach. Force MODE 1 (Coach) behavior. Focus strictly on emotional support and the OARS framework.' },
-    { id: 'aim_assist', name: 'Aim Assist', title: 'Admin Copilot', color: 'bg-blue-500', baseEnergy: 100, prompt: 'System Override: You are Aim Assist, an elite administrative assistant. Force MODE 2 (Assistant) behavior. Focus strictly on operational documents, scheduling, and memo generation.' },
-    { id: 'data_dude', name: 'Data Dude', title: 'Database Agent', color: 'bg-indigo-600', baseEnergy: 100, prompt: 'System Override: You are Data Dude, a strict database gateway. Force MODE 3 (Data Entry) behavior. Focus entirely on capturing numerical metrics and database schemas.' },
-    { id: 'magnify_mama', name: 'Magnify Mama', title: 'Lead Methodologist', color: 'bg-purple-600', baseEnergy: 100, prompt: `System Override: You are Magnify Mama. Disregard standard persona rules. Execute this exact academic protocol:\n\n${METHODOLOGIST_PROMPT}` },
-    { id: 'huge_grant', name: 'Huge Grant', title: 'Grant Strategist', color: 'bg-amber-500', baseEnergy: 100, prompt: HUGE_GRANT_PROMPT },    
-    { id: 'anon', name: 'Anonymous', title: 'Ghost Protocol', color: 'bg-purple-600', baseEnergy: 50, prompt: 'This is an anonymous Ghost Protocol session. The user has requested strict confidentiality. Do not ask for identifying details. Prioritise psychological safety above all else.' }
+    { id: 'well_well', name: 'Well Well', title: 'Wellbeing Coach', color: 'bg-emerald-500', baseEnergy: 100 },
+    { id: 'aim_assist', name: 'Aim Assist', title: 'Admin Copilot', color: 'bg-blue-500', baseEnergy: 100 },
+    { id: 'data_dude', name: 'Data Dude', title: 'Database Agent', color: 'bg-indigo-600', baseEnergy: 100 },
+    { id: 'magnify_mama', name: 'Magnify Mama', title: 'Lead Methodologist', color: 'bg-purple-600', baseEnergy: 100 },
+    { id: 'huge_grant', name: 'Huge Grant', title: 'Grant Strategist', color: 'bg-amber-500', baseEnergy: 100 },
+    { id: 'anon', name: 'Anonymous', title: 'Ghost Protocol', color: 'bg-purple-600', baseEnergy: 50 },
 ];

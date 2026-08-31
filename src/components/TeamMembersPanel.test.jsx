@@ -30,6 +30,29 @@ import { render, screen, cleanup, fireEvent, act } from '@testing-library/react'
 vi.mock('../firebase', () => ({ db: {}, auth: {}, storage: {} }));
 
 /**
+ * ⚠️ THE FIRESTORE MOCK IDENTIFIES A CALL BY ITS PATH, NEVER BY SUBTRACTION.
+ *
+ *    Three helpers in this repository used to identify a listener as "the one that
+ *    is not the other one", and all three broke the moment a second listener was
+ *    added — twice, in files that already carried a comment saying they had been
+ *    narrowed once for exactly this reason. `doc()` here returns the joined path and
+ *    every assertion matches on it, so adding a fourth read to this component makes
+ *    these tests fail loudly rather than quietly assert against the wrong document.
+ */
+const docPath = (_db, ...segments) => segments.join('/');
+let getDocImpl = () => Promise.resolve({ exists: () => false, data: () => ({}) });
+const getDocSpy = vi.fn((path) => getDocImpl(path));
+const updateDocSpy = vi.fn(() => Promise.resolve());
+const setDocSpy = vi.fn(() => Promise.resolve());
+
+vi.mock('firebase/firestore', () => ({
+    doc: (...args) => docPath(...args),
+    getDoc: (path) => getDocSpy(path),
+    updateDoc: (path, payload) => updateDocSpy(path, payload),
+    setDoc: (path, payload, options) => setDocSpy(path, payload, options),
+}));
+
+/**
  * One spy per callable, resolving whatever the test sets. `httpsCallable` is mocked
  * at the module boundary rather than the component being handed an injected client,
  * because the region-pinning in `call()` is part of what this file should not let
@@ -89,6 +112,10 @@ beforeEach(() => {
     invited.mockReset().mockReturnValue(ok({ alreadyMember: false, uid: 'newUid' }));
     removed.mockReset().mockReturnValue(ok({ alreadyGone: false }));
     lastRegion = undefined;
+    getDocSpy.mockClear();
+    updateDocSpy.mockClear();
+    setDocSpy.mockClear();
+    getDocImpl = () => Promise.resolve({ exists: () => false, data: () => ({}) });
 });
 
 afterEach(() => cleanup());
@@ -324,5 +351,208 @@ describe('the sandbox', () => {
         render(<TeamMembersPanel />);
         expect(screen.queryByRole('button', { name: /add to team/i })).toBeNull();
         expect(screen.getByText(/only a lead of this team/i)).toBeTruthy();
+    });
+});
+
+
+// ── 4. SETTING SOMEBODY ELSE'S PROFESSION AND GRADE ──────────────────────────
+//
+// `firestore.rules` has permitted a lead to write both since grades were split into
+// their own collection — `allow create, update: if isSelf(memberUid) || isLead(teamId)`
+// on the grade document, and `profession` inside the lead's membership allowlist.
+// There was no screen, so in practice a grade could only ever be set by the person
+// themselves: a department could not roster until every member had been chased for
+// one, and a wrong grade — which decides who leads a shift — was uncorrectable.
+//
+// ⚠️ TWO COMMENTS IN THE SOURCE CLAIMED OTHERWISE. Both said a lead "can correct it
+//    in the Configure staff table". Those rows come from `staffRowsFromMembers` and
+//    are derived and read-only. The claim was never true, and the last test in this
+//    block is the one that would have caught it.
+
+const gradeDocOf = (uid) => `teams/${TEAM_ID}/grades/${uid}`;
+const memberDocOf = (uid) => `teams/${TEAM_ID}/members/${uid}`;
+
+const openEditorFor = async (name) => {
+    await act(async () => {
+        fireEvent.click(screen.getByRole('button', { name: new RegExp(`edit profession and grade for ${name}`, 'i') }));
+    });
+};
+
+const chooseGrade = (uid, value) =>
+    fireEvent.change(document.getElementById(`member-grade-${uid}`), { target: { value } });
+const chooseProfession = (uid, value) =>
+    fireEvent.change(document.getElementById(`member-profession-${uid}`), { target: { value } });
+
+const save = async () => {
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: /^save$/i })); });
+};
+
+describe('4. a lead sets profession and grade for a member', () => {
+    it('offers an editor per member to a lead, and none at all to a non-lead', async () => {
+        render(<TeamMembersPanel />);
+        expect(screen.getAllByRole('button', { name: /edit profession and grade/i })).toHaveLength(2);
+
+        cleanup();
+        team = asTeam({ isLead: false });
+        render(<TeamMembersPanel />);
+        expect(screen.queryByRole('button', { name: /edit profession and grade/i })).toBeNull();
+    });
+
+    /**
+     * ⚠️ THE LIST ITSELF MUST READ NO GRADES. This is the property that keeps the
+     *    department's pay scale out of a component that also renders for a non-lead:
+     *    a grade is fetched when one editor opens, and at no other moment.
+     */
+    it('reads no grade at all until an editor is opened', () => {
+        render(<TeamMembersPanel />);
+        expect(getDocSpy).not.toHaveBeenCalled();
+    });
+
+    it('reads exactly one grade document, for the member whose editor opened', async () => {
+        render(<TeamMembersPanel />);
+        await openEditorFor('Brandon');
+        expect(getDocSpy.mock.calls.map(([path]) => path)).toEqual([gradeDocOf(STAFF.uid)]);
+    });
+
+    it('shows the stored grade, and writes it back with setBy and merge when changed', async () => {
+        getDocImpl = () => Promise.resolve({ exists: () => true, data: () => ({ grade: 'AH11' }) });
+        render(<TeamMembersPanel />);
+        await openEditorFor('Brandon');
+
+        expect(document.getElementById(`member-grade-${STAFF.uid}`).value).toBe('AH11');
+        chooseGrade(STAFF.uid, 'AH14');
+        await save();
+
+        expect(setDocSpy).toHaveBeenCalledTimes(1);
+        const [path, payload, options] = setDocSpy.mock.calls[0];
+        expect(path).toBe(gradeDocOf(STAFF.uid));
+        expect(payload.grade).toBe('AH14');
+        expect(payload.setBy).toBe('lead');
+        expect(typeof payload.updatedAt).toBe('string');
+        // The document may not exist yet — `updateDoc` on a missing document fails.
+        expect(options).toEqual({ merge: true });
+    });
+
+    /**
+     * The membership write carries `profession` AND NOTHING ELSE. The lead's rule is
+     * `changedKeys().hasOnly([...])`, so one stray key refuses the WHOLE write with
+     * `permission-denied` — an error naming nothing the lead did.
+     */
+    it('writes profession to the membership, on its own', async () => {
+        render(<TeamMembersPanel />);
+        await openEditorFor('Brandon');
+        chooseProfession(STAFF.uid, 'physiotherapist');
+        await save();
+
+        expect(updateDocSpy).toHaveBeenCalledTimes(1);
+        const [path, payload] = updateDocSpy.mock.calls[0];
+        expect(path).toBe(memberDocOf(STAFF.uid));
+        expect(Object.keys(payload)).toEqual(['profession']);
+        expect(payload.profession).toBe('physiotherapist');
+        // Grade untouched, so no second write.
+        expect(setDocSpy).not.toHaveBeenCalled();
+    });
+
+    it('writes nothing when neither value changed', async () => {
+        getDocImpl = () => Promise.resolve({ exists: () => true, data: () => ({ grade: 'AH11' }) });
+        render(<TeamMembersPanel />);
+        await openEditorFor('Brandon');
+        await save();
+
+        expect(setDocSpy).not.toHaveBeenCalled();
+        expect(updateDocSpy).not.toHaveBeenCalled();
+    });
+
+    /**
+     * ⚠️ A REFUSED READ IS A REFUSAL TO WRITE, and this is the case that would
+     *    otherwise destroy data: a caller who cannot READ the grade sees the field
+     *    empty, which is indistinguishable from "they have not set one". Saving
+     *    would write over a value never seen.
+     */
+    it('refuses to save when the grade could not be read, and says why', async () => {
+        getDocImpl = () => Promise.reject(new Error('permission-denied'));
+        render(<TeamMembersPanel />);
+        await openEditorFor('Brandon');
+        chooseProfession(STAFF.uid, 'physiotherapist');
+        await save();
+
+        expect(setDocSpy).not.toHaveBeenCalled();
+        expect(updateDocSpy).not.toHaveBeenCalled();
+        expect(screen.getByRole('alert').textContent).toMatch(/could not be read/i);
+    });
+
+    it('writes nothing in the sandbox', async () => {
+        demoMode = true;
+        render(<TeamMembersPanel />);
+        await openEditorFor('Brandon');
+        chooseProfession(STAFF.uid, 'physiotherapist');
+        await save();
+
+        expect(setDocSpy).not.toHaveBeenCalled();
+        expect(updateDocSpy).not.toHaveBeenCalled();
+        expect(screen.getByRole('alert').textContent).toMatch(/sandbox/i);
+    });
+
+    /**
+     * ⚠️ THE SEED EFFECT MUST NOT CLOBBER A CHOICE MADE WHILE THE READ WAS IN
+     *    FLIGHT. The hook starts at `grade: ''`; an unguarded effect seeds that,
+     *    then the real value lands and overwrites whatever the lead picked in
+     *    between — silently reverting a selection they watched themselves make.
+     */
+    it('keeps a grade chosen before the read resolves', async () => {
+        let release;
+        getDocImpl = () => new Promise((resolve) => { release = () => resolve({ exists: () => true, data: () => ({ grade: 'AH11' }) }); });
+
+        render(<TeamMembersPanel />);
+        await openEditorFor('Brandon');
+        chooseGrade(STAFF.uid, 'AH16');
+        await act(async () => { release(); });
+
+        expect(document.getElementById(`member-grade-${STAFF.uid}`).value).toBe('AH16');
+    });
+
+    /**
+     * Closing drops the grade rather than keeping it. Without this, opening a second
+     * member shows the first member's grade until their read resolves — one
+     * colleague's pay grade rendered under another colleague's name.
+     */
+    it('does not carry one member\'s grade into another\'s editor', async () => {
+        getDocImpl = (path) => Promise.resolve({
+            exists: () => path === gradeDocOf(STAFF.uid),
+            data: () => (path === gradeDocOf(STAFF.uid) ? { grade: 'AH17' } : {}),
+        });
+
+        render(<TeamMembersPanel />);
+        await openEditorFor('Brandon');
+        expect(document.getElementById(`member-grade-${STAFF.uid}`).value).toBe('AH17');
+
+        await openEditorFor('Nur');
+        expect(document.getElementById(`member-grade-${OWNER.uid}`).value).toBe('');
+    });
+
+    it('tells the member, on their own row, when a lead set the grade rather than them', async () => {
+        getDocImpl = () => Promise.resolve({ exists: () => true, data: () => ({ grade: 'AH14', setBy: 'lead' }) });
+        render(<TeamMembersPanel />);
+        await openEditorFor('Brandon');
+        expect(screen.getByText(/set by a lead, not by them/i)).toBeTruthy();
+    });
+
+    /**
+     * ⚠️ THE TEST THAT WOULD HAVE CAUGHT THE FALSE COMMENT. Both source files
+     *    claimed a lead could correct a grade in the Configure staff table. Nothing
+     *    asserted that a correction path existed anywhere, so the claim survived
+     *    two reviews. This asserts the path by its effect: a grade a lead did not
+     *    set reaches Firestore.
+     */
+    it('gives a lead a working path to set a grade for somebody who never set one', async () => {
+        render(<TeamMembersPanel />);
+        await openEditorFor('Brandon');
+        expect(document.getElementById(`member-grade-${STAFF.uid}`).value).toBe('');
+
+        chooseGrade(STAFF.uid, 'AH13');
+        await save();
+
+        expect(setDocSpy).toHaveBeenCalledTimes(1);
+        expect(setDocSpy.mock.calls[0][1].grade).toBe('AH13');
     });
 });

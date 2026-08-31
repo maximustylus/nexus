@@ -147,7 +147,11 @@ module.exports = {
 
         // ---- CommonJS: Cloud Functions and the seed script ----------------
         {
-            files: ['functions/**/*.js', 'scripts/**/*.cjs', '.eslintrc.cjs'],
+            // `functions/**/*.cjs` added 2026-08-23 with `functions/personas.cjs`.
+            // The glob covered `.js` only, so the existing `retention.cjs`,
+            // `insights.cjs` and `sectorRegions.cjs` are linted as ESM-in-a-browser
+            // and would fail on `module` the moment anything referenced them here.
+            files: ['functions/**/*.js', 'functions/**/*.cjs', 'scripts/**/*.cjs', '.eslintrc.cjs'],
             env: { node: true, browser: false, es2021: true },
             parserOptions: { sourceType: 'script' },
         },

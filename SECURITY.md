@@ -6,7 +6,8 @@ We take the security and data privacy of the NEXUS platform very seriously. Curr
 
 | Version | Support Status |
 | ------- | -------------- |
-| 2.0.x   | Supported (Active Beta — multi-team) |
+| 2.1.x   | Supported (Active Beta — multi-team) |
+| 2.0.x   | Supported (superseded — upgrade to 2.1.x) |
 | 1.18.x  | Supported (rollback target for the v2.0.0 migration) |
 | < 1.18  | Unsupported |
 
@@ -26,6 +27,17 @@ Please do not report security vulnerabilities through public GitHub issues or pu
 If you discover a security vulnerability within NEXUS, please send a direct email to the Lead Developer, Muhammad Alif, at muhammad.alif@kkh.com.sg. 
 
 All security reports will be treated with the highest priority. You can expect an acknowledgement of your report within 24 hours, followed by a remediation timeline and an immediate hotfix deployment if the live environment is compromised.
+
+## Transparency
+
+NEXUS will align with the IMDA *Transparency Guidelines for Generative AI Chatbots*
+(Infocomm Media Development Authority, Singapore, published 20 July 2026) for its
+generative AI surfaces. The chatbot info card the guidelines describe is
+[`docs/AURA-CHATBOT-INFO-CARD.md`](docs/AURA-CHATBOT-INFO-CARD.md) — what AURA can and
+cannot do, how it is kept safe, how data is handled (including what reaches Google's
+Gemini API), and how to report issues. The card was signed off by the owner on 2026-08-28
+(v1.0, in effect); the remaining refinement — a dedicated public support address — is
+tracked in [`AURA-TODO.md`](AURA-TODO.md) §P9 (9.5).
 
 ## Data Governance Reminder
 

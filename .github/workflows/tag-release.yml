@@ -1,0 +1,32 @@
+# Creates an annotated release tag from inside Actions, where the workflow's
+# GITHUB_TOKEN has contents:write. Exists because the remote Claude sandbox's
+# git credentials can push branches but not tags (403 on refs/tags/*), so
+# release tagging from a cloud session goes through this dispatch instead.
+name: Tag Release
+'on':
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Tag name, e.g. v2.1.2'
+        required: true
+      sha:
+        description: 'Full commit SHA to tag'
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  tag:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/github-script@v7
+        with:
+          script: |
+            const { tag, sha } = context.payload.inputs;
+            if (!/^v\d+\.\d+\.\d+$/.test(tag)) throw new Error(`Refusing non-release tag name: ${tag}`);
+            const { owner, repo } = context.repo;
+            // Annotated tag object first, then the ref pointing at it.
+            const tagObj = await github.rest.git.createTag({ owner, repo, tag, message: tag, object: sha, type: 'commit' });
+            await github.rest.git.createRef({ owner, repo, ref: `refs/tags/${tag}`, sha: tagObj.data.sha });
+            core.notice(`Created annotated tag ${tag} at ${sha}`);

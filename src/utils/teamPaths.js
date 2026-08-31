@@ -107,6 +107,29 @@ export const TEAM_COLLECTIONS = Object.freeze({
     projects: 'projects',
     feed: 'feed',
     notifications: 'notifications',
+    /**
+     * ⚠️ A SEPARATE COLLECTION BECAUSE FIRESTORE RULES CANNOT HIDE A FIELD.
+     *
+     * Pay grade is what `bandOfGrade` reads to decide who may lead a shift, so the
+     * roster needs it — and it is the most sensitive thing anybody would volunteer
+     * about themselves short of the wellbeing log. `teams/{id}/members/{uid}` is
+     * readable by every member of the team, deliberately: the roster, the swap
+     * picker and the load table are all built from that list. A rule cannot grant
+     * `get` on a document while withholding one of its fields, so a grade stored
+     * there is a grade every colleague can read.
+     *
+     * It therefore lives in its own document under its own rule — readable by the
+     * person and by a lead, and by nobody else. See `firestore.rules`.
+     */
+    grades: 'grades',
+    /**
+     * A department's roster CONFIGURATION — its tasks, band boundaries, hours
+     * policy and scheduling rules. Not the roster itself, and not the people: the
+     * staff pool is `members`, and their grades are `grades`. See
+     * `src/utils/rosterSettings.js` for why those two are excluded rather than
+     * copied in.
+     */
+    settings: 'settings',
 });
 
 /** Root collections that are NOT beneath a team. See the header for each reason. */
@@ -319,7 +342,23 @@ export const PULSE_PERIOD_DAILY = 'daily';
 export const pulsePath = (teamId, period) => under(teamId, TEAM_COLLECTIONS.pulse, period);
 export const loadsPath = (teamId) => under(teamId, TEAM_COLLECTIONS.loads);
 export const loadPath = (teamId, uid) => under(teamId, TEAM_COLLECTIONS.loads, assertUid(uid));
-export const workloadPath = (teamId, period) => under(teamId, TEAM_COLLECTIONS.workload, period);
+/**
+ * `AU4` — the period gets the same treatment as the year, for the same reason:
+ * this id comes ultimately from a MODEL (MODE 3's `target_doc`), and an id
+ * nothing validates is a stray document nothing cleans up. Strictly lowercase
+ * here: `dataEntryGuard` accepts `Jan_2026` case-insensitively and the caller
+ * lowercases before this runs, so by this point a mixed-case period is a coding
+ * error upstream, not a model quirk to tolerate into two documents per month.
+ */
+const assertPeriod = (value) => {
+    if (typeof value !== 'string'
+        || !/^(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)_\d{4}$/.test(value)) {
+        throw new Error(`Invalid workload period: ${JSON.stringify(value)}. Expected mmm_yyyy, e.g. "jan_2026".`);
+    }
+    return value;
+};
+
+export const workloadPath = (teamId, period) => under(teamId, TEAM_COLLECTIONS.workload, assertPeriod(period));
 export const reportPath = (teamId, year) => under(teamId, TEAM_COLLECTIONS.reports, assertYear(year));
 /**
  * Monthly attendance. Was ONE global document, `system_data/monthly_attendance`,
@@ -345,6 +384,35 @@ export const projectsStaffPath = (teamId, year) =>
     under(teamId, TEAM_COLLECTIONS.projects, assertYear(year), 'staff');
 export const projectStaffPath = (teamId, year, uid) =>
     under(teamId, TEAM_COLLECTIONS.projects, assertYear(year), 'staff', assertUid(uid));
+/**
+ * One person's pay grade, and NOT part of their membership document.
+ *
+ * ⚠️ THE SPLIT IS THE PRIVACY MECHANISM, NOT AN ORGANISING PREFERENCE. Rules grant
+ *    access per DOCUMENT; there is no field-level read. So the only way for the
+ *    roster to know a grade while a colleague does not is for the grade to be a
+ *    document a colleague cannot open.
+ *
+ * ⚠️ AND THE PROTECTION IS NOT TOTAL, WHICH IS WORTH SAYING RATHER THAN IMPLYING.
+ *    The engine gives lead shifts to senior and principal bands, so a published
+ *    roster still tells an attentive reader which BAND somebody is in. What this
+ *    withholds is the number, and the difference between "rosters as senior" and
+ *    "is an AH14" is most of what makes the number uncomfortable.
+ */
+export const gradesPath = (teamId) => under(teamId, TEAM_COLLECTIONS.grades);
+export const gradePath = (teamId, uid) => under(teamId, TEAM_COLLECTIONS.grades, assertUid(uid));
+
+/**
+ * `teams/{id}/settings/roster` — the Configure wizard, persisted.
+ *
+ * A fixed document id rather than a free one: there is exactly one roster
+ * configuration per team and always will be, so the id is a constant and a typo
+ * cannot silently address a second, empty document that reads as "never
+ * configured".
+ */
+export const ROSTER_SETTINGS_ID = 'roster';
+export const rosterSettingsPath = (teamId) =>
+    under(teamId, TEAM_COLLECTIONS.settings, ROSTER_SETTINGS_ID);
+
 export const feedPath = (teamId) => under(teamId, TEAM_COLLECTIONS.feed);
 export const feedPostPath = (teamId, postId) => under(teamId, TEAM_COLLECTIONS.feed, postId);
 export const notificationsPath = (teamId) => under(teamId, TEAM_COLLECTIONS.notifications);

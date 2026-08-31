@@ -573,6 +573,12 @@ describe('generateRoster is byte-compatible for a Monday start (ROSTER_TODO.md P
      * identical output. They are not re-derived from the new source.
      */
     const LIVE_STAFF = ['Brandon', 'Ying Xian', 'Derlinder', 'Fadzlynn'];
+    // ⚠️ THE OLD ACRONYMS ON PURPOSE, AND THEY MUST STAY. This block pins the
+    // PRE-P4 engine's output verbatim, to prove the date fix changed nothing. It is a
+    // historical record, so its fixture is the task list that engine actually ran with.
+    // Renaming it to the 2026-08-15 duty names would compare today's engine against
+    // today's names and prove nothing at all — the comparison is the whole point.
+    // The live list's rename is pinned separately, in `auraEngine.guards.test.js`.
     const LIVE_TASKS = ['EFT', 'IPT+SKG', 'NC', 'FSG+WI'];
     const mondayConfig = () => ({
         staff: [...LIVE_STAFF],

@@ -51,7 +51,7 @@ not changed by this release.
 
 ---
 
-## [2.2.0] - 2026-08-15
+## [2.2.0] - 2026-08-31
 
 The clinical exercise physiology duty names, spelled out — and an honest note about a
 structure this repository has been describing wrongly.
@@ -121,10 +121,281 @@ Live V1: 9 duties, 24 days, 188 shifts, weekly rotation intact. Sandbox V2: 140 
 byte-compat pins existed to catch an *unintended* change to live output, and every one
 of them fired on an intended one, which is the pins working.
 
-*(Versioned 2.2.0 rather than 2.1.0: a dangling `v2.1.1` tag exists from another line of
-work and is not an ancestor of this branch, so 2.1.0 would have read as older than a tag
-that already exists.)*
+*(Versioned 2.2.0 as the next minor after main's `2.1.3`. An earlier draft of this entry
+called `v2.1.1` a dangling tag from another line — that was measured against a stale local
+`main` and was wrong: `v2.1.0`–`v2.1.3` are real releases, and this branch had simply not
+seen them yet.)*
 
+## [2.1.3] - 2026-08-25
+
+A patch release: the public answering surfaces now speak lay language, and the word
+"clinical" is gone from public-facing copy. **No new features, no Firestore shape
+change, no data migration.** The AURA engine stays at `v2.3` — it is not touched by
+this release.
+
+*Two commits since `v2.1.2`, merged as `2ba1c15`, classified by reading the diffs.
+Their subjects are conventional (`fix(...)`, `ci:`) rather than this repository's
+historical `Update <file>.jsx`, and the diffs agree with them: every hunk in the app
+change is a display string or a presentation-only key. The CI commit adds a workflow
+file and touches nothing the app ships.*
+
+### Fixed
+
+- **People answering the assessment were shown instrument acronyms mid-question.**
+  The chat's domain badges and the form's step titles, progress subtitles, section
+  badges and footnotes carried `ACSM PAVS`, `SPAG`, `SDOH`, `PHQ-2`, `LSNS-6` and
+  `BPS-RS II` — vocabulary that means nothing outside a health system, shown to a
+  member of the public at the moment they are trying to answer. They now read as plain
+  words: *Physical Activity*, *Strength Training*, *Health & Safety Check*, *Cost &
+  Access*, *Social Support*, *Food Security*, *Mood & Wellbeing*. Footnotes describe
+  the question instead of citing it — "Based on a standard two-week mood question used
+  in health screening" rather than "Aligned with BPS-RS II P22 (PHQ-2 based…)".
+  **The precise instrument citations are not lost**: they remain, expanded on first
+  use, on the PDF report's governance page, which is where an auditor looks for them.
+- **The word "clinical" appeared throughout public-facing copy**, in a portal that
+  must not present itself as a clinical service. Removed from every public surface in
+  all four languages, including the Malay *klinikal* and Chinese *临床* wordings —
+  "Clinical Safety Screen" is now "Health & Safety Check", and the Demo Mode card
+  offers analytics "without processing live health data". The result page's
+  `pavsTitle` reads "Your Physical Activity Check" instead of "ACSM Physical Activity
+  Vital Sign", `pavsLabel` reads "Activity Score" instead of "PAVS Score", and SPAG
+  thresholds read "National guideline".
+
+  Staff-side surfaces are deliberately untouched — *Clinical Exercise Physiologist* is
+  a real job title, not portal copy.
+
+### Changed
+
+- **The chat's internal domain group key `clinical` is renamed `safety`** in
+  `AuraChat.jsx` (`DOMAIN_CONFIG`, `GROUP_COLOURS` and the badge `colourMap`).
+  **This is not a data change.** The `group` field never leaves the browser — it
+  selects a progress-bar colour and a badge palette, and is read only through
+  `GROUP_COLOURS[domain?.group]` and `colourMap[domain.group]`. The identifiers that
+  *are* persisted are the `key` fields (`pavs_days`, `medical`, `falls`, …), and every
+  one of them is unchanged, so a client already in someone's service-worker cache
+  parses stored responses exactly as before.
+- **Release tags can now be created from a `workflow_dispatch`**
+  (`.github/workflows/tag-release.yml`). Build tooling only; nothing the app ships.
+  It exists because a cloud session's git credentials can push branches but not tags,
+  so the tag is created inside Actions where `GITHUB_TOKEN` carries `contents:write`.
+  The workflow refuses any tag name that is not `vX.Y.Z`, and it takes an explicit
+  SHA — the release commit's — so the repo's rule that **a tag points at a commit
+  whose tree already carries its own version** is preserved through the new path.
+
+## [2.1.2] - 2026-08-25
+
+A patch release: three rendering fixes in the exported two-page report, and nothing
+else. **No new features, no Firestore shape change, no data migration.** The AURA
+engine stays at `v2.3` — it is not touched by this release.
+
+*One commit since `v2.1.1` (`a4c126c`, merged as `eef154d`), classified by reading the
+diff. Its subject is conventional (`fix(...)`) rather than this repository's historical
+`Update <file>.jsx`, and the diff agrees with it: every hunk is presentation — flex
+styling, paddings, an image import and a column width. No props are read from stored
+data that were not read before, so nothing here can change what a deployed client can
+parse.*
+
+### Fixed
+
+- **Page 1's header strip printed at ~57px while page 2's kept 130px.** The page
+  wrapper is a fixed-height flex column, and **a fixed height does not stop a flex item
+  shrinking** — when page 1's content ran long the browser compressed the header and
+  footer strips to make room, so the two pages of one report carried visibly different
+  headers. Both strips are now `flexShrink: 0`; the content area takes `minHeight: 0`
+  and `overflow: hidden` so it absorbs the excess instead, and page paddings and gaps
+  are tightened so the fullest report (Red tier, previous ID, three SDOH bullets, six
+  resources) fits without overflowing. Measured after the fix: both pages exactly
+  794×1123, 130px headers, 44px footers, zero content overflow.
+
+  ⚠️ This is the same defect class the v2.1.1 entry below claimed to have closed. That
+  release gave both strips *fixed heights* and clamped the wrappers, which is necessary
+  but not sufficient: a fixed height is still shrinkable under flex. The strips only
+  stop moving once they are also unshrinkable.
+
+- **The header logo printed with a dark N.** The N strokes in `nexus.png` are
+  transparent cut-outs, so against the dark header strip the background showed through
+  and the wordmark inverted. On a light page the same file looks white, **which is why
+  it passed review** — the artwork is only wrong on the one background the PDF uses.
+  The header now draws a bundled copy (`src/assets/nexus-logo.png`) with white baked
+  into the interior transparency and the exterior corners still transparent, imported
+  through Vite so it ships content-hashed. That also closes a second hole: the previous
+  code fetched `/nexus.png` by URL, so a browser holding an older cached copy drew
+  **whatever the cache held** into the export rather than what the repo ships.
+
+- **"Psychological Wellbeing" broke the evidence column's alignment.** The label was
+  wider than the column's `minWidth: 110`, so that row widened and its description
+  started at a different x from every other row. The label column is now an exact
+  `width`, so a long label wraps to a second line instead of pushing its description
+  out. Also on page 2: partner-site lines no longer break mid-word (`break-all` →
+  `overflowWrap: break-word`, so URLs still split when they must and prose never does),
+  and the last evidence row no longer draws a stray border below itself.
+
+## [2.1.1] - 2026-08-24
+
+A patch release: four fixes and one documentation correction. **No new features, no
+Firestore shape change, no data migration.** The AURA engine stays at `v2.3` — it is
+not touched by this release.
+
+*Classified by reading the diffs. These commit subjects are conventional (`fix(...)`)
+rather than this repository's historical `Update <file>.jsx`, so intent was legible
+for once; the file deletions listed below still had to be attributed by diff, because
+no subject line mentions them.*
+
+### Fixed
+
+- **Hosting never re-served `index.html`, so every deploy was invisible.**
+  `firebase.json` declared no `headers` block at all, leaving Firebase Hosting's
+  default cache policy on the one file that must never be cached. Vite fingerprints
+  every asset; `index.html` is the map naming the current fingerprint, so a stale map
+  points returning browsers at the previous bundle. Three rules now ship: `no-store`
+  on `/index.html` and on `/firebase-messaging-sw.js` (a cached service worker keeps
+  re-registering an old script, which is how a push fix ships and never arrives), and
+  a one-year `immutable` on `/assets/**`, which is safe precisely because the content
+  hash is in the filename.
+
+  ⚠️ **This was true of every deploy this project has ever made.** It surfaced at
+  v2.1.0 only because that was the first release where somebody went looking for a
+  specific new control and could not find it. Covered by
+  `scripts/hosting-headers.test.mjs`.
+
+- **The dashboard showed one department's staff to every team, and every bar read
+  zero.** The *Individual Clinical Load* panel rendered `TEAM_DIRECTORY` in live mode
+  — ten people from Sport & Exercise Medicine at KKH — so a respiratory therapy lead
+  at SGH opened their dashboard onto somebody else's colleagues. This was the sixth
+  hardcoded copy of that one department and the last one standing.
+
+  ⚠️ **And it was not cosmetic.** The multi-team rewire re-keyed `activeStaffLoads`
+  by uid, while this panel still supplied a directory id (`'brandon'`, `'alif'`), so
+  every lookup missed and fell back to `Array(12).fill(0)`. Twelve months of zero bars
+  per clinician, rendered confidently, on the first screen anybody sees — nothing
+  errored and nothing was empty, which is the failure mode that survives a demo. The
+  people now come from `members`, keyed by the uid the loads are already stored under;
+  `rostered !== false` matches the roster's own pool, so the roster master who holds no
+  clinical duties no longer appears as a row of zeros indistinguishable from a bug.
+
+- **"Enterprise / Scale Unit" routed a department head into a disabled button.** The
+  sign-in screen's second option read as *for setting up a department* and opened a
+  panel about multi-tenant architecture whose only button was disabled and said
+  *"Registration Restricted — Contact Admin for whitelisting"*. The path that person
+  wanted sat behind the **first** button, one unmarked role dropdown down.
+
+  That panel was honest when written — multi-tenancy did not exist — and became false
+  at v2.0.0 without anything failing, because a disabled button is not a bug; it is a
+  button doing what it says. No test could have caught it. **The fix is a repoint, not
+  a delete:** the signpost is well aimed, so it now opens registration with the lead
+  role preselected and says so in the words a department head uses.
+
+- **The exported two-page traffic light report (`ResultPage.jsx`).** Three faults in
+  the jsPDF + html2canvas export: the header and footer strips could differ between
+  pages (heights followed their content, page 2 hardcoded its own subtitle, the two
+  footers carried different labels) — both strips now have fixed heights and shared
+  styles, and each page wrapper is clamped to exactly 794×1123 so jsPDF rasterises
+  both canvases at the same scale and the strips print at the same physical size.
+  Nothing in the rasterised pages was clickable — elements tagged `data-pdf-link` (the
+  NEXUS logo and wordmark, resource logos and printed URLs, the primary-action URL, the
+  QR block, the Healthier SG partner logos) now carry real PDF link annotations stamped
+  over their footprint. Em-dashes in the English report copy are replaced with plain
+  punctuation; the UK English spellings are retained.
+
+### Removed
+
+- **Dead modules, no remaining consumers:** `Aura.utils.js`, `KpiChart.jsx`,
+  `ScrollToTop.jsx`, `StaffLoadChart.jsx`, `StatusBarChart.jsx`,
+  `TaskProjectBarChart.jsx` and `hooks/useWindowSize.js`. Removed alongside the
+  dashboard fix above. Internal cleanup only — nothing in `src/` imported them, and
+  no rendered surface changes. `TEAM_DIRECTORY` itself still exists in
+  `src/utils/index.js` but now has **no consumers in `src/`**.
+
+### Documentation
+
+- `firestore.rules.README.md` cited 91 emulator checks; it is 119. The banner
+  correctly points readers at `scripts/firestore-rules-verify.mjs` as the current
+  record, but the number it quoted was two releases stale — which is the specific way
+  a "read this instead" pointer stops being trustworthy. The 28 added since cover
+  pay-grade privacy and the team's roster configuration.
+
+---
+
+## [2.1.0] - 2026-08-23
+
+**ONE CONFIGURE SCREEN, ONE ENGINE.** The live roster had never used the AURA v2
+engine. Every capability the sandbox has demonstrated for months — grade bands,
+skill matching, part-time fairness, working-hours ceilings, consecutive-day limits,
+the grade floor shipped in v1.18.0 — existed only there.
+
+> ### ⚠️ NOTHING IS REGENERATED BY THIS RELEASE
+>
+> The deploy changes no roster. v2 runs the first time a lead presses **Generate**
+> and confirms. The existing roster renders unchanged: v2's shift object is a
+> superset of v1's — same `task`, `lead`, `coLead`, `staff`, `category`, `week`,
+> plus `assignees` — so the calendar, the swap picker and the ICS export are
+> unaffected either way.
+>
+> **When it does run, the allocation will differ.** v2 respects constraints v1
+> ignored. That is the point of the change rather than a regression, and the
+> confirmation modal is what makes it a decision.
+
+### Why the two screens differed
+
+Not a UI preference. Live mode ran `generateRoster` — a round-robin rotating a list
+of NAMES, assigning `staff[taskIdx % staff.length]` as lead, Mon–Fri — which could
+not see a grade, an FTE, a skill, a leave date or a rule, because its input was two
+comma-separated strings. Two textareas were the honest UI for it. The sandbox ran
+`generateRosterV2`, which needs all of it. The `isDemo` gate was a symptom.
+
+### Added
+
+- **Profession and job grade on Edit Profile.** Profession from the 37 MOH allied
+  health professions; grade from `AH7`–`AH17`, the engine's own scale. Both
+  self-set. Selecting a grade shows what it means for duties beside the control
+  that sets it — somebody choosing a principal grade reads "leads shifts" as they
+  choose it.
+- **A department's configuration persists** — `teams/{id}/settings/roster`, read by
+  the team, written by a lead, saved when a lead generates. Tasks, band boundaries,
+  hours policy and scheduling rules survived only as long as the browser tab did.
+- **The staff table is the team.** Rows come from the member list and carry uid,
+  ending the comma-separated staff pool — the last place display-name keying
+  survived. Read-only: somebody leaves the roster by leaving the team.
+- **A bridge for departments that already roster.** No stored configuration and
+  nothing typed ⇒ the wizard opens on the tasks the department is already running,
+  rather than on blank rows with Generate refusing.
+
+### Changed — pay grade is now private
+
+`grade` moved off the membership document, which every member of the team can read,
+into `teams/{id}/grades/{uid}`, which only the person and a lead can.
+
+**Firestore rules cannot hide a field.** Access is granted per document; there is no
+field-level read. A member who may `get` the membership reads every field on it, so
+a grade stored there was a grade every colleague could read, and hiding it in the UI
+would have changed nothing.
+
+`list` is denied on the new collection to everybody including a lead: a lead reads
+one document per member by uid from the member list they already hold, so denying it
+costs nothing and removes the artefact the split exists to prevent — one query
+returning every salary band in the department.
+
+**The protection is partial, and that is stated rather than implied.** The engine
+gives lead shifts to senior and principal bands, so a published roster still tells
+an attentive reader roughly which band somebody is in. What this withholds is the
+number.
+
+### Known limitations
+
+- **The wizard's staff attributes are read-only in live mode by design**, and the
+  places to edit each one are named under the table. Grade and profession on the
+  person's own profile; membership fields in Admin → Team.
+- **Self-set grade has no review step.** Nothing flags a staff member who selects a
+  senior grade and begins receiving lead shifts. The mitigations are the
+  consequence sentence beside the control and a lead seeing grades in the Configure
+  staff table. The rejected alternative — lead-set-only, which the rules still
+  support — is recorded in `firestore.rules` so the decision can be revisited on
+  the facts.
+- **`rules.forbidPairs` stores two colleagues' names** in a team-readable document.
+  It cannot live elsewhere — the engine reads it with the rest of the configuration
+  — and the rule's effect is observable in any roster it produces.
+
+---
 
 ## [2.0.0] - 2026-08-23
 

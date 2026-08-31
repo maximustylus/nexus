@@ -1984,7 +1984,17 @@ describe('generateRoster (V1) is unaffected by V2', () => {
     it('still produces its documented output after V2 has run', () => {
         const config = {
             staff: ['Brandon', 'Ying Xian', 'Derlinder', 'Fadzlynn'],
-            tasks: ['EFT', 'IPT+SKG', 'NC', 'FSG+WI'],
+            tasks: [
+            'Physical Activity Counseling',
+            'Exercise Test',
+            'New Case',
+            'Walk-in',
+            'Individual Session',
+            'Inpatient Exercise',
+            'Paediatrics Group Session',
+            'Adolescent Group Session',
+            'Video Consultation Group',
+        ],
             startDate: '2026-02-01',
             weeks: 4,
         };

@@ -12,6 +12,15 @@ import { recordTelemetry } from '../utils/telemetry';
 import { readTheme, writeTheme } from '../utils/theme';
 import { readLanguage, writeLanguage, applyDocumentLanguage } from '../utils/language';
 import { getSessionId, saveResult, loadResult } from '../utils/assessmentSession';
+/*
+  ⚠️ BUNDLED, NOT FETCHED FROM `/nexus.png`. The PDF header used to load the
+     public-folder copy by URL, and a browser holding a cached older file drew
+     the WRONG LOGO into the exported report — the artwork on the page was
+     whatever the cache held, not what the repo ships. Importing it through
+     Vite gives the file a content-hashed name, so a stale cache can never
+     answer for it.
+*/
+import nexusLogo from '../assets/nexus-logo.png';
 import { clusterForSector } from '../utils/singapore/communityServices';
 import { sectorInfo } from '../utils/singapore/postalSectors';
 import HandoverSlip from './HandoverSlip';
@@ -28,22 +37,22 @@ const DICTIONARY = {
     redDesc: 'Your risk profile indicates a need for supervised care. We strongly recommend consulting a healthcare professional before starting any new exercise programme.',
     amberDesc: 'You have moderate needs. Consider gradually increasing your activity levels and exploring the structured community resources below.',
     greenDesc: "You meet the physical activity guidelines. Maintain your routine and consider levelling up with structured programmes.",
-    sdohFinText: 'Cost flagged as a barrier — we have prioritised free and fully subsidised options below.',
-    sdohSocText: 'Social connection flagged — community group and befriending resources have been included.',
-    sdohPsychoText: 'Mental wellbeing flagged — emotional wellness and counselling resources have been added.',
+    sdohFinText: 'Cost flagged as a barrier, so we have prioritised free and fully subsidised options below.',
+    sdohSocText: 'Social connection flagged, so community group and befriending resources have been included.',
+    sdohPsychoText: 'Mental wellbeing flagged, so emotional wellness and counselling resources have been added.',
     trendActive: 'Longitudinal Tracking Active',
     trendDesc: 'Your results have been linked to your previous assessment so you can track your progress over time.',
-    pavsTitle: 'ACSM Physical Activity Vital Sign',
+    pavsTitle: 'Your Physical Activity Check',
     pavsWeekly: 'mins / week',
     pavsDays: 'days / week',
     pavsMins: 'mins / session',
     pavsBelow: 'Insufficiently Active',
     pavsMeets: 'Meets Guidelines',
     pavsActive: 'Active',
-    pavsBelowDesc: 'Below 150 mins/week — the Singapore Physical Activity Guidelines recommend at least 150 mins of moderate activity per week.',
-    pavsMeetsDesc: 'You meet the SPAG minimum of 150 mins/week. Consider building toward 300 mins for greater health benefit.',
-    pavsActiveDesc: 'Excellent — you exceed the SPAG recommendation of 300 mins/week. Focus on maintaining quality and adding variety.',
-    pavsThreshold: 'SPAG: 150–300 mins / week',
+    pavsBelowDesc: 'Below 150 mins/week. The Singapore Physical Activity Guidelines recommend at least 150 mins of moderate activity per week.',
+    pavsMeetsDesc: 'You meet the national guideline minimum of 150 mins/week. Consider building toward 300 mins for greater health benefit.',
+    pavsActiveDesc: 'Excellent. You exceed the national recommendation of 300 mins/week. Focus on maintaining quality and adding variety.',
+    pavsThreshold: 'National guideline: 150–300 mins / week',
     primaryAction: 'Your Primary Action',
     resources: 'Recommended Community Resources',
     download: 'Download PDF',
@@ -55,7 +64,7 @@ const DICTIONARY = {
     assessmentId: 'Assessment ID',
     prevId: 'Previous ID',
     postalSector: 'Postal Sector',
-    pavsLabel: 'PAVS Score',
+    pavsLabel: 'Activity Score',
     scanQR: 'Scan to access digital portal',
     webLink: 'Website: ',
     sharePrefix: 'My NEXUS AURA result:',
@@ -75,8 +84,8 @@ const DICTIONARY = {
     sdohSocText: 'Hubungan sosial dikenal pasti — sumber kumpulan komuniti dan rakan disertakan.',
     sdohPsychoText: 'Kesejahteraan mental dikenal pasti — sumber sokongan emosi dan kaunseling ditambah.',
     trendActive: 'Penjejakan Membujur Aktif',
-    trendDesc: 'Keputusan anda dipautkan ke penilaian lepas untuk memantau kemajuan klinikal.',
-    pavsTitle: 'Tanda Vital Aktiviti Fizikal ACSM',
+    trendDesc: 'Keputusan anda dipautkan ke penilaian lepas untuk memantau kemajuan kesihatan anda.',
+    pavsTitle: 'Semakan Aktiviti Fizikal Anda',
     pavsWeekly: 'minit / minggu',
     pavsDays: 'hari / minggu',
     pavsMins: 'minit / sesi',
@@ -84,9 +93,9 @@ const DICTIONARY = {
     pavsMeets: 'Memenuhi Garis Panduan',
     pavsActive: 'Aktif',
     pavsBelowDesc: 'Di bawah 150 minit/minggu — Garis Panduan Aktiviti Fizikal Singapura mengesyorkan sekurang-kurangnya 150 minit seminggu.',
-    pavsMeetsDesc: 'Anda memenuhi minimum SPAG 150 minit/minggu. Pertimbangkan untuk mencapai 300 minit untuk manfaat kesihatan yang lebih besar.',
-    pavsActiveDesc: 'Cemerlang — anda melebihi cadangan SPAG 300 minit/minggu.',
-    pavsThreshold: 'SPAG: 150–300 minit / minggu',
+    pavsMeetsDesc: 'Anda memenuhi garis panduan kebangsaan 150 minit/minggu. Pertimbangkan untuk mencapai 300 minit untuk manfaat kesihatan yang lebih besar.',
+    pavsActiveDesc: 'Cemerlang — anda melebihi cadangan kebangsaan 300 minit/minggu.',
+    pavsThreshold: 'Garis panduan kebangsaan: 150–300 minit / minggu',
     primaryAction: 'Tindakan Utama Anda',
     resources: 'Sumber Komuniti yang Disyorkan',
     download: 'Muat Turun PDF',
@@ -98,7 +107,7 @@ const DICTIONARY = {
     assessmentId: 'ID Penilaian',
     prevId: 'ID Lepas',
     postalSector: 'Sektor Pos',
-    pavsLabel: 'Skor PAVS',
+    pavsLabel: 'Skor Aktiviti',
     scanQR: 'Imbas untuk akses portal digital',
     webLink: 'Laman Web: ',
     sharePrefix: 'Keputusan NEXUS AURA saya:',
@@ -118,8 +127,8 @@ const DICTIONARY = {
     sdohSocText: '社会联系被标记 — 已包含社区团体和交友资源。',
     sdohPsychoText: '心理健康被标记 — 已添加情感支持和心理辅导资源。',
     trendActive: '纵向跟踪已激活',
-    trendDesc: '您的结果已链接到之前的评估，以监测临床进展。',
-    pavsTitle: 'ACSM 体力活动关键指标',
+    trendDesc: '您的结果已链接到之前的评估，以跟踪您的健康进展。',
+    pavsTitle: '您的体力活动检查',
     pavsWeekly: '分钟 / 周',
     pavsDays: '天 / 周',
     pavsMins: '分钟 / 次',
@@ -127,9 +136,9 @@ const DICTIONARY = {
     pavsMeets: '达到指南要求',
     pavsActive: '活跃',
     pavsBelowDesc: '低于 150 分钟/周 — 新加坡体力活动指南建议每周至少进行 150 分钟的中等强度活动。',
-    pavsMeetsDesc: '您达到了 SPAG 最低要求 150 分钟/周。考虑向 300 分钟迈进以获得更大的健康益处。',
-    pavsActiveDesc: '优秀 — 您超过了 SPAG 建议的 300 分钟/周。',
-    pavsThreshold: 'SPAG: 150–300 分钟 / 周',
+    pavsMeetsDesc: '您达到了全国指南最低要求 150 分钟/周。考虑向 300 分钟迈进以获得更大的健康益处。',
+    pavsActiveDesc: '优秀 — 您超过了全国建议的 300 分钟/周。',
+    pavsThreshold: '全国指南：150–300 分钟 / 周',
     primaryAction: '您的首要行动',
     resources: '推荐的社区资源',
     download: '下载 PDF',
@@ -141,7 +150,7 @@ const DICTIONARY = {
     assessmentId: '评估 ID',
     prevId: '之前的 ID',
     postalSector: '邮政区域',
-    pavsLabel: 'PAVS 评分',
+    pavsLabel: '活动评分',
     scanQR: '扫描以访问数字门户',
     webLink: '网址: ',
     sharePrefix: '我的 NEXUS AURA 结果：',
@@ -162,17 +171,17 @@ const DICTIONARY = {
     sdohPsychoText: 'மன நலன் கண்டறியப்பட்டது — உணர்ச்சி ஆதரவு வளங்கள் சேர்க்கப்பட்டுள்ளன.',
     trendActive: 'நீண்டகால கண்காணிப்பு செயலில் உள்ளது',
     trendDesc: 'மருத்துவ முன்னேற்றத்தைக் கண்காணிக்க முந்தைய மதிப்பீட்டுடன் இணைக்கப்பட்டுள்ளது.',
-    pavsTitle: 'ACSM உடல் செயல்பாட்டு உயிர் அறிகுறி',
+    pavsTitle: 'உங்கள் உடல் செயல்பாட்டு சரிபார்ப்பு',
     pavsWeekly: 'நிமிடங்கள் / வாரம்',
     pavsDays: 'நாட்கள் / வாரம்',
     pavsMins: 'நிமிடங்கள் / சேஷன்',
     pavsBelow: 'போதுமான செயல்பாட்டிற்கு குறைவு',
     pavsMeets: 'வழிகாட்டுதல்களை பூர்த்தி செய்கிறது',
     pavsActive: 'செயலில் உள்ளது',
-    pavsBelowDesc: '150 நிமிடங்களுக்கும் குறைவு/வாரம் — SPAG குறைந்தது 150 நிமிடங்கள் பரிந்துரைக்கிறது.',
-    pavsMeetsDesc: 'SPAG குறைந்தபட்சம் 150 நிமிடங்கள்/வாரத்தை பூர்த்தி செய்கிறீர்கள். 300 நிமிடங்களை இலக்காக கொள்ளுங்கள்.',
-    pavsActiveDesc: 'சிறப்பு — SPAG 300 நிமிடங்கள்/வாரத்தை தாண்டுகிறீர்கள்.',
-    pavsThreshold: 'SPAG: 150–300 நிமிடங்கள் / வாரம்',
+    pavsBelowDesc: '150 நிமிடங்களுக்கும் குறைவு/வாரம் — தேசிய வழிகாட்டுதல் குறைந்தது 150 நிமிடங்கள் பரிந்துரைக்கிறது.',
+    pavsMeetsDesc: 'தேசிய வழிகாட்டுதலின் குறைந்தபட்சம் 150 நிமிடங்கள்/வாரத்தை பூர்த்தி செய்கிறீர்கள். 300 நிமிடங்களை இலக்காக கொள்ளுங்கள்.',
+    pavsActiveDesc: 'சிறப்பு — தேசிய பரிந்துரையான 300 நிமிடங்கள்/வாரத்தை தாண்டுகிறீர்கள்.',
+    pavsThreshold: 'தேசிய வழிகாட்டுதல்: 150–300 நிமிடங்கள் / வாரம்',
     primaryAction: 'உங்கள் முதல் நடவடிக்கை',
     resources: 'பரிந்துரைக்கப்பட்ட சமூக வளங்கள்',
     download: 'PDF பதிவிறக்குக',
@@ -184,7 +193,7 @@ const DICTIONARY = {
     assessmentId: 'மதிப்பீட்டு ID',
     prevId: 'முந்தைய ID',
     postalSector: 'அஞ்சல் பிரிவு',
-    pavsLabel: 'PAVS மதிப்பெண்',
+    pavsLabel: 'செயல்பாட்டு மதிப்பெண்',
     scanQR: 'டிஜிட்டல் போர்ட்டலை அணுக ஸ்கேன் செய்யவும்',
     webLink: 'இணையதளம்: ',
     sharePrefix: 'எனது NEXUS AURA முடிவு:',
@@ -195,31 +204,31 @@ const DICTIONARY = {
 
 // ─── RESOURCE LIBRARY ─────────────────────────────────────────────────────────
 const ALL_RESOURCES = {
-  ssmc_kkh:          { id: 'ssmc_kkh',          url: 'https://for.sg/exercise',                                          logo: '/logos/ssmckkh.png',      en: { title: 'SSMC@KKH Exercise Resources',          desc: 'Expert exercise guidance and safety resources from KKH and SingHealth for the community.' },                          ms: { title: 'Sumber Senaman SSMC@KKH',              desc: 'Panduan senaman pakar dan sumber keselamatan untuk komuniti.' },                                               zh: { title: 'SSMC@KKH 运动资源',                    desc: '为社区提供的专家临床运动处方和安全资源。' },                                                        ta: { title: 'SSMC@KKH உடற்பயிற்சி வளங்கள்',        desc: 'சமூகத்திற்கான நிபுணர் மருத்துவ உடற்பயிற்சி வளங்கள்.' } },
+  ssmc_kkh:          { id: 'ssmc_kkh',          url: 'https://for.sg/exercise',                                          logo: '/logos/ssmckkh.png',      en: { title: 'SSMC@KKH Exercise Resources',          desc: 'Expert exercise guidance and safety resources from KKH and SingHealth for the community.' },                          ms: { title: 'Sumber Senaman SSMC@KKH',              desc: 'Panduan senaman pakar dan sumber keselamatan untuk komuniti.' },                                               zh: { title: 'SSMC@KKH 运动资源',                    desc: '为社区提供的专家运动指导和安全资源。' },                                                        ta: { title: 'SSMC@KKH உடற்பயிற்சி வளங்கள்',        desc: 'சமூகத்திற்கான நிபுணர் மருத்துவ உடற்பயிற்சி வளங்கள்.' } },
   spag:              { id: 'spag',               url: 'https://for.sg/spag',                                              logo: '/logos/sportsg.png',      en: { title: 'Singapore Physical Activity Guidelines', desc: 'National guidelines for physical activity and sedentary behaviour.' },                                     ms: { title: 'Garis Panduan Aktiviti Fizikal SG',    desc: 'Garis panduan kebangsaan untuk aktiviti fizikal.' },                                                zh: { title: '新加坡体力活动指南',                    desc: '国家体力活动指南。' },                                                                                ta: { title: 'சிங்கப்பூர் உடல் செயல்பாட்டு வழிகாட்டுதல்கள்', desc: 'தேசிய உடல் செயல்பாட்டு வழிகாட்டுதல்கள்.' } },
   healthier_sg:      { id: 'healthier_sg',       url: 'https://www.healthiersg.gov.sg/',                                  logo: '/logos/healthiersg.png',  en: { title: 'Healthier SG GP Check-In',             desc: 'Schedule a fully subsidised annual check-in with your enrolled GP.' },                                     ms: { title: 'Semakan GP Healthier SG',              desc: 'Jadualkan pemeriksaan tahunan bersubsidi penuh dengan doktor anda.' },                                      zh: { title: 'Healthier SG 全科医生复查',              desc: '安排全额补贴的年度检查。' },                                                                        ta: { title: 'Healthier SG GP சோதனை',                desc: 'மருத்துவரிடம் முழு மானியத்துடன் கூடிய பரிசோதனையை திட்டமிடுங்கள்.' } },
   start2move:        { id: 'start2move',         url: 'https://www.healthhub.sg/programmes/letsmoveit/start2move',        logo: '/logos/hpb.png',          en: { title: 'HPB Start2Move (Free)',                desc: 'A free 6-session beginner programme to help you start exercising safely.' },                               ms: { title: 'Program Start2Move HPB (Percuma)',     desc: 'Program percuma 6 sesi untuk pemula.' },                                                              zh: { title: 'HPB Start2Move（免费）',               desc: '免费的6节初学者计划，帮助您安全锻炼。' },                                                             ta: { title: 'HPB Start2Move (இலவசம்)',               desc: 'இலவச 6 அமர்வு தொடக்க திட்டம்.' } },
-  active_health:     { id: 'active_health',      url: 'https://www.myactivesg.com/active-health',                         logo: '/logos/activehealth.png', en: { title: 'Active Health Labs',                  desc: 'Supervised exercise and metabolic health programmes by SportSG professionals.' },                              ms: { title: 'Makmal Active Health',                desc: 'Program senaman dan kesihatan metabolik yang diawasi oleh SportSG.' },                                               zh: { title: 'Active Health 实验室',                 desc: 'SportSG 提供的有监督临床锻炼计划。' },                                                               ta: { title: 'Active Health ஆய்வகங்கள்',              desc: 'SportSG-ன் மருத்துவ உடற்பயிற்சி திட்டங்கள்.' } },
+  active_health:     { id: 'active_health',      url: 'https://www.myactivesg.com/active-health',                         logo: '/logos/activehealth.png', en: { title: 'Active Health Labs',                  desc: 'Supervised exercise and metabolic health programmes by SportSG professionals.' },                              ms: { title: 'Makmal Active Health',                desc: 'Program senaman dan kesihatan metabolik yang diawasi oleh SportSG.' },                                               zh: { title: 'Active Health 实验室',                 desc: 'SportSG 提供的有监督锻炼计划。' },                                                               ta: { title: 'Active Health ஆய்வகங்கள்',              desc: 'SportSG-ன் மருத்துவ உடற்பயிற்சி திட்டங்கள்.' } },
   activesg_gym:      { id: 'activesg_gym',       url: 'https://www.myactivesg.com/',                                      logo: '/logos/activesg.png',     en: { title: 'ActiveSG Facilities',                 desc: 'Affordable fitness gyms, pools, and group workout classes near you.' },                                   ms: { title: 'Fasiliti ActiveSG',                   desc: 'Gim, kolam renang dan kelas senaman berpatutan berhampiran anda.' },                                        zh: { title: 'ActiveSG 设施',                        desc: '附近价格实惠的健身房和团体锻炼课程。' },                                                             ta: { title: 'ActiveSG வசதிகள்',                      desc: 'மலிவு விலையில் உடற்பயிற்சி நிலையங்கள்.' } },
   pa_courses:        { id: 'pa_courses',         url: 'https://www.onepa.gov.sg/',                                        logo: '/logos/pa.png',           en: { title: 'PA Community Interest Groups',        desc: 'Free or low-cost Tai Chi, Yoga, Brisk Walking groups at your nearest Community Club.' },                  ms: { title: 'Kumpulan Minat Komuniti PA',           desc: 'Kumpulan Tai Chi, Yoga, Berjalan Pantas percuma atau murah di CC terdekat.' },                               zh: { title: 'PA 社区兴趣小组',                       desc: '在最近的社区俱乐部参加太极拳、瑜伽等免费或低价活动。' },                                             ta: { title: 'PA சமூக ஆர்வக் குழுக்கள்',              desc: 'தாய்ச்சி, யோகா, விரைவு நடை குழுக்கள்.' } },
   singhealth_healthup: { id: 'singhealth_healthup', url: 'https://www.singhealth.com.sg/community-care/level-up-with-healthup', logo: '/logos/singhealth.png', en: { title: 'SingHealth Health UP!',           desc: 'Community wellness programmes with guidance from SingHealth Wellbeing Coordinators.' },                    ms: { title: 'SingHealth Health UP!',               desc: 'Program kesejahteraan komuniti dengan bimbingan SingHealth.' },                                             zh: { title: 'SingHealth Health UP!',               desc: '在 SingHealth 健康协调员指导下的社区健康计划。' },                                                   ta: { title: 'SingHealth Health UP!',                desc: 'SingHealth நலன்புரி ஒருங்கிணைப்பாளர்களுடன் சமூக திட்டங்கள்.' } },
   nuhs_chp:          { id: 'nuhs_chp',           url: 'https://www.nuhs.edu.sg/care-in-the-community',                    logo: '/logos/nuhs.png',         en: { title: 'NUHS Community Health Post',          desc: 'Health screenings and lifestyle coaching in your neighbourhood.' },                                        ms: { title: 'Pos Kesihatan Komuniti NUHS',          desc: 'Saringan kesihatan dan bimbingan gaya hidup di kejiranan anda.' },                                          zh: { title: 'NUHS 社区卫生站',                       desc: '社区健康筛查和生活方式辅导。' },                                                                     ta: { title: 'NUHS சமூக சுகாதார நிலையம்',             desc: 'உங்கள் பகுதியில் சுகாதார பரிசோதனைகள்.' } },
   nhg_coaches:       { id: 'nhg_coaches',        url: 'https://form.gov.sg/663c452b463eff5b7438b117',                     logo: '/logos/nhg.png',          en: { title: 'NHG Health Coaches',                  desc: 'Connect with a Health Coach to set personalised goals for a healthier lifestyle.' },                      ms: { title: 'Jurulatih Kesihatan NHG',              desc: 'Berhubung dengan Jurulatih Kesihatan untuk menetapkan matlamat peribadi.' },                                zh: { title: 'NHG 健康教练',                          desc: '与健康教练联系，设定个性化健康目标。' },                                                             ta: { title: 'NHG சுகாதார பயிற்சியாளர்கள்',           desc: 'தனிப்பட்ட இலக்குகளை அமைக்க பயிற்சியாளருடன் இணையுங்கள்.' } },
-  aic_aac:           { id: 'aic_aac',            url: 'https://www.aic.sg/care-services/active-ageing-centres',          logo: '/logos/aic.png',          en: { title: 'Active Ageing Centres (AAC)',          desc: 'Neighbourhood hubs for residents 60+ offering active programmes and social networks. Walk in — no appointment needed.' }, ms: { title: 'Pusat Penuaan Aktif (AAC)', desc: 'Hab kejiranan untuk warga 60+ menawarkan program aktif. Jalan masuk — tiada temujanji diperlukan.' }, zh: { title: '活跃乐龄中心 (AAC)', desc: '为 60 岁以上居民提供活跃计划的社区中心。直接上门，无需预约。' }, ta: { title: 'சுறுசுறுப்பான முதுமை மையங்கள் (AAC)', desc: '60+ வயதினருக்கான நேரடி முன்-பதிவு தேவையில்லாத சமூக மையங்கள்.' } },
+  aic_aac:           { id: 'aic_aac',            url: 'https://www.aic.sg/care-services/active-ageing-centres',          logo: '/logos/aic.png',          en: { title: 'Active Ageing Centres (AAC)',          desc: 'Neighbourhood hubs for residents 60+ offering active programmes and social networks. Walk in; no appointment needed.' }, ms: { title: 'Pusat Penuaan Aktif (AAC)', desc: 'Hab kejiranan untuk warga 60+ menawarkan program aktif. Jalan masuk — tiada temujanji diperlukan.' }, zh: { title: '活跃乐龄中心 (AAC)', desc: '为 60 岁以上居民提供活跃计划的社区中心。直接上门，无需预约。' }, ta: { title: 'சுறுசுறுப்பான முதுமை மையங்கள் (AAC)', desc: '60+ வயதினருக்கான நேரடி முன்-பதிவு தேவையில்லாத சமூக மையங்கள்.' } },
   touch_community:   { id: 'touch_community',    url: 'https://www.touch.org.sg/',                                        logo: '/logos/touch.png',        en: { title: 'TOUCH Community Services',            desc: 'Holistic social support, befriending, and caregiving resources.' },                                       ms: { title: 'Perkhidmatan Komuniti TOUCH',          desc: 'Sokongan sosial holistik dan sumber penjagaan.' },                                                          zh: { title: 'TOUCH 社区服务',                       desc: '全方位的社会支持和护理资源。' },                                                                     ta: { title: 'TOUCH சமூக சேவைகள்',                   desc: 'முழுமையான சமூக ஆதரவு வளங்கள்.' } },
   society_wings:     { id: 'society_wings',      url: 'https://www.wings.sg/',                                            logo: '/logos/wings.png',        en: { title: 'Society for WINGS',                   desc: 'Empowering women aged 40+ with health, wealth, and happiness programmes.' },                              ms: { title: 'Persatuan untuk WINGS',                desc: 'Memperkasakan wanita 40+ dengan program kesihatan dan kebahagiaan.' },                                      zh: { title: 'WINGS 协会',                           desc: '为 40 岁以上女性提供健康计划。' },                                                                   ta: { title: 'WINGS சங்கம்',                          desc: '40+ வயது பெண்களுக்கான திட்டங்கள்.' } },
   singhealth_careline: { id: 'singhealth_careline', url: 'https://www.singhealth.com.sg/community-care/careline',        logo: '/logos/careline.png',     en: { title: 'SingHealth CareLine (24/7)',           desc: 'Personal tele-befriending service providing round-the-clock social support for seniors.' },               ms: { title: 'SingHealth CareLine (24/7)',            desc: 'Perkhidmatan tele-rakan 24/7 untuk warga emas.' },                                                          zh: { title: 'SingHealth CareLine（24/7）',           desc: '为老年人提供全天候电话交友服务。' },                                                                 ta: { title: 'SingHealth CareLine (24/7)',            desc: 'முதியோர்களுக்கான 24/7 தொலைபேசி நட்பு சேவை.' } },
-  financial_chas:    { id: 'financial_chas',     url: 'https://www.chas.sg/',                                             logo: '/logos/chas.png',         en: { title: 'CHAS & Medical Subsidies',            desc: 'Financial support schemes for community healthcare — Blue, Orange, and Merdeka Generation.' },             ms: { title: 'CHAS & Subsidi Perubatan',             desc: 'Skim sokongan kewangan untuk penjagaan kesihatan komuniti.' },                                              zh: { title: 'CHAS 与医疗补贴',                       desc: '社区医疗财务支持计划。' },                                                                           ta: { title: 'CHAS & மருத்துவ மானியங்கள்',             desc: 'சமூக சுகாதாரத்திற்கான நிதி ஆதரவு திட்டங்கள்.' } },
+  financial_chas:    { id: 'financial_chas',     url: 'https://www.chas.sg/',                                             logo: '/logos/chas.png',         en: { title: 'CHAS & Medical Subsidies',            desc: 'Financial support schemes for community healthcare: Blue, Orange, and Merdeka Generation.' },             ms: { title: 'CHAS & Subsidi Perubatan',             desc: 'Skim sokongan kewangan untuk penjagaan kesihatan komuniti.' },                                              zh: { title: 'CHAS 与医疗补贴',                       desc: '社区医疗财务支持计划。' },                                                                           ta: { title: 'CHAS & மருத்துவ மானியங்கள்',             desc: 'சமூக சுகாதாரத்திற்கான நிதி ஆதரவு திட்டங்கள்.' } },
   mental_wellness:   { id: 'mental_wellness',    url: 'https://www.mindline.sg/',                                         logo: '/logos/mindline.png',     en: { title: 'Mindline.sg Support',                 desc: 'Free, confidential emotional support tools and mental wellness resources.' },                               ms: { title: 'Sokongan Mindline.sg',                 desc: 'Sokongan emosi percuma dan sulit.' },                                                                       zh: { title: 'Mindline.sg 支持',                     desc: '免费保密的情感支持工具。' },                                                                         ta: { title: 'Mindline.sg ஆதரவு',                     desc: 'இலவச, ரகசிய உணர்ச்சி ஆதரவு கருவிகள்.' } },
 };
 
 // ─── CTA BANNER CONFIG ────────────────────────────────────────────────────────
 const CTA_BANNER = {
-  URGENT:    { emoji: '⚠️', bg: 'bg-rose-50 dark:bg-rose-950/40 border-rose-200 dark:border-rose-800',       label: 'bg-rose-600',    text: 'text-rose-800 dark:text-rose-200',     action: { en: 'Consult your GP before starting any exercise. Mention your PAVS result at your visit.', ms: 'Sila berjumpa doktor sebelum memulakan sebarang senaman.', zh: '在开始任何运动前，请先咨询您的全科医生。', ta: 'எந்தவொரு உடற்பயிற்சியையும் தொடங்கும் முன் உங்கள் மருத்துவரை அணுகவும்.' }, url: 'https://www.healthiersg.gov.sg/', urlLabel: { en: 'Book via HealthHub', ms: 'Tempah via HealthHub', zh: '通过 HealthHub 预约', ta: 'HealthHub மூலம் பதிவு செய்க' } },
-  CLINICAL:  { emoji: '🩺', bg: 'bg-amber-50 dark:bg-amber-950/40 border-amber-200 dark:border-amber-800',   label: 'bg-amber-500',   text: 'text-amber-800 dark:text-amber-200',   action: { en: 'Enrol in Manage Metabolic Health at your nearest Active Health Lab — 7 sessions, from SGD 48.', ms: 'Daftar dalam program Urus Kesihatan Metabolik di Makmal Active Health terdekat — 7 sesi, dari SGD 48.', zh: '报名参加最近的 Active Health 实验室的"管理代谢健康"课程 — 7 节课，SGD 48 起。', ta: 'உங்களுக்கு அருகிலுள்ள Active Health ஆய்வகத்தில் வளர்சிதை மாற்ற சுகாதார திட்டத்தில் பதிவு செய்யவும் — 7 அமர்வுகள், SGD 48 முதல்.' }, url: 'https://www.myactivesg.com/active-health', urlLabel: { en: 'Book at activesg.gov.sg', ms: 'Tempah di activesg.gov.sg', zh: '在 activesg.gov.sg 预约', ta: 'activesg.gov.sg இல் பதிவு செய்க' } },
-  COMMUNITY: { emoji: '🏠', bg: 'bg-teal-50 dark:bg-teal-950/40 border-teal-200 dark:border-teal-800',       label: 'bg-teal-600',    text: 'text-teal-800 dark:text-teal-200',     action: { en: 'Visit your nearest Active Ageing Centre — walk in, no appointment, activities largely free for residents 60+.', ms: 'Kunjungi Pusat Penuaan Aktif (AAC) terdekat — hadir terus, aktiviti percuma untuk warga 60+.', zh: '访问离您最近的活跃乐龄中心 (AAC) — 无需预约，60岁以上居民活动大多免费。', ta: 'உங்களுக்கு அருகிலுள்ள Active Ageing மையத்தைப் பார்வையிடவும் — முன்பதிவு தேவையில்லை, 60+ வயதினருக்கு இலவசம்.' }, url: 'https://www.aic.sg/care-services/active-ageing-centres', urlLabel: { en: 'Find nearest AAC', ms: 'Cari AAC terdekat', zh: '查找最近的 AAC', ta: 'அருகிலுள்ள AAC ஐக் கண்டறிக' } },
-  WELLBEING: { emoji: '🌿', bg: 'bg-violet-50 dark:bg-violet-950/40 border-violet-200 dark:border-violet-800', label: 'bg-violet-600', text: 'text-violet-800 dark:text-violet-200', action: { en: "Connect with your polyclinic's mental health support service — this is your most important first step.", ms: 'Dapatkan perkhidmatan sokongan kesihatan mental poliklinik anda — ini adalah langkah pertama yang paling penting.', zh: '联系您综合诊所的心理健康支持服务 — 这是您最重要的一步。', ta: 'உங்கள் பாலிகிளினிக்கின் மனநல ஆதரவு சேவையுடன் இணையுங்கள் — இது உங்கள் மிக முக்கியமான முதல் படியாகும்.' }, url: 'https://www.mindline.sg/', urlLabel: { en: 'mindline.sg', ms: 'mindline.sg', zh: 'mindline.sg', ta: 'mindline.sg' } },
-  FREE_FIRST: { emoji: '🆓', bg: 'bg-emerald-50 dark:bg-emerald-950/40 border-emerald-200 dark:border-emerald-800', label: 'bg-emerald-600', text: 'text-emerald-800 dark:text-emerald-200', action: { en: 'Register for Start2Move — a completely free 6-session beginner programme via the Healthy 365 app.', ms: 'Daftar untuk Start2Move — program pemula 6 sesi percuma melalui aplikasi Healthy 365.', zh: '注册 Start2Move — 通过 Healthy 365 应用程序免费参加的 6 节初学者课程。', ta: 'Start2Move-க்கு பதிவு செய்யவும் — Healthy 365 ஆப் மூலம் முற்றிலும் இலவச 6-அமர்வு தொடக்க திட்டம்.' }, url: 'https://www.healthhub.sg/programmes/letsmoveit/start2move', urlLabel: { en: 'Register via Healthy 365', ms: 'Daftar via Healthy 365', zh: '通过 Healthy 365 注册', ta: 'Healthy 365 மூலம் பதிவு செய்க' } },
+  URGENT:    { emoji: '⚠️', bg: 'bg-rose-50 dark:bg-rose-950/40 border-rose-200 dark:border-rose-800',       label: 'bg-rose-600',    text: 'text-rose-800 dark:text-rose-200',     action: { en: 'Consult your GP before starting any exercise. Mention your activity result at your visit.', ms: 'Sila berjumpa doktor sebelum memulakan sebarang senaman.', zh: '在开始任何运动前，请先咨询您的全科医生。', ta: 'எந்தவொரு உடற்பயிற்சியையும் தொடங்கும் முன் உங்கள் மருத்துவரை அணுகவும்.' }, url: 'https://www.healthiersg.gov.sg/', urlLabel: { en: 'Book via HealthHub', ms: 'Tempah via HealthHub', zh: '通过 HealthHub 预约', ta: 'HealthHub மூலம் பதிவு செய்க' } },
+  CLINICAL:  { emoji: '🩺', bg: 'bg-amber-50 dark:bg-amber-950/40 border-amber-200 dark:border-amber-800',   label: 'bg-amber-500',   text: 'text-amber-800 dark:text-amber-200',   action: { en: 'Enrol in Manage Metabolic Health at your nearest Active Health Lab (7 sessions, from SGD 48).', ms: 'Daftar dalam program Urus Kesihatan Metabolik di Makmal Active Health terdekat — 7 sesi, dari SGD 48.', zh: '报名参加最近的 Active Health 实验室的"管理代谢健康"课程 — 7 节课，SGD 48 起。', ta: 'உங்களுக்கு அருகிலுள்ள Active Health ஆய்வகத்தில் வளர்சிதை மாற்ற சுகாதார திட்டத்தில் பதிவு செய்யவும் — 7 அமர்வுகள், SGD 48 முதல்.' }, url: 'https://www.myactivesg.com/active-health', urlLabel: { en: 'Book at activesg.gov.sg', ms: 'Tempah di activesg.gov.sg', zh: '在 activesg.gov.sg 预约', ta: 'activesg.gov.sg இல் பதிவு செய்க' } },
+  COMMUNITY: { emoji: '🏠', bg: 'bg-teal-50 dark:bg-teal-950/40 border-teal-200 dark:border-teal-800',       label: 'bg-teal-600',    text: 'text-teal-800 dark:text-teal-200',     action: { en: 'Visit your nearest Active Ageing Centre: walk in, no appointment, activities largely free for residents 60+.', ms: 'Kunjungi Pusat Penuaan Aktif (AAC) terdekat — hadir terus, aktiviti percuma untuk warga 60+.', zh: '访问离您最近的活跃乐龄中心 (AAC) — 无需预约，60岁以上居民活动大多免费。', ta: 'உங்களுக்கு அருகிலுள்ள Active Ageing மையத்தைப் பார்வையிடவும் — முன்பதிவு தேவையில்லை, 60+ வயதினருக்கு இலவசம்.' }, url: 'https://www.aic.sg/care-services/active-ageing-centres', urlLabel: { en: 'Find nearest AAC', ms: 'Cari AAC terdekat', zh: '查找最近的 AAC', ta: 'அருகிலுள்ள AAC ஐக் கண்டறிக' } },
+  WELLBEING: { emoji: '🌿', bg: 'bg-violet-50 dark:bg-violet-950/40 border-violet-200 dark:border-violet-800', label: 'bg-violet-600', text: 'text-violet-800 dark:text-violet-200', action: { en: "Connect with your polyclinic's mental health support service; this is your most important first step.", ms: 'Dapatkan perkhidmatan sokongan kesihatan mental poliklinik anda — ini adalah langkah pertama yang paling penting.', zh: '联系您综合诊所的心理健康支持服务 — 这是您最重要的一步。', ta: 'உங்கள் பாலிகிளினிக்கின் மனநல ஆதரவு சேவையுடன் இணையுங்கள் — இது உங்கள் மிக முக்கியமான முதல் படியாகும்.' }, url: 'https://www.mindline.sg/', urlLabel: { en: 'mindline.sg', ms: 'mindline.sg', zh: 'mindline.sg', ta: 'mindline.sg' } },
+  FREE_FIRST: { emoji: '🆓', bg: 'bg-emerald-50 dark:bg-emerald-950/40 border-emerald-200 dark:border-emerald-800', label: 'bg-emerald-600', text: 'text-emerald-800 dark:text-emerald-200', action: { en: 'Register for Start2Move, a completely free 6-session beginner programme via the Healthy 365 app.', ms: 'Daftar untuk Start2Move — program pemula 6 sesi percuma melalui aplikasi Healthy 365.', zh: '注册 Start2Move — 通过 Healthy 365 应用程序免费参加的 6 节初学者课程。', ta: 'Start2Move-க்கு பதிவு செய்யவும் — Healthy 365 ஆப் மூலம் முற்றிலும் இலவச 6-அமர்வு தொடக்க திட்டம்.' }, url: 'https://www.healthhub.sg/programmes/letsmoveit/start2move', urlLabel: { en: 'Register via Healthy 365', ms: 'Daftar via Healthy 365', zh: '通过 Healthy 365 注册', ta: 'Healthy 365 மூலம் பதிவு செய்க' } },
   START:     { emoji: '🚀', bg: 'bg-teal-50 dark:bg-teal-950/40 border-teal-200 dark:border-teal-800',        label: 'bg-teal-600',    text: 'text-teal-800 dark:text-teal-200',     action: { en: 'Download the Healthy 365 app and search "Start2Move" to register for the free 6-session beginner programme.', ms: 'Muat turun aplikasi Healthy 365 dan cari "Start2Move" untuk mendaftar program pemula 6 sesi percuma.', zh: '下载 Healthy 365 应用程序并搜索"Start2Move"以注册免费的 6 节初学者课程。', ta: 'Healthy 365 ஆப்பை பதிவிறக்கம் செய்து இலவச 6-அமர்வு தொடக்க திட்டத்திற்கு பதிவு செய்ய "Start2Move" ஐ தேடவும்.' }, url: 'https://www.healthhub.sg/programmes/letsmoveit/start2move', urlLabel: { en: 'Register via Healthy 365', ms: 'Daftar via Healthy 365', zh: '通过 Healthy 365 注册', ta: 'Healthy 365 மூலம் பதிவு செய்க' } },
   LEVEL_UP:  { emoji: '💪', bg: 'bg-teal-50 dark:bg-teal-950/40 border-teal-200 dark:border-teal-800',        label: 'bg-teal-600',    text: 'text-teal-800 dark:text-teal-200',     action: { en: 'Book a Strength 2.0 or Balance & Muscular Fitness session at your nearest Active Health Lab, from SGD 6.', ms: 'Tempah sesi Kekuatan 2.0 atau Keseimbangan di Makmal Active Health terdekat, dari SGD 6.', zh: '在最近的 Active Health 实验室预约力量 2.0 或平衡与肌肉健身课程，SGD 6 起。', ta: 'உங்களுக்கு அருகிலுள்ள Active Health ஆய்வகத்தில் வலிமை 2.0 அல்லது தசை உடற்பயிற்சி அமர்வை பதிவு செய்யவும், SGD 6 முதல்.' }, url: 'https://www.myactivesg.com/active-health', urlLabel: { en: 'Book at activesg.gov.sg', ms: 'Tempah di activesg.gov.sg', zh: '在 activesg.gov.sg 预约', ta: 'activesg.gov.sg இல் பதிவு செய்க' } },
   /*
@@ -237,11 +246,14 @@ const CTA_BANNER = {
        clinical advice here was machine-translated. If the wording needs to
        change, change it against the CareLine service page, not by paraphrase.
   */
-  SOCIAL_CARE: { emoji: '📞', bg: 'bg-teal-50 dark:bg-teal-950/40 border-teal-200 dark:border-teal-800', label: 'bg-teal-600', text: 'text-teal-800 dark:text-teal-200', action: { en: 'Call SingHealth CareLine on 6340 7054 — a free round-the-clock tele-befriending and social support service for seniors.', ms: 'Hubungi SingHealth CareLine di 6340 7054 — perkhidmatan tele-rakan 24/7 untuk warga emas.', zh: '致电 SingHealth CareLine：6340 7054 — 为老年人提供全天候电话交友服务。', ta: 'SingHealth CareLine — 6340 7054 ஐ அழைக்கவும் — முதியோர்களுக்கான 24/7 தொலைபேசி நட்பு சேவை.' }, url: 'https://www.singhealth.com.sg/community-care/careline', urlLabel: { en: 'About CareLine', ms: 'Tentang CareLine', zh: '关于 CareLine', ta: 'CareLine பற்றி' } },
+  SOCIAL_CARE: { emoji: '📞', bg: 'bg-teal-50 dark:bg-teal-950/40 border-teal-200 dark:border-teal-800', label: 'bg-teal-600', text: 'text-teal-800 dark:text-teal-200', action: { en: 'Call SingHealth CareLine on 6340 7054, a free round-the-clock tele-befriending and social support service for seniors.', ms: 'Hubungi SingHealth CareLine di 6340 7054 — perkhidmatan tele-rakan 24/7 untuk warga emas.', zh: '致电 SingHealth CareLine：6340 7054 — 为老年人提供全天候电话交友服务。', ta: 'SingHealth CareLine — 6340 7054 ஐ அழைக்கவும் — முதியோர்களுக்கான 24/7 தொலைபேசி நட்பு சேவை.' }, url: 'https://www.singhealth.com.sg/community-care/careline', urlLabel: { en: 'About CareLine', ms: 'Tentang CareLine', zh: '关于 CareLine', ta: 'CareLine பற்றி' } },
   ADVANCED:  { emoji: '⚡', bg: 'bg-emerald-50 dark:bg-emerald-950/40 border-emerald-200 dark:border-emerald-800', label: 'bg-emerald-600', text: 'text-emerald-800 dark:text-emerald-200', action: { en: 'Try the free HIIT Workout Library on HealthHub, or book a Perform 2.0 session at your nearest Active Health Lab.', ms: 'Cuba senaman HIIT percuma di HealthHub, atau tempah sesi Perform 2.0 di Makmal Active Health terdekat.', zh: '尝试 HealthHub 上免费的 HIIT 锻炼库，或在最近的 Active Health 实验室预约 Perform 2.0 课程。', ta: 'HealthHub-இல் இலவச HIIT உடற்பயிற்சிகளை முயற்சிக்கவும் அல்லது Perform 2.0 அமர்வை பதிவு செய்யவும்.' }, url: 'https://www.healthhub.sg/programmes/letsmoveit', urlLabel: { en: 'HealthHub Move It', ms: 'HealthHub Move It', zh: 'HealthHub Move It', ta: 'HealthHub Move It' } },
 };
 
 // ─── HELPERS ──────────────────────────────────────────────────────────────────
+// The public short link, shared by the on-screen page, the QR code, and the
+// link annotations stamped into the exported PDF.
+const NEXUS_URL = 'https://for.sg/nexus';
 /**
  * ⚠️ REPLACED BY THE NATIONAL LOOKUP. This used to be a range check over
  *    `parseInt(sector)`, and it had two faults that mattered outside the north:
@@ -322,10 +334,32 @@ const generateActionPlan = (riskTier, ctaTier, data, postalSector) => {
 };
 
 // ─── REUSABLE PDF HEADER BLOCK ────────────────────────────────────────────────
-const PdfHeader = ({ baseUrl, subtitle, t, formattedDate, activeSessionId, previousSessionId, postalSector }) => (
-  <div style={{ background: '#0f172a', padding: '24px 40px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-    <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-      <img src={`${baseUrl}/nexus.png`} alt="NEXUS" crossOrigin="anonymous" style={{ width: 36, height: 36, objectFit: 'contain' }} />
+/**
+ * Both PDF pages render this one component with the same props, and the strip
+ * has a FIXED height: the header must be pixel-identical on page 1 and page 2,
+ * so its size cannot be allowed to follow its content (a missing previous-ID
+ * line used to change the strip's height between reports).
+ */
+const PDF_HEADER_STYLE = {
+  background: '#0f172a',
+  height: 130,
+  // ⚠️ LOAD-BEARING. The page wrapper is a fixed-height flex column, and a
+  //    flex item's fixed height is still shrinkable: when page 1's content ran
+  //    long, the browser compressed this strip to ~57px while page 2 kept the
+  //    full 130px — the exact mismatch this style exists to prevent.
+  flexShrink: 0,
+  boxSizing: 'border-box',
+  padding: '0 40px',
+  display: 'flex',
+  justifyContent: 'space-between',
+  alignItems: 'center',
+};
+
+const PdfHeader = ({ subtitle, t, formattedDate, activeSessionId, previousSessionId, postalSector }) => (
+  <div style={PDF_HEADER_STYLE}>
+    {/* data-pdf-link becomes a real link annotation in the exported PDF. */}
+    <div data-pdf-link={NEXUS_URL} style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+      <img src={nexusLogo} alt="NEXUS" crossOrigin="anonymous" style={{ width: 36, height: 36, objectFit: 'contain' }} />
       <div>
         <div style={{ color: 'white', fontWeight: 900, fontSize: 20, letterSpacing: 6 }}>NEXUS</div>
         <div style={{ color: '#94a3b8', fontWeight: 700, fontSize: 9, letterSpacing: 4, marginTop: 2 }}>{subtitle}</div>
@@ -346,9 +380,23 @@ const PdfHeader = ({ baseUrl, subtitle, t, formattedDate, activeSessionId, previ
 );
 
 // ─── REUSABLE PDF FOOTER STRIP ────────────────────────────────────────────────
-const PdfFooter = ({ label, pageNum }) => (
-  <div style={{ background: '#0f172a', padding: '10px 40px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 'auto' }}>
-    <div style={{ color: '#64748b', fontSize: 9, fontWeight: 700, letterSpacing: 2 }}>{label}</div>
+// Fixed height and one shared label for the same reason as the header: the two
+// pages must carry an identical strip, differing only in the page number.
+const PDF_FOOTER_STYLE = {
+  background: '#0f172a',
+  height: 44,
+  flexShrink: 0, // see PDF_HEADER_STYLE — the same squeeze applies here
+  boxSizing: 'border-box',
+  padding: '0 40px',
+  display: 'flex',
+  justifyContent: 'space-between',
+  alignItems: 'center',
+  marginTop: 'auto',
+};
+
+const PdfFooter = ({ pageNum }) => (
+  <div style={PDF_FOOTER_STYLE}>
+    <div style={{ color: '#64748b', fontSize: 9, fontWeight: 700, letterSpacing: 2 }}>NEXUS AURA · SMART DASHBOARD</div>
     <div style={{ color: '#94a3b8', fontSize: 9, fontWeight: 700, letterSpacing: 2 }}>PAGE {pageNum} OF 2</div>
   </div>
 );
@@ -474,7 +522,7 @@ const DataGovernance = () => (
     <p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed mt-3">
       <strong>How long it is kept:</strong> assessment records are deleted automatically{' '}
       <strong>24 months</strong> after they are created. Nothing is kept beyond that, and there is
-      no account to close — the record cannot be traced back to you, which is also why it cannot
+      no account to close. The record cannot be traced back to you, which is also why it cannot
       be retrieved or amended on request.
     </p>
   </div>
@@ -560,9 +608,16 @@ const LANGS = [
 ];
 
 // ─── PDF PAGE WRAPPER (shared structure for both pages) ───────────────────────
+/**
+ * EXACT height, not `minHeight`, and overflow clipped. Both captured canvases
+ * must be 794×1123 (A4 at 96dpi): if one page were allowed to grow taller, jsPDF
+ * would shrink it to fit the A4 sheet and the two pages would print their
+ * headers and footers at different physical sizes.
+ */
 const PDF_PAGE_STYLE = {
   width: '794px',
-  minHeight: '1123px',
+  height: '1123px',
+  overflow: 'hidden',
   background: '#ffffff',
   padding: 0,
   display: 'flex',
@@ -629,7 +684,7 @@ export default function ResultPage() {
   // and on the downloaded PDF — matched nothing in Firestore.
   const activeSessionId = sessionId || getSessionId();
   const formattedDate   = new Date().toLocaleDateString('en-GB');
-  const nexusUrl        = 'https://for.sg/nexus';
+  const nexusUrl        = NEXUS_URL;
   const qrCodeUrl       = `https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent(nexusUrl)}`;
   const baseUrl         = window.location.origin;
 
@@ -734,16 +789,38 @@ export default function ResultPage() {
       const pw  = pdf.internal.pageSize.getWidth();
       const ph  = pdf.internal.pageSize.getHeight();
 
-      const addCanvasPage = (canvas) => {
+      const addCanvasPage = (canvas, container) => {
         const img = canvas.toDataURL('image/jpeg', 0.82);
         let rw = pw, rh = (canvas.height * rw) / canvas.width, mx = 0;
         if (rh > ph) { rh = ph; rw = (canvas.width * rh) / canvas.height; mx = (pw - rw) / 2; }
         pdf.addImage(img, 'JPEG', mx, 0, rw, rh);
+
+        /*
+          The page is a rasterised JPEG, so nothing in it is clickable by itself.
+          Every element in the template carrying `data-pdf-link` gets a real PDF
+          link annotation stamped over its footprint — logos, the QR block, and
+          printed URLs — measured against the page wrapper and rescaled from CSS
+          pixels to the millimetres this page occupies on the A4 sheet.
+          `pdf.link` targets the CURRENT page, so this must run before addPage().
+        */
+        const pageRect = container.getBoundingClientRect();
+        const sx = rw / pageRect.width;
+        const sy = rh / pageRect.height;
+        container.querySelectorAll('[data-pdf-link]').forEach((el) => {
+          const r = el.getBoundingClientRect();
+          pdf.link(
+            mx + (r.left - pageRect.left) * sx,
+            (r.top - pageRect.top) * sy,
+            r.width * sx,
+            r.height * sy,
+            { url: el.getAttribute('data-pdf-link') },
+          );
+        });
       };
 
-      addCanvasPage(canvas1);
+      addCanvasPage(canvas1, printRef.current);
       pdf.addPage();
-      addCanvasPage(canvas2);
+      addCanvasPage(canvas2, printRef2.current);
 
       pdf.save(`NEXUS_AURA_Result_${riskTier}_${activeSessionId}.pdf`);
     } catch (err) { console.error('[NEXUS] PDF generation error:', err); }
@@ -817,13 +894,18 @@ export default function ResultPage() {
 
           <PdfHeader subtitle={t.reportTitle} {...headerProps} />
 
-          {/* Content area — flex: 1 pushes footer to bottom */}
-          <div style={{ padding: '28px 40px', display: 'flex', flexDirection: 'column', gap: 20, flex: 1 }}>
+          {/*
+            Content area — flex: 1 pushes the footer to the bottom. `minHeight: 0`
+            + `overflow: hidden` make THIS box absorb any excess instead of the
+            fixed header/footer strips, and the tightened padding/gap keep the
+            fullest page (Red tier, three SDOH bullets, six resources) inside it.
+          */}
+          <div style={{ padding: '16px 40px', display: 'flex', flexDirection: 'column', gap: 10, flex: 1, minHeight: 0, overflow: 'hidden' }}>
 
             {/* Risk Tier */}
-            <div style={{ background: th.printBg, borderRadius: 12, padding: '24px 28px' }}>
-              <div style={{ color: 'white', fontWeight: 900, fontSize: 24, marginBottom: 8 }}>{tierLabel}</div>
-              <div style={{ color: 'rgba(255,255,255,0.9)', fontWeight: 700, fontSize: 12, lineHeight: 1.6, marginBottom: 12 }}>{tierDesc}</div>
+            <div style={{ background: th.printBg, borderRadius: 12, padding: '16px 24px' }}>
+              <div style={{ color: 'white', fontWeight: 900, fontSize: 24, marginBottom: 6 }}>{tierLabel}</div>
+              <div style={{ color: 'rgba(255,255,255,0.9)', fontWeight: 700, fontSize: 12, lineHeight: 1.6, marginBottom: 8 }}>{tierDesc}</div>
               {(data.sdohFinancial || data.sdohSocial || hasPsycho) && (
                 <div style={{ borderTop: '1px solid rgba(255,255,255,0.25)', paddingTop: 10, display: 'flex', flexDirection: 'column', gap: 4 }}>
                   {data.sdohFinancial && <div style={{ color: 'white', fontSize: 11, fontWeight: 700 }}>• {t.sdohFinText}</div>}
@@ -835,8 +917,8 @@ export default function ResultPage() {
 
             {/* PAVS Metrics */}
             {data?.pavsScore != null && (
-              <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 12, padding: '16px 24px' }}>
-                <div style={{ fontWeight: 900, fontSize: 10, color: '#64748b', textTransform: 'uppercase', letterSpacing: 3, marginBottom: 12 }}>{t.pavsTitle}</div>
+              <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 12, padding: '12px 20px' }}>
+                <div style={{ fontWeight: 900, fontSize: 10, color: '#64748b', textTransform: 'uppercase', letterSpacing: 3, marginBottom: 10 }}>{t.pavsTitle}</div>
                 <div style={{ display: 'flex', gap: 12 }}>
                   {[
                     { value: data.pavsScore,           label: t.pavsWeekly },
@@ -859,30 +941,30 @@ export default function ResultPage() {
             )}
 
             {/* Primary Action Banner */}
-            <div style={{ background: '#f0fdfa', border: '1px solid #99f6e4', borderRadius: 12, padding: '16px 24px' }}>
-              <div style={{ fontWeight: 900, fontSize: 10, color: '#0f766e', textTransform: 'uppercase', letterSpacing: 3, marginBottom: 8 }}>{t.primaryAction}</div>
+            <div style={{ background: '#f0fdfa', border: '1px solid #99f6e4', borderRadius: 12, padding: '12px 20px' }}>
+              <div style={{ fontWeight: 900, fontSize: 10, color: '#0f766e', textTransform: 'uppercase', letterSpacing: 3, marginBottom: 6 }}>{t.primaryAction}</div>
               <div style={{ fontWeight: 700, fontSize: 12, color: '#134e4a', lineHeight: 1.6 }}>
                 {ctaBanner.emoji} {ctaBanner.action[lang] || ctaBanner.action.en}
               </div>
-              <div style={{ marginTop: 6, fontSize: 10, color: '#0d9488', fontWeight: 600 }}>{ctaBanner.url}</div>
+              <div data-pdf-link={ctaBanner.url} style={{ marginTop: 6, fontSize: 10, color: '#0d9488', fontWeight: 600 }}>{ctaBanner.url}</div>
             </div>
 
             {/* Resources Grid */}
             <div>
-              <div style={{ fontWeight: 900, fontSize: 11, color: '#0f172a', textTransform: 'uppercase', letterSpacing: 3, borderBottom: '2px solid #e2e8f0', paddingBottom: 8, marginBottom: 14 }}>{t.resources}</div>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+              <div style={{ fontWeight: 900, fontSize: 11, color: '#0f172a', textTransform: 'uppercase', letterSpacing: 3, borderBottom: '2px solid #e2e8f0', paddingBottom: 6, marginBottom: 10 }}>{t.resources}</div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
                 {suggestedResources.map((resource) => {
                   const c = resource[lang] || resource.en;
                   return (
-                    <div key={resource.id} style={{ border: '1px solid #e2e8f0', borderRadius: 10, padding: '12px 14px', background: '#f8fafc', display: 'flex', flexDirection: 'column', gap: 6 }}>
+                    <div key={resource.id} style={{ border: '1px solid #e2e8f0', borderRadius: 10, padding: '10px 12px', background: '#f8fafc', display: 'flex', flexDirection: 'column', gap: 5 }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                        <div style={{ width: 32, height: 32, flexShrink: 0, background: 'white', border: '1px solid #e2e8f0', borderRadius: 6, overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                        <div data-pdf-link={resource.url} style={{ width: 32, height: 32, flexShrink: 0, background: 'white', border: '1px solid #e2e8f0', borderRadius: 6, overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                           <img src={`${baseUrl}${resource.logo}`} alt="" crossOrigin="anonymous" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                         </div>
                         <div style={{ fontWeight: 900, fontSize: 11, color: '#0f172a', lineHeight: 1.3 }}>{c.title}</div>
                       </div>
                       <div style={{ fontSize: 10, color: '#475569', lineHeight: 1.5 }}>{c.desc}</div>
-                      <div style={{ fontSize: 9, color: '#0d9488', fontWeight: 700, background: '#f0fdfa', padding: '4px 8px', borderRadius: 4, border: '1px solid #99f6e4', wordBreak: 'break-all' }}>
+                      <div data-pdf-link={resource.url} style={{ fontSize: 9, color: '#0d9488', fontWeight: 700, background: '#f0fdfa', padding: '4px 8px', borderRadius: 4, border: '1px solid #99f6e4', wordBreak: 'break-all' }}>
                         <span style={{ color: '#64748b', fontWeight: 600, marginRight: 4 }}>{t.webLink}</span>{resource.url}
                       </div>
                     </div>
@@ -892,8 +974,8 @@ export default function ResultPage() {
             </div>
 
             {/* QR + Assessment ID footer area */}
-            <div style={{ borderTop: '1px solid #e2e8f0', paddingTop: 16, display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 'auto' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <div style={{ borderTop: '1px solid #e2e8f0', paddingTop: 12, display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 'auto' }}>
+              <div data-pdf-link={nexusUrl} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                 <img src={qrCodeUrl} alt="QR" crossOrigin="anonymous" style={{ width: 60, height: 60, border: '1px solid #e2e8f0', borderRadius: 6, padding: 3 }} />
                 <div>
                   <div style={{ fontWeight: 900, fontSize: 9, textTransform: 'uppercase', letterSpacing: 3, color: '#0f172a' }}>{t.scanQR}</div>
@@ -907,15 +989,16 @@ export default function ResultPage() {
             </div>
           </div>
 
-          <PdfFooter label="NEXUS AURA · SMART DASHBOARD" pageNum={1} />
+          <PdfFooter pageNum={1} />
         </div>
 
         {/* ── PAGE 2: Governance ──────────────────────────────────────── */}
         <div ref={printRef2} style={PDF_PAGE_STYLE}>
 
-          <PdfHeader subtitle="SMART DASHBOARD" {...headerProps} />
+          {/* Same subtitle source as page 1, so the two headers are identical. */}
+          <PdfHeader subtitle={t.reportTitle} {...headerProps} />
 
-          <div style={{ padding: '28px 40px', display: 'flex', flexDirection: 'column', gap: 20, flex: 1 }}>
+          <div style={{ padding: '16px 40px', display: 'flex', flexDirection: 'column', gap: 10, flex: 1, minHeight: 0, overflow: 'hidden' }}>
 
             {/* Medical Disclaimer */}
             <div style={{ background: '#fff1f2', border: '1px solid #fecdd3', borderRadius: 12, padding: '18px 24px' }}>
@@ -960,16 +1043,22 @@ export default function ResultPage() {
                      asked, and names the source as what it was adapted FROM.
                 */}
                 {[
-                  ['Physical Activity', 'ACSM Physical Activity Vital Sign (PAVS) — administered as published: 2 questions (days per week, minutes per session).'],
-                  ['National Targets', 'Sport Singapore Physical Activity Guidelines (SPAG) — 150–300 mins/week moderate-intensity aerobic activity. A reference target, not an instrument.'],
+                  ['Physical Activity', 'ACSM Physical Activity Vital Sign (PAVS), administered as published: 2 questions (days per week, minutes per session).'],
+                  ['National Targets', 'Sport Singapore Physical Activity Guidelines (SPAG): 150–300 mins/week moderate-intensity aerobic activity. A reference target, not an instrument.'],
                   ['Psychological Wellbeing', 'SINGLE-ITEM screen adapted from BPS-RS II Domain P22 (PHQ-2 aligned, 2-week timeframe). One item, not the two-item PHQ-2, and not separately validated in this form.'],
                   ['Social Isolation', 'SINGLE-ITEM screen adapted from the Lubben Social Network Scale (LSNS-6). One item, not the six-item scale; LSNS-6\u2019s published reliability does not transfer to it.'],
                   ['Food Insecurity', 'SINGLE-ITEM screen adapted from the Lien Centre for Social Innovation Food Insufficiency Screen (2 items).'],
-                  ['Financial Adequacy', 'Self-guided pathway: 3-level screen adapted from the Duke-NUS Perceived Income Adequacy Scale. Chat pathway: NOT asked — inferred from reported access barriers.'],
+                  ['Financial Adequacy', 'Self-guided pathway: 3-level screen adapted from the Duke-NUS Perceived Income Adequacy Scale. Chat pathway: NOT asked; inferred from reported access barriers.'],
                   ['Housing Risk', 'Self-reported HDB flat type, used as a social-risk proxy. Flat type is asked; tenure (rented or owned) is not.'],
                 ].map(([label, text], i) => (
-                  <div key={i} style={{ display: 'flex', gap: 10, paddingBottom: 5, borderBottom: i < 7 ? '1px solid #f1f5f9' : 'none' }}>
-                    <div style={{ fontWeight: 800, fontSize: 9, color: '#0d9488', minWidth: 110, paddingTop: 1, textTransform: 'uppercase', letterSpacing: 0.5, flexShrink: 0 }}>{label}</div>
+                  <div key={i} style={{ display: 'flex', gap: 10, paddingBottom: 5, borderBottom: i < 6 ? '1px solid #f1f5f9' : 'none' }}>
+                    {/*
+                      EXACT width, not minWidth: "Psychological Wellbeing" grew
+                      past 110px and pushed its description out of the column
+                      every other row aligned to. A long label now wraps to a
+                      second line instead of widening its row.
+                    */}
+                    <div style={{ fontWeight: 800, fontSize: 9, color: '#0d9488', width: 110, paddingTop: 1, textTransform: 'uppercase', letterSpacing: 0.5, flexShrink: 0 }}>{label}</div>
                     <div style={{ fontSize: 10, color: '#475569', lineHeight: 1.6 }}>{text}</div>
                   </div>
                 ))}
@@ -996,19 +1085,20 @@ export default function ResultPage() {
                 Enrol with a Healthier SG GP to receive a fully subsidised annual Health Plan consultation, personalised screening schedule, and community programme referrals.
               </div>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px 28px', maxWidth: '540px', margin: '0 auto', textAlign: 'left' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8, gridColumn: '1 / -1', paddingBottom: 6, borderBottom: '1px solid #99f6e4' }}>
+                <div data-pdf-link="https://www.healthiersg.gov.sg/" style={{ display: 'flex', alignItems: 'center', gap: 8, gridColumn: '1 / -1', paddingBottom: 6, borderBottom: '1px solid #99f6e4' }}>
                   <img src={baseUrl + '/logos/healthiersg.png'} alt="Healthier SG" crossOrigin="anonymous" style={{ width: 20, height: 20, objectFit: 'contain', flexShrink: 0 }} />
                   <span style={{ fontWeight: 700, fontSize: 10, color: '#0f766e' }}>healthiersg.gov.sg</span>
                 </div>
                 {[
-                  { logo: '/logos/hpb.png', text: 'healthhub.sg — Access your Health Plan & book screenings' },
-                  { logo: '/logos/activehealth.png', text: 'activesgcircle.gov.sg/activehealth — Find your nearest Active Health Lab' },
-                  { logo: '/logos/aic.png', text: 'aic.sg/care-services/active-ageing-centres — Locate AACs for residents 60+' },
-                  { logo: '/logos/pa.png', text: 'onepa.gov.sg — Search HealthierSG interest groups near you' },
+                  { logo: '/logos/hpb.png', url: 'https://www.healthhub.sg/', text: 'healthhub.sg: Access your Health Plan and book screenings' },
+                  { logo: '/logos/activehealth.png', url: 'https://www.activesgcircle.gov.sg/activehealth', text: 'activesgcircle.gov.sg/activehealth: Find your nearest Active Health Lab' },
+                  { logo: '/logos/aic.png', url: 'https://www.aic.sg/care-services/active-ageing-centres', text: 'aic.sg/care-services/active-ageing-centres: Locate AACs for residents 60+' },
+                  { logo: '/logos/pa.png', url: 'https://www.onepa.gov.sg/', text: 'onepa.gov.sg: Search HealthierSG interest groups near you' },
                 ].map((item, i) => (
-                  <div key={i} style={{ display: 'flex', alignItems: 'flex-start', gap: 6 }}>
+                  <div key={i} data-pdf-link={item.url} style={{ display: 'flex', alignItems: 'flex-start', gap: 6 }}>
                     <img src={baseUrl + item.logo} alt="" crossOrigin="anonymous" style={{ width: 14, height: 14, objectFit: 'contain', flexShrink: 0, marginTop: 1 }} />
-                    <span style={{ fontWeight: 600, fontSize: 9, color: '#0f766e', wordBreak: 'break-all', lineHeight: 1.5 }}>{item.text}</span>
+                    {/* break-word, not break-all: URLs may split when they must, prose words never split mid-word */}
+                    <span style={{ fontWeight: 600, fontSize: 9, color: '#0f766e', overflowWrap: 'break-word', lineHeight: 1.5 }}>{item.text}</span>
                   </div>
                 ))}
               </div>
@@ -1016,7 +1106,7 @@ export default function ResultPage() {
 
           </div>
 
-          <PdfFooter label="NEXUS AURA · HEALTH NAVIGATION GOVERNANCE" pageNum={2} />
+          <PdfFooter pageNum={2} />
         </div>
       </div>
 
@@ -1146,6 +1236,9 @@ export default function ResultPage() {
               score={score} riskTier={riskTier} data={data}
               postalSector={postalSector} sessionId={activeSessionId}
               formattedDate={formattedDate}
+              /* The person's chosen language, for the second line of each reported
+                 flag. The slip stays English-first — see `slipFlagLines.js`. */
+              language={lang}
             />
 
             <div className="pt-4 border-t border-slate-100 dark:border-slate-800 flex justify-between items-center">

@@ -25,8 +25,10 @@
 >   team A gets nothing from team B.**
 >
 > **The current record is the rules file's own header plus
-> `scripts/firestore-rules-verify.mjs` — 91 checks, last run 2026-08-21 against the
-> emulator, 0 failed.** Read those, not this. The one part below still worth reading
+> `scripts/firestore-rules-verify.mjs` — 119 checks, last run 2026-08-23 against the
+> emulator, 0 failed.** Read those, not this. (It was 91 on 2026-08-21; the 28 added
+> since cover pay-grade privacy and the department's roster configuration, both of
+> which arrived after this banner was written.) The one part below still worth reading
 > is §4, which is how the live console was reconciled and how it should be
 > reconciled again before the next deploy.
 

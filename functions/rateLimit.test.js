@@ -19,6 +19,9 @@
 import { describe, it, expect } from 'vitest';
 import {
     LIMITS,
+    STAFF_LIMITS,
+    staffPlanFor,
+    staffRefusalMessage,
     WINDOW_MS,
     CALLS_PER_ASSESSMENT,
     UNKNOWN_CALLER,
@@ -324,5 +327,77 @@ describe('windowIndex', () => {
 
     it('is an integer, so it can be compared by the sweep', () => {
         expect(Number.isInteger(windowIndex(NOW))).toBe(true);
+    });
+});
+
+// ─── AU14 · the staff side ────────────────────────────────────────────────────
+
+describe('staffPlanFor — one budget per uid across the authenticated endpoints', () => {
+    const NOW = 1756000000000;
+
+    it('buckets by uid with the per-user ceiling', () => {
+        const plan = staffPlanFor({ uid: 'uid-abc123', nowMs: NOW });
+        expect(plan.caller.attributable).toBe(true);
+        expect(plan.caller.limit).toBe(STAFF_LIMITS.perUser);
+        expect(plan.global.limit).toBe(STAFF_LIMITS.global);
+    });
+
+    it('does not put the uid itself in the document id', () => {
+        // Same convention as the community side: `rate_limits` must not become a
+        // readable log of who used AURA and when.
+        const plan = staffPlanFor({ uid: 'uid-abc123', nowMs: NOW });
+        expect(plan.caller.path.join('/')).not.toContain('uid-abc123');
+        expect(plan.caller.path[1]).toMatch(/^staff__[0-9a-f]{32}__\d+$/);
+    });
+
+    it('separates two uids and separates staff from community buckets', () => {
+        const a = staffPlanFor({ uid: 'uid-a', nowMs: NOW });
+        const b = staffPlanFor({ uid: 'uid-b', nowMs: NOW });
+        expect(a.caller.path[1]).not.toBe(b.caller.path[1]);
+        // Identical key text under the two scopes must still be distinct docs.
+        const community = planFor({ callerKey: 'uid-a', appCheckVerified: false, nowMs: NOW });
+        expect(a.caller.path[1]).not.toBe(community.caller.path[1]);
+        expect(a.global.path[1]).not.toBe(community.global.path[1]);
+    });
+
+    it.each([[undefined], [null], [''], [42]])(
+        'a missing or junk uid (%s) shares the unattributable bucket with the tight limit',
+        (uid) => {
+            const plan = staffPlanFor({ uid, nowMs: NOW });
+            expect(plan.caller.attributable).toBe(false);
+            // Cannot-count must never mean allow — the community limiter's rule.
+            expect(plan.caller.limit).toBe(STAFF_LIMITS.perUser);
+            expect(plan.caller.path[1]).toBe(
+                staffPlanFor({ uid: undefined, nowMs: NOW }).caller.path[1],
+            );
+        },
+    );
+
+    it('rolls to a fresh document each window, so expiry is deletion not comparison', () => {
+        const before = staffPlanFor({ uid: 'uid-a', nowMs: NOW });
+        const after = staffPlanFor({ uid: 'uid-a', nowMs: NOW + WINDOW_MS });
+        expect(before.caller.path[1]).not.toBe(after.caller.path[1]);
+    });
+
+    it('the ceilings encode the reasoning: chat-speed generous, loop-speed fatal', () => {
+        // 120/hour = a reply every 30 seconds for two hours, which no human chat
+        // has ever needed; a 1-call-per-second loop is refused within 2 minutes.
+        expect(STAFF_LIMITS.perUser).toBe(120);
+        expect(STAFF_LIMITS.perUser).toBeLessThan(LIMITS.unverified);
+        expect(STAFF_LIMITS.global).toBeGreaterThan(STAFF_LIMITS.perUser * 10);
+    });
+});
+
+describe('staffRefusalMessage — staff wording, not roadshow wording', () => {
+    it('names the cost ceiling and a real wait, and does not blame the network', () => {
+        const msg = staffRefusalMessage({ retryAfterSeconds: 1800 });
+        expect(msg).toContain('30 minutes');
+        expect(msg.toLowerCase()).toContain('cost');
+        expect(msg.toLowerCase()).not.toContain('wifi');
+        expect(msg.toLowerCase()).not.toContain('connection');
+    });
+
+    it('never says a fraction of a minute', () => {
+        expect(staffRefusalMessage({ retryAfterSeconds: 10 })).toContain('1 minute');
     });
 });

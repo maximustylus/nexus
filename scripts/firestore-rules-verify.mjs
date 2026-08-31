@@ -212,10 +212,104 @@ console.log('\n══ membership-as-data: a member document IS the permission �
         assertSucceeds(updateDoc(doc(brandon, `teams/${TEAM_A}/members/${BRANDON}`), { unavailable: ['2026-02-02'] })));
     await check('a member cannot edit a COLLEAGUE\'s availability',
         assertFails(updateDoc(doc(brandon, `teams/${TEAM_A}/members/${YING}`), { unavailable: ['2026-02-02'] })));
-    await check('a lead CAN edit a colleague\'s grade and role',
-        assertSucceeds(updateDoc(doc(as(ALIF), `teams/${TEAM_A}/members/${BRANDON}`), { grade: 'AH12', role: 'staff' })));
+    await check('a lead CAN edit a colleague\'s role and duties',
+        assertSucceeds(updateDoc(doc(as(ALIF), `teams/${TEAM_A}/members/${BRANDON}`), { role: 'staff', rostered: true })));
     await check('nobody may delete a membership (removal is a Cloud Function)',
         assertFails(deleteDoc(doc(as(ALIF), `teams/${TEAM_A}/members/${YING}`))));
+
+    /**
+     * ⚠️ GRADE IS NOT A MEMBERSHIP FIELD ANY MORE, AND THIS IS THE ASSERTION THAT
+     *    KEEPS IT OUT. It was one — `allow update` listed it for both a lead and
+     *    the person — and it had to move, because RULES CANNOT HIDE A FIELD: a
+     *    member who may `get` the membership reads every field on it, so a grade
+     *    stored there is a grade every colleague in the department can read.
+     *
+     *    Putting it back would not merely leak the value. `grade` is no longer in
+     *    the allowlist, so a write carrying it fails ENTIRELY — a profile save that
+     *    included one would break for everybody, which is a loud failure and the
+     *    only reason this is survivable as a mistake.
+     */
+    await check('grade CANNOT be written onto a membership, even by a lead',
+        assertFails(updateDoc(doc(as(ALIF), `teams/${TEAM_A}/members/${BRANDON}`), { grade: 'AH12' })));
+    await check('grade CANNOT be written onto a membership by the person either',
+        assertFails(updateDoc(doc(brandon, `teams/${TEAM_A}/members/${BRANDON}`), { grade: 'AH12' })));
+}
+
+// ═════════════════════════════════════════════════════════════════════════════
+// 2b. PAY GRADE — the roster may know it; a colleague may not
+// ═════════════════════════════════════════════════════════════════════════════
+//
+// ⚠️ THE PROPERTY: a staff member must not be able to read what their colleague
+//    earns. Grade is what `bandOfGrade` reads to decide who may LEAD a shift, so
+//    the roster genuinely needs it — but "the roster needs it" justifies the roster
+//    reading it, not the team browsing it.
+//
+//    It is a separate DOCUMENT rather than a field precisely because rules grant
+//    access per document and there is no field-level read. This section is what
+//    makes that claim enforcement rather than intention.
+console.log('\n══ pay grade: private to the person and their lead ══');
+{
+    await seed();
+    const brandon = as(BRANDON);
+    const ying = as(YING);
+
+    await check('a person can set their OWN grade',
+        assertSucceeds(setDoc(doc(brandon, `teams/${TEAM_A}/grades/${BRANDON}`), { grade: 'AH12' })));
+    await check('and read it back',
+        assertSucceeds(getDoc(doc(brandon, `teams/${TEAM_A}/grades/${BRANDON}`))));
+
+    // THE ONE THAT MATTERS.
+    await check('a colleague CANNOT read it',
+        assertFails(getDoc(doc(ying, `teams/${TEAM_A}/grades/${BRANDON}`))));
+    await check('a colleague CANNOT write it',
+        assertFails(setDoc(doc(ying, `teams/${TEAM_A}/grades/${BRANDON}`), { grade: 'AH7' })));
+
+    /**
+     * ⚠️ `list` IS DENIED TO EVERYBODY, INCLUDING A LEAD. A lead reads one document
+     *    per member, by uid, from the member list they already have — so denying
+     *    `list` costs them nothing and removes the artefact this split exists to
+     *    prevent: one query returning every salary band in the department.
+     */
+    await check('a lead CAN read a member\'s grade (the roster needs it)',
+        assertSucceeds(getDoc(doc(as(ALIF), `teams/${TEAM_A}/grades/${BRANDON}`))));
+    await check('a lead CAN correct one',
+        assertSucceeds(setDoc(doc(as(ALIF), `teams/${TEAM_A}/grades/${BRANDON}`), { grade: 'AH13' }, { merge: true })));
+    await check('NOBODY may list the grades collection, not even a lead',
+        assertFails(getDocs(collection(as(ALIF), `teams/${TEAM_A}/grades`))));
+    await check('a member cannot list it either',
+        assertFails(getDocs(collection(brandon, `teams/${TEAM_A}/grades`))));
+
+    // Cross-team, the property section 1 exists for, applied to the new collection.
+    await check('another department\'s lead gets nothing',
+        assertFails(getDoc(doc(as(SGH_LEAD), `teams/${TEAM_A}/grades/${BRANDON}`))));
+
+    await check('nobody may delete a grade (clearing it is an update to \'\')',
+        assertFails(deleteDoc(doc(brandon, `teams/${TEAM_A}/grades/${BRANDON}`))));
+}
+
+// ═════════════════════════════════════════════════════════════════════════════
+// 2c. ROSTER SETTINGS — the department describes itself; a lead writes it
+// ═════════════════════════════════════════════════════════════════════════════
+console.log('\n══ roster settings: read by the team, written by a lead ══');
+{
+    await seed();
+    await check('a lead CAN write the department configuration',
+        assertSucceeds(setDoc(doc(as(ALIF), `teams/${TEAM_A}/settings/roster`), { version: 1, tasks: [{ name: 'EFT' }] })));
+    await check('a member CAN read it — it is the department describing itself',
+        assertSucceeds(getDoc(doc(as(BRANDON), `teams/${TEAM_A}/settings/roster`))));
+
+    /**
+     * ⚠️ IT DECIDES WHAT EVERY GENERATED ROSTER CONTAINS. A staff member who could
+     *    edit this could rewrite the department's duties without touching a roster.
+     */
+    await check('a member CANNOT write it',
+        assertFails(setDoc(doc(as(BRANDON), `teams/${TEAM_A}/settings/roster`), { version: 1, tasks: [{ name: 'Nothing' }] })));
+    await check('nobody may delete it (clearing tasks is an update)',
+        assertFails(deleteDoc(doc(as(ALIF), `teams/${TEAM_A}/settings/roster`))));
+    await check('nobody may list the settings collection',
+        assertFails(getDocs(collection(as(ALIF), `teams/${TEAM_A}/settings`))));
+    await check('another department gets nothing',
+        assertFails(getDoc(doc(as(SGH_LEAD), `teams/${TEAM_A}/settings/roster`))));
 }
 
 // ═════════════════════════════════════════════════════════════════════════════
@@ -492,6 +586,93 @@ await env.withSecurityRulesDisabled(async (c) => {
         assertFails(getDoc(doc(brandon, 'cep_team/brandon'))));
     await check('and none of them is writable',
         assertFails(setDoc(doc(brandon, 'system_data/roster_2026'), { x: 1 })));
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// SECTION: the AU3 workload backstop — the model's field choice, fenced
+// ─────────────────────────────────────────────────────────────────────────────
+//
+// The client's `ALLOWED_WORKLOAD_FIELDS` was "the only thing standing between a
+// model-chosen string and a key on that document". This is the standing behind
+// it. `hasOnly` permits a subset, so partial updates pass; anything the model
+// invents fails the WHOLE write. The field list here must mirror
+// `src/utils/dataEntryGuard.js` exactly.
+console.log('\nAU3 — the workload document accepts only its own fields:');
+await seed();
+{
+    const alif = as(ALIF);       // a lead — the only role that may write at all
+    const brandon = as(BRANDON); // staff
+    const wdoc = (client) => doc(client, `teams/${TEAM_A}/workload/jan_2026`);
+    const audit = { last_updated_by: 'Alif', last_updated_at: '2026-08-24T00:00:00Z' };
+
+    await check('a lead writes patient_attendance with the audit fields',
+        assertSucceeds(setDoc(wdoc(alif), { patient_attendance: 120, ...audit })));
+    await check('a lead updates just patient_load — hasOnly permits a subset',
+        assertSucceeds(setDoc(wdoc(alif), { patient_load: 80, ...audit }, { merge: true })));
+    await check('staff may not write it at all',
+        assertFails(setDoc(wdoc(brandon), { patient_attendance: 5, ...audit })));
+    await check('a model-invented field fails the whole write',
+        assertFails(setDoc(wdoc(alif), { patient_attendance: 120, engagement_score: 9, ...audit })));
+    await check('a field-name typo fails rather than minting a key',
+        assertFails(setDoc(wdoc(alif), { patient_attendence: 120, ...audit })));
+    await check('a string count is refused — the guard requires a number',
+        assertFails(setDoc(wdoc(alif), { patient_attendance: '120', ...audit })));
+    await check('a negative count is refused',
+        assertFails(setDoc(wdoc(alif), { patient_load: -5, ...audit })));
+    await check('the collection stays unreadable, even to the lead who wrote it',
+        assertFails(getDoc(wdoc(alif))));
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// SECTION: the AN13 comments fence — the REAL RE2, not a JS mirror
+// ─────────────────────────────────────────────────────────────────────────────
+//
+// ⚠️ THIS SECTION EXISTS BECAUSE A JS MIRROR LIED ONCE. `nric.test.js` asserts
+//    the fence's pattern with a JavaScript regex, and its first draft passed the
+//    `s` flag unconditionally — building a MORE permissive mirror than the RE2
+//    engine these rules actually run (RE2's `.` does not match `\n` by default),
+//    so an NRIC mid-way through a multi-line comment sailed past the deployed
+//    fence while all 19 mirror cases passed. The fix was `(?s)` in the pattern;
+//    the ACCEPTANCE for that fix is this section, against the emulator's real
+//    engine. The mirror is a fast regression check; this is the truth.
+console.log('\nAN13 — the comments NRIC fence, against the real RE2:');
+await seed();
+{
+    const brandon = as(BRANDON);
+    const comment = (text) => addDoc(
+        collection(brandon, `teams/${TEAM_A}/feed/post-1/comments`),
+        { author: 'Brandon', text, timestamp: serverTimestamp() },
+    );
+
+    await check('an ordinary comment is allowed',
+        assertSucceeds(comment('great session everyone, see you thursday')));
+    await check('multi-line plain text is allowed',
+        assertSucceeds(comment('line one\nline two\nline three')));
+    await check('the asked-for shortened form ("ending 567D") is allowed',
+        assertSucceeds(comment('patient ending 567D')));
+    await check('an ops code (NS1234567X) is allowed — letters run on',
+        assertSucceeds(comment('ref NS1234567X checked')));
+    await check('a phone number is allowed',
+        assertSucceeds(comment('call me at 91234567')));
+
+    await check('a bare NRIC is refused',
+        assertFails(comment('S1234567D')));
+    await check('a lowercase NRIC in a sentence is refused',
+        assertFails(comment('patient s1234567d came in today')));
+    await check('a FIN (M-series) is refused',
+        assertFails(comment('M1234567W')));
+    await check('a bracketed NRIC is refused',
+        assertFails(comment('the patient (S1234567D) asked about results')));
+
+    // The four arrangements the un-flagged pattern let through:
+    await check('an NRIC mid multi-line text is refused',
+        assertFails(comment('line one\nsee id S1234567D')));
+    await check('an NRIC before a newline is refused',
+        assertFails(comment('S1234567D was here\nsecond line')));
+    await check('an NRIC after a blank line is refused',
+        assertFails(comment('ward round\n\nS1234567D discharged today')));
+    await check('an NRIC in the middle of a handover note is refused',
+        assertFails(comment('Handover notes:\npatient S1234567D for review\nthanks')));
 }
 
 await env.cleanup();
