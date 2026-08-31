@@ -25,8 +25,9 @@ import {
     buildGradeUpdate,
     validateMemberProfile,
 } from './memberProfile';
-import { GRADE_SCALE, DEFAULT_GRADE_BANDS, bandOfGrade } from './rosterEngineV2';
+import { GRADE_SCALE, DEFAULT_GRADE_BANDS, bandOfGrade, NON_NURSING_GRADE_ALIASES } from './rosterEngineV2';
 import { MOH_PROFESSION_LEAVES } from '../data/mohAlliedHealth';
+import { SUPPORT_AND_ADMIN_ROLES } from '../data/mockData';
 
 describe('the grade vocabulary is the engine\'s, not a second copy', () => {
     /**
@@ -122,16 +123,41 @@ describe('validation', () => {
         (value) => { expect(isValidGrade(value)).toBe(false); },
     );
 
-    it('accepts every profession on the MOH list and nothing else', () => {
+    /**
+     * ⚠️ "AND NOTHING ELSE" NOW MEANS THE PICKER'S WHOLE LIST, not MOH's alone.
+     *    Administrators, assistants and associates were added to the picker on
+     *    2026-08-31 — "they are the ones who are the roster masters" — and this
+     *    validator still built its set from `MOH_PROFESSION_LEAVES`, so the option
+     *    appeared, was chosen, and was refused on save. The owner hit it on the first
+     *    member they edited. What the assertion pins is unchanged in spirit: exactly
+     *    what the picker can emit is accepted, and nothing beyond it.
+     */
+    it('accepts every profession the picker can emit, and nothing else', () => {
         MOH_PROFESSION_LEAVES.forEach((leaf) => expect(isValidProfession(leaf.id)).toBe(true));
+        SUPPORT_AND_ADMIN_ROLES.forEach((role) => expect(isValidProfession(role.id)).toBe(true));
+        // The support roles are IN the selectable list and NOT in MOH's — the split
+        // that keeps "MOH's own 28" true everywhere else in the app.
+        const mohIds = new Set(MOH_PROFESSION_LEAVES.map((leaf) => leaf.id));
+        SUPPORT_AND_ADMIN_ROLES.forEach((role) => expect(mohIds.has(role.id)).toBe(false));
+
         expect(isValidProfession('wizard')).toBe(false);
-        expect(validateMemberProfile({ grade: '', profession: 'wizard' })).toMatch(/MOH allied health/);
+        expect(validateMemberProfile({ grade: '', profession: 'wizard' })).toMatch(/not one of the professions or roles/i);
+    });
+
+    it('accepts the NN spelling of a support grade, and still refuses a sloppy one', () => {
+        // NN7–NN10 is the same ladder under the name half the department uses.
+        NON_NURSING_GRADE_ALIASES.forEach((grade) => expect(isValidGrade(grade)).toBe(true));
+        // …but storage stays canonical: a lexer would take these, a validator must not.
+        ['nn8', 'NN 8', 'NN6', 'NN11', 'NN18'].forEach((bad) => expect(isValidGrade(bad)).toBe(false));
     });
 
     it('renders a stored id as the name a person recognises', () => {
         const leaf = MOH_PROFESSION_LEAVES[0];
         expect(professionLabel(leaf.id)).toBe(leaf.name);
         expect(professionLabel('wizard')).toBe('');
+        // …including the roles MOH does not list, which would otherwise render as a
+        // raw id like `administrator` on the member row.
+        expect(professionLabel('administrator')).toBe('Administrator');
     });
 });
 

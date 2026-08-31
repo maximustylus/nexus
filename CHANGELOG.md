@@ -51,6 +51,53 @@ not changed by this release.
 
 ---
 
+## [2.4.1] - 2026-08-31
+
+v2.4.0 put the new options in the dropdowns and left the validators behind them
+unchanged. Reported on the first member the owner tried to edit.
+
+### Fixed
+
+- **"Admin is not on the MOH profession list."** `isValidProfession` built its set from
+  `MOH_PROFESSION_LEAVES` alone, so `Administrator` rendered as an option, was chosen,
+  and was refused on save. There is now one exported list —
+  `SELECTABLE_PROFESSION_LEAVES` — that decides both what the picker offers and what the
+  validator accepts. Two places answering "what is a valid profession" from two different
+  sources is the shape of this bug, and the same shape as the two domain checks and the
+  two grade parsers this repository has already been caught by.
+
+- **`NN8` would have been refused next, and nobody had hit it yet.** `isValidGrade` and
+  the wizard's `gradeCellReason` both matched `GRADE_SCALE.includes(...)`, which is
+  exactly `AH7`…`AH17`. The Non-Nursing spelling added in v2.4.0 was offered in two
+  dropdowns and rejected by both validators.
+
+  **Fixed as an exact match over both label sets, deliberately NOT `parseRank`.** The
+  first attempt used the scale's parser and a test caught it: `parseRank` is a *lexer* —
+  it accepts `ah13`, `AH 13`, `AH07`. Those are right to read and wrong to store. A
+  validator deciding "may this be written to the member document" has to insist on the
+  canonical spelling, or the same grade ends up written two ways and every comparison
+  downstream has to know it.
+
+- `professionLabel` looked up MOH leaves only, so a support role would have rendered as
+  the raw id `administrator` on the member row.
+
+### Changed
+
+- `NON_NURSING_GRADE_ALIASES` moved to `rosterEngineV2.js`, beside the scale. Both grade
+  validators need it, and keeping it in one of them would make the other import its
+  sibling for a fact about the scale. Still derived from the `nonExempt` band, never four
+  written-down strings.
+
+### Notes — Brandon still cannot be added, and that is correct
+
+The refusal changed from the domain gate to `NO_ACCOUNT`, which is the v2.4.0 own-domain
+fix working: the address now clears the allowlist and stops at the next check. NEXUS
+adds people who already have an account — it does not pre-authorise an address. There is
+no invitation flow, and the panel's own copy says so. That is a real gap and a feature,
+not a bug: a lead cannot currently reserve a seat for somebody who has not registered.
+
+---
+
 ## [2.4.0] - 2026-08-31
 
 Three things the roster owner said, all of which were right.

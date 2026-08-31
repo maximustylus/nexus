@@ -834,6 +834,28 @@ export const GRADE_SCALE = ALLIED_HEALTH_SCALE.labels;
 export const DEFAULT_GRADE_BANDS = ALLIED_HEALTH_SCALE.defaultRegions;
 
 /**
+ * `NN7`–`NN10` — the Non-Nursing spelling of the support grades.
+ *
+ * Lives here, beside the scale, because it IS scale vocabulary: the grade
+ * validators in `rosterWizard.js` and `memberProfile.js` both need it, and having it
+ * in one of them would make the other import its sibling for a fact about the scale.
+ *
+ * DERIVED FROM THE `nonExempt` BAND, never four written-down strings. These are
+ * exactly the grades the engine calls non-exempt, and that boundary moved once
+ * already — on 2026-08-13, out of a three-band cut that conflated assistants with
+ * junior clinicians. A hardcoded list would have kept offering NN10 after AH10
+ * stopped being a support grade.
+ */
+export const NON_NURSING_GRADE_ALIASES = Object.freeze(
+    (() => {
+        const [min, max] = DEFAULT_GRADE_BANDS.nonExempt;
+        const out = [];
+        for (let rank = min; rank <= max; rank += 1) out.push(`NN${rank}`);
+        return Object.freeze(out);
+    })(),
+);
+
+/**
  * The band names, lowest first — four today, and however many the scale
  * declares. Not exported: `Object.keys` of
  * `DEFAULT_GRADE_BANDS` is the same list in the same order, so there is one

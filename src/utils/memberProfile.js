@@ -82,8 +82,8 @@
  *    they never chose is deciding which shifts they lead.
  */
 
-import { GRADE_SCALE, DEFAULT_GRADE_BANDS, bandOfGrade } from './rosterEngineV2';
-import { MOH_PROFESSION_LEAVES } from '../data/mohAlliedHealth';
+import { GRADE_SCALE, DEFAULT_GRADE_BANDS, bandOfGrade, NON_NURSING_GRADE_ALIASES } from './rosterEngineV2';
+import { SELECTABLE_PROFESSION_LEAVES } from '../data/mockData';
 
 /** `'AH7' … 'AH17'`. The engine's own scale, not a second list that can drift. */
 export const GRADE_OPTIONS = GRADE_SCALE;
@@ -95,15 +95,37 @@ export const GRADE_OPTIONS = GRADE_SCALE;
  * with `grade: ''`, because neither of them knows it. A screen that refused to save
  * until a grade was chosen would block somebody from fixing their bio.
  */
-export const isValidGrade = (value) => value === '' || GRADE_SCALE.includes(value);
+/**
+ * ⚠️ EXACT MATCH OVER BOTH SPELLINGS — not `parseRank`, and the difference matters.
+ *
+ *    This was `GRADE_SCALE.includes(value)`, which accepts exactly `AH7`…`AH17`, so
+ *    `NN8` — added to the dropdown on 2026-08-31 as the Non-Nursing spelling of the
+ *    same grade — rendered as an option and would have been refused on save.
+ *
+ *    The first fix used `parseRank`, and a test caught it: `parseRank` is a LEXER and
+ *    accepts `ah13`, ` AH13 `, `AH07`. Those are fine to READ and wrong to STORE — a
+ *    validator whose job is "may this be written to the member document" has to
+ *    insist on the canonical spelling, or two members end up with the same grade
+ *    written two ways and every comparison downstream has to know that. So: the
+ *    scale's own labels, plus the NN aliases, matched exactly.
+ */
+const STORABLE_GRADES = new Set([...GRADE_SCALE, ...NON_NURSING_GRADE_ALIASES]);
 
-const PROFESSION_IDS = new Set(MOH_PROFESSION_LEAVES.map((leaf) => leaf.id));
+export const isValidGrade = (value) => value === '' || STORABLE_GRADES.has(value);
+
+/**
+ * ⚠️ EVERY id THE PICKER CAN EMIT, not only MOH's. Built from
+ *    `MOH_PROFESSION_LEAVES` alone, this refused `Administrator` — an option the
+ *    picker offers — with "that is not a profession on the MOH allied health list".
+ *    One list now decides what the picker offers AND what the validator accepts.
+ */
+const PROFESSION_IDS = new Set(SELECTABLE_PROFESSION_LEAVES.map((leaf) => leaf.id));
 
 export const isValidProfession = (value) => value === '' || PROFESSION_IDS.has(value);
 
 /** The reader-visible name for a stored profession id, or '' if there is none. */
 export const professionLabel = (value) => {
-    const leaf = MOH_PROFESSION_LEAVES.find((entry) => entry.id === value);
+    const leaf = SELECTABLE_PROFESSION_LEAVES.find((entry) => entry.id === value);
     return leaf ? leaf.name : '';
 };
 
@@ -210,10 +232,10 @@ export const buildGradeUpdate = (grade, current = null, now = null, setBy = null
  */
 export const validateMemberProfile = ({ grade, profession }) => {
     if (!isValidGrade(grade)) {
-        return `"${grade}" is not a grade on the AH7–AH17 scale. Choose one from the list.`;
+        return `"${grade}" is not a grade on the AH7–AH17 scale (NN7–NN10 is accepted for the support grades). Choose one from the list.`;
     }
     if (!isValidProfession(profession)) {
-        return 'That is not a profession on the MOH allied health list. Choose one from the list.';
+        return 'That is not one of the professions or roles in the list. Choose one from the dropdown.';
     }
     return '';
 };

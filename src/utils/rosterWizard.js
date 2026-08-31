@@ -98,6 +98,7 @@ import {
     validateGradeBands,
 // The `.js` extension is explicit, matching `rosterEngineV2.js`'s own import of
 // `auraEngine.js`, so this module resolves under plain Node ESM as well as Vite.
+    NON_NURSING_GRADE_ALIASES,
 } from './rosterEngineV2.js';
 
 /**
@@ -132,30 +133,6 @@ export const BAND_NAMES = Object.freeze(Object.keys(DEFAULT_GRADE_BANDS));
  * its own visible heading. It is what a screen reader announces for the badge, so
  * "Step 4 of 7: Working hours" is speakable without the icon.
  */
-/**
- * `NN7`–`NN10` — the Non-Nursing spelling of the support grades.
- *
- * DERIVED FROM THE SCALE'S OWN nonExempt BAND, never written down as four strings:
- * these are exactly the grades the engine calls `nonExempt`, and if that boundary
- * moves again — it moved on 2026-08-13, from a three-band cut that conflated
- * assistants with junior clinicians — this list moves with it. A hardcoded
- * `['NN7','NN8','NN9','NN10']` would quietly keep offering NN10 after AH10 stopped
- * being a support grade.
- *
- * The engine parses either spelling to the same rank, so choosing `NN8` and
- * choosing `AH8` produce byte-identical rosters. This is vocabulary, not policy.
- */
-export const NON_NURSING_GRADE_ALIASES = Object.freeze(
-    (() => {
-        const band = DEFAULT_GRADE_BANDS.nonExempt;
-        if (!Array.isArray(band)) return [];
-        const [min, max] = band;
-        const out = [];
-        for (let rank = min; rank <= max; rank += 1) out.push(`NN${rank}`);
-        return out;
-    })(),
-);
-
 export const WIZARD_STEPS = Object.freeze([
     Object.freeze({ id: 'team', label: 'Your team' }),
     Object.freeze({ id: 'period', label: 'Dates and length' }),
@@ -1456,12 +1433,20 @@ export const parseForbidPairs = (pairs) => {
     return { ok: true, pairs: out, reason: null };
 };
 
-/** Is this string one of `GRADE_SCALE`? `''` (not recorded) is fine too. */
+/**
+ * Is this a grade on the scale? `''` (not recorded) is fine too.
+ *
+ * ⚠️ EXACT MATCH OVER BOTH SPELLINGS. `GRADE_SCALE.includes` alone refused `NN8`,
+ *    the Non-Nursing spelling this wizard's own dropdown offers. `parseRank` would
+ *    have accepted it — and also `ah13` and `AH07`, which are fine to read and wrong
+ *    to store. So both label sets, matched exactly, the same rule
+ *    `memberProfile.isValidGrade` applies.
+ */
 const gradeCellReason = (raw) => {
     const trimmed = typeof raw === 'string' ? raw.trim() : '';
     if (trimmed === '') return null;
-    if (GRADE_SCALE.includes(trimmed)) return null;
-    return `Grade "${trimmed}" is not on the allied-health scale (${GRADE_SCALE[0]}–${GRADE_SCALE[GRADE_SCALE.length - 1]}). Leave it blank if it is not recorded.`;
+    if (GRADE_SCALE.includes(trimmed) || NON_NURSING_GRADE_ALIASES.includes(trimmed)) return null;
+    return `Grade "${trimmed}" is not on the allied-health scale (${GRADE_SCALE[0]}–${GRADE_SCALE[GRADE_SCALE.length - 1]}, or NN7–NN10 for the support grades). Leave it blank if it is not recorded.`;
 };
 
 // --- THE MAPPING --------------------------------------------------------------

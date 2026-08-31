@@ -1229,12 +1229,32 @@ const byReaderVisibleName = (a, b) => a.sortName.localeCompare(b.sortName, 'en')
  *    clinician's duty. Here it could not name them at all, while asking them to
  *    configure the roster.
  */
-const SUPPORT_AND_ADMIN_ROLES = Object.freeze([
+export const SUPPORT_AND_ADMIN_ROLES = Object.freeze([
   Object.freeze({ id: 'administrator', name: 'Administrator', groupId: 'support-admin' }),
   Object.freeze({ id: 'allied-health-assistant', name: 'Allied Health Assistant', groupId: 'support-admin' }),
   Object.freeze({ id: 'allied-health-associate', name: 'Allied Health Associate', groupId: 'support-admin' }),
   Object.freeze({ id: 'technologist-support', name: 'Technologist', groupId: 'support-admin' }),
   Object.freeze({ id: 'operations-manager', name: 'Operations / Service Manager', groupId: 'support-admin' }),
+]);
+
+/**
+ * EVERY id the profession picker can produce — MOH's 37 leaves plus the support and
+ * administrative roles.
+ *
+ * ⚠️ THIS EXISTS BECAUSE ADDING THE ROLES TO THE PICKER WAS NOT ENOUGH. The
+ *    validator in `memberProfile.js` built its set from `MOH_PROFESSION_LEAVES`
+ *    alone, so `Administrator` appeared in the dropdown, was chosen, and was then
+ *    refused on save with "that is not a profession on the MOH allied health list".
+ *    The owner hit it on the first member they tried to edit.
+ *
+ *    So there is now ONE list of what the picker can emit, and the validator reads
+ *    it. Two places deciding what a valid profession is, from two different sources,
+ *    is the shape of that bug — and it is the same shape as the two domain checks
+ *    and the two grade parsers this repository has already been caught by.
+ */
+export const SELECTABLE_PROFESSION_LEAVES = Object.freeze([
+  ...MOH_PROFESSION_LEAVES,
+  ...SUPPORT_AND_ADMIN_ROLES,
 ]);
 
 export const MOH_PROFESSION_OPTIONS = Object.freeze(

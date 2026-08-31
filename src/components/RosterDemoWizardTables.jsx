@@ -65,6 +65,7 @@ import {
     DEFAULT_WEEKLY_HOURS,
     GRADE_SCALE,
     ROSTER_V2_DEFAULTS,
+    NON_NURSING_GRADE_ALIASES,
 } from '../utils/rosterEngineV2';
 import {
     ANY_BAND,
@@ -94,7 +95,6 @@ import {
     wizardStepNumber,
     wizardStepLabel,
     WIZARD_STEP_COUNT,
-    NON_NURSING_GRADE_ALIASES,
 } from '../utils/rosterWizard';
 import WizardStep from './WizardStep';
 import { STANDARD_CATEGORIES, categoryChipClass, suggestCategoryFor } from '../utils/rosterCategories';
