@@ -731,9 +731,28 @@ const AH_GRADE_MIN = 7;
 const AH_GRADE_MAX = 17;
 
 /** `'ah13'`, `'AH13'`, `' AH13 '`, `'AH07'` -> `13`; anything else -> `null`. */
+/**
+ * `AH13`, `ah13`, ` AH13 `, `AH07` — and `NN8`.
+ *
+ * ⚠️ `NN` IS THE SAME LADDER UNDER ANOTHER NAME. The roster owner, 2026-08-31:
+ *    the support grades "AH7 through AH10 [are] sometimes known as NN7-NN10 ie
+ *    Non-Nursing". Different institutions, and different documents inside one
+ *    institution, write the same person's grade both ways. A parser that knows only
+ *    `AH` rejects a correctly-typed grade and the roster master is told their entry
+ *    is invalid, which is the tool being wrong about their own vocabulary.
+ *
+ *    ACCEPTED ACROSS THE WHOLE RANGE, not only 7–10, deliberately. `NN` is used for
+ *    the support grades in practice, but refusing `NN12` would mean explaining a
+ *    boundary the person typing it does not have — and `NN12` is unambiguous: it is
+ *    grade 12. Being strict here buys nothing and costs a confusing refusal.
+ *
+ *    DISPLAY IS STILL `AH`. `labelOfRank` is unchanged, so the app names one grade
+ *    one way — two spellings on screen for the same rank would be worse than one
+ *    spelling that everybody can type. The scale accepts both and speaks one.
+ */
 const parseAlliedHealthRank = (value) => {
     if (typeof value !== 'string') return null;
-    const match = /^ah(\d{1,2})$/i.exec(value.trim());
+    const match = /^(?:ah|nn)(\d{1,2})$/i.exec(value.trim());
     if (!match) return null;
     const number = Number(match[1]);
     return number >= AH_GRADE_MIN && number <= AH_GRADE_MAX ? number : null;

@@ -1940,9 +1940,23 @@ async function readTeamContext(db, request) {
         throw new HttpsError('permission-denied', 'You are not a lead of that team.');
     }
 
+    /**
+     * ⚠️ THE EMAIL COMES FROM THE TOKEN, AND ONLY WHEN VERIFIED. `request.data.email`
+     *    would be a claim by whoever called. `email_verified` is Firebase's own
+     *    assertion that this person can receive mail at that address, and it is what
+     *    makes "their own domain" mean anything — an unverified token yields `null`
+     *    here, so the same-institution rule in `assertInvitable` simply does not
+     *    apply and the allowlist decides, as before.
+     */
+    var token = request.auth.token || {};
+    var callerEmail = token.email_verified === true && typeof token.email === 'string'
+        ? token.email.trim().toLowerCase()
+        : null;
+
     return {
         teamId: teamId,
         callerUid: callerUid,
+        callerEmail: callerEmail,
         team: teamSnap.data(),
         callerMembership: callerSnap.data(),
     };
@@ -2007,6 +2021,7 @@ exports.inviteMember = onCall({ cors: true }, async (request) => {
         var refusal = teamMembership.assertInvitable({
             teamId: context.teamId,
             callerMembership: context.callerMembership,
+            callerEmail: context.callerEmail,
             invitee: { uid: null, email: email, emailVerified: false },
             role: role,
             allowedDomains: domains,
@@ -2034,6 +2049,7 @@ exports.inviteMember = onCall({ cors: true }, async (request) => {
     var verdict = teamMembership.assertInvitable({
         teamId: context.teamId,
         callerMembership: context.callerMembership,
+        callerEmail: context.callerEmail,
         invitee: invitee,
         role: role,
         existingMembership: existingSnap && existingSnap.exists ? existingSnap.data() : null,

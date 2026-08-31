@@ -169,6 +169,12 @@ const INVITE_REASONS = {
 const assertInvitable = ({
     teamId,
     callerMembership,
+    /**
+     * The VERIFIED email of the lead making the call, from the auth token — never
+     * from `request.data`, which would be a claim. See `sameInstitution` below for
+     * what it is for and why it is safe.
+     */
+    callerEmail = null,
     invitee,
     role = 'staff',
     existingMembership = null,
@@ -215,7 +221,38 @@ const assertInvitable = ({
         return no(INVITE_REASONS.BAD_EMAIL, 'That does not look like an email address.');
     }
 
-    if (!isAllowedEmail(invitee.email, domains)) {
+    /**
+     * ⚠️ A LEAD MAY ALWAYS ADD A COLLEAGUE ON THEIR OWN DOMAIN, and this is the
+     *    rule that stops NEXUS being unable to start itself.
+     *
+     *    THE OBJECTION THAT PRODUCED IT, from the owner on 2026-08-31: *"why do I
+     *    need to register my organisation when I'm the one building it, it doesn't
+     *    make sense."* It did not. `config/domains` is unwritable by any client, so
+     *    a freshly deployed NEXUS refused the first lead the right to add the first
+     *    colleague at their own hospital — the base case, and the one that has to
+     *    work before anything else can.
+     *
+     *    WHY THIS IS SAFE, and narrower than it looks. All four hold at once:
+     *      • the caller is authenticated and is a LEAD of this team (checked above);
+     *      • their email is VERIFIED — an unverified token is not accepted below,
+     *        so the domain is one Firebase confirmed they can receive mail at;
+     *      • the invitee ALREADY has a NEXUS account, or the `NO_ACCOUNT` refusal
+     *        further down catches them — so they passed registration themselves;
+     *      • and it admits exactly ONE domain: the lead's own.
+     *    "A verified lead adds a colleague at their own institution" is not the
+     *    threat the allowlist exists for. Placing an ARBITRARY address, or one at
+     *    ANOTHER institution, still needs `config/domains`, which is what it was
+     *    always for.
+     *
+     *    It is deliberately NOT a fallback to `DEFAULT_ALLOWED_DOMAINS`. That would
+     *    hardcode two hospitals into the server and re-create the coupling the
+     *    config document removed; this derives the answer from who is calling.
+     */
+    const sameInstitution = typeof callerEmail === 'string'
+        && emailDomain(callerEmail) !== null
+        && emailDomain(callerEmail) === emailDomain(invitee.email);
+
+    if (!sameInstitution && !isAllowedEmail(invitee.email, domains)) {
         const domain = emailDomain(invitee.email);
         /**
          * TWO REFUSALS, NOT ONE, because they need different actions from the person

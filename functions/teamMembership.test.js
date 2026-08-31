@@ -114,6 +114,71 @@ describe('the invitee has to be real, allowed and verified', () => {
      *    inside a team; a gate that opens when its configuration is missing is not
      *    a gate.
      */
+    /**
+     * ⚠️ THE RULE THAT LETS NEXUS START ITSELF. The owner, 2026-08-31: *"why do I
+     *    need to register my organisation when I'm the one building it, it doesn't
+     *    make sense."* It did not: `config/domains` is unwritable by any client, so
+     *    a fresh deployment refused the first lead the right to add the first
+     *    colleague at their own hospital.
+     */
+    it('lets a verified lead add a colleague on their OWN domain with no allowlist at all', () => {
+        const verdict = invite({
+            allowedDomains: [],
+            callerEmail: 'lead@kkh.com.sg',
+            invitee: invitee({ email: 'brandon@kkh.com.sg' }),
+        });
+        expect(verdict.ok, verdict.message).toBe(true);
+    });
+
+    it('still refuses ANOTHER institution when the allowlist is empty', () => {
+        // The exemption is exactly one domain wide: the caller's own.
+        expect(invite({
+            allowedDomains: [],
+            callerEmail: 'lead@kkh.com.sg',
+            invitee: invitee({ email: 'someone@gmail.com' }),
+        }).reason).toBe(INVITE_REASONS.DOMAIN_NOT_ALLOWED);
+    });
+
+    it('ignores an UNVERIFIED caller — the exemption rests on the verified token', () => {
+        // `readTeamContext` passes null unless `email_verified` is true, so an
+        // unverified lead falls back to the allowlist, which here admits nobody.
+        expect(invite({
+            allowedDomains: [],
+            callerEmail: null,
+            invitee: invitee({ email: 'brandon@kkh.com.sg' }),
+        }).reason).toBe(INVITE_REASONS.DOMAIN_NOT_ALLOWED);
+    });
+
+    it('does not let a lookalike caller domain smuggle one in', () => {
+        expect(invite({
+            allowedDomains: [],
+            callerEmail: 'lead@kkh.com.sg.attacker.example',
+            invitee: invitee({ email: 'brandon@kkh.com.sg' }),
+        }).reason).toBe(INVITE_REASONS.DOMAIN_NOT_ALLOWED);
+    });
+
+    /**
+     * ⚠️ THE DANGEROUS DIRECTION, and the one the first draft of these tests missed.
+     *    A mutation replacing the exact comparison with `endsWith` survived all of
+     *    them: the lookalike case above puts the attacker in the CALLER's address,
+     *    where a suffix check still refuses. The hole is the other way round — a
+     *    legitimate lead, and an invitee whose domain ENDS WITH theirs. This is the
+     *    exact trap `accessPolicy.js` names: "does not admit kkh.com.sg.attacker
+     *    .example, which an endsWith check would have let through".
+     */
+    it('refuses an invitee whose domain merely ENDS WITH the lead\'s own', () => {
+        for (const email of [
+            'attacker@evil-kkh.com.sg',
+            'attacker@notkkh.com.sg',
+            'attacker@x.kkh.com.sg',
+        ]) {
+            expect(
+                invite({ allowedDomains: [], callerEmail: 'lead@kkh.com.sg', invitee: invitee({ email }) }).reason,
+                `${email} was admitted by a suffix match`,
+            ).toBe(INVITE_REASONS.DOMAIN_NOT_ALLOWED);
+        }
+    });
+
     it('refuses everybody when the allowlist is empty', () => {
         expect(invite({ allowedDomains: [] }).reason).toBe(INVITE_REASONS.DOMAIN_NOT_ALLOWED);
     });

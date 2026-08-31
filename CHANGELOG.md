@@ -51,6 +51,76 @@ not changed by this release.
 
 ---
 
+## [2.4.0] - 2026-08-31
+
+Three things the roster owner said, all of which were right.
+
+### Fixed
+
+- **"Why do I need to register my organisation when I'm the one building it?"** It did
+  not make sense, and the answer was not "read the runbook". `config/domains` is
+  unwritable by any client, so a freshly deployed NEXUS refused the first lead the right
+  to add the first colleague **at their own hospital** — the base case, and the one that
+  has to work before anything else can.
+
+  **A verified lead may now always add a colleague on their own domain**, with no
+  allowlist at all. Four things hold at once, which is what makes it narrower than it
+  sounds: the caller is a **lead of that team**; their email is **verified** by Firebase,
+  so the domain is one they demonstrably receive mail at; the invitee **already has a
+  NEXUS account**, so they passed registration themselves; and the exemption is exactly
+  **one domain wide — the caller's own**. Placing an arbitrary address, or one at another
+  institution, still needs `config/domains`, which is what it was always for.
+
+  Deliberately **not** a fallback to `DEFAULT_ALLOWED_DOMAINS`: that would hardcode two
+  hospitals into the server and rebuild the coupling the config document removed. This
+  derives the answer from who is calling.
+
+  The caller's email now reaches the gate from `request.auth.token`, and **only when
+  `email_verified` is true** — never from `request.data`, which would be a claim.
+
+  Six tests. A mutation replacing the exact domain comparison with `endsWith` **survived
+  the first five**: the lookalike case put the attacker in the *caller's* address, where a
+  suffix check still refuses. The hole is the other direction — a legitimate lead and an
+  invitee at `evil-kkh.com.sg`. That case is now pinned, and it is the exact trap
+  `accessPolicy.js` names.
+
+### Added
+
+- **`NN7`–`NN10`, the Non-Nursing spelling of the support grades.** The owner: AH7–AH10
+  are *"sometimes known as NN7-NN10 ie Non-Nursing"*. The parser accepted only `AH`, so a
+  correctly-typed grade was rejected and the roster master was told their own vocabulary
+  was invalid. `NN8` now parses to rank 8 exactly as `AH8` does — same band, same gating,
+  byte-identical rosters — and the grade dropdown offers them under *"Non-Nursing — the
+  same grades, the other name"*. **Derived from the scale's own `nonExempt` band**, never
+  written down as four strings, so they move if that boundary moves again as it did on
+  2026-08-13. Display stays `AH`: the app accepts both spellings and speaks one.
+
+- **Administrators, assistants, associates, technologists and service managers.** The
+  owner: *"there are no Administrators, Assistants and Associate Roles which AHP
+  departments and services may have — and they are the ones who are the roster masters."*
+  They were unable to name themselves in a form that asks them to configure the roster.
+
+  **Kept in their own group, appended after MOH's 28 and labelled "not an MOH
+  profession".** An administrator is not an allied health profession, and merging them in
+  would make the claim "MOH's own 28" — which this repository repeats in the picker's own
+  copy — false. The two tests that pin that claim were made **more** precise rather than
+  relaxed: they now assert 28 MOH entries *excluding* the new group, that the group is
+  labelled as non-MOH, and that it is **last**.
+
+  Same omission as the grade bands had, one layer up: `nonExempt` (AH7–AH10, NN7–NN10) is
+  exactly where these roles sit, and the app spent a fortnight unable to express that a
+  support-grade colleague may not *lead* a clinician's duty. Here it could not name them
+  at all.
+
+### Notes
+
+A mutation that changed the appended group's `sortName` passed every test — because that
+field is never read: the group's position comes from `.concat()` after the sort, not from
+a sort key. Removed rather than left in place. Dead data that looks live is how the next
+reader concludes ordering is handled somewhere it is not.
+
+---
+
 ## [2.3.1] - 2026-08-31
 
 The setup notice, cut down — and the reason it was needed at all, fixed properly.

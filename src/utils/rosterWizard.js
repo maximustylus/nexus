@@ -132,6 +132,30 @@ export const BAND_NAMES = Object.freeze(Object.keys(DEFAULT_GRADE_BANDS));
  * its own visible heading. It is what a screen reader announces for the badge, so
  * "Step 4 of 7: Working hours" is speakable without the icon.
  */
+/**
+ * `NN7`–`NN10` — the Non-Nursing spelling of the support grades.
+ *
+ * DERIVED FROM THE SCALE'S OWN nonExempt BAND, never written down as four strings:
+ * these are exactly the grades the engine calls `nonExempt`, and if that boundary
+ * moves again — it moved on 2026-08-13, from a three-band cut that conflated
+ * assistants with junior clinicians — this list moves with it. A hardcoded
+ * `['NN7','NN8','NN9','NN10']` would quietly keep offering NN10 after AH10 stopped
+ * being a support grade.
+ *
+ * The engine parses either spelling to the same rank, so choosing `NN8` and
+ * choosing `AH8` produce byte-identical rosters. This is vocabulary, not policy.
+ */
+export const NON_NURSING_GRADE_ALIASES = Object.freeze(
+    (() => {
+        const band = DEFAULT_GRADE_BANDS.nonExempt;
+        if (!Array.isArray(band)) return [];
+        const [min, max] = band;
+        const out = [];
+        for (let rank = min; rank <= max; rank += 1) out.push(`NN${rank}`);
+        return out;
+    })(),
+);
+
 export const WIZARD_STEPS = Object.freeze([
     Object.freeze({ id: 'team', label: 'Your team' }),
     Object.freeze({ id: 'period', label: 'Dates and length' }),

@@ -94,6 +94,7 @@ import {
     wizardStepNumber,
     wizardStepLabel,
     WIZARD_STEP_COUNT,
+    NON_NURSING_GRADE_ALIASES,
 } from '../utils/rosterWizard';
 import WizardStep from './WizardStep';
 import { STANDARD_CATEGORIES, categoryChipClass, suggestCategoryFor } from '../utils/rosterCategories';
@@ -1318,6 +1319,25 @@ export const StaffTable = ({ rows, errors, onChange, onAdd, onRemove, readOnly =
                                                 {GRADE_SCALE.map((grade) => (
                                                     <option key={grade} value={grade}>{grade}</option>
                                                 ))}
+                                                {/* ⚠️ THE SAME GRADES UNDER THE NAME HALF THE
+                                                    DEPARTMENT USES. AH7–AH10 are "sometimes known
+                                                    as NN7–NN10, ie Non-Nursing" — the roster
+                                                    owner, 2026-08-31 — and these are the support
+                                                    grades: administrators, assistants,
+                                                    associates, technologists, who are very often
+                                                    the roster master. Somebody looking for their
+                                                    own grade and finding only `AH` concludes the
+                                                    tool is not for them.
+
+                                                    They are SYNONYMS, not extra grades: the
+                                                    engine parses `NN8` to rank 8, exactly as
+                                                    `AH8`. The band, the gating and the roster are
+                                                    identical whichever is chosen. */}
+                                                <optgroup label="Non-Nursing — the same grades, the other name">
+                                                    {NON_NURSING_GRADE_ALIASES.map((grade) => (
+                                                        <option key={grade} value={grade}>{grade}</option>
+                                                    ))}
+                                                </optgroup>
                                             </select>
                                         </Cell>
                                         <Cell label={STAFF_HEADINGS.fte} className="py-1 pr-2 align-top">

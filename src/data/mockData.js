@@ -1209,6 +1209,34 @@ export const demoShapeById = (id) => DEMO_SHAPES.find((shape) => shape.id === id
 // the 29th profession will be added by somebody who has not read this file.
 const byReaderVisibleName = (a, b) => a.sortName.localeCompare(b.sortName, 'en');
 
+/**
+ * THE PEOPLE MOH'S LIST DOES NOT NAME, AND WHO ARE OFTEN THE ROSTER MASTER.
+ *
+ * The roster owner, 2026-08-31: *"there are no Administrators, Assistants and
+ * Associate Roles which AHP departments and services may have and they are the ones
+ * who are the roster masters."*
+ *
+ * ⚠️ KEPT IN THEIR OWN GROUP, NOT MERGED INTO THE 28. MOH's list is a register of
+ *    allied health PROFESSIONS, and an administrator is not one of them — dropping
+ *    them in among the physiotherapists would make the claim "MOH's own 28" false,
+ *    and that claim is load-bearing everywhere else in this file. They are a second,
+ *    clearly labelled group instead: the list stays honest AND the person filling in
+ *    the form finds themselves in it.
+ *
+ *    THAT THIS WAS MISSING IS THE SAME OMISSION THE GRADE BANDS HAD. AH7–AH10 —
+ *    `nonExempt`, also written NN7–NN10 — is where these roles sit, and the app spent
+ *    a fortnight unable to express that a support-grade colleague may not LEAD a
+ *    clinician's duty. Here it could not name them at all, while asking them to
+ *    configure the roster.
+ */
+const SUPPORT_AND_ADMIN_ROLES = Object.freeze([
+  Object.freeze({ id: 'administrator', name: 'Administrator', groupId: 'support-admin' }),
+  Object.freeze({ id: 'allied-health-assistant', name: 'Allied Health Assistant', groupId: 'support-admin' }),
+  Object.freeze({ id: 'allied-health-associate', name: 'Allied Health Associate', groupId: 'support-admin' }),
+  Object.freeze({ id: 'technologist-support', name: 'Technologist', groupId: 'support-admin' }),
+  Object.freeze({ id: 'operations-manager', name: 'Operations / Service Manager', groupId: 'support-admin' }),
+]);
+
 export const MOH_PROFESSION_OPTIONS = Object.freeze(
   MOH_ALLIED_HEALTH_PROFESSIONS
     .map((profession) => (profession.children
@@ -1229,7 +1257,29 @@ export const MOH_PROFESSION_OPTIONS = Object.freeze(
         ...MOH_PROFESSION_LEAVES.find((leaf) => leaf.id === profession.id),
         sortName: profession.name,
       })))
-    .sort(byReaderVisibleName),
+    .sort(byReaderVisibleName)
+    /**
+     * APPENDED AFTER THE SORT, ON PURPOSE. Everything above is alphabetical because
+     * a reader arrives knowing the word they are looking for. This group is not part
+     * of that list and must not be interleaved into it — an `Administrator` sitting
+     * between `Art Therapist` and `Audiologist` reads as MOH having registered it.
+     * It goes last, under its own heading, where it is findable and unambiguous.
+     */
+    .concat([Object.freeze({
+      kind: 'group',
+      label: 'Support and administrative roles (not an MOH profession)',
+      groupId: 'support-admin',
+      // NO `sortName`, deliberately. Every other entry carries one because it is
+      // sorted; this group is `.concat`ed AFTER the sort and its position comes from
+      // that. A sort key here would imply it takes part in an ordering it does not —
+      // a mutation changing it to 'Administrator' passed every test, which is what
+      // dead data that looks live gets you.
+      options: Object.freeze(
+        [...SUPPORT_AND_ADMIN_ROLES]
+          .map((role) => Object.freeze({ ...role, sortName: role.name }))
+          .sort(byReaderVisibleName),
+      ),
+    })]),
 );
 
 /**
