@@ -168,13 +168,34 @@ describe('the domain allowlist is not configured yet', () => {
         render(<TeamMembersPanel />);
 
         const notice = screen.getByRole('note');
-        expect(notice.textContent).toMatch(/no registered organisations/i);
-        // It must say this is SETUP, not a judgement about their institution — that
-        // conflation is the whole reason this notice exists.
-        expect(notice.textContent).toMatch(/setup step/i);
-        expect(notice.textContent).toMatch(/not a judgement about your institution/i);
-        // And it must not send a clinician to a database path.
+        // It must name this as SETUP rather than as a refusal of their institution —
+        // that conflation is the whole reason the notice exists.
+        expect(notice.textContent).toMatch(/setup outstanding/i);
+        expect(notice.textContent).toMatch(/no organisation is registered/i);
+        // …say who can fix it…
+        expect(notice.textContent).toMatch(/installed NEXUS/i);
+        // …not send a clinician to a database path…
         expect(notice.textContent).not.toMatch(/config\/domains/i);
+        // …and stay SHORT. It sits above a form, not in place of one, and the first
+        // version was three sentences that repeated the refusal banner beneath it.
+        expect(notice.textContent.trim().length).toBeLessThan(220);
+    });
+
+    it('steps aside once the server has said it — two banners for one point is noise', async () => {
+        // The refusal from `inviteMember` covers the same ground in more words. Showing
+        // both at once was the owner's "feels vulgar", and it was a fair verdict.
+        domainState.configured = false;
+        invited.mockReturnValue(refused('NEXUS has not been set up with any organisations yet.'));
+        render(<TeamMembersPanel />);
+        expect(screen.getByRole('note')).toBeTruthy();
+
+        fill({ email: 'brandon@kkh.com.sg' });
+        await act(async () => {
+            fireEvent.click(screen.getByRole('button', { name: /add to team/i }));
+        });
+
+        expect(screen.getByText(/has not been set up with any organisations/i)).toBeTruthy();
+        expect(screen.queryByRole('note'), 'the notice stacked under the refusal').toBeNull();
     });
 
     it('says nothing at all once the allowlist IS configured', () => {

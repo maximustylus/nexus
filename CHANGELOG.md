@@ -51,6 +51,66 @@ not changed by this release.
 
 ---
 
+## [2.3.1] - 2026-08-31
+
+The setup notice, cut down — and the reason it was needed at all, fixed properly.
+
+### Fixed
+
+- **Two banners were making one point, and the longer one was mine.** The new setup
+  notice sat directly above the server's refusal, which says the same thing in more
+  words. Seeing both at once, the owner's verdict was that it *"feels vulgar"*, and that
+  was fair. It is now **one line** — *"Setup outstanding: no organisation is registered
+  yet, so adding anybody will be refused. Whoever installed NEXUS needs to register your
+  email domain."* — and it **hides once the server has spoken**, so the two can never
+  stack again. Pinned by a test that drives an add, gets the refusal, and asserts the
+  notice is gone.
+
+### Added
+
+- **`scripts/bootstrap-config.cjs` — NEXUS could not be initialised from NEXUS.** This
+  is the actual cause of the owner being unable to add a valid colleague, and it is
+  larger than the message that reported it. Two documents govern everything:
+
+  | | gates | written by |
+  |---|---|---|
+  | `config/domains` | which institutions may be added to a team | **nothing** |
+  | `config/superAdmins` | who may approve a lead's request for a team | **nothing** |
+
+  Both are read by Cloud Functions. Neither is client-writable — `allow write: if false`
+  on `config/{docId}`, correctly, since a client that can edit the login allowlist can
+  admit itself. So a freshly deployed NEXUS refused every invitation *and* left every
+  lead request unapprovable. Each refusal is right on its own; together they are a
+  product that cannot be started.
+
+  The script runs on the Admin SDK, which is the only thing that legitimately bypasses
+  those rules, and follows `migrate-to-teams.cjs`'s conventions because they were paid
+  for: **dry run is the default**, the **project is named before anything is read** (a
+  key for the wrong project is otherwise indistinguishable from an empty database), and
+  **an existing allowlist is never replaced** — adding needs `--merge-domains`, which is
+  a union. Replacing it could remove an already-onboarded institution and lock out
+  everyone there, producing the exact wrong message this release set out to stop.
+
+  It **will not invent a super-admin**: an address must be passed explicitly, because a
+  script that grants approval rights to whoever ran it is a privilege escalation with a
+  helpful tone of voice.
+
+  Six tests, source-read rather than imported (the script initialises firebase-admin on
+  load). The load-bearing one asserts its built-in default is **exactly**
+  `accessPolicy.js`'s `DEFAULT_ALLOWED_DOMAINS` — two copies of one fact, and if they
+  drift the bootstrap "succeeds" while changing nothing anyone can use.
+
+### Notes
+
+The first draft of the script used `admin.firestore()`. **firebase-admin v14 removed the
+service namespaces from the root export**, so that is `undefined` and fails with a
+message that reads like a credential problem — a trap `migrate-to-teams.cjs` had already
+hit and documented at length. Rewritten to the `firebase-admin/app` and
+`firebase-admin/firestore` subpath imports, which work on v10 through v14. Caught before
+shipping only because the repo had written the lesson down.
+
+---
+
 ## [2.3.0] - 2026-08-31
 
 Reported from the field: a lead could not add a colleague, and the refusal blamed their

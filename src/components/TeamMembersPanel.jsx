@@ -393,24 +393,25 @@ const TeamMembersPanel = () => {
               *
               * `domainsLoaded` gates it so the notice does not flash while the read is
               * in flight, which would train people to ignore it.
+              *
+              * ⚠️ AND `!error` — IT HIDES ONCE THE SERVER HAS SAID IT. The first version
+              * of this notice was three sentences and sat directly above the refusal
+              * banner, which says the same thing in more words. The owner's verdict on
+              * seeing both at once was that it "feels vulgar", and they were right: two
+              * banners making one point is noise, and the longer one was mine. It is now
+              * one line, and it steps aside the moment the server has spoken for itself.
               */}
-            {isLead && domainsLoaded && !domainsConfigured && (
+            {isLead && domainsLoaded && !domainsConfigured && !error && (
                 /* `role="note"`, not `status`: this is persistent, rendered on mount, and
                    a live region announces CHANGES — it would also collide with the
                    transient status banner above, which tests address by that role. */
-                <div role="note" className="flex gap-3 p-4 rounded-xl bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800/50">
-                    <ShieldAlert className="text-amber-500 shrink-0" size={18} />
-                    <div className="text-xs font-medium text-amber-800 dark:text-amber-300 leading-relaxed space-y-1">
-                        <p>
-                            <span className="font-black">NEXUS has no registered organisations yet, so adding
-                            anybody will be refused</span> — whatever their address. This is a one-off setup step,
-                            not a judgement about your institution.
-                        </p>
-                        <p>
-                            Whoever installed NEXUS needs to register your organisation&apos;s email domain. Until
-                            then colleagues can still create accounts, but they cannot be added to a team.
-                        </p>
-                    </div>
+                <div role="note" className="flex gap-2.5 p-3 rounded-xl bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800/50">
+                    <ShieldAlert className="text-amber-500 shrink-0 mt-0.5" size={15} />
+                    <p className="text-xs font-medium text-amber-800 dark:text-amber-300 leading-relaxed">
+                        <span className="font-black">Setup outstanding:</span> no organisation is registered yet,
+                        so adding anybody will be refused. Whoever installed NEXUS needs to register your email
+                        domain.
+                    </p>
                 </div>
             )}
 
