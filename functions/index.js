@@ -2078,6 +2078,32 @@ exports.inviteMember = onCall({ cors: true }, async (request) => {
         now: new Date().toISOString(),
     });
 
+    /**
+     * ⚠️ THE PLACEHOLDER FOR THIS PERSON, IF THERE IS ONE, GOES IN THE SAME BATCH.
+     *
+     *    `scripts/add-pending-member.cjs` writes a rosterable member for somebody who
+     *    has not registered yet, so a department can build next month's roster without
+     *    waiting on a registration relay. Those rows carry `pendingEmail` and an id
+     *    prefixed `pending-`.
+     *
+     *    When that person finally registers and a lead adds them here, a membership is
+     *    created under their REAL uid — and without this, the placeholder would still
+     *    be sitting in the staff pool. The department would then have TWO of the same
+     *    colleague: both rostered, both eligible, and the engine would happily give one
+     *    person two duties at once while believing they were two people. That is a
+     *    double-booking a roster master would have to spot by eye.
+     *
+     *    IN THE SAME BATCH, deliberately: a separate delete could succeed while the
+     *    membership write failed, or fail after it succeeded, and either order leaves
+     *    the department in the state this exists to prevent.
+     *
+     *    Matched on `pendingEmail`, not on the id: the id is derived from the address
+     *    and is for humans reading a console. The field is the contract.
+     */
+    var placeholders = await db.collection('teams/' + context.teamId + '/members')
+        .where('pendingEmail', '==', email)
+        .get();
+
     var batch = db.batch();
     batch.set(db.doc(writes.member.path.join('/')), writes.member.data);
     batch.set(
@@ -2090,7 +2116,20 @@ exports.inviteMember = onCall({ cors: true }, async (request) => {
         },
         { merge: true },
     );
+    placeholders.forEach(function (placeholder) {
+        // The grade travels with the person, not with the placeholder: their real
+        // membership gets its own `grades/{uid}` document when a lead sets one. The
+        // placeholder's is removed with it so no orphan grade is left addressed to an
+        // id nobody will look up again.
+        batch.delete(placeholder.ref);
+        batch.delete(db.doc('teams/' + context.teamId + '/grades/' + placeholder.id));
+    });
     await batch.commit();
+
+    if (!placeholders.empty) {
+        logger.info('[TEAMS] replaced ' + placeholders.size + ' placeholder(s) for ' + email
+            + ' in ' + context.teamId);
+    }
 
     logger.info('[TEAMS] ' + context.callerUid + ' added ' + invitee.uid + ' to ' + context.teamId);
     return { success: true, alreadyMember: false, uid: invitee.uid, role: role };

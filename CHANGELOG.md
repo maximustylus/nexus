@@ -51,6 +51,72 @@ not changed by this release.
 
 ---
 
+## [2.5.0] - 2026-08-31
+
+Roster a colleague who has not registered yet — because four months of roster should
+not wait on a registration relay.
+
+### Added
+
+- **`scripts/add-pending-member.cjs` — placeholder members.** `inviteMember` resolves an
+  address to a Firebase uid and refuses when there is none, because a membership is
+  *keyed* by uid, and `firestore.rules` has `allow create: if false` on the members
+  subcollection — a lead who could mint a membership for an arbitrary uid could sign in
+  as it. All correct, and it meant a department could not build next month's roster until
+  every colleague had registered.
+
+  **But the roster does not need a uid.** `rosteredMembers` is
+  `members.filter(p => p.rostered !== false)` and the engine rosters `displayName`. A uid
+  is needed for exactly two things: signing in, and being the target of a coverage swap.
+  So a member record with no real uid is **rosterable and cannot be signed in as** — that
+  asymmetry is the whole safety argument, not a convenience.
+
+  The script writes a member keyed `pending-<slugged-email>` plus their grade, following
+  the established conventions: dry run by default, the project named before anything is
+  read, an address that already has a real account **left alone and reported**. The id is
+  derived from the email so adding twice is one row, and `email:Name:Grade` is a single
+  argument because parallel flags silently mis-pair when one list is shorter — and
+  mis-pairing here writes somebody else's grade against a colleague's name.
+
+  **What a placeholder cannot do is stated in the script**: sign in, see their own roster,
+  request cover, be swapped with, or log wellbeing. It is a name and a grade in the staff
+  pool. Everything else waits for the real account.
+
+- **`inviteMember` now replaces a placeholder rather than duplicating the person.** This is
+  the half that makes the other half safe. When somebody finally registers and a lead adds
+  them, a membership is created under their real uid — and without this the placeholder
+  would still be in the staff pool. The department would then have **two of one
+  colleague**, both rostered, and the engine would give one person two duties at once
+  believing they were two people. A double-booking a roster master would have to catch by
+  eye.
+
+  Matched on the `pendingEmail` field rather than the id — the id is for humans reading a
+  console, the field is the contract — and the delete is **in the same batch** as the
+  membership write, with the placeholder's orphan grade document. A separate delete could
+  succeed while the membership write failed, or fail after it succeeded, and either order
+  leaves the department in exactly the state this prevents.
+
+  Nine tests. One of them failed on its first draft for a reason unrelated to the code: it
+  matched the *first* `db.batch()` in `functions/index.js`, which belongs to a different
+  handler. It is anchored on the query now.
+
+### For the roster owner, right now
+
+```bash
+npm i --no-save firebase-admin
+GOOGLE_APPLICATION_CREDENTIALS=/path/to/serviceAccountKey.json \
+  node scripts/add-pending-member.cjs --team <teamId> \
+    --person brandon.feng.gq@kkh.com.sg:Brandon:AH11 \
+    --person fadzlynn.mohamad.fadzully@kkh.com.sg:Fadzlynn:AH13
+```
+
+Dry run first — it prints the project and every document it would write. Add `--write`
+once that reads correctly. Both appear in the staff pool immediately, with grades, and
+the four-month roster can be generated tonight. When they register, adding them through
+the app replaces the placeholder automatically.
+
+---
+
 ## [2.4.1] - 2026-08-31
 
 v2.4.0 put the new options in the dropdowns and left the validators behind them
