@@ -51,6 +51,22 @@ not changed by this release.
 
 ---
 
+## [2.7.4] - 2026-08-31
+
+### Fixed
+
+- **The weekly-rotation checkbox rendered as a vertical bar, not a box.** A checkbox is
+  a fixed-size mark, but a flex item defaults to `flex-shrink: 1` — and this control is
+  the first `CheckBox` placed in a flex row beside a paragraph of explanation, so the
+  text squeezed it. Measured in a real browser: the co-lead checkbox in the task table
+  was **16 × 16** and this one **8.1 × 16**, which reads as a thin line. The owner
+  reported it as "not shaped like a box", which is exactly what it was.
+
+  `shrink-0` is now on the shared component and on the mark it draws, so no future
+  placement inside a flex container can reintroduce it. Verified in the running app —
+  both checkboxes now measure 16 × 16. jsdom performs no layout, so the tests assert the
+  class that prevents it rather than the width, on the control the defect appeared on.
+
 ## [2.7.3] - 2026-08-31
 
 A department's whole configuration was being thrown away by one control, and an

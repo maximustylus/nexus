@@ -243,11 +243,23 @@ const CheckBox = ({ checked, onChange, ariaLabel, title }) => (
         aria-label={ariaLabel}
         title={title}
         onClick={() => onChange(!checked)}
-        className={`inline-flex items-center justify-center ${TOUCH} min-w-11 sm:min-w-0 w-11 sm:w-auto`}
+        /**
+         * ⚠️ `shrink-0` IS LOAD-BEARING. A checkbox is a fixed-size mark, but a flex
+         *    item defaults to `flex-shrink: 1` — so the first time this control was
+         *    placed in a flex row beside a paragraph of explanation (the weekly
+         *    rotation panel), the text squeezed it from 16px wide to 8.1px and it
+         *    rendered as a vertical BAR rather than a box. Measured, not guessed: the
+         *    co-lead checkbox in the task table was 16×16 and this one 8.1×16.
+         *
+         *    Fixed on the component rather than at that one call site, because every
+         *    future placement inside a flex container would hit the same thing and
+         *    a control that silently changes shape is not obviously a checkbox.
+         */
+        className={`inline-flex shrink-0 items-center justify-center ${TOUCH} min-w-11 sm:min-w-0 w-11 sm:w-auto`}
     >
         <span
             aria-hidden="true"
-            className={`flex items-center justify-center w-5 h-5 sm:w-4 sm:h-4 rounded border-2 transition-colors ${
+            className={`flex shrink-0 items-center justify-center w-5 h-5 sm:w-4 sm:h-4 rounded border-2 transition-colors ${
                 checked
                     ? 'bg-emerald-600 border-emerald-600 text-white'
                     : 'bg-white dark:bg-slate-900 border-slate-300 dark:border-slate-600'

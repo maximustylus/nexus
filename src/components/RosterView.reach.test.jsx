@@ -1193,6 +1193,42 @@ describe('leaving and re-entering the sandbox', () => {
  *    `—` into JSX text — which renders as those six literal characters — passed
  *    the whole suite. That defect had already been shipped once, one branch away.
  */
+describe('the weekly-rotation checkbox is a checkbox', () => {
+    /**
+     * ⚠️ IT RENDERED AS A VERTICAL BAR. A checkbox is a fixed-size mark, but a flex
+     *    item defaults to `flex-shrink: 1`, and this control sits in a flex row beside
+     *    a paragraph of explanation — so the text squeezed it. Measured in a real
+     *    browser: the co-lead checkbox in the task table was 16x16 and this one
+     *    8.1x16, which reads as a thin line rather than a box. The owner reported it
+     *    as "not shaped like a box".
+     *
+     *    jsdom does no layout, so the WIDTH cannot be asserted here. What can be
+     *    asserted is the class that prevents it, on the control the defect appeared
+     *    on — and `shrink-0` is now on the shared component, so no future placement
+     *    inside a flex container can reintroduce it.
+     */
+    it('carries shrink-0, so a flex row cannot squash it', () => {
+        render(<RosterView user={VISITOR} />);
+        openConfigure();
+        const rotate = screen.getByRole('checkbox', { name: /rotate duties weekly/i });
+        expect(rotate.className).toMatch(/\bshrink-0\b/);
+        // The mark drawn inside it is protected too.
+        expect(rotate.querySelector('span').className).toMatch(/\bshrink-0\b/);
+    });
+
+    it('is the same control as the co-lead checkbox it is meant to match', () => {
+        render(<RosterView user={VISITOR} />);
+        openConfigure();
+        const rotate = screen.getByRole('checkbox', { name: /rotate duties weekly/i });
+        const coLead = screen.getByRole('checkbox', { name: /task row 1: co-lead/i });
+        // Same component, so the box classes that decide its shape must agree.
+        for (const cls of ['shrink-0', 'rounded', 'border-2']) {
+            expect(rotate.querySelector('span').className, `rotate box lost ${cls}`).toMatch(cls);
+            expect(coLead.querySelector('span').className, `co-lead box lost ${cls}`).toMatch(cls);
+        }
+    });
+});
+
 describe('a short name a visitor types reaches the calendar and the file', () => {
     /** The acronym cell lives behind the row's own disclosure. */
     const setShortName = (row, value) => {
