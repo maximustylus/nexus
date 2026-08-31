@@ -1237,17 +1237,8 @@ const RosterView = ({ user }) => {
      * ==========================================================================
      *
      * Team #1 has been rostering for months. Its tasks live in `config.tasks` —
-     * `[
-            'Physical Activity Counseling',
-            'Exercise Test',
-            'New Case',
-            'Walk-in',
-            'Individual Session',
-            'Inpatient Exercise',
-            'Paediatrics Group Session',
-            'Adolescent Group Session',
-            'Video Consultation Group',
-        ]` — because that is what the round-robin
+     * historically `['EFT', 'IPT+SKG', 'NC', 'FSG+WI']`, and since 2026-08-31 the
+     * spelled-out nine — because that is what the round-robin
      * engine consumed, and it has no `settings/roster` document because that
      * document did not exist until today.
      *
