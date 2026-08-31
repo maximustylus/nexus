@@ -127,11 +127,19 @@ describe('the duty passes on, and comes back on a cycle', () => {
      *    below, and it is what the department asked for: the duty is held for the
      *    week, it moves on, and over a run everybody does everything.
      */
-    it('never keeps the same lead on a duty two weeks running', () => {
+    /**
+     * ⚠️ EVERY DUTY, INCLUDING THE TWICE-WEEKLY ONE — and the earlier version of this
+     *    test looped over `DAILY` alone, which is exactly why the defect shipped. The
+     *    engine held the video-consultation duty with the same colleague for four
+     *    weeks running while this suite stayed green, because the only duty that broke
+     *    was the one duty not being checked. A test that excludes the awkward case is
+     *    not evidence about the awkward case.
+     */
+    it('never keeps the same lead on a duty two weeks running — every duty', () => {
         const run = generateRosterV2(config());
         const byWeek = leadsByWeek(run.roster);
         const weeks = Object.keys(byWeek).map(Number).sort((a, b) => a - b);
-        for (const task of DAILY) {
+        for (const task of [...DAILY, 'VC']) {
             for (let i = 1; i < weeks.length; i += 1) {
                 const previous = [...(byWeek[weeks[i - 1]][task] ?? [])][0];
                 const current = [...(byWeek[weeks[i]][task] ?? [])][0];
@@ -168,6 +176,35 @@ describe('the duty passes on, and comes back on a cycle', () => {
         for (const [week, perTask] of Object.entries(leadsByWeek(run.roster))) {
             const held = [...DAILY, 'VC'].map((task) => [...(perTask[task] ?? [])][0]).filter(Boolean);
             expect(new Set(held).size, `week ${week} doubled somebody up`).toBe(held.length);
+        }
+    });
+
+    /**
+     * With as many people as duties, a week should be a clean assignment: everybody
+     * leads exactly one thing. This is the property the twice-weekly duty broke — one
+     * colleague led nothing for four weeks while another doubled up.
+     */
+    it('gives every person exactly one duty to lead each week', () => {
+        const run = generateRosterV2(config());
+        for (const [week, perTask] of Object.entries(leadsByWeek(run.roster))) {
+            const held = [...DAILY, 'VC'].map((task) => [...(perTask[task] ?? [])][0]).filter(Boolean);
+            expect(held.length, `week ${week} did not staff every duty`).toBe(5);
+            expect(new Set(held).size, `week ${week} was not one duty each`).toBe(5);
+        }
+    });
+
+    it('gives every person every duty over the run, none more than twice the least', () => {
+        const run = generateRosterV2(config());
+        const weeksHeld = {};
+        for (const [, perTask] of Object.entries(leadsByWeek(run.roster))) {
+            for (const [task, leads] of Object.entries(perTask)) {
+                for (const person of leads) (weeksHeld[person] ??= {})[task] = (weeksHeld[person][task] || 0) + 1;
+            }
+        }
+        for (const person of TEAM) {
+            const counts = [...DAILY, 'VC'].map((task) => weeksHeld[person]?.[task] ?? 0);
+            expect(Math.min(...counts), `${person} was shut out of a duty`).toBeGreaterThan(0);
+            expect(Math.max(...counts) / Math.min(...counts), `${person}'s duties are lopsided`).toBeLessThanOrEqual(2);
         }
     });
 

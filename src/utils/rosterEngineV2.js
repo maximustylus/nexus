@@ -4506,8 +4506,37 @@ const compareContinuityCandidates = (a, b) => {
  *    convention a department means by "a week on that duty".
  */
 const compareRotationCandidates = (a, b) => {
-    // WITHIN the week: whoever already holds this duty this week keeps it.
-    if (a.ledThisWeek !== b.ledThisWeek) return b.ledThisWeek - a.ledThisWeek;
+    /**
+     * WITHIN the week: whoever already holds this duty this week keeps it.
+     *
+     * ⚠️ COUNTED IN DAYS, NOT AS A FLAG, AND A TEST PAID FOR THAT DISTINCTION. As a
+     *    boolean, a stand-in who covered ONE day of somebody's leave looked identical
+     *    to the person whose week it is — both "led it this week" — and the keys below
+     *    then handed the rest of the week to the stand-in, because covering one day
+     *    left them with fewer lead-days overall. The week changed hands over a single
+     *    sick day, which is precisely what this feature promises it will not do.
+     *
+     *    In days, the incumbent is ahead by however long they have held it, so they
+     *    take it back the moment they are a candidate again.
+     */
+    if (a.daysLedThisWeek !== b.daysLedThisWeek) return b.daysLedThisWeek - a.daysLedThisWeek;
+    /**
+     * ⚠️ LAST WEEK'S LEAD GOES TO THE BACK, AND THIS KEY IS THE REQUIREMENT ITSELF.
+     *
+     *    "The next week another staff leads" is not an emergent property to be hoped
+     *    for out of the two keys below — it is the rule, so it is stated. Without it
+     *    the spread key beneath decided a twice-weekly duty on its own: the one person
+     *    not yet leading anything that week won it every time, and their history with
+     *    that duty was never consulted. On the reporting department that handed the
+     *    same colleague the video-consultation duty four weeks running, while the
+     *    suite passed — because the test excluded exactly the duty that broke.
+     *
+     *    Deliberately a PREFERENCE, not a gate. On a duty only one person is eligible
+     *    to lead — one skill, one grade band, one person left after leave — the choice
+     *    is that person or nobody, and a roster that leaves a clinic unstaffed to
+     *    honour a rotation has misunderstood which of the two matters.
+     */
+    if (a.ledLastWeek !== b.ledLastWeek) return a.ledLastWeek - b.ledLastWeek;
     /**
      * ⚠️ ONE LEAD DUTY PER PERSON PER WEEK, AND WITHOUT THIS KEY THE ROTATION IS
      *    LOPSIDED RATHER THAN WRONG. With five people and four duties a clean cycle
@@ -4522,6 +4551,24 @@ const compareRotationCandidates = (a, b) => {
      *    of the first one mid-week to even things out.
      */
     if (a.leadDutiesThisWeek !== b.leadDutiesThisWeek) return a.leadDutiesThisWeek - b.leadDutiesThisWeek;
+    /**
+     * ⚠️ WHOEVER HAS LED FEWEST DAYS SO FAR, AND THIS KEY EXISTS TO STOP ONE PERSON
+     *    BECOMING THE PERMANENT LEFTOVER.
+     *
+     *    A duty that runs twice a week is two lead-days; a daily duty is five. Somebody
+     *    who draws the short duty is therefore behind on lead-days but NOT behind on
+     *    `compareCandidates`'s fairness, which counts co-leads too and so cannot see
+     *    it. On the reporting department that let one colleague be excluded from all
+     *    four daily duties for four weeks running: each week the other four took a
+     *    daily duty, he was the only person left when the twice-weekly duty came round,
+     *    and so he got it again. Every key above this one was satisfied. The rotation
+     *    still looked wrong, because it was.
+     *
+     *    Ranking by lead-days pulls the under-led person into a daily duty instead, so
+     *    the person left over for the short duty CHANGES from week to week — which is
+     *    what makes the short duty rotate at all.
+     */
+    if (a.leadDaysTotal !== b.leadDaysTotal) return a.leadDaysTotal - b.leadDaysTotal;
     // BETWEEN weeks: whoever has been away from it longest takes it next.
     if (a.weeksSinceLed !== b.weeksSinceLed) return b.weeksSinceLed - a.weeksSinceLed;
     return compareCandidates(a, b);
@@ -5660,6 +5707,13 @@ export const generateRosterV2 = (config) => {
      * five anchor fills of ONE duty, and counting fills would read that as five.
      */
     const weekLeadTasks = new Map();
+    /** person -> total lead DAYS so far, across every duty. See the comparator. */
+    const leadDaysByPerson = new Map();
+    /**
+     * task -> person -> { week, days } — how many DAYS of the current week they have
+     * led this duty. Reset as the week turns, so it never accumulates across weeks.
+     */
+    const weekTaskDays = new Map(tasks.map((task) => [task.name, new Map()]));
     /**
      * taskName -> { dateKey, leads } for the most recent occurrence of a
      * continuity task that actually got a lead. The comparison point for both the
@@ -6149,7 +6203,11 @@ export const generateRosterV2 = (config) => {
                          * who has not had a turn ahead of everybody who has — the property
                          * that makes the first cycle a clean Latin square.
                          */
-                        ledThisWeek: lastLeadWeekByTask.get(task.name).get(person.name) === week ? 1 : 0,
+                        daysLedThisWeek: weekTaskDays.get(task.name).get(person.name)?.week === week
+                            ? weekTaskDays.get(task.name).get(person.name).days
+                            : 0,
+                        ledLastWeek: lastLeadWeekByTask.get(task.name).get(person.name) === week - 1 ? 1 : 0,
+                        leadDaysTotal: leadDaysByPerson.get(person.name) || 0,
                         leadDutiesThisWeek: weekLeadTasks.get(person.name)?.week === week
                             ? weekLeadTasks.get(person.name).tasks.size
                             : 0,
@@ -6230,6 +6288,13 @@ export const generateRosterV2 = (config) => {
                     anchorCounts.set(name, (anchorCounts.get(name) || 0) + 1);
                     // The same ledger entry, in WEEKS, for the rotation comparator.
                     lastLeadWeekByTask.get(task.name).set(name, week);
+                    leadDaysByPerson.set(name, (leadDaysByPerson.get(name) || 0) + 1);
+                    const dayTally = weekTaskDays.get(task.name).get(name);
+                    if (dayTally === undefined || dayTally.week !== week) {
+                        weekTaskDays.get(task.name).set(name, { week, days: 1 });
+                    } else {
+                        dayTally.days += 1;
+                    }
                     // …and which duties they lead in THIS week, reset as the week turns.
                     const held = weekLeadTasks.get(name);
                     if (held === undefined || held.week !== week) {

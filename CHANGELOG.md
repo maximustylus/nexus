@@ -51,6 +51,46 @@ not changed by this release.
 
 ---
 
+## [2.7.1] - 2026-08-31
+
+Weekly rotation, actually applied to every duty.
+
+### Fixed
+
+- **A twice-weekly duty stayed with the same person for four weeks running.** Reported
+  within the hour by the department that asked for rotation: *"why is Ying Xian leading
+  VC for 4 weeks? I specifically said tasks rotate weekly."* They were right.
+
+  With five people and five duties, four of them daily, the same colleague was left over
+  every week when the twice-weekly duty came round — and the "spread the leads" key
+  chose him for it before his history with that duty was ever consulted. Three keys
+  now sit between:
+
+  - **last week's lead goes to the back.** "The next week another staff leads" is the
+    requirement, so it is stated rather than hoped for as an emergent property. A
+    preference and not a gate: where only one person can lead a duty, a rotation is not
+    worth leaving a clinic unstaffed for.
+  - **whoever has led fewest DAYS takes precedence.** A twice-weekly duty is two
+    lead-days against a daily duty's five, so the person drawing the short duty falls
+    behind on lead-days while looking level on ordinary fairness, which counts co-leads
+    too. This is what stopped one person becoming the permanent leftover.
+  - **incumbency is counted in days, not as a flag.** As a boolean, a stand-in covering
+    one day of somebody's leave looked identical to the person whose week it was, and
+    the week was handed to the stand-in for having led fewer days — the block changing
+    hands over a single sick day, which is the one thing this feature promises will not
+    happen.
+
+  On the reporting department, seventeen weeks: every week is now a clean assignment —
+  five people, five duties, one each — no duty repeats a lead in consecutive weeks, and
+  every person leads every duty three or four times against an ideal of 3.4.
+
+### Tests
+
+- **The suite checked only the four daily duties and skipped the twice-weekly one**,
+  which is why this shipped green. A test that excludes the awkward case is not evidence
+  about the awkward case. Every rotation assertion now covers every duty, and two were
+  added: each week is one duty per person, and nobody is shut out of a duty across a run.
+
 ## [2.7.0] - 2026-08-31
 
 A duty belongs to one person for the week, then it passes on.
