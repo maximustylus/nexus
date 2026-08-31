@@ -3769,6 +3769,32 @@ export const validateRosterV2Config = (config) => {
             }
         }
 
+        /**
+         * ⚠️ REFUSED RATHER THAN COERCED, for the reason `continuity` is: the engine
+         *    reads `=== true`, so `'yes'` or `1` would be silently OFF and a
+         *    department would get a per-day roster having asked for a weekly one.
+         *    That is exactly the failure this whole feature was reported as.
+         */
+        if (rules.rotateWeekly !== undefined && rules.rotateWeekly !== null) {
+            if (typeof rules.rotateWeekly !== 'boolean') {
+                return invalid('rules.rotateWeekly must be true or false — true holds each duty with one person for a whole week before it passes on.');
+            }
+            /**
+             * ⚠️ AND IT CANNOT BE COMBINED WITH `continuity`. They are contradictory
+             *    requests about the same slot: continuity says "the same lead every
+             *    time" and rotation says "a different lead every week". A department
+             *    that has stated both has made a mistake, and being told is better
+             *    than the engine quietly preferring one — which is what it would do,
+             *    because continuity is checked first.
+             */
+            if (rules.rotateWeekly === true) {
+                const held = (Array.isArray(tasks) ? tasks : []).find((task) => isPlainObject(task) && task.continuity === true);
+                if (held) {
+                    return invalid(`Task ${held.name} asks for continuity while the department rotates weekly — continuity keeps the SAME lead on every occurrence and a weekly rotation hands it on each week, so they cannot both hold. Turn off weekly rotation, or drop continuity from that task.`);
+                }
+            }
+        }
+
         if (rules.forbidPairs !== undefined && rules.forbidPairs !== null) {
             if (!Array.isArray(rules.forbidPairs)) {
                 return invalid('rules.forbidPairs must be an array of two-name pairs, e.g. [["Ann","Bob"]].');
@@ -4447,6 +4473,61 @@ const compareContinuityCandidates = (a, b) => {
 };
 
 /**
+ * The LEAD comparator for a WEEKLY ROTATION: hold the duty for the week, then hand
+ * it to whoever has been away from it longest.
+ *
+ * ── WHY THIS EXISTS ──────────────────────────────────────────────────────────
+ *
+ * A department that rotates weekly is not asking for fairness OR continuity, and
+ * neither of the two comparators above produces it:
+ *
+ *   compareCandidates            spreads a task across the team by FTE-weighted
+ *                                fairness, which re-decides every DAY and so gives
+ *                                somebody a different duty most mornings.
+ *   compareContinuityCandidates  concentrates a task on one person for the whole
+ *                                run, which is a rotation of period one.
+ *
+ * A weekly rotation is both, on two different clocks: WITHIN a week it behaves like
+ * continuity, and BETWEEN weeks it behaves like the inverse of continuity. So the
+ * comparator is two keys, in that order, and the ordinary fairness chain below them.
+ *
+ * ⚠️ `weeksSinceLed` IS `Infinity` FOR SOMEBODY WHO HAS NEVER LED THIS TASK, and
+ *    that is what makes the first cycle come out as a Latin square rather than as
+ *    fairness noise: everybody takes a turn before anybody takes a second. It also
+ *    means a person added to the team mid-run goes to the front of the queue for
+ *    every duty, which is the behaviour a roster master expects from "they have not
+ *    had a turn yet".
+ *
+ * ⚠️ THE BLOCK HOLDS ACROSS AN ABSENCE. Leave is a HARD gate applied before any
+ *    comparator runs, so a lead who is away on the Wednesday is simply not a
+ *    candidate that day and somebody stands in; on the Thursday they are a candidate
+ *    again, they still have the highest `ledThisWeek` for the task, and they get it
+ *    back. The week is not handed over because of one absent day — which is the
+ *    convention a department means by "a week on that duty".
+ */
+const compareRotationCandidates = (a, b) => {
+    // WITHIN the week: whoever already holds this duty this week keeps it.
+    if (a.ledThisWeek !== b.ledThisWeek) return b.ledThisWeek - a.ledThisWeek;
+    /**
+     * ⚠️ ONE LEAD DUTY PER PERSON PER WEEK, AND WITHOUT THIS KEY THE ROTATION IS
+     *    LOPSIDED RATHER THAN WRONG. With five people and four duties a clean cycle
+     *    leaves exactly one person leading nothing that week — they co-lead instead.
+     *    Ranking only by "away longest" gave that free person BOTH remaining duties
+     *    on the weeks where two tasks had the same longest-absent candidate, so one
+     *    colleague led twice and another led not at all. Measured on the owner's own
+     *    department: weeks 3 and 5 of 17 came out doubled before this key existed.
+     *
+     *    It sits BELOW the incumbency key on purpose: holding a duty for the week
+     *    outranks tidiness, so somebody who picked up a second duty is never stripped
+     *    of the first one mid-week to even things out.
+     */
+    if (a.leadDutiesThisWeek !== b.leadDutiesThisWeek) return a.leadDutiesThisWeek - b.leadDutiesThisWeek;
+    // BETWEEN weeks: whoever has been away from it longest takes it next.
+    if (a.weeksSinceLed !== b.weeksSinceLed) return b.weeksSinceLed - a.weeksSinceLed;
+    return compareCandidates(a, b);
+};
+
+/**
  * THE FLOOR COMPARATOR: whoever is furthest BEHIND a quota `min` for this period
  * wins, and everything else is the comparator that would have decided it.
  *
@@ -4470,8 +4551,20 @@ const compareContinuityCandidates = (a, b) => {
  * Every HARD gate still runs first — a floor never buys somebody a slot they are not
  * eligible for, on leave for, or over a ceiling for.
  */
-const candidateComparator = (prefersIncumbent, floorApplies) => {
-    const tail = prefersIncumbent ? compareContinuityCandidates : compareCandidates;
+const candidateComparator = (prefersIncumbent, floorApplies, rotatesWeekly = false) => {
+    /**
+     * ⚠️ CONTINUITY WINS OVER ROTATION WHERE A TASK ASKS FOR BOTH, and the config
+     *    validator refuses that combination outright so this branch is a belt to the
+     *    validator's braces rather than a silent preference. They are contradictory
+     *    requests — "the same lead every time" and "a different lead every week" —
+     *    and a department that states both has made a mistake worth being told about.
+     *
+     * Defaulting `rotatesWeekly` to false is what keeps every existing configuration
+     * on exactly the comparator chain it had before rotation existed.
+     */
+    const tail = prefersIncumbent
+        ? compareContinuityCandidates
+        : (rotatesWeekly ? compareRotationCandidates : compareCandidates);
     if (!floorApplies) return tail;
     return (a, b) => {
         if (a.quotaDeficit !== b.quotaDeficit) return b.quotaDeficit - a.quotaDeficit;
@@ -5456,6 +5549,16 @@ export const generateRosterV2 = (config) => {
     }
 
     const rules = isPlainObject(config.rules) ? config.rules : {};
+    /**
+     * WEEKLY ROTATION — a department-level setting, not a per-task one.
+     *
+     * "We rotate tasks weekly" is a statement about how a department works, not about
+     * one clinic, and a roster where three duties rotate and two do not is not a thing
+     * anybody asked for. So it is one switch, OFF by default: every configuration
+     * written before this existed keeps exactly the per-day fairness it was generated
+     * with, and no existing roster changes shape because this shipped.
+     */
+    const rotatesWeekly = rules.rotateWeekly === true;
     const maxConcurrentPerDay = isPositiveInt(rules.maxConcurrentPerDay)
         ? rules.maxConcurrentPerDay
         : ROSTER_V2_DEFAULTS.maxConcurrentPerDay;
@@ -5542,6 +5645,21 @@ export const generateRosterV2 = (config) => {
      * clinic six times has no incumbency in it.
      */
     const leadsByTask = new Map(tasks.map((task) => [task.name, new Map()]));
+    /**
+     * task -> person -> the LAST week index in which they led it.
+     *
+     * One map serves both keys `compareRotationCandidates` needs: "are they holding
+     * it this week" is `lastWeek === week`, and "how long since they held it" is
+     * `week - lastWeek`. Storing the derived pair instead would mean two maps that
+     * can disagree.
+     */
+    const lastLeadWeekByTask = new Map(tasks.map((task) => [task.name, new Map()]));
+    /**
+     * person -> { week, tasks } — the DISTINCT duties they lead in the week they are
+     * currently in. A Set rather than a count because a lead held Monday to Friday is
+     * five anchor fills of ONE duty, and counting fills would read that as five.
+     */
+    const weekLeadTasks = new Map();
     /**
      * taskName -> { dateKey, leads } for the most recent occurrence of a
      * continuity task that actually got a lead. The comparison point for both the
@@ -5867,7 +5985,7 @@ export const generateRosterV2 = (config) => {
                 // two comparators that existed before section 1e was implemented.
                 const floorsHere = quotaFloors.filter((quota) => quotaCountsTask(quota, task));
                 const ceilingsHere = quotaCeilings.filter((limit) => quotaCountsTask(limit.quota, task));
-                const compare = candidateComparator(prefersIncumbent, floorsHere.length > 0);
+                const compare = candidateComparator(prefersIncumbent, floorsHere.length > 0, rotatesWeekly);
 
                 /**
                  * How far behind their FLOOR is this person, right now, in the period
@@ -6022,6 +6140,22 @@ export const generateRosterV2 = (config) => {
                         // Read by `compareContinuityCandidates` only. Present on
                         // every candidate so there is one candidate shape.
                         taskLeads: leadsByTask.get(task.name).get(person.name) || 0,
+                        /**
+                         * Read by `compareRotationCandidates` only, and present on every
+                         * candidate for the reason `taskLeads` is: one candidate shape,
+                         * so no comparator ever reads `undefined`.
+                         *
+                         * `Infinity` means "has never led this task", which puts somebody
+                         * who has not had a turn ahead of everybody who has — the property
+                         * that makes the first cycle a clean Latin square.
+                         */
+                        ledThisWeek: lastLeadWeekByTask.get(task.name).get(person.name) === week ? 1 : 0,
+                        leadDutiesThisWeek: weekLeadTasks.get(person.name)?.week === week
+                            ? weekLeadTasks.get(person.name).tasks.size
+                            : 0,
+                        weeksSinceLed: lastLeadWeekByTask.get(task.name).has(person.name)
+                            ? week - lastLeadWeekByTask.get(task.name).get(person.name)
+                            : Infinity,
                         // Read by `orderTeamFills` only, and present here for
                         // the same reason `taskLeads` is: one candidate shape, and
                         // the snapshot the lead ranking reads is the snapshot the
@@ -6094,6 +6228,15 @@ export const generateRosterV2 = (config) => {
                 if (slot.position.role === anchorRoleOf(task)) {
                     const anchorCounts = leadsByTask.get(task.name);
                     anchorCounts.set(name, (anchorCounts.get(name) || 0) + 1);
+                    // The same ledger entry, in WEEKS, for the rotation comparator.
+                    lastLeadWeekByTask.get(task.name).set(name, week);
+                    // …and which duties they lead in THIS week, reset as the week turns.
+                    const held = weekLeadTasks.get(name);
+                    if (held === undefined || held.week !== week) {
+                        weekLeadTasks.set(name, { week, tasks: new Set([task.name]) });
+                    } else {
+                        held.tasks.add(task.name);
+                    }
                 }
             };
 

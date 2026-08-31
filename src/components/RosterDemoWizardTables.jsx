@@ -881,6 +881,42 @@ export const DepartmentLimitsEditor = ({ inputs, onChange, errors, staffNames = 
                 AURA uses the figure shown in it.
             </p>
 
+            {/* ⚠️ FIRST, AND IN ITS OWN BOX, BECAUSE IT CHANGES THE SHAPE OF THE WHOLE
+                ROSTER rather than capping it. The controls below are limits — they
+                say what may not happen. This one says how the work is handed round,
+                and a department that wants it is usually describing the single most
+                important fact about how it runs. */}
+            <div className="mb-4 p-3 rounded-lg border border-indigo-200 dark:border-indigo-800/60 bg-indigo-50/60 dark:bg-indigo-900/20">
+                <div className="flex items-start gap-2.5">
+                    <CheckBox
+                        checked={inputs?.rotateWeekly === true}
+                        onChange={(next) => onChange('rotateWeekly', next)}
+                        ariaLabel="Rotate duties weekly"
+                        title="One person leads a duty for the whole week, then it passes to somebody else"
+                    />
+                    <div className="min-w-0">
+                        <p className="text-[11px] font-black text-slate-700 dark:text-slate-200 uppercase tracking-wide">
+                            Rotate duties weekly
+                        </p>
+                        <p className="mt-1 text-[10px] text-slate-500 dark:text-slate-400 leading-relaxed">
+                            One person leads a duty for the <span className="font-bold">whole week</span>, then it
+                            passes to whoever has been away from it longest — so in a team of five, a duty comes
+                            back to the same person every fifth week. It applies to every duty, including one that
+                            only runs a day or two.
+                        </p>
+                        <p className="mt-1 text-[10px] text-slate-500 dark:text-slate-400 leading-relaxed">
+                            Leave it <span className="font-bold">off</span> and AURA decides each day on its own.
+                            That shares the work evenly, but it moves people between duties most mornings.
+                        </p>
+                        <p className="mt-1 text-[10px] text-slate-500 dark:text-slate-400 leading-relaxed">
+                            Leave still applies. If the week&apos;s lead is away on the Wednesday, somebody stands
+                            in for that day and they take the duty back on the Thursday — the week does not change
+                            hands over one absence.
+                        </p>
+                    </div>
+                </div>
+            </div>
+
             <div className="flex flex-wrap gap-x-4 gap-y-3">
                 <div>
                     <label className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase block mb-1" htmlFor="demo-max-concurrent">

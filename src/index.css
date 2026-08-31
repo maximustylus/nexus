@@ -6,7 +6,22 @@
   font-family: Inter, system-ui, Avenir, Helvetica, Arial, sans-serif;
   line-height: 1.5;
   font-weight: 400;
-  color-scheme: light dark;
+  /**
+   * ⚠️ `light`, NOT `light dark`, AND THIS IS A BUG FIX RATHER THAN A TIGHTENING.
+   *
+   * `color-scheme: light dark` tells the browser "this page handles both", so it
+   * draws NATIVE controls — the `<input type="date">` picker and its calendar icon
+   * — according to the OPERATING SYSTEM's preference. But this app's theme is a
+   * Tailwind `class` on <html> (see `darkMode: 'class'`), which the OS knows
+   * nothing about.
+   *
+   * So a user whose Mac is in dark mode but who has NEXUS in light mode got a
+   * white calendar icon on a white field — invisible, though still clickable — and
+   * a dark date picker popping out of a light page. Binding the property to the
+   * same class that drives everything else makes the native controls agree with
+   * the app rather than with the laptop.
+   */
+  color-scheme: light;
   
   /* Safe Area Variables */
   --safe-area-inset-left: env(safe-area-inset-left);
@@ -17,6 +32,8 @@
 
 html.dark {
   background-color: #0f172a; 
+  /* The other half of the pair above: the date picker follows the app's toggle. */
+  color-scheme: dark;
 }
 
 /* FIX: Changed height to min-height to allow scrolling */

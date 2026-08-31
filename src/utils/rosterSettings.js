@@ -199,6 +199,17 @@ export const toStoredSettings = ({
                 .slice(0, LIMITS.forbidPairs)
                 .filter((pair) => Array.isArray(pair) && pair.length === 2)
                 .map((pair) => pair.map((name) => asText(name))),
+            /**
+             * A BOOLEAN, always written, unlike the text controls beside it.
+             *
+             * The others are stored as text because `''` and `'2'` are different
+             * ANSWERS — blank means "we never said", which the engine reads as its
+             * own default. A switch has no third state: off IS an answer, and a
+             * department that turns rotation off wants it to stay off when the
+             * settings are read back, not to fall through to a default that might
+             * change later.
+             */
+            rotateWeekly: rules.rotateWeekly === true,
         },
         extraRules: isPlainObject(extraRules) ? extraRules : null,
         updatedAt: now || undefined,
@@ -277,6 +288,9 @@ export const fromStoredSettings = (data) => {
                 .filter((pair) => Array.isArray(pair) && pair.length === 2)
                 .map((pair) => [String(pair[0] ?? ''), String(pair[1] ?? '')]);
         }
+        // `=== true` rather than truthiness: a document written before this field
+        // existed has no key at all, and a stored `'false'` string must not read as on.
+        rules.rotateWeekly = data.rules.rotateWeekly === true;
     }
 
     return {

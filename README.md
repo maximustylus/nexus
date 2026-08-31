@@ -1,6 +1,6 @@
-# NEXUS: Smart Operations Dashboard v2.6.0 [BETA]
+# NEXUS: Smart Operations Dashboard v2.7.0 [BETA]
 
-![Version](https://img.shields.io/badge/Version-v2.6.0-blue) ![Status](https://img.shields.io/badge/Status-Beta%20Phase-emerald) ![Teams](https://img.shields.io/badge/Multi--Team-28%20AHP%20professions-indigo) ![Roster](https://img.shields.io/badge/Roster%20engine-deterministic-0f766e) ![Assistant](https://img.shields.io/badge/AURA%20assistant-Gemini-purple) ![PWA](https://img.shields.io/badge/PWA-Native%20Push%20Enabled-blue) ![CI/CD](https://img.shields.io/badge/CI%2FCD-GitHub%20Actions-2ea44f)
+![Version](https://img.shields.io/badge/Version-v2.7.0-blue) ![Status](https://img.shields.io/badge/Status-Beta%20Phase-emerald) ![Teams](https://img.shields.io/badge/Multi--Team-28%20AHP%20professions-indigo) ![Roster](https://img.shields.io/badge/Roster%20engine-deterministic-0f766e) ![Assistant](https://img.shields.io/badge/AURA%20assistant-Gemini-purple) ![PWA](https://img.shields.io/badge/PWA-Native%20Push%20Enabled-blue) ![CI/CD](https://img.shields.io/badge/CI%2FCD-GitHub%20Actions-2ea44f)
 
 **NEXUS** (formerly IDC App) is a clinician-led platform for workload management, skill-mix routing and staff wellbeing, built inside an allied health department and now serving departments beyond the one it was written for.
 
@@ -222,8 +222,8 @@ This application is an operational and workload management tool. It is not a cli
 ### Supported Versions
 | Version | Status |
 | ------- | ------ |
-| 2.6.x   | **Active Beta** (multi-team) |
-| 2.5.x   | Superseded — upgrade to 2.6.x |
+| 2.7.x   | **Active Beta** (multi-team) |
+| 2.6.x   | Superseded — upgrade to 2.7.x |
 | 2.4.x   | Superseded — upgrade to 2.5.x |
 | 2.3.x   | Superseded — upgrade to 2.4.x |
 | 2.2.x   | Superseded — upgrade to 2.3.x |
@@ -342,11 +342,28 @@ Beta testers should utilise Demo Mode to verify system integrity:
 
 ## Release History
 
+### NEXUS v2.7.0 [Current Beta] — A duty is somebody's for the week
+
+**Weekly rotation.** A department can now say "we rotate duties weekly" and mean it:
+one person leads a duty for the whole week, then it passes to whoever has been away
+from it longest. It applies to every duty, including one that runs only a day or two.
+Off by default, so no existing roster changes shape.
+
+Measured on the owner's own department, seventeen weeks: a duty changed lead mid-week
+in **68 weeks out of 68** before, and **0 out of 68** after, with every slot still
+filled. Leave still applies — a lead away on the Wednesday has somebody stand in for
+that day and takes the duty back on the Thursday.
+
+**Two theme fixes.** The date picker's calendar icon was invisible in light mode, and
+its pop-up opened dark, because `color-scheme` followed the operating system while the
+app's theme is a class. And step 2 of Configure had no gap beneath it in live mode —
+the one seam where two steps come from different files.
+
 > The authoritative, machine-readable record is **[`CHANGELOG.md`](CHANGELOG.md)**, which
 > also lists the **known issues that are documented but not yet fixed**. The summaries
 > below are narrative highlights; where the two disagree, `CHANGELOG.md` is correct.
 
-### NEXUS v2.6.0 [Current Beta] — Some of the duties, and a name that fits a phone
+### NEXUS v2.6.0 — Some of the duties, and a name that fits a phone
 
 A minor release: two new lead-set membership fields, plus the dead controls that
 building them exposed. **`onlyTasks`** lets a lead say a colleague carries *some* of the

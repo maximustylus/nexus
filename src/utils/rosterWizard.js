@@ -361,6 +361,13 @@ export const EMPTY_RULES_INPUTS = () => ({
     maxConcurrentPerDay: '',
     maxConsecutiveDays: '',
     forbidPairs: [],
+    /**
+     * WEEKLY ROTATION — a BOOLEAN, and the only control in this object that is not a
+     * raw string, because it is a switch rather than something typed. `false` is the
+     * default and means the engine's per-day fairness, which is what every roster
+     * generated before this existed used.
+     */
+    rotateWeekly: false,
 });
 
 // --- ROW FACTORIES ------------------------------------------------------------
@@ -1917,6 +1924,13 @@ export const buildDemoRosterV2ConfigFromTables = ({
         // into the config that was generated from — the same aliasing rule `skills`
         // and `leadBands` follow.
         ...(pairShape.pairs.length === 0 ? {} : { forbidPairs: pairShape.pairs.map((pair) => [...pair]) }),
+        /**
+         * ABSENT WHEN OFF, like every control above it. The engine reads
+         * `rules.rotateWeekly === true`, so a `false` would behave identically — but
+         * emitting it would put a key into every saved configuration in the estate to
+         * record that a department did NOT ask for something.
+         */
+        ...(rulesInputs?.rotateWeekly === true ? { rotateWeekly: true } : {}),
     };
 
     return {

@@ -3654,9 +3654,16 @@ const RosterView = ({ user }) => {
                                 it, which read as a gap in the sequence rather than as a step.
                                 Live mode keeps it bare and unnumbered — the classes are
                                 conditional, not a second copy of the markup. */}
+                            {/* ⚠️ `mb-4` ON BOTH BRANCHES. It used to be on the Sandbox one
+                                only, so in LIVE mode this step butted straight against
+                                step 3 with no gap at all — the one seam in the wizard
+                                where two steps come from different files, and so the one
+                                nobody owned. Every other panel gets its breathing room
+                                from a `pb-4` inside `RosterDemoWizardTables`; this is the
+                                same rhythm, applied to the step that sits outside it. */}
                             <div className={isDemo
                                 ? 'mb-4 p-3 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 grid grid-cols-3 gap-3'
-                                : 'grid grid-cols-2 gap-4'}
+                                : 'mb-4 grid grid-cols-2 gap-4'}
                             >
                                 {/* TWO THIRDS TO THE DATE, one to Weeks — in Sandbox only.
                                     Equal halves left the date field 151px, and the native

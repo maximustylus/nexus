@@ -51,6 +51,69 @@ not changed by this release.
 
 ---
 
+## [2.7.0] - 2026-08-31
+
+A duty belongs to one person for the week, then it passes on.
+
+### Added
+
+- **Weekly rotation (`rules.rotateWeekly`).** A department that rotates duties weekly
+  could not express it. The engine decides every *(duty, day)* on its own, so a roster
+  master describing "a week on that duty, then we swap" got people moved between duties
+  most mornings. Measured on the reporting department's own seventeen-week roster: a
+  duty changed lead **mid-week in 68 weeks out of 68**.
+
+  Turned on, one person holds a duty for the whole week and it then passes to whoever
+  has been away from it longest. Same run, same team: **0 mid-week changes out of 68**,
+  every slot still filled. It applies to every duty, including one that runs only a day
+  or two — "even if a task only lasts two days out of six, the next week another staff
+  leads" was the requirement, in the owner's words.
+
+  ⚠️ **Off by default.** Absent or `false` gives exactly the per-day fairness every
+  roster generated before this shipped was built with, so nothing in the estate changes
+  shape. `validateRosterV2Config` refuses a non-boolean rather than coercing it — `'yes'`
+  is truthy to a reader and `false` to `=== true`, and a department that typed it would
+  have got a per-day roster having asked for a weekly one.
+
+  ⚠️ **Refused alongside `continuity`,** naming the task. They are contradictory requests
+  about the same slot — "the same lead every time" against "a different lead every week"
+  — and continuity is evaluated first, so without this the engine would quietly prefer it.
+
+  **How it works.** A third lead comparator beside the two that existed. A weekly
+  rotation is continuity *within* a week and the inverse of continuity *between* weeks,
+  so it is two keys in that order, with a third that spreads leads one-per-person before
+  rotating them — without that key the owner's own weeks 3 and 5 gave one colleague two
+  duties while another led none.
+
+  **Leave does not hand the week over.** Leave is a hard gate applied before any
+  comparator, so the week's lead simply is not a candidate on the day they are away;
+  somebody stands in for that day and they take the duty back the next. A week does not
+  change hands over one absence.
+
+  ⚠️ **What is NOT claimed:** a strict Latin square. Assignment is greedy, slot by slot,
+  and a duty running only twice a week absorbs one person for that week — on the owner's
+  department that parked one colleague on the video-consultation duty for four weeks, so
+  he entered the daily rotation late and that duty's cycle ran short. Guaranteed instead:
+  the duty is held for the week, it never keeps the same lead two weeks running, and over
+  a run everybody leads everything. A true Latin square needs the whole week solved as one
+  matching problem, which is a different engine.
+
+### Fixed
+
+- **The date picker's calendar icon was invisible in light mode, and its pop-up opened
+  dark.** `src/index.css` declared `color-scheme: light dark`, which tells the browser to
+  draw NATIVE controls according to the **operating system** — but this app's theme is a
+  Tailwind class on `<html>`, which the OS knows nothing about. A user with a dark Mac and
+  NEXUS in light got a white calendar icon on a white field, still clickable but unseeable,
+  and a dark picker out of a light page. `color-scheme` is now bound to the same class that
+  drives everything else. Verified in a browser with the OS emulated dark and the app in
+  light: computed `color-scheme: light`, icon visible.
+
+- **Step 2 of Configure had no gap beneath it in live mode.** *Dates and length* lives in
+  `RosterView.jsx` and *Grade bands* in `RosterDemoWizardTables.jsx` — the one seam in the
+  wizard where consecutive steps come from different files, and so the one nobody owned.
+  The spacing existed on the sandbox branch of the className and not the live one.
+
 ## [2.6.0] - 2026-08-31
 
 A roster master who carries *some* of the department's duties, and an acronym short

@@ -83,3 +83,7 @@ dist/
 # wellbeing history — these must never be committed, and the script's own banner
 # says to delete them once the cutover has settled.
 nexus-backup-*.json
+
+# macOS Finder metadata — never useful in a repo.
+.DS_Store
+**/.DS_Store
