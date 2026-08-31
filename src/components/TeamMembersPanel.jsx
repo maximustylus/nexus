@@ -37,7 +37,7 @@ import { getFunctions, httpsCallable } from 'firebase/functions';
 import { doc, updateDoc, setDoc } from 'firebase/firestore';
 import {
     UserPlus, Trash2, Loader2, AlertCircle, CheckCircle2, Users, ShieldCheck, Eye, Stethoscope,
-    Pencil, X, Lock,
+    Pencil, X, Lock, ShieldAlert,
 } from 'lucide-react';
 import { useTeam } from '../context/TeamContext';
 import {
@@ -52,6 +52,7 @@ import { useMemberGrade } from '../hooks/useMemberGrade';
 import { memberPath, gradePath } from '../utils/teamPaths';
 import { db } from '../firebase';
 import { useNexus } from '../context/NexusContext';
+import { useDomainAllowlist } from '../hooks/useDomainAllowlist';
 
 // Pinned region, as at every other call site (`AuraChat.jsx`, `FeedsView.jsx`,
 // `LeadRequestsPanel.jsx`). An unpinned `getFunctions()` defaults to the same region
@@ -87,6 +88,11 @@ const readError = (error) => error?.message || 'Something went wrong.';
 const TeamMembersPanel = () => {
     const { teamId, team, members, isLead } = useTeam();
     const { isDemo } = useNexus();
+    // Is `config/domains` actually set up? Not the same question as "what are"
+    // "the domains" — the hook always HAS a list, because it falls back so the
+    // login screen keeps working. This asks whether the document yielded one,
+    // because `inviteMember` on the server refuses everybody when it did not.
+    const { configured: domainsConfigured, loaded: domainsLoaded } = useDomainAllowlist();
 
     const [email, setEmail] = useState('');
     const [displayName, setDisplayName] = useState('');
@@ -364,6 +370,47 @@ const TeamMembersPanel = () => {
                 <div role="status" className="flex gap-3 p-4 rounded-xl bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800/50">
                     <CheckCircle2 className="text-emerald-500 shrink-0" size={18} />
                     <p className="text-xs font-medium text-emerald-700 dark:text-emerald-300">{notice}</p>
+                </div>
+            )}
+
+            {/*
+              * ⚠️ SAID BEFORE THEY PRESS ADD, NOT AFTER IT FAILS.
+              *
+              * `config/domains` is what tells the server which institutions NEXUS
+              * serves, and until that document exists `inviteMember` refuses EVERY
+              * address — correctly, because a gate that opens when its configuration
+              * is missing is not a gate. But nothing said so, so the first a lead knew
+              * was a refusal naming their own hospital, which reads as "your
+              * institution is not welcome here". It is not: it is a setup step nobody
+              * has done. The owner hit this on 2026-08-31 on `kkh.com.sg`.
+              *
+              * WHY HERE AND NOT ON THE LOGIN SCREEN: the hook's own header argues that
+              * a red banner on the login screen of a clinical tool costs more than it
+              * buys, and that is still right — a visitor can do nothing about it and
+              * the fallback lets them in anyway. A lead standing in front of the Add
+              * form is the opposite case: they are about to take an action that will
+              * fail, and they are usually the person who can get it fixed.
+              *
+              * `domainsLoaded` gates it so the notice does not flash while the read is
+              * in flight, which would train people to ignore it.
+              */}
+            {isLead && domainsLoaded && !domainsConfigured && (
+                /* `role="note"`, not `status`: this is persistent, rendered on mount, and
+                   a live region announces CHANGES — it would also collide with the
+                   transient status banner above, which tests address by that role. */
+                <div role="note" className="flex gap-3 p-4 rounded-xl bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800/50">
+                    <ShieldAlert className="text-amber-500 shrink-0" size={18} />
+                    <div className="text-xs font-medium text-amber-800 dark:text-amber-300 leading-relaxed space-y-1">
+                        <p>
+                            <span className="font-black">NEXUS has no registered organisations yet, so adding
+                            anybody will be refused</span> — whatever their address. This is a one-off setup step,
+                            not a judgement about your institution.
+                        </p>
+                        <p>
+                            Whoever installed NEXUS needs to register your organisation&apos;s email domain. Until
+                            then colleagues can still create accounts, but they cannot be added to a team.
+                        </p>
+                    </div>
                 </div>
             )}
 

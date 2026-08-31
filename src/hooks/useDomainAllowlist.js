@@ -29,6 +29,27 @@ import { DEFAULT_ALLOWED_DOMAINS, parseDomainAllowlist } from '../utils/accessPo
 export const useDomainAllowlist = () => {
     const [domains, setDomains] = useState(DEFAULT_ALLOWED_DOMAINS);
     const [loaded, setLoaded] = useState(false);
+    /**
+     * ⚠️ `configured` IS NOT `domains.length > 0` — it can never be, because
+     *    `domains` always has a value. It answers a different question: did the
+     *    `config/domains` DOCUMENT actually yield a list, or are we running on the
+     *    built-in fallback?
+     *
+     *    WHY THAT DISTINCTION EARNS A SECOND RETURN VALUE. The fallback keeps the
+     *    LOGIN screen working — existing users must get in even if the document is
+     *    missing — but `inviteMember` on the server has the opposite rule and
+     *    refuses everybody when the document is empty or unreadable. Both are right
+     *    (see the function's own note). The consequence is a state where somebody
+     *    can register and then cannot be added to a team, and nothing said why: the
+     *    owner hit exactly that on 2026-08-31 and the message they got read as
+     *    "your hospital is refused".
+     *
+     *    So the fact is exposed, and the SURFACE decides what to do with it. The
+     *    login screen still says nothing — see the header, that reasoning stands.
+     *    The team panel, where a lead is about to press Add and it will fail, says
+     *    so before they do.
+     */
+    const [configured, setConfigured] = useState(true);
 
     useEffect(() => {
         let cancelled = false;
@@ -37,10 +58,16 @@ export const useDomainAllowlist = () => {
             try {
                 const snapshot = await getDoc(doc(db, ...configPath(CONFIG_DOCS.domains)));
                 const parsed = snapshot.exists() ? parseDomainAllowlist(snapshot.data()) : null;
-                if (!cancelled && parsed) setDomains(parsed);
+                if (cancelled) return;
+                if (parsed) setDomains(parsed);
+                // Absent, empty, or unparseable all mean the same thing to the server.
+                setConfigured(Boolean(parsed));
             } catch (error) {
                 // Fall back rather than fail — see the header. Logged, not shown.
                 console.warn('[NEXUS] config/domains unreadable; using the built-in allowlist.', error);
+                // Unreadable is NOT "configured": the server will refuse invitations
+                // for the same reason we could not read it.
+                if (!cancelled) setConfigured(false);
             } finally {
                 if (!cancelled) setLoaded(true);
             }
@@ -50,7 +77,7 @@ export const useDomainAllowlist = () => {
         return () => { cancelled = true; };
     }, []);
 
-    return { domains, loaded };
+    return { domains, loaded, configured };
 };
 
 export default useDomainAllowlist;

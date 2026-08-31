@@ -118,6 +118,37 @@ describe('the invitee has to be real, allowed and verified', () => {
         expect(invite({ allowedDomains: [] }).reason).toBe(INVITE_REASONS.DOMAIN_NOT_ALLOWED);
     });
 
+    /**
+     * ⚠️ THE REFUSAL IS THE SAME; THE SENTENCE MUST NOT BE. These two cases need
+     *    different actions from the lead reading them, and one message served both:
+     *    "NEXUS is not open to kkh.com.sg. Registered organisations: none configured."
+     *    told a lead their hospital had been considered and rejected, when in fact
+     *    nobody had configured ANY institution yet. Reported from the field on
+     *    2026-08-31, by the owner, on their own hospital's domain.
+     */
+    it('says SETUP IS OUTSTANDING when nothing is configured — not "your institution is refused"', () => {
+        const message = invite({ allowedDomains: [] }).message;
+        expect(message).toMatch(/not been set up with any organisations/i);
+        expect(message).toMatch(/setup step/i);
+        // It must NOT imply a judgement about their institution…
+        expect(message).not.toMatch(/is not open to \S+ yet/i);
+        // …and it must not send a clinical lead to a database path.
+        expect(message).not.toMatch(/config\/domains/i);
+    });
+
+    it('names the registered organisations when there ARE some and theirs is not one', () => {
+        const message = invite({
+            invitee: invitee({ email: 'someone@gmail.com' }),
+            allowedDomains: ['kkh.com.sg', 'singhealth.com.sg'],
+        }).message;
+        expect(message).toMatch(/not open to gmail\.com/i);
+        expect(message).toContain('kkh.com.sg');
+        expect(message).toContain('singhealth.com.sg');
+        expect(message).not.toMatch(/config\/domains/i);
+        // The setup wording belongs to the other case only.
+        expect(message).not.toMatch(/not been set up/i);
+    });
+
     it('refuses everybody when the allowlist is not even an array', () => {
         expect(invite({ allowedDomains: null }).reason).toBe(INVITE_REASONS.DOMAIN_NOT_ALLOWED);
     });

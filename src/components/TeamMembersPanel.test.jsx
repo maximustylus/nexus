@@ -30,6 +30,28 @@ import { render, screen, cleanup, fireEvent, act } from '@testing-library/react'
 vi.mock('../firebase', () => ({ db: {}, auth: {}, storage: {} }));
 
 /**
+ * ⚠️ THE DOMAIN ALLOWLIST IS MOCKED, AND `configured: true` IS THE DEFAULT.
+ *
+ * The panel reads `config/domains` on mount to decide whether to warn a lead that
+ * adding anybody will be refused. Left real, that read appears in `getDocSpy` and
+ * breaks the grade tests below, which assert the EXACT set of documents read — and
+ * rightly so: "reads exactly one grade document" is the point of them, and an
+ * unrelated read making it two would be a real regression they must keep catching.
+ *
+ * `true` is the default because it is the configured, working state — so every
+ * existing assertion runs against a panel with no setup notice, exactly as before.
+ * The notice's own tests set it false.
+ */
+const domainState = vi.hoisted(() => ({ configured: true, loaded: true }));
+vi.mock('../hooks/useDomainAllowlist', () => ({
+    useDomainAllowlist: () => ({
+        domains: ['kkh.com.sg'],
+        loaded: domainState.loaded,
+        configured: domainState.configured,
+    }),
+}));
+
+/**
  * ⚠️ THE FIRESTORE MOCK IDENTIFIES A CALL BY ITS PATH, NEVER BY SUBTRACTION.
  *
  *    Three helpers in this repository used to identify a listener as "the one that
@@ -121,6 +143,62 @@ beforeEach(() => {
 afterEach(() => cleanup());
 
 // ── 1. ADDING ────────────────────────────────────────────────────────────────
+
+/**
+ * ==============================================================================
+ * THE SETUP NOTICE — said before the lead presses Add, not after it fails
+ * ==============================================================================
+ *
+ * Until `config/domains` exists, `inviteMember` refuses EVERY address — correctly,
+ * because a gate that opens when its configuration is missing is not a gate. But
+ * nothing said so, so the first a lead knew was a refusal naming their own
+ * hospital, which reads as "your institution is not welcome". Reported from the
+ * field on 2026-08-31, by the owner, on `kkh.com.sg`.
+ */
+describe('the domain allowlist is not configured yet', () => {
+    beforeEach(() => {
+        team = asTeam();
+        domainState.configured = true;
+        domainState.loaded = true;
+    });
+    afterEach(() => { domainState.configured = true; domainState.loaded = true; });
+
+    it('warns the lead that adding anybody will be refused, and why', () => {
+        domainState.configured = false;
+        render(<TeamMembersPanel />);
+
+        const notice = screen.getByRole('note');
+        expect(notice.textContent).toMatch(/no registered organisations/i);
+        // It must say this is SETUP, not a judgement about their institution — that
+        // conflation is the whole reason this notice exists.
+        expect(notice.textContent).toMatch(/setup step/i);
+        expect(notice.textContent).toMatch(/not a judgement about your institution/i);
+        // And it must not send a clinician to a database path.
+        expect(notice.textContent).not.toMatch(/config\/domains/i);
+    });
+
+    it('says nothing at all once the allowlist IS configured', () => {
+        domainState.configured = true;
+        render(<TeamMembersPanel />);
+        expect(screen.queryByRole('note')).toBeNull();
+    });
+
+    it('does not flash while the read is still in flight', () => {
+        // A notice that appears and vanishes on every mount is one people learn to
+        // ignore, and then miss the time it matters.
+        domainState.configured = false;
+        domainState.loaded = false;
+        render(<TeamMembersPanel />);
+        expect(screen.queryByRole('note')).toBeNull();
+    });
+
+    it('is for the lead only — a staff member can do nothing about it', () => {
+        domainState.configured = false;
+        team = asTeam({ isLead: false });
+        render(<TeamMembersPanel />);
+        expect(screen.queryByRole('note')).toBeNull();
+    });
+});
 
 describe('adding a colleague', () => {
     it('sends the team, the address and the role the lead chose', async () => {

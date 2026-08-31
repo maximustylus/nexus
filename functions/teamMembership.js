@@ -217,11 +217,33 @@ const assertInvitable = ({
 
     if (!isAllowedEmail(invitee.email, domains)) {
         const domain = emailDomain(invitee.email);
+        /**
+         * TWO REFUSALS, NOT ONE, because they need different actions from the person
+         * reading them — and the old single sentence conflated them.
+         *
+         *   • NOTHING CONFIGURED. Nobody can be added to any team, at any
+         *     institution. That is a SETUP step somebody has not done yet, and it
+         *     says nothing about the institution in the address. The old message
+         *     read "NEXUS is not open to kkh.com.sg… none configured", which tells a
+         *     lead their hospital was considered and rejected. It was not.
+         *   • CONFIGURED, BUT NOT THIS ONE. Their institution genuinely is not
+         *     registered, and the list is worth showing so they can see what is.
+         *
+         * NEITHER NAMES `config/domains`. A Firestore path is not an action a
+         * clinical lead can take, and it was the first thing the old message asked
+         * of them. The path is in the code, the runbook and the CHANGELOG, where the
+         * person who can act on it is looking.
+         */
         return no(
             INVITE_REASONS.DOMAIN_NOT_ALLOWED,
-            'NEXUS is not open to ' + domain + '. Registered organisations: '
-            + (domains.length > 0 ? domains.join(', ') : 'none configured')
-            + '. If this institution should be here, the owner adds it to config/domains.',
+            domains.length === 0
+                ? 'NEXUS has not been set up with any organisations yet, so nobody can be '
+                  + 'added to a team — including ' + domain + '. This is a setup step that is '
+                  + 'still outstanding, not a decision about your institution. Ask whoever '
+                  + 'installed NEXUS to register your organisation, then add this person again.'
+                : 'NEXUS is not open to ' + domain + ' yet. Registered organisations: '
+                  + domains.join(', ') + '. If your institution should be here, ask whoever '
+                  + 'installed NEXUS to register it.',
         );
     }
 

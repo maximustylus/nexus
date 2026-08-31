@@ -51,6 +51,72 @@ not changed by this release.
 
 ---
 
+## [2.3.0] - 2026-08-31
+
+Reported from the field: a lead could not add a colleague, and the refusal blamed their
+hospital.
+
+### Fixed
+
+- **"NEXUS is not open to kkh.com.sg. Registered organisations: none configured."** One
+  sentence served two situations that need opposite responses, and it chose the wrong
+  words for the more common one. There are now two:
+  - **Nothing configured at all** — *"NEXUS has not been set up with any organisations
+    yet, so nobody can be added to a team — including {domain}. This is a setup step
+    that is still outstanding, not a decision about your institution."* Nobody can be
+    added anywhere, at any institution; it says nothing about the address in the form.
+  - **Configured, but not that one** — the registered organisations are listed, so the
+    lead can see what NEXUS does serve.
+
+  **Neither names `config/domains` any more.** A Firestore path was the first thing the
+  old message asked of a clinical lead, and it is not an action they can take. The path
+  lives in the code, the runbook and this file, where the person who *can* act on it is
+  looking.
+
+- **The panel now says so BEFORE the lead presses Add.** Until `config/domains` exists,
+  `inviteMember` refuses every address — correctly, because a gate that opens when its
+  configuration is missing is not a gate. But nothing announced it, so the first anyone
+  knew was a refusal naming their own hospital. A lead now sees a setup notice above the
+  add form, gated on the read having completed so it cannot flash, and shown only to a
+  lead — a staff member can do nothing about it.
+
+  `useDomainAllowlist` gained a `configured` flag to make this possible. It is **not**
+  `domains.length > 0`, which can never be false: it reports whether the *document*
+  yielded a list, or whether the built-in fallback is in play. The login screen still
+  says nothing — that reasoning in the hook's header stands, and a visitor can do nothing
+  about it either.
+
+  Four component tests, mutation-checked four ways, all caught: the notice never
+  rendering, the loaded-gate dropped so it flashes, the lead-gate dropped so staff see
+  it, and the "not a judgement about your institution" sentence removed.
+
+### Notes — why this was not a code bug, and the operator fix
+
+`config/domains` does not exist in the deployed project. `allow write: if false` on
+`config/{docId}` means no client can create it, so it is a Firebase console or CLI step:
+collection `config`, document `domains`, one **array** field named `allowed` holding
+`kkh.com.sg` and `singhealth.com.sg`. The field name matters — `parseDomainAllowlist`
+reads `data.allowed` and ignores anything else.
+
+The client/server asymmetry is deliberate and documented on both sides: the login screen
+falls back to a built-in list so existing users can always get in, and the invite
+function refuses when its configuration is missing because it is what stands between a
+lead and placing an arbitrary address inside a team. What was missing was any account of
+the state *between* them — register successfully, then be un-addable — which is what the
+notice and the reworded refusal now cover.
+
+### Also — the local verify harness was testing a subset
+
+`verify.sh` ran `vitest run src`, but `npm test` is `vitest run` with no path and
+`vitest.config.js` includes `functions/**` and `scripts/**` as well. The harness was
+reporting a **src-only** figure as the whole suite, so a Cloud Function or
+migration-manifest regression could have passed it and failed CI — and the change in this
+very release is in `functions/`. Fixed, along with the root files those suites read
+(`firebase.json`, `AURA-GUARDRAILS.md`). **True baseline: 92 files, 3274 tests** — the
+2727 quoted in recent entries was src only.
+
+---
+
 ## [2.2.1] - 2026-08-31
 
 > **Correction to the [2.2.0] entry below.** Its release also claimed the README title,
