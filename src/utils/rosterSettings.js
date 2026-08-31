@@ -195,10 +195,31 @@ export const toStoredSettings = ({
         rules: {
             maxConcurrentPerDay: asText(rules.maxConcurrentPerDay, 8),
             maxConsecutiveDays: asText(rules.maxConsecutiveDays, 8),
+            /**
+             * ⚠️ STORED AS `{ a, b }` MAPS, NOT AS TWO-ELEMENT ARRAYS, AND THIS IS A
+             *    DATA-LOSS FIX RATHER THAN A STYLE PREFERENCE.
+             *
+             *    FIRESTORE FORBIDS AN ARRAY DIRECTLY INSIDE AN ARRAY. `[["Ann","Bob"]]`
+             *    is exactly that, so `setDoc` threw
+             *
+             *        Function setDoc() called with invalid data.
+             *        Nested arrays are not supported
+             *
+             *    and the WHOLE settings document failed to write — not just the pairs.
+             *    A department that named one pair of colleagues who must not work
+             *    together silently lost its entire saved configuration and was told
+             *    "you may have to set it up again next time", with no clue which
+             *    control had done it. The owner hit this and had to read it out of a
+             *    browser console.
+             *
+             *    An array of MAPS is legal, and each map holds an array of nothing.
+             *    `fromStoredSettings` reads both shapes, though no document can
+             *    actually contain the old one — every write that tried, failed.
+             */
             forbidPairs: (Array.isArray(rules.forbidPairs) ? rules.forbidPairs : [])
                 .slice(0, LIMITS.forbidPairs)
                 .filter((pair) => Array.isArray(pair) && pair.length === 2)
-                .map((pair) => pair.map((name) => asText(name))),
+                .map((pair) => ({ a: asText(pair[0]), b: asText(pair[1]) })),
             /**
              * A BOOLEAN, always written, unlike the text controls beside it.
              *
@@ -284,9 +305,16 @@ export const fromStoredSettings = (data) => {
             rules.maxConsecutiveDays = data.rules.maxConsecutiveDays;
         }
         if (Array.isArray(data.rules.forbidPairs)) {
+            // `{ a, b }` is what is written now. The two-element array is read as well
+            // because it costs one branch and this module must never be the reason a
+            // department's configuration comes back short.
             rules.forbidPairs = data.rules.forbidPairs
-                .filter((pair) => Array.isArray(pair) && pair.length === 2)
-                .map((pair) => [String(pair[0] ?? ''), String(pair[1] ?? '')]);
+                .map((pair) => {
+                    if (isPlainObject(pair)) return [String(pair.a ?? ''), String(pair.b ?? '')];
+                    if (Array.isArray(pair) && pair.length === 2) return [String(pair[0] ?? ''), String(pair[1] ?? '')];
+                    return null;
+                })
+                .filter((pair) => pair !== null && pair[0] !== '' && pair[1] !== '');
         }
         // `=== true` rather than truthiness: a document written before this field
         // existed has no key at all, and a stored `'false'` string must not read as on.

@@ -51,6 +51,47 @@ not changed by this release.
 
 ---
 
+## [2.7.3] - 2026-08-31
+
+A department's whole configuration was being thrown away by one control, and an
+acronym was only honoured where I had decided it should be.
+
+### Fixed
+
+- **⚠️ DATA LOSS: naming one pair of colleagues who must not work together destroyed
+  the entire saved configuration.** `forbidPairs` was stored as `[["Ann","Bob"]]` — an
+  array directly inside an array, which **Firestore refuses**:
+
+  ```
+  Function setDoc() called with invalid data. Nested arrays are not supported
+  ```
+
+  The write threw, so **nothing** was saved: not the pairs, not the tasks, not the
+  bands, hours or limits. The department was told "your configuration could not be
+  saved, so you may have to set it up again next time" with no indication which control
+  had done it, and the roster itself saved fine — so the failure looked cosmetic. The
+  owner had to read the cause out of a browser console.
+
+  Pairs are now stored as `{ a, b }` maps, which Firestore accepts. `fromStoredSettings`
+  reads both shapes, though no stored document can hold the old one — every write that
+  tried, failed. A test now walks the whole written object and fails on **any** array
+  whose entries are arrays, so the next field cannot reintroduce it.
+
+- **The `.csv` ignored short names, because I decided it should.** Acronyms went into
+  the calendar and the `.ics` and full names stayed in the spreadsheet, on the reasoning
+  that a CSV column has no width to run out of and `MA` under a heading of `Lead` is
+  worse for analysis. The reasoning is fine; the decision was not mine to take. Somebody
+  who types an acronym against a colleague has said how they want that colleague written
+  down. An acronym is now used wherever one is set — Lead, Co-Lead and Assignees — and a
+  department that wants full names gets them by not setting one.
+
+- **The rotation/duty-limit warning told the roster master off.** It read as though the
+  combination were a mistake to undo. It is not: a specialist who does one duty and
+  nothing else is an ordinary department. It now states the consequence — in the weeks
+  that duty goes to a colleague, somebody else leads two — says plainly that this is a
+  fair trade if the limit was intended, and offers the alternatives instead of
+  prescribing them.
+
 ## [2.7.2] - 2026-08-31
 
 Two settings that contradict each other, and said nothing about it.

@@ -2451,7 +2451,7 @@ const RosterView = ({ user }) => {
                     <button onClick={() => setIsConfigOpen(true)} className={`flex gap-2 items-center justify-center px-4 py-2 ${TOUCH} rounded bg-slate-100 font-bold text-xs hover:bg-slate-200 text-slate-600 transition-colors`}>
                         <Settings size={14} /> Configure
                     </button>
-                    <button onClick={() => downloadCSV(rosterData)} className={`flex gap-2 items-center justify-center px-4 py-2 ${TOUCH} rounded bg-green-100 text-green-700 font-bold text-xs hover:bg-green-200 transition-colors`}>
+                    <button onClick={() => downloadCSV(rosterData, { shortNames })} className={`flex gap-2 items-center justify-center px-4 py-2 ${TOUCH} rounded bg-green-100 text-green-700 font-bold text-xs hover:bg-green-200 transition-colors`}>
                         <FileSpreadsheet size={14} /> CSV
                     </button>
                     <button onClick={() => downloadICS(rosterData, { shortNames })} className={`flex gap-2 items-center justify-center px-4 py-2 ${TOUCH} rounded bg-indigo-600 text-white font-bold text-xs hover:bg-indigo-700 shadow-lg transition-colors`}>

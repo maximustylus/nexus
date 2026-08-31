@@ -1282,7 +1282,7 @@ describe('a short name a visitor types reaches the calendar and the file', () =>
         expect(ics).toMatch(/DESCRIPTION:.*Benedict Tan/);
     });
 
-    it('leaves the .csv on full names, which is a deliberate asymmetry', async () => {
+    it('uses the acronym in the .csv too', async () => {
         generateWithAcronyms();
         const original = URL.createObjectURL;
         let captured = null;
@@ -1293,10 +1293,13 @@ describe('a short name a visitor types reaches the calendar and the file', () =>
             URL.createObjectURL = original;
         }
         const csv = await captured.text();
-        // A spreadsheet column has no width to run out of, and `AN` under a heading
-        // of `Lead` is strictly worse for the analysis a CSV exists for.
-        expect(csv).toMatch(/Adaeze Nwosu/);
-        expect(csv).toMatch(/Benedict Tan/);
+        // ⚠️ THIS ASSERTION USED TO BE THE OPPOSITE. The CSV kept full names by a
+        //    decision taken on the department's behalf — sound reasoning about
+        //    spreadsheets, wrong person deciding. Somebody who types an acronym has
+        //    said how they want that colleague written down, everywhere.
+        expect(csv).toMatch(/AN/);
+        expect(csv).toMatch(/BT/);
+        expect(csv).not.toMatch(/Adaeze Nwosu/);
     });
 
     it('falls back to full names when nobody has an acronym', () => {

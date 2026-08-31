@@ -510,18 +510,36 @@ describe('the .ics export', () => {
     });
 });
 
-describe('the .csv export keeps full names', () => {
+describe('the .csv export uses short names too', () => {
     /**
-     * A DELIBERATE ASYMMETRY, not an oversight. The complaint that produced short
-     * names was an Outlook event title on a phone; a spreadsheet column has no width
-     * to run out of, and `MA` in a column headed "Lead" is strictly worse for the
-     * analysis a CSV exists for.
+     * ⚠️ THIS TEST USED TO ASSERT THE OPPOSITE, AND THE OPPOSITE WAS A DECISION TAKEN
+     *    ON A DEPARTMENT'S BEHALF. The CSV deliberately kept full names, reasoning
+     *    that a spreadsheet has no width to run out of. Sound reasoning, wrong person
+     *    making the call: the owner set acronyms, opened the CSV, saw full names and
+     *    asked what was going on. An acronym is now used wherever one is set, and a
+     *    department that wants full names gets them by not setting one.
      */
-    it('writes the identity fields, unshortened', () => {
-        const csv = buildCSV({ '2026-09-07': [shift()] });
-        expect(csv).toMatch(/Muhammad Alif/);
-        expect(csv).toMatch(/Brandon Feng/);
-        expect(csv).not.toMatch(/\bMA\b/);
+    it('shortens the identity columns when an acronym exists', () => {
+        const csv = buildCSV({ '2026-09-07': [shift()] }, { shortNames: SHORTS });
+        expect(csv).toMatch(/,MA,BF,/);
+        expect(csv).not.toMatch(/Muhammad Alif/);
+    });
+
+    it('keeps full names when no acronym is set', () => {
+        // Both the absent-map case and the nobody-matches case, because a department
+        // that has set none must get exactly the file it always got.
+        for (const options of [undefined, {}, { shortNames: { 'Nobody Here': 'NH' } }]) {
+            const csv = buildCSV({ '2026-09-07': [shift()] }, options);
+            expect(csv).toMatch(/Muhammad Alif/);
+            expect(csv).toMatch(/Brandon Feng/);
+        }
+    });
+
+    it('shortens the Assignees column as well as Lead and Co-Lead', () => {
+        // Three names go through a different code path from the two identity columns.
+        const three = shift({ assignees: ['Muhammad Alif', 'Brandon Feng', 'Somebody Else'] });
+        const csv = buildCSV({ '2026-09-07': [three] }, { shortNames: SHORTS });
+        expect(csv).toMatch(/MA; BF; Somebody Else/);
     });
 });
 

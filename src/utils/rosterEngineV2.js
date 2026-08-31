@@ -5702,12 +5702,21 @@ export const generateRosterV2 = (config) => {
         for (const person of staff) {
             const limited = Array.isArray(person.windows) && person.windows.length > 0;
             if (!limited) continue;
+            /**
+             * ⚠️ STATES THE COST, DOES NOT TELL ANYBODY OFF. The first version of this
+             *    sentence read as though the combination were a mistake to be undone.
+             *    It is not: a department with a specialist who does one duty and
+             *    nothing else is an ordinary department, and the owner meant it when
+             *    they set it. What they are owed is the consequence, in numbers they
+             *    can check against their own roster — not advice they did not ask for.
+             */
             warnings.push(
-                `${person.name} is limited to specific duties, so the weekly rotation cannot include them — `
-                + 'in the weeks their duty passes to somebody else they are eligible for nothing, which leaves '
-                + 'the rest of the team covering more duties than there are people. Clear "Only these duties" '
-                + `on ${person.name}'s row in Admin → Team to put them in the rotation; to give them a lighter `
-                + 'load instead, lower their FTE, which keeps them eligible for everything.',
+                `${person.name} is limited to specific duties, so in the weeks their duty goes to a colleague `
+                + 'they are eligible for nothing else — the rest of the team then covers more duties than there '
+                + 'are people, and somebody leads two. That is arithmetic rather than a fault, and it is a fair '
+                + `trade if ${person.name} genuinely only does those duties. If it was not intended, clearing `
+                + '"Only these duties" on their row in Admin → Team puts them in the rotation, and lowering their '
+                + 'FTE instead gives them a lighter load while keeping them eligible for everything.',
             );
         }
     }

@@ -269,17 +269,22 @@ describe('a duty limit and a weekly rotation contradict each other', () => {
     it('warns, by name, that the limited person cannot be in the rotation', () => {
         const run = limited();
         expect(run.ok).toBe(true);
-        const warning = (run.warnings || []).find((w) => /rotation cannot include/i.test(w));
-        expect(warning, 'no warning about the contradiction').toBeTruthy();
+        const warning = (run.warnings || []).find((w) => /limited to specific duties/i.test(w));
+        expect(warning, 'no warning about the consequence').toBeTruthy();
         expect(warning).toMatch(/Alif/);
-        // …and says what to do instead, because a warning naming no remedy is a shrug.
+        // ⚠️ It states the COST — "somebody leads two" — and explicitly says the
+        //    trade is fair, because a specialist who does one duty is an ordinary
+        //    department and not a misconfiguration to be corrected.
+        expect(warning).toMatch(/somebody leads two/i);
+        expect(warning).toMatch(/fair trade/i);
+        // The remedies are offered, not prescribed.
         expect(warning).toMatch(/Only these duties/i);
         expect(warning).toMatch(/FTE/);
     });
 
     it('says nothing when nobody is limited', () => {
         const run = generateRosterV2(config());
-        expect((run.warnings || []).filter((w) => /rotation cannot include/i.test(w))).toHaveLength(0);
+        expect((run.warnings || []).filter((w) => /limited to specific duties/i.test(w))).toHaveLength(0);
     });
 
     it('says nothing when the department does not rotate', () => {
@@ -292,7 +297,7 @@ describe('a duty limit and a weekly rotation contradict each other', () => {
                 ...(name === 'Alif' ? { windows: [{ tasks: ['EFT'] }] } : {}),
             })),
         }));
-        expect((run.warnings || []).filter((w) => /rotation cannot include/i.test(w))).toHaveLength(0);
+        expect((run.warnings || []).filter((w) => /limited to specific duties/i.test(w))).toHaveLength(0);
     });
 });
 

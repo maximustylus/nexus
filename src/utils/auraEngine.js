@@ -1348,7 +1348,26 @@ const ASSIGNEE_SEPARATOR = '; ';
  * never the string `undefined` (M7), and that now covers the new column too — a
  * shift with no readable assignee gets an empty cell, not `undefined`.
  */
-export const buildCSV = (rosterData) => {
+/**
+ * ⚠️ THE CSV USES SHORT NAMES TOO, AND IT DID NOT AT FIRST — THAT WAS MY CALL AND IT
+ *    WAS THE WRONG ONE.
+ *
+ *    When short names shipped, this exporter deliberately kept full names, reasoning
+ *    that a spreadsheet has no width to run out of and `MA` under a column headed
+ *    `Lead` is worse for the analysis a CSV exists for. That reasoning is fine and it
+ *    was not a decision to take on a department's behalf: somebody who has typed an
+ *    acronym against a colleague has said how they want that colleague written down.
+ *    The owner configured acronyms, opened the CSV, found full names and asked what
+ *    was going on — which is the right question.
+ *
+ *    So the rule is now simply: an acronym is used wherever one is set. A department
+ *    that wants full names in the spreadsheet gets them by not setting an acronym,
+ *    which is a choice they can make and undo without anybody's help.
+ */
+export const buildCSV = (rosterData, options = {}) => {
+    const shortNames = options.shortNames && typeof options.shortNames === 'object'
+        ? options.shortNames
+        : null;
     const header = ['Date', 'Week', 'Task', 'Category', 'Lead', 'Co-Lead', 'Assignees'];
     const rows = [header.map(csvField).join(',')];
 
@@ -1362,9 +1381,10 @@ export const buildCSV = (rosterData) => {
                 // `csvField` quotes the cell if a name contains a comma, a quote
                 // or a newline, and de-weaponises a leading `=`/`+`/`-`/`@`
                 // exactly as it does for every other field (M10).
-                const assignees = shiftAssigneeNames(s).join(ASSIGNEE_SEPARATOR);
+                const show = (name) => displayNameFor(name, shortNames);
+                const assignees = shiftAssigneeNames(s).map(show).join(ASSIGNEE_SEPARATOR);
                 rows.push(
-                    [date, s.week, s.task, s.category, s.lead, s.coLead, assignees]
+                    [date, s.week, s.task, s.category, show(s.lead), show(s.coLead), assignees]
                         .map(csvField)
                         .join(','),
                 );
@@ -1402,8 +1422,8 @@ export const downloadICS = (rosterData, options = {}) => {
     downloadBlob(buildICS(rosterData, options), 'text/calendar', 'AURA_Roster_Merged.ics');
 };
 
-export const downloadCSV = (rosterData) => {
-    downloadBlob(buildCSV(rosterData), 'text/csv', 'AURA_Roster_Merged.csv');
+export const downloadCSV = (rosterData, options = {}) => {
+    downloadBlob(buildCSV(rosterData, options), 'text/csv', 'AURA_Roster_Merged.csv');
 };
 
 
