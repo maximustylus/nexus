@@ -752,6 +752,22 @@ const TeamMembersPanel = () => {
                                                 rostered for <span className="font-bold">only</span> those — leave one
                                                 out and they stop being rostered for it. Blank means every duty.
                                             </p>
+                                            {/* ⚠️ THE COMBINATION NOBODY WAS TOLD ABOUT. Each setting is accurate on
+                                                its own, and together they contradict: a duty limit says "never
+                                                anything else" while a weekly rotation passes every duty round the
+                                                whole team. The owner set both and found out from a spreadsheet —
+                                                their own row led nothing in 8 weeks of 17 while the rest of the team
+                                                covered more duties than there were people. The engine warns at
+                                                generation too; this is the earlier of the two chances to say it. */}
+                                            <p className="mt-1 text-[11px] font-bold text-amber-700 dark:text-amber-300 leading-relaxed">
+                                                ⚠ Leave this blank if your department has{' '}
+                                                <span className="font-bold">Rotate duties weekly</span> switched on in
+                                                Configure. A limit keeps somebody out of the rotation: in the weeks
+                                                their duty passes to a colleague they are eligible for nothing. To give
+                                                a roster master a lighter load, lower their{' '}
+                                                <span className="font-bold">FTE</span> instead — that keeps them in the
+                                                rotation for everything and simply gives them fewer shifts.
+                                            </p>
                                         </div>
                                     </div>
 

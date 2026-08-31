@@ -251,6 +251,51 @@ describe('leave does not hand the week over', () => {
     });
 });
 
+describe('a duty limit and a weekly rotation contradict each other', () => {
+    /**
+     * ⚠️ BOTH SETTINGS WERE ACCURATE ALONE AND SILENT TOGETHER, and the owner found
+     *    out from a CSV: their own row led one duty in 9 weeks of 17 and nothing in
+     *    the other 8, twelve weeks doubled somebody up, and nineteen co-lead slots
+     *    went unfilled. Nothing in the app said the two could not both hold. This is
+     *    the sentence that says it.
+     */
+    const limited = () => generateRosterV2(config({
+        staff: TEAM.map((name) => ({
+            name, grade: 'AH13', fte: 1,
+            ...(name === 'Alif' ? { windows: [{ tasks: ['EFT'] }] } : {}),
+        })),
+    }));
+
+    it('warns, by name, that the limited person cannot be in the rotation', () => {
+        const run = limited();
+        expect(run.ok).toBe(true);
+        const warning = (run.warnings || []).find((w) => /rotation cannot include/i.test(w));
+        expect(warning, 'no warning about the contradiction').toBeTruthy();
+        expect(warning).toMatch(/Alif/);
+        // …and says what to do instead, because a warning naming no remedy is a shrug.
+        expect(warning).toMatch(/Only these duties/i);
+        expect(warning).toMatch(/FTE/);
+    });
+
+    it('says nothing when nobody is limited', () => {
+        const run = generateRosterV2(config());
+        expect((run.warnings || []).filter((w) => /rotation cannot include/i.test(w))).toHaveLength(0);
+    });
+
+    it('says nothing when the department does not rotate', () => {
+        // The limit is a legitimate setting on its own — it is only the COMBINATION
+        // that misbehaves, so a department not rotating must not be nagged.
+        const run = generateRosterV2(config({
+            rotate: false,
+            staff: TEAM.map((name) => ({
+                name, grade: 'AH13', fte: 1,
+                ...(name === 'Alif' ? { windows: [{ tasks: ['EFT'] }] } : {}),
+            })),
+        }));
+        expect((run.warnings || []).filter((w) => /rotation cannot include/i.test(w))).toHaveLength(0);
+    });
+});
+
 describe('the switch is off unless asked for', () => {
     it('an absent rules object rosters exactly as it did before rotation existed', () => {
         const withFlagOff = generateRosterV2(config({ rotate: false }));

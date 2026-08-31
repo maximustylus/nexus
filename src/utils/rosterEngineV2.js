@@ -5680,6 +5680,38 @@ export const generateRosterV2 = (config) => {
         );
     }
 
+    /**
+     * ⚠️ A DUTY LIMIT AND A WEEKLY ROTATION CONTRADICT EACH OTHER, AND NOTHING SAID SO.
+     *
+     *    "Only these duties" means somebody is never rostered for anything else. A
+     *    weekly rotation passes every duty around the whole team. Set both and the
+     *    rotation cannot include that person: in the weeks their one duty goes to a
+     *    colleague they are eligible for nothing, so they lead nothing, the rest of the
+     *    team covers one more duty than there are people, and slots go unstaffed.
+     *
+     *    The owner hit exactly this and had to be told from a CSV: their own row led
+     *    one duty in 9 weeks of 17 and nothing in the other 8, twelve weeks doubled
+     *    somebody up, and nineteen co-lead slots went unfilled. Every individual
+     *    setting was behaving as documented. The COMBINATION was not described
+     *    anywhere, which is a defect in the product rather than in their configuration.
+     *
+     *    Named per person, and it says what to do instead — FTE is the control for
+     *    "carries less", and a duty limit is the control for "never does this".
+     */
+    if (rotatesWeekly) {
+        for (const person of staff) {
+            const limited = Array.isArray(person.windows) && person.windows.length > 0;
+            if (!limited) continue;
+            warnings.push(
+                `${person.name} is limited to specific duties, so the weekly rotation cannot include them — `
+                + 'in the weeks their duty passes to somebody else they are eligible for nothing, which leaves '
+                + 'the rest of the team covering more duties than there are people. Clear "Only these duties" '
+                + `on ${person.name}'s row in Admin → Team to put them in the rotation; to give them a lighter `
+                + 'load instead, lower their FTE, which keeps them eligible for everything.',
+            );
+        }
+    }
+
     // --- running state --------------------------------------------------------
     const duties = new Map(staff.map((person) => [person.name, 0]));
     /** dateKey -> (name -> duty count that day) */

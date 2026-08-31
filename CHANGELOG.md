@@ -51,6 +51,32 @@ not changed by this release.
 
 ---
 
+## [2.7.2] - 2026-08-31
+
+Two settings that contradict each other, and said nothing about it.
+
+### Fixed
+
+- **A duty limit silently defeats a weekly rotation, and nothing told anybody.**
+  "Only these duties" means somebody is never rostered for anything else. "Rotate duties
+  weekly" passes every duty round the whole team. Both were documented accurately on
+  their own; the COMBINATION was described nowhere.
+
+  The owner set both and had to be shown it from a spreadsheet: their own row led one
+  duty in 9 weeks of 17 and **nothing in the other 8**, twelve weeks doubled somebody up,
+  and nineteen co-lead slots went unfilled — because in the weeks that one duty passed to
+  a colleague they were eligible for nothing, leaving four people to cover five duties.
+  Every individual setting behaved exactly as written. That is a defect in the product,
+  not in their configuration.
+
+  `generateRosterV2` now warns per person, by name, and says what to do instead: clear
+  the limit to join the rotation, or lower FTE for a lighter load, which keeps somebody
+  eligible for everything. The member editor says the same thing before the save rather
+  than after the roster.
+
+  ⚠️ **The limit remains legitimate on its own** — a colleague who genuinely never does a
+  duty is exactly what it is for — so a department that does not rotate is not nagged.
+
 ## [2.7.1] - 2026-08-31
 
 Weekly rotation, actually applied to every duty.
