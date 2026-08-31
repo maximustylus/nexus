@@ -149,16 +149,22 @@ export const generateRoster = (config) => {
             }
         });
 
-        // --- B. VC TASKS (Tue & Sat) ---
+        // --- B. VIDEO CONSULTATIONS (Thu & Sat mornings) ---
+        //
+        // MOVED FROM TUESDAY TO THURSDAY on 2026-08-15: the service changed and this
+        // code had not caught up. Both slots are the INDIVIDUAL consultation, and that
+        // follows from the department's own constraint rather than from a preference —
+        // every group session runs in the afternoon because the children are at school
+        // in the morning, so a morning slot cannot be a group one.
         const vcLead = staff[w % staff.length];
         const vcCoLead = staff[(w + 1) % staff.length];
 
-        // Tuesday (Index 1) — genuinely a Tuesday now that `weekStart` is a Monday.
-        const tueKey = toDateKey(addDays(weekStart, 1));
+        // Thursday (Index 3) — `weekStart` is a Monday, so index 3 is genuinely a Thursday.
+        const tueKey = toDateKey(addDays(weekStart, 3));
 
         if (!roster[tueKey]) roster[tueKey] = [];
         roster[tueKey].push({ 
-            task: "VC (PM)",
+            task: "Video Consultation Individual",
             lead: vcLead,
             coLead: vcCoLead,
             staff: buildShiftStaffLabel(vcLead, vcCoLead),
@@ -171,7 +177,7 @@ export const generateRoster = (config) => {
 
         if (!roster[satKey]) roster[satKey] = [];
         roster[satKey].push({ 
-            task: "VC (AM)",
+            task: "Video Consultation Individual",
             lead: vcLead,
             coLead: vcCoLead,
             staff: buildShiftStaffLabel(vcLead, vcCoLead),
@@ -242,7 +248,44 @@ const MONTH_LABELS = [
  */
 export const LIVE_ROSTER_DEFAULTS = Object.freeze({
     staff: Object.freeze(['Brandon', 'Ying Xian', 'Derlinder', 'Fadzlynn']),
-    tasks: Object.freeze(['EFT', 'IPT+SKG', 'NC', 'FSG+WI']),
+    // THE DUTY NAMES, SPELLED OUT — the acronyms were retired on 2026-08-15 at the
+    // roster owner's request, because NEXUS is being offered to other departments
+    // and `IPT+SKG` means nothing outside this one service.
+    //
+    // TWO OF THEM WERE COMPOUNDS carrying two duties in one string, and they are
+    // split here, which is why four names became nine:
+    //   EFT      -> Exercise Test
+    //   IPT+SKG  -> Inpatient Exercise  +  Paediatrics Group Session
+    //   NC       -> New Case
+    //   FSG+WI   -> Adolescent Group Session  +  Walk-in
+    // and Physical Activity Counseling, Individual Session and Video Consultation
+    // Group are duties the service runs that this list never carried.
+    //
+    // THE GROUP SESSIONS ARE NAMED BY AGE BAND, NOT BY THE LOCAL PROGRAMME NAME.
+    // The department calls them Super Kids (12 and under) and Fitness Superstars
+    // (13 and above); another institution would not know those words, and this list
+    // is now read by people outside this team. The programme names are recorded here
+    // rather than on the roster.
+    //
+    // ⚠️ AFTERNOON-ONLY IS NOT EXPRESSIBLE HERE. Every group session runs in the
+    // afternoon, because the children are at school in the morning — and this engine
+    // has no concept of time of day at all (`rosterEngineV2.js:6577` says the same
+    // thing about `unavailable`: "for the morning only" is unsayable). The old names
+    // smuggled it into the string — `VC (AM)`, `VC (PM)` — which is exactly the
+    // information-in-a-label pattern this rename removes. It is now written down
+    // where a reader can see it instead of encoded where only a human could decode
+    // it, and it is a gap in the model rather than a gap in the documentation.
+    tasks: Object.freeze([
+        'Physical Activity Counseling',
+        'Exercise Test',
+        'New Case',
+        'Walk-in',
+        'Individual Session',
+        'Inpatient Exercise',
+        'Paediatrics Group Session',      // afternoon — Super Kids, 12 and under
+        'Adolescent Group Session',       // afternoon — Fitness Superstars, 13 and above
+        'Video Consultation Group',       // afternoon
+    ]),
     startDate: '2026-02-01',
     weeks: 4,
 });

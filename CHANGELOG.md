@@ -49,6 +49,83 @@ not changed by this release.
 
 ## [Unreleased]
 
+---
+
+## [2.2.0] - 2026-08-15
+
+The clinical exercise physiology duty names, spelled out — and an honest note about a
+structure this repository has been describing wrongly.
+
+### Changed
+
+- **The duty acronyms are retired.** `EFT`, `IPT+SKG`, `NC` and `FSG+WI` meant nothing
+  outside the one service that invented them, and NEXUS is now offered to departments
+  who cannot read them. Two were **compounds carrying two duties in a single string**,
+  which is why four names became nine:
+
+  | Was | Now |
+  |---|---|
+  | `EFT` | Exercise Test |
+  | `IPT+SKG` | Inpatient Exercise **+** Paediatrics Group Session |
+  | `NC` | New Case |
+  | `FSG+WI` | Adolescent Group Session **+** Walk-in |
+  | `VC (PM)`, `VC (AM)` | Video Consultation Individual |
+  | — | Physical Activity Counseling, Individual Session, Video Consultation Group |
+
+- **The group sessions are named by age band, not by programme name.** The department
+  calls them *Super Kids* (12 and under) and *Fitness Superstars* (13 and above). The
+  roster owner asked for `Paediatrics Group Session` and `Adolescent Group Session`
+  instead, in their words *"because other institutions may not be aware of customised
+  names as we are now scaling"*. The programme names are recorded in the code comment
+  rather than on the roster.
+
+- **The video consultation moved from Tuesday afternoon to Thursday morning.** The
+  service changed and the code had not caught up. Both consult slots are now the
+  *individual* consultation, and that follows from the department's own constraint
+  rather than a preference: every group session runs in the afternoon, because the
+  children are at school in the morning, so a morning slot cannot be a group one.
+
+### Notes — a structure this repository was describing wrongly
+
+The roster owner, 2026-08-15: *"for my team of CEP each task lasts for a week and then
+we rotate, not daily."*
+
+The **live V1 engine already does exactly that** — `rotate(staff, w)` picks a lead per
+task per WEEK and writes that one person across all five days
+(`auraEngine.js:129-135`). Measured after the rename: Ying Xian holds Exercise Test for
+all of week 1, Derlinder for all of week 2.
+
+**The sandbox shape does not.** V2 assigns per DAY, so a duty changes hands mid-week —
+measured before this note was written, `EFT` ran Atalanta / Penelope / Penelope /
+Penelope / Hector inside one week. That shape was attributed as *"the one shape here
+that is reported rather than modelled"*, and for its assignment pattern that was false.
+The attribution now says so: its **duties** are reported, its **assignment pattern is
+the engine's, not the department's**.
+
+**V2 cannot express a weekly rotation today.** `continuity: true` is the nearest
+primitive and is the wrong shape — it asks for the same lead on every occurrence
+*forever*, which is the opposite of rotating. Cohort windows could simulate it only by
+enumerating every person × task × week, which is the "data-entry accident waiting to
+happen" their own comment warns against. Recorded as a gap, unbuilt.
+
+Also unmodellable, and now written down rather than smuggled into a label: **the engine
+has no concept of time of day at all.** Afternoon-only group sessions cannot be
+expressed; the old names encoded it as `(AM)` / `(PM)`, which is exactly the
+information-in-a-string pattern this rename removes.
+
+### Verified
+
+Live V1: 9 duties, 24 days, 188 shifts, weekly rotation intact. Sandbox V2: 140 shifts
+(up from 88), unfilled 0, warnings 0, still filling at the department's own
+`maxConcurrentPerDay: 3`. **2228 tests, lint clean.** Six pinned suites updated — the
+byte-compat pins existed to catch an *unintended* change to live output, and every one
+of them fired on an intended one, which is the pins working.
+
+*(Versioned 2.2.0 rather than 2.1.0: a dangling `v2.1.1` tag exists from another line of
+work and is not an ancestor of this branch, so 2.1.0 would have read as older than a tag
+that already exists.)*
+
+
 ## [2.0.0] - 2026-08-23
 
 **MULTI-TEAM.** NEXUS was built for one ten-person department, with every collection at

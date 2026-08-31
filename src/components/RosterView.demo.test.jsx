@@ -2293,8 +2293,10 @@ describe('demo mode: the picker is a profession and a shape', () => {
         for (const task of LIVE_ROSTER_DEFAULTS.tasks) {
             expect(cepTasks).toContain(task);
         }
-        expect(cepTasks).toContain('VC (PM)');
-        expect(cepTasks).toContain('VC (AM)');
+        // Both consult slots carry ONE name now — the individual consultation — because
+        // every group session is an afternoon and these two are mornings.
+        expect(cepTasks).toContain('Video Consultation Individual');
+        expect(cepTasks).toContain('Video Consultation Group');
     });
 
     it('accepts every shape, and re-audits every finished roster to zero', () => {
@@ -3015,17 +3017,35 @@ describe('demo mode: the graded duty split and the fixed weekday sessions', () =
             .toBeGreaterThan(leadsOf(result, 'Outpatient Musculoskeletal Clinic').length);
     });
 
-    it('fixed weekday sessions: the real duty list, and the Tuesday that needs three', () => {
+    it('fixed weekday sessions: the real duty list, and the day that needs three', () => {
         const fixture = shapeOf('shape-weekday-sessions').config;
         const result = generateRosterV2(fixture);
 
         // The run starts on the Monday the LIVE roster's Sunday start snaps forward to.
         expect(result.effectiveStart).toBe('2026-02-02');
-        // Tuesday carries the four core duties AND the afternoon video consult…
+        // RENAMED AND SPLIT 2026-08-15 — see `LIVE_ROSTER_DEFAULTS`. The six weekday
+        // duties run Mon–Fri; the group sessions and the two consults sit on their own
+        // days, so a weekday carries six duties plus whatever that day adds.
+        const WEEKDAY_SIX = [
+            'Physical Activity Counseling',
+            'Exercise Test',
+            'New Case',
+            'Walk-in',
+            'Individual Session',
+            'Inpatient Exercise',
+        ];
+        // Monday is the six alone.
+        expect(result.roster['2026-02-02'].map((shift) => shift.task)).toEqual(WEEKDAY_SIX);
+        // Tuesday adds the group video consultation…
         expect(result.roster['2026-02-03'].map((shift) => shift.task))
-            .toEqual(['EFT', 'IPT+SKG', 'NC', 'FSG+WI', 'VC (PM)']);
-        // …Saturday carries the morning one and nothing else, and Sunday nothing at all.
-        expect(result.roster['2026-02-07'].map((shift) => shift.task)).toEqual(['VC (AM)']);
+            .toEqual([...WEEKDAY_SIX, 'Video Consultation Group']);
+        // …Thursday adds the individual one, which moved here from Tuesday…
+        expect(result.roster['2026-02-05'].map((shift) => shift.task))
+            .toEqual([...WEEKDAY_SIX, 'Video Consultation Individual']);
+        // …Saturday carries the individual consultation and nothing else, and Sunday
+        // nothing at all.
+        expect(result.roster['2026-02-07'].map((shift) => shift.task))
+            .toEqual(['Video Consultation Individual']);
         expect(result.roster['2026-02-08']).toBeUndefined();
 
         // Somebody holds three duties on that Tuesday, and nobody holds four anywhere.
@@ -3042,9 +3062,13 @@ describe('demo mode: the graded duty split and the fixed weekday sessions', () =
         }
 
         // MUTATION: the 2-a-day cap every other shape uses cannot staff this week.
+        // Was 8 unfilled before the 2026-08-15 rename; 52 after, because two compound
+        // duties became four rows and three more were added. The claim is unchanged and
+        // now stated more loudly — `maxConcurrentPerDay: 3` is this service's own policy,
+        // not a number chosen to make a demo work.
         const capped = without('shape-weekday-sessions', (copy) => { copy.rules.maxConcurrentPerDay = 2; });
         expect(result.unfilled).toHaveLength(0);
-        expect(capped.unfilled.length).toBe(8);
+        expect(capped.unfilled.length).toBe(52);
     });
 });
 

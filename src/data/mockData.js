@@ -859,13 +859,31 @@ export const DEMO_ARRANGEMENT_RESPIRATORY = Object.freeze({
 
 // --- CLINICAL EXERCISE PHYSIOLOGY ---------------------------------------------
 //
-// INTERVIEWED, AND THE ONE ARRANGEMENT IN THIS FILE THAT IS ACCURATE RATHER THAN
-// PLAUSIBLE. This is the department NEXUS was built for, and its real configuration
-// is in this repository: `LIVE_ROSTER_DEFAULTS` in `src/utils/auraEngine.js` carries
-// the live roster's four staff and its four core tasks — `EFT`, `IPT+SKG`, `NC`,
-// `FSG+WI` — and `generateRoster` in the same file adds a video consult on Tuesday
-// afternoon (`VC (PM)`) and Saturday morning (`VC (AM)`). All six duty names below,
-// their days, and the six-day shape of the week are READ OFF THAT CODE, not invented.
+// INTERVIEWED. This is the department NEXUS was built for, and its real duty list is
+// in this repository: `LIVE_ROSTER_DEFAULTS` in `src/utils/auraEngine.js`. The duty
+// NAMES below are read off that code, not invented.
+//
+// ⚠️ BUT THE STRUCTURE BELOW IS NOT THIS SERVICE'S STRUCTURE, and saying so is the
+// point of this note. The roster owner, 2026-08-15: *"for my team of CEP each task
+// lasts for a week and then we rotate, not daily."* The live V1 engine does exactly
+// that — `rotate(staff, w)` picks a lead per task per WEEK and writes that one person
+// across all five days (`auraEngine.js:129-135`). **V2, which generates this shape,
+// assigns per DAY**, so a duty here changes hands mid-week: measured before this note
+// was written, `EFT` ran Atalanta / Penelope / Penelope / Penelope / Hector inside one
+// week. Nobody in the real service works like that.
+//
+// V2 CANNOT EXPRESS A WEEKLY ROTATION TODAY. `continuity: true` is the nearest
+// primitive and it is the wrong shape — it asks for the SAME lead on every occurrence
+// forever, which is the opposite of rotating. Cohort windows could simulate it by
+// enumerating every person × task × week, which is the "data-entry accident waiting to
+// happen" their own comment warns against. So this shape demonstrates the department's
+// DUTIES and its six-day week honestly, and its assignment pattern is the engine's,
+// not the department's. Recorded as a gap rather than papered over.
+//
+// The acronyms were retired on 2026-08-15: `EFT`, `IPT+SKG`, `NC` and `FSG+WI` meant
+// nothing outside this one service, and two of them were compounds holding two duties
+// in a single string. The video consultation also moved from Tuesday afternoon to
+// Thursday morning, which this file had not caught up with either.
 //
 // 🔒 THE FOUR STAFF NAMES ARE NOT. `LIVE_ROSTER_DEFAULTS.staff` names four real
 // colleagues, and a demo any visitor can screenshot is exactly where their names must
@@ -891,13 +909,12 @@ export const DEMO_ARRANGEMENT_RESPIRATORY = Object.freeze({
 // the demo a week early — the two engines disagree about which way to snap, and this
 // is the one fixture where that matters.
 //
-// MEASURED (generateRosterV2, 2026-02-02, 4 weeks): ok = true, hardViolations = 0, an
-// independent `auditHardConstraints` read-back of 0, unfilled = 0, warnings = 0, 24
-// days, 88 shifts — 4 weeks × (4 core duties × 5 days + one Tuesday consult + one
-// Saturday consult). On a Tuesday two people hold three duties and two hold two; on no
-// day does anybody hold four. Dropping the cap to the 2 every other arrangement uses
-// leaves EIGHT slots unfilled — two on each Tuesday — which is the measurement that
-// says three is a requirement of this service and not a convenience.
+// MEASURED AGAIN after the 2026-08-15 rename and split (generateRosterV2, 2026-02-02,
+// 4 weeks): ok = true, unfilled = 0, warnings = 0, 24 days, **140 shifts** — up from 88,
+// because two compound duties became four and three duties the list never carried were
+// added. It fills at the department's own `maxConcurrentPerDay: 3` with no change: the
+// two duties that gained rows are single-lead, and the group sessions run one afternoon
+// each rather than daily, so the extra rows cost less than their count suggests.
 export const DEMO_ARRANGEMENT_EXERCISE_PHYSIOLOGY = Object.freeze({
   label: 'Allied Health — Clinical Exercise Physiology',
   startDate: '2026-02-02', // Monday — the day the live roster's 2026-02-01 snaps to
@@ -909,14 +926,26 @@ export const DEMO_ARRANGEMENT_EXERCISE_PHYSIOLOGY = Object.freeze({
     { name: 'Theseus', fte: 1.0, grade: 'AH8', skills: [], unavailable: [] },
   ]),
   tasks: Object.freeze([
-    // The four core duties, by their real names, Mon–Fri.
-    { name: 'EFT', days: [1, 2, 3, 4, 5], leads: 1, coLeads: 1, category: 'CORE' },
-    { name: 'IPT+SKG', days: [1, 2, 3, 4, 5], leads: 1, coLeads: 1, category: 'CORE' },
-    { name: 'NC', days: [1, 2, 3, 4, 5], leads: 1, coLeads: 1, category: 'CORE' },
-    { name: 'FSG+WI', days: [1, 2, 3, 4, 5], leads: 1, coLeads: 1, category: 'CORE' },
-    // The two video consults: Tuesday afternoon and Saturday morning.
-    { name: 'VC (PM)', days: [2], leads: 1, coLeads: 1, category: 'VC' },
-    { name: 'VC (AM)', days: [6], leads: 1, coLeads: 1, category: 'VC' },
+    // The weekday duties, by their real names — the acronyms (`EFT`, `IPT+SKG`,
+    // `NC`, `FSG+WI`) were retired on 2026-08-15 because this shape is offered to
+    // departments who cannot read them. Two were COMPOUNDS holding two duties in
+    // one string, and splitting them is why four rows became eight.
+    { name: 'Physical Activity Counseling', days: [1, 2, 3, 4, 5], leads: 1, coLeads: 0, category: 'Clinical' },
+    { name: 'Exercise Test', days: [1, 2, 3, 4, 5], leads: 1, coLeads: 1, category: 'Clinical' },
+    { name: 'New Case', days: [1, 2, 3, 4, 5], leads: 1, coLeads: 1, category: 'Clinical' },
+    { name: 'Walk-in', days: [1, 2, 3, 4, 5], leads: 1, coLeads: 0, category: 'Clinical' },
+    { name: 'Individual Session', days: [1, 2, 3, 4, 5], leads: 1, coLeads: 0, category: 'Clinical' },
+    { name: 'Inpatient Exercise', days: [1, 2, 3, 4, 5], leads: 1, coLeads: 1, category: 'Clinical' },
+    // The group sessions, named by AGE BAND rather than by the local programme name.
+    // The department calls them Super Kids (12 and under) and Fitness Superstars (13
+    // and above); nobody outside this service knows those words, and this shape is
+    // read by people who are not in it.
+    { name: 'Paediatrics Group Session', days: [3], leads: 1, coLeads: 1, category: 'Clinical' },
+    { name: 'Adolescent Group Session', days: [5], leads: 1, coLeads: 1, category: 'Clinical' },
+    // Video consultations. The individual one runs Thursday and Saturday MORNINGS;
+    // the group one is an afternoon, like every other group session.
+    { name: 'Video Consultation Individual', days: [4, 6], leads: 1, coLeads: 1, category: 'Clinical' },
+    { name: 'Video Consultation Group', days: [2], leads: 1, coLeads: 1, category: 'Clinical' },
   ]),
   rules: Object.freeze({
     // Three, not two — see the note above. This is the department's own policy.
@@ -1106,7 +1135,7 @@ export const DEMO_SHAPES = Object.freeze([
     sourceProfession: 'Clinical Exercise Physiologist',
     sourceProfessionId: 'clinical-exercise-physiologist',
     sourceScope: Object.freeze({ teams: 1, institutions: 1, describedOn: null }),
-    attribution: 'This is the roster owner’s own service — one team, at one institution — by its real duty names, the one shape here that is reported rather than modelled. It is a starting point to adapt, exercise physiologists elsewhere work differently, and it says nothing about your own service.',
+    attribution: 'This is the roster owner’s own service — one team, at one institution — by its real duty names. Its DUTIES are reported; its assignment pattern is not. The real service gives one person a duty for a whole week and then rotates, and this engine assigns each day independently, so a duty here changes hands mid-week. It is a starting point to adapt, exercise physiologists elsewhere work differently, and it says nothing about your own service.',
     config: DEMO_ARRANGEMENT_EXERCISE_PHYSIOLOGY,
   }),
   Object.freeze({

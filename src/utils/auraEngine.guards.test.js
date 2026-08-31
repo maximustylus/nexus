@@ -46,7 +46,17 @@ import {
 /** The config RosterView ships in live mode. */
 const liveConfig = (overrides = {}) => ({
     staff: ['Brandon', 'Ying Xian', 'Derlinder', 'Fadzlynn'],
-    tasks: ['EFT', 'IPT+SKG', 'NC', 'FSG+WI'],
+    tasks: [
+        'Physical Activity Counseling',
+        'Exercise Test',
+        'New Case',
+        'Walk-in',
+        'Individual Session',
+        'Inpatient Exercise',
+        'Paediatrics Group Session',
+        'Adolescent Group Session',
+        'Video Consultation Group',
+    ],
     startDate: '2026-02-01',
     weeks: 4,
     ...overrides,
@@ -342,7 +352,21 @@ describe('restoreLiveRosterConfig (ROSTER_QC_AUDIT.md M1)', () => {
             'Derlinder',
             'Fadzlynn',
         ]);
-        expect(LIVE_ROSTER_DEFAULTS.tasks).toEqual(['EFT', 'IPT+SKG', 'NC', 'FSG+WI']);
+    // RENAMED 2026-08-15 at the roster owner's request: the acronyms meant nothing to
+    // the departments NEXUS is now offered to, and `IPT+SKG` / `FSG+WI` each held TWO
+    // duties in one string, which is why four names became nine. This pin is the
+    // demo-poisoning guard's fixture, so it moves with the defaults deliberately.
+        expect(LIVE_ROSTER_DEFAULTS.tasks).toEqual([
+        'Physical Activity Counseling',
+        'Exercise Test',
+        'New Case',
+        'Walk-in',
+        'Individual Session',
+        'Inpatient Exercise',
+        'Paediatrics Group Session',
+        'Adolescent Group Session',
+        'Video Consultation Group',
+    ]);
         expect(LIVE_ROSTER_DEFAULTS.startDate).toBe('2026-02-01');
         expect(LIVE_ROSTER_DEFAULTS.weeks).toBe(4);
     });
@@ -355,7 +379,17 @@ describe('restoreLiveRosterConfig (ROSTER_QC_AUDIT.md M1)', () => {
         const restored = restoreLiveRosterConfig(demoPoisonedConfig());
 
         expect(restored.staff).toEqual(['Brandon', 'Ying Xian', 'Derlinder', 'Fadzlynn']);
-        expect(restored.tasks).toEqual(['EFT', 'IPT+SKG', 'NC', 'FSG+WI']);
+        expect(restored.tasks).toEqual([
+        'Physical Activity Counseling',
+        'Exercise Test',
+        'New Case',
+        'Walk-in',
+        'Individual Session',
+        'Inpatient Exercise',
+        'Paediatrics Group Session',
+        'Adolescent Group Session',
+        'Video Consultation Group',
+    ]);
 
         // The exact M1 blast radius: none of these five may survive the toggle.
         ['Steve', 'Peter', 'Charles', 'Jean', 'Tony'].forEach((name) => {
