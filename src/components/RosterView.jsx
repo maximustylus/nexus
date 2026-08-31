@@ -1738,11 +1738,20 @@ const RosterView = ({ user }) => {
                 { now: new Date().toISOString(), by: user?.uid || null },
             );
 
+            // THREE OUTCOMES, NOT TWO, and the third is why this is not one boolean.
+            // `settingsSaved` alone conflated "written" with "there was nothing to
+            // write" — both left it `true`. The banner below now tells the roster
+            // master their setup was kept, and it may only say so when a write
+            // actually happened: announcing a save on a generation that changed
+            // nothing would be claiming an action that did not occur, which is the
+            // failure this whole subsystem's post-mortem is about.
             let settingsSaved = true;
+            let settingsWritten = false;
             if (nextSettings && settingsChanged(storedSettings, nextSettings)) {
                 try {
                     await setDoc(doc(db, ...rosterSettingsPath(teamId)), nextSettings);
                     setStoredSettings(nextSettings);
+                    settingsWritten = true;
                 } catch (settingsWriteError) {
                     console.error('[NEXUS] roster settings not saved', settingsWriteError);
                     settingsSaved = false;
@@ -1757,7 +1766,18 @@ const RosterView = ({ user }) => {
                 ? `Roster saved: ${generationPlan.dayCount} days, ${formatRosterDateKey(generationPlan.firstDate)} → ${formatRosterDateKey(generationPlan.lastDate)}.`
                 : 'Roster saved.';
 
-            if (settingsSaved) {
+            if (settingsSaved && settingsWritten) {
+                // ⚠️ THE SAVE WAS SILENT UNTIL NOW, and that was the actual gap: the
+                // configuration has been persisted on every Generate since `R4`, but
+                // nothing said so, so a roster master had no way to learn it had
+                // happened and reasonably assumed they would be retyping their
+                // department next time. The failure case had a sentence and the
+                // success case did not, which is the wrong way round — the quiet
+                // outcome is the one nobody can verify for themselves.
+                showStatus('success', `${rosterSentence} Your department's setup is saved, `
+                    + 'so you will not have to enter it again.');
+            } else if (settingsSaved) {
+                // Nothing changed, so nothing was written. Say only what happened.
                 showStatus('success', rosterSentence);
             } else {
                 // Not an error tone: the roster — the thing they pressed the button

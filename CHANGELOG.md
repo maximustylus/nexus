@@ -51,6 +51,60 @@ not changed by this release.
 
 ---
 
+## [2.2.1] - 2026-08-31
+
+> **Correction to the [2.2.0] entry below.** Its release also claimed the README title,
+> the shields badge and both *Supported Versions* tables were realigned. They were not —
+> the substitutions targeted string shapes from the v1.14 era that do not exist on this
+> branch, and nothing verified the result, so the README kept saying `v2.1.3` through a
+> v2.2.0 release. Fixed here, and the lesson is the boring one: a version bump is not
+> done because a script reported success, it is done when the surfaces are read back.
+
+### Fixed
+
+- **The banner now says the department's setup was saved.** The configuration has been
+  written on every Generate since `R1` — the roster master just had no way to know it.
+  The failure case had a sentence (*"could not be saved, so you may have to set it up
+  again"*) and the success case had none, which is the wrong way round: the quiet
+  outcome is the one nobody can verify for themselves. So a successful generation now
+  reads *"Roster saved: 24 days, 2 Feb → 27 Feb. Your department's setup is saved, so
+  you will not have to enter it again."*
+
+  **And it only says so when a write actually happened.** `settingsChanged` means a
+  second Generate that altered nothing writes nothing, and a banner announcing a save
+  anyway would be claiming an action that did not occur — the failure this subsystem's
+  post-mortem is named for. One boolean could not express that: `settingsSaved` was
+  `true` both when a write succeeded and when there was nothing to write. There are now
+  three outcomes — written, unchanged, failed — and three sentences.
+
+  Two component tests, mutation-checked three ways, all caught: reverting to the single
+  boolean, never setting the written flag, and changing the copy out from under the
+  assertion.
+
+### Notes — the feature this started as was already built
+
+Asked to build "save your team's tasks", the honest answer was that it exists:
+`src/utils/rosterSettings.js` writing `teams/{teamId}/settings/roster` after a
+successful generation, restored by an `onSnapshot` listener with its own error
+callback, 24 unit tests, lead-only by rule, plus an `R4` migration bridge that seeds
+the wizard from a department's legacy `config.tasks` the first time. Proved rather than
+assumed: `['EFT','IPT+SKG','NC','FSG+WI']` saves, comes back intact with its days and
+co-lead flags, and does not re-write on an unchanged generate.
+
+**A parallel implementation was written and then reverted** — a `rosterTeamTasks.js`
+module and a widening of the `teams/{teamId}` update allowlist to admit a new
+`rosterTasks` field. Both were unnecessary: `teams/{teamId}/settings/roster` already
+carries `allow create, update: if isLead(teamId)`. The rules half mattered most —
+`firestore.rules` is deployed by CI on this branch, so it would have loosened a live
+security boundary to enable something already permitted, and left two competing sources
+of truth for one team's configuration.
+
+Also corrects a comment the 2026-08-15 rename had corrupted: the `R4` bridge exists to
+explain a department whose tasks are the *legacy acronyms*, and a blanket substitution
+had it illustrating that with the names introduced the same day.
+
+---
+
 ## [2.2.0] - 2026-08-31
 
 The clinical exercise physiology duty names, spelled out — and an honest note about a
