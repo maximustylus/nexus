@@ -17,6 +17,8 @@ import { Calendar, Download, Settings, ChevronLeft, ChevronRight, Play, FileSpre
 import {
     downloadICS,
     downloadCSV,
+    shiftStaffDisplay,
+    displayNameFor,
     // 🛡️ P1 SAFETY GUARDS — pure, unit-tested in auraEngine.guards.test.js
     restoreLiveRosterConfig,
     validateRosterConfig,
@@ -138,6 +140,9 @@ import {
     wizardStepLabel,
     staffRowsFromMembers,
 } from '../utils/rosterWizard';
+// One definition of the trimming and the eight-character cap, shared with the member
+// editor that writes the field — two normalizers would drift the moment one changed.
+import { normalizeShortName } from '../utils/memberProfile';
 import { categoryChipClass } from '../utils/rosterCategories';
 // 👤 ONE PERSON'S DUTIES — pure, unit-tested in rosterPersonView.test.js, and used
 // by BOTH universes: "my week" is a re-reading of the roster already on screen, so
@@ -845,6 +850,60 @@ const RosterView = ({ user }) => {
         [rosteredMembers, memberGrades],
     );
 
+    /**
+     * FULL NAME → ACRONYM, for the calendar chips and the `.ics` export.
+     *
+     * ⚠️ `null` WHEN NOBODY HAS ONE, AND THAT IS LOAD-BEARING RATHER THAN TIDY. Both
+     *    `shiftStaffDisplay` and `buildICS` treat an absent map as "print what is
+     *    stored", which is how a department that has set no acronyms keeps byte-identical
+     *    exports and chips. An empty object would take the same branch, but saying
+     *    `null` makes the intent checkable — and an entry equal to the full name is
+     *    dropped here so it can never mean "shortened" downstream.
+     *
+     * ⚠️ BUILT FROM THE MEMBERSHIP, NOT FROM THE WIZARD CONFIG, so it is the same map
+     *    whichever engine produced the roster: the v1 live path persists only a flat
+     *    array of display names, and a roster read back from Firestore carries no
+     *    acronyms at all. Keyed by `displayName` because that is what the engine puts
+     *    in `shift.lead` — the `D-names` limitation, borrowed here rather than fought.
+     */
+    const shortNames = useMemo(() => {
+        const map = {};
+        const add = (rawFull, rawShort) => {
+            /**
+             * ⚠️ KEYED BY THE **TRIMMED** NAME. The mapper trims a row's name before it
+             *    reaches the config, so that is what the engine writes into
+             *    `shift.lead` — a key carrying the untrimmed spelling would simply
+             *    never match and the acronym would silently not appear.
+             */
+            const full = typeof rawFull === 'string' ? rawFull.trim() : '';
+            const short = normalizeShortName(rawShort);
+            if (full !== '' && short !== '' && short !== full) map[full] = short;
+        };
+
+        /**
+         * ⚠️ TWO SOURCES, BECAUSE THE SANDBOX HAS NO MEMBERSHIP TO READ. Built from
+         *    `rosteredMembers` alone, the wizard's own short-name cell wrote to a row
+         *    nothing ever read: the cell was editable, its help text promised the
+         *    calendar and the `.ics` would use it, and neither did — a dead control,
+         *    which is the precise defect this change set exists to remove. An audit
+         *    caught it one commit after the drawer fix that prompted it.
+         *
+         *    Read from `demoStaffRows` rather than from `demoWizard.config`, which is
+         *    declared further down this component: referencing it here would be a
+         *    temporal dead zone, and the rows carry the same value.
+         */
+        if (isDemo) {
+            for (const row of Array.isArray(demoStaffRows) ? demoStaffRows : []) {
+                add(row?.name, row?.shortName);
+            }
+        } else {
+            for (const person of Array.isArray(rosteredMembers) ? rosteredMembers : []) {
+                add(person?.displayName, person?.shortName);
+            }
+        }
+        return Object.keys(map).length > 0 ? map : null;
+    }, [isDemo, demoStaffRows, rosteredMembers]);
+
     const [storedSettings, setStoredSettings] = useState(null);
     const [settingsError, setSettingsError] = useState(null);
     // Whether the wizard's rows came from a stored document. `false` means either
@@ -908,11 +967,16 @@ const RosterView = ({ user }) => {
     // 🛡️ M12: signatures of the swap requests this component has already sent.
     // NOTE: client-side and in-memory only — it does not survive a reload, a
     // second tab, or a second device. A real guard is a uniqueness constraint in
-    // `firestore.rules`, which cannot be DEPLOYED until blocked decision Q6 is
-    // settled. The file itself exists and is tracked — it is inert, because
-    // `firebase.json` declares only `hosting` and `functions`, so nothing deploys
-    // it. (Q6 was written `D6` before 2026-08-14; `D6` now names only the ESLint
-    // defect, which is a different thing entirely.)
+    // `firestore.rules` — which is a change nobody has written, not a change nobody
+    // can deploy. (Q6 was written `D6` before 2026-08-14; `D6` now names only the
+    // ESLint defect, which is a different thing entirely.)
+    //
+    // ⚠️ CORRECTED 2026-08-31: this said the rules file "is inert, because
+    //    `firebase.json` declares only `hosting` and `functions`, so nothing deploys
+    //    it". That stopped being true at v2.0.0 — Q6 is closed, the rules DO deploy,
+    //    and `README.md` says so. Left standing, it hands a reviewer a false model of
+    //    exactly the boundary they are checking, which is how a rules change gets
+    //    waved through.  
     const [sentSwapSignatures, setSentSwapSignatures] = useState(() => new Set());
 
     // Default Config — the live staff pool and task list now live in
@@ -2390,7 +2454,7 @@ const RosterView = ({ user }) => {
                     <button onClick={() => downloadCSV(rosterData)} className={`flex gap-2 items-center justify-center px-4 py-2 ${TOUCH} rounded bg-green-100 text-green-700 font-bold text-xs hover:bg-green-200 transition-colors`}>
                         <FileSpreadsheet size={14} /> CSV
                     </button>
-                    <button onClick={() => downloadICS(rosterData)} className={`flex gap-2 items-center justify-center px-4 py-2 ${TOUCH} rounded bg-indigo-600 text-white font-bold text-xs hover:bg-indigo-700 shadow-lg transition-colors`}>
+                    <button onClick={() => downloadICS(rosterData, { shortNames })} className={`flex gap-2 items-center justify-center px-4 py-2 ${TOUCH} rounded bg-indigo-600 text-white font-bold text-xs hover:bg-indigo-700 shadow-lg transition-colors`}>
                         <Download size={14} /> ICS
                     </button>
                 </div>
@@ -2565,7 +2629,7 @@ const RosterView = ({ user }) => {
                                         >
                                             <span className="uppercase tracking-tighter opacity-80">{s.task}</span>
                                             <span className={`text-slate-800 dark:text-slate-200 ${isMyShift ? 'text-indigo-600 dark:text-indigo-400 font-black' : ''}`}>
-                                                {s.staff}
+                                                {shiftStaffDisplay(s, shortNames)}
                                             </span>
                                             {/* The same `Also:` wording the ICS export
                                                 uses for three or more people, so the
@@ -2576,7 +2640,7 @@ const RosterView = ({ user }) => {
                                                 in a 9px cell, not one string. */}
                                             {alsoOnShift.length > 0 && (
                                                 <span className="text-slate-800 dark:text-slate-200">
-                                                    Also: {alsoOnShift.join(', ')}
+                                                    Also: {alsoOnShift.map((name) => displayNameFor(name, shortNames)).join(', ')}
                                                 </span>
                                             )}
                                             {coverAsks.length > 0 && (

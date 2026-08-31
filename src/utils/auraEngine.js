@@ -1071,17 +1071,72 @@ const shiftAssigneeNames = (shift) => {
  * a count would not satisfy "list every assignee", so the names are spelled out.
  * The commas are escaped by `escapeICSText` on the way into SUMMARY.
  */
-const shiftPeopleText = (shift) => {
-    const names = shiftAssigneeNames(shift);
-
-    if (names.length > 2) {
-        return `Lead: ${names[0]}, Co: ${names[1]}, Also: ${names.slice(2).join(', ')}`;
-    }
-    if (typeof shift.staff === 'string' && shift.staff.trim() !== '') return shift.staff;
-    if (names.length === 0) return '';
-    return buildShiftStaffLabel(names[0], names[1]);
+/**
+ * One person's name as an export should PRINT it: their short name when the team has
+ * recorded one, otherwise their full name.
+ *
+ * ⚠️ A DISPLAY SUBSTITUTION AND NOTHING MORE. `shift.lead` and `shift.coLead` are
+ *    IDENTITY, and four separate things compare them to a name by equality —
+ *    `findAppliedSwapShift` below verifies an applied swap with
+ *    `shift.staff === buildShiftStaffLabel(...)`, the calendar decides "my shift"
+ *    with `s.lead === user?.name`, `rosterPersonView` builds somebody's own week the
+ *    same way, and stored Firestore documents already hold the full-name form. So a
+ *    short name is allowed to exist only in text on its way OUT, and never in a
+ *    field the roster is keyed by. Substituting one upstream would silently stop
+ *    people recognising their own shifts.
+ */
+export const displayNameFor = (name, shortNames = null) => {
+    if (typeof name !== 'string' || name === '' || !shortNames) return name;
+    const short = shortNames[name];
+    return typeof short === 'string' && short.trim() !== '' ? short.trim() : name;
 };
 
+const shiftPeopleText = (shift, shortNames = null) => {
+    const names = shiftAssigneeNames(shift);
+    const show = (name) => displayNameFor(name, shortNames);
+
+    if (names.length > 2) {
+        return `Lead: ${show(names[0])}, Co: ${show(names[1])}, Also: ${names.slice(2).map(show).join(', ')}`;
+    }
+    /**
+     * ⚠️ THE CACHED STRING IS ONLY USABLE WHEN NOTHING IS BEING SHORTENED. `shift.staff`
+     *    is a full-name sentence built at generation time and stored, so returning it
+     *    while a short name exists would ignore the substitution for exactly the
+     *    common two-person case. Tested per shift rather than "are there any short
+     *    names at all", so a team where only one person has an acronym keeps the
+     *    stored string — and its byte-exact export pins — for everybody else.
+     */
+    const shortened = names.some((name) => show(name) !== name);
+    if (!shortened && typeof shift.staff === 'string' && shift.staff.trim() !== '') return shift.staff;
+    if (names.length === 0) return '';
+    return buildShiftStaffLabel(show(names[0]), show(names[1]));
+};
+
+
+/**
+ * The CALENDAR CHIP's text — the roster grid's one line per shift.
+ *
+ * ⚠️ NOT `shiftPeopleText`, and the difference is not stylistic. The chip prints
+ *    the third-and-later assignees on a second line of its own, so borrowing the
+ *    exporter's `Lead: A, Co: B, Also: C` form would print those people twice.
+ *
+ * Returns the STORED string untouched whenever nothing is being shortened, which
+ * covers every team that has set no acronyms and every shift altered by a swap —
+ * `applyShiftSubstitution` rebuilds `staff` itself, and second-guessing it here
+ * would make the chip disagree with the document.
+ */
+export const shiftStaffDisplay = (shift, shortNames = null) => {
+    const stored = typeof shift?.staff === 'string' ? shift.staff : '';
+    if (!shortNames) return stored;
+
+    const lead = displayNameFor(shift?.lead, shortNames);
+    const coLead = displayNameFor(shift?.coLead, shortNames);
+    // Nothing shortened on this shift, or no lead to build a label around.
+    if (lead === shift?.lead && coLead === shift?.coLead) return stored;
+    if (typeof lead !== 'string' || lead.trim() === '') return stored;
+
+    return buildShiftStaffLabel(lead, coLead);
+};
 
 // --- 2a. ICS (RFC 5545) ------------------------------------------------------
 
@@ -1160,6 +1215,14 @@ export const buildICS = (rosterData, options = {}) => {
     const stampSource =
         options.now instanceof Date && !Number.isNaN(options.now.getTime()) ? options.now : new Date();
     const dtStamp = formatICSTimestampUTC(stampSource);
+    /**
+     * `{ 'Muhammad Alif': 'MA' }`, or absent. Absent is the default and the default
+     * is the old behaviour exactly — every existing caller and every byte-exact pin
+     * in `auraEngine.exports.test.js` passes nothing and gets full names.
+     */
+    const shortNames = options.shortNames && typeof options.shortNames === 'object'
+        ? options.shortNames
+        : null;
 
     const lines = [
         'BEGIN:VCALENDAR',
@@ -1181,13 +1244,28 @@ export const buildICS = (rosterData, options = {}) => {
             uidCounts.set(base, seen);
             const uid = `${seen === 1 ? base : `${base}-${seen}`}${ICS_UID_DOMAIN}`;
 
-            const summary = `[${exportText(shift.task)}] ${shiftPeopleText(shift)}`.trimEnd();
+            const summary = `[${exportText(shift.task)}] ${shiftPeopleText(shift, shortNames)}`.trimEnd();
 
             // A shift with no `week` (demo transform, legacy documents) drops the
             // prefix entirely rather than printing `Week undefined -` (audit M7).
             const week = exportText(shift.week).trim();
             const category = exportText(shift.category).trim();
-            const description = [week === '' ? '' : `Week ${week}`, category].filter(Boolean).join(' - ');
+            /**
+             * ⚠️ FULL NAMES GO IN THE BODY WHENEVER THE TITLE WAS SHORTENED, so an
+             *    acronym never LOSES information — it moves it. `MA` in a phone's
+             *    event title is only an improvement if opening the event still
+             *    answers "who is that?", and a colleague reading somebody else's
+             *    roster has no reason to know the department's initials. Appended
+             *    only when the two actually differ, so an export with no short names
+             *    keeps the DESCRIPTION it has always had, byte for byte.
+             */
+            const fullNames = shiftPeopleText(shift);
+            const shortened = summary !== `[${exportText(shift.task)}] ${fullNames}`.trimEnd();
+            const description = [
+                week === '' ? '' : `Week ${week}`,
+                category,
+                shortened ? fullNames : '',
+            ].filter(Boolean).join(' - ');
 
             lines.push(
                 'BEGIN:VEVENT',
@@ -1316,8 +1394,12 @@ const downloadBlob = (contents, type, filename) => {
     document.body.removeChild(link);
 };
 
-export const downloadICS = (rosterData) => {
-    downloadBlob(buildICS(rosterData), 'text/calendar', 'AURA_Roster_Merged.ics');
+/**
+ * `options` is forwarded whole, so `{ shortNames }` reaches `buildICS`. Optional and
+ * absent by default: every existing caller keeps producing full names.
+ */
+export const downloadICS = (rosterData, options = {}) => {
+    downloadBlob(buildICS(rosterData, options), 'text/calendar', 'AURA_Roster_Merged.ics');
 };
 
 export const downloadCSV = (rosterData) => {

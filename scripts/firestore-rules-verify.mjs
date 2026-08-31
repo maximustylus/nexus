@@ -218,6 +218,48 @@ console.log('\n══ membership-as-data: a member document IS the permission �
         assertFails(deleteDoc(doc(as(ALIF), `teams/${TEAM_A}/members/${YING}`))));
 
     /**
+     * ── ROSTER LIMITS: `shortName` AND `onlyTasks` ────────────────────────────
+     *
+     * Added at v2.6.0. `onlyTasks` limits somebody to SOME of the department's duties;
+     * `shortName` is the acronym the calendar and the `.ics` show instead of a full
+     * name. Both are on the LEAD's allowlist and deliberately not the member's own.
+     *
+     * ⚠️ WHY THEY ARE ASSERTED HERE AND NOT ONLY IN THE UNIT SUITE. The only in-repo
+     *    check on them was a STRING SCAN of `firestore.rules` — which cannot tell
+     *    whether the deployed rule actually admits or refuses a write. These two
+     *    fields decide who is rostered for what, and pushing to `main` deploys the
+     *    rules, so the boundary is worth an emulator assertion rather than a grep.
+     *
+     * ⚠️ A CHANGED VALUE, NOT AN EQUAL ONE, in the smuggle case below. Writing
+     *    `onlyTasks: []` over a stored `[]` leaves the key out of `affectedKeys()`, so
+     *    the write legitimately succeeds and the test would pass while proving
+     *    nothing — trap #1 in this file's own header.
+     */
+    await check('a lead CAN set a colleague\'s shortName',
+        assertSucceeds(updateDoc(doc(as(ALIF), `teams/${TEAM_A}/members/${BRANDON}`), { shortName: 'BF' })));
+    await check('a lead CAN set a colleague\'s onlyTasks',
+        assertSucceeds(updateDoc(doc(as(ALIF), `teams/${TEAM_A}/members/${BRANDON}`), { onlyTasks: ['Exercise Test'] })));
+    await check('a lead CAN set both plus profession in ONE write (the real payload)',
+        assertSucceeds(updateDoc(doc(as(ALIF), `teams/${TEAM_A}/members/${BRANDON}`), {
+            shortName: 'BFG', onlyTasks: ['New Case'], profession: 'physiotherapist',
+        })));
+    await check('a lead sending shortName + grade is refused ENTIRELY (grade is not a membership field)',
+        assertFails(updateDoc(doc(as(ALIF), `teams/${TEAM_A}/members/${BRANDON}`), { shortName: 'BF', grade: 'AH11' })));
+
+    await check('a member CANNOT set their own shortName',
+        assertFails(updateDoc(doc(brandon, `teams/${TEAM_A}/members/${BRANDON}`), { shortName: 'BF' })));
+    await check('a member CANNOT set their own onlyTasks (they could drop a duty unannounced)',
+        assertFails(updateDoc(doc(brandon, `teams/${TEAM_A}/members/${BRANDON}`), { onlyTasks: ['Exercise Test'] })));
+    await check('a member CANNOT smuggle a CHANGED onlyTasks alongside a key they DO own',
+        assertFails(updateDoc(doc(brandon, `teams/${TEAM_A}/members/${BRANDON}`), {
+            unavailable: ['2026-03-03'], onlyTasks: ['Something Else'],
+        })));
+    await check('a member cannot set a COLLEAGUE\'s shortName',
+        assertFails(updateDoc(doc(brandon, `teams/${TEAM_A}/members/${YING}`), { shortName: 'YX' })));
+    await check('a lead of ANOTHER team cannot set either field',
+        assertFails(updateDoc(doc(as(SGH_LEAD), `teams/${TEAM_A}/members/${BRANDON}`), { shortName: 'BF' })));
+
+    /**
      * ⚠️ GRADE IS NOT A MEMBERSHIP FIELD ANY MORE, AND THIS IS THE ASSERTION THAT
      *    KEEPS IT OUT. It was one — `allow update` listed it for both a lead and
      *    the person — and it had to move, because RULES CANNOT HIDE A FIELD: a

@@ -203,10 +203,19 @@ service cloud.firestore {
         // A lead edits anybody's roster attributes. `role` and `rostered` are
         // included: promoting a colleague to lead, or marking the roster master as
         // carrying no duties, is exactly this screen's job.
+        //
+        // ⚠️ `shortName` AND `onlyTasks` ARE LEAD-ONLY, AND ARE ABSENT FROM THE SELF
+        //    LIST BELOW ON PURPOSE. `shortName` is what colleagues see on a shared
+        //    calendar, so it belongs with `displayName` rather than with `title`;
+        //    `onlyTasks` is which duties somebody carries, and a person who could
+        //    edit their own would be able to opt out of a duty without telling
+        //    anybody — the roster would still generate, and nobody would be short
+        //    until the day itself.
         allow update: if isLead(teamId)
                       && changedKeys().hasOnly([
                            'displayName', 'fte', 'skills',
-                           'unavailable', 'role', 'rostered', 'title', 'profession'
+                           'unavailable', 'role', 'rostered', 'title', 'profession',
+                           'shortName', 'onlyTasks'
                          ]);
 
         /**

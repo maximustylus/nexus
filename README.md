@@ -1,6 +1,6 @@
-# NEXUS: Smart Operations Dashboard v2.5.0 [BETA]
+# NEXUS: Smart Operations Dashboard v2.6.0 [BETA]
 
-![Version](https://img.shields.io/badge/Version-v2.5.0-blue) ![Status](https://img.shields.io/badge/Status-Beta%20Phase-emerald) ![Teams](https://img.shields.io/badge/Multi--Team-28%20AHP%20professions-indigo) ![Roster](https://img.shields.io/badge/Roster%20engine-deterministic-0f766e) ![Assistant](https://img.shields.io/badge/AURA%20assistant-Gemini-purple) ![PWA](https://img.shields.io/badge/PWA-Native%20Push%20Enabled-blue) ![CI/CD](https://img.shields.io/badge/CI%2FCD-GitHub%20Actions-2ea44f)
+![Version](https://img.shields.io/badge/Version-v2.6.0-blue) ![Status](https://img.shields.io/badge/Status-Beta%20Phase-emerald) ![Teams](https://img.shields.io/badge/Multi--Team-28%20AHP%20professions-indigo) ![Roster](https://img.shields.io/badge/Roster%20engine-deterministic-0f766e) ![Assistant](https://img.shields.io/badge/AURA%20assistant-Gemini-purple) ![PWA](https://img.shields.io/badge/PWA-Native%20Push%20Enabled-blue) ![CI/CD](https://img.shields.io/badge/CI%2FCD-GitHub%20Actions-2ea44f)
 
 **NEXUS** (formerly IDC App) is a clinician-led platform for workload management, skill-mix routing and staff wellbeing, built inside an allied health department and now serving departments beyond the one it was written for.
 
@@ -222,7 +222,8 @@ This application is an operational and workload management tool. It is not a cli
 ### Supported Versions
 | Version | Status |
 | ------- | ------ |
-| 2.5.x   | **Active Beta** (multi-team) |
+| 2.6.x   | **Active Beta** (multi-team) |
+| 2.5.x   | Superseded — upgrade to 2.6.x |
 | 2.4.x   | Superseded — upgrade to 2.5.x |
 | 2.3.x   | Superseded — upgrade to 2.4.x |
 | 2.2.x   | Superseded — upgrade to 2.3.x |
@@ -345,7 +346,30 @@ Beta testers should utilise Demo Mode to verify system integrity:
 > also lists the **known issues that are documented but not yet fixed**. The summaries
 > below are narrative highlights; where the two disagree, `CHANGELOG.md` is correct.
 
-### NEXUS v2.1.3 [Current Beta]
+### NEXUS v2.6.0 [Current Beta] — Some of the duties, and a name that fits a phone
+
+A minor release: two new lead-set membership fields, plus the dead controls that
+building them exposed. **`onlyTasks`** lets a lead say a colleague carries *some* of the
+department's duties — the reporting lead is on the roster for two of nine — mapping to
+one cohort window with no date bounds, so it narrows *which* duties without narrowing
+*when*. **`shortName`** is an 8-character acronym used in the roster calendar chips and
+the `.ics` `SUMMARY` (`[Exercise Test] Lead: MA, Co: BF`); full names move to the event
+`DESCRIPTION` rather than disappearing, and the `.csv` deliberately keeps them
+throughout. Both fields are lead-only in `firestore.rules` and absent from the member's
+own update list on purpose.
+
+Two controls that rendered, accepted typing and reached nothing were fixed: the staff
+table's **"More" drawer never received `readOnly`**, so in live mode its inputs and its
+"Add availability window" button were interactive but inert; and an audit one step later
+found the **sandbox's own short-name cell had no consumer either**. Mutation testing
+found four surviving mutations plus a JSX-escape — nothing had proved a typed short name
+reached a chip or a file — now covered end to end.
+
+⚠️ **An old cached PWA bundle silently ignores `onlyTasks`.** A lead holding a stale
+bundle who presses Generate writes a roster putting the restricted person on every duty
+and reports success. Additive in shape, not in behaviour — see `CHANGELOG.md`.
+
+### NEXUS v2.1.3
 
 A patch release: the public answering surfaces now speak lay language, no new features and no data change. People filling in the chat and the form were shown **instrument acronyms mid-question** — `ACSM PAVS`, `SPAG`, `SDOH`, `PHQ-2`, `LSNS-6`, `BPS-RS II` — vocabulary that means nothing outside a health system, at the moment they are trying to answer. Badges, step titles and footnotes now read as plain words (*Physical Activity*, *Strength Training*, *Health & Safety Check*, *Mood & Wellbeing*), and a footnote describes its question rather than citing it. The full instrument citations are **not** lost: they remain, expanded on first use, on the PDF report's governance page, where an auditor looks for them. Separately, the word **"clinical" is gone from every public-facing string** in all four languages — including the Malay *klinikal* and Chinese *临床* — because this portal must not present itself as a clinical service; staff-side copy is untouched, since *Clinical Exercise Physiologist* is a real job title. The chat's internal `clinical` group key became `safety`, which is a **presentation key that never leaves the browser** — the persisted `key` fields are unchanged, so a cached client reads stored responses exactly as before. Release tags can now also be cut from a `workflow_dispatch` (`.github/workflows/tag-release.yml`), build tooling only.
 

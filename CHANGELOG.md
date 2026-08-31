@@ -51,6 +51,190 @@ not changed by this release.
 
 ---
 
+## [2.6.0] - 2026-08-31
+
+A roster master who carries *some* of the department's duties, and an acronym short
+enough to read in a calendar on a phone.
+
+### Added
+
+- **`onlyTasks` on a membership — "this person takes these duties, not all of them".**
+  The department lead who reported this is on the roster for two of nine duties. The
+  engine could already express it: a cohort window with a `tasks` list and no dates
+  narrows *which* duties somebody is eligible for without narrowing *when*. What did
+  not exist was any way to say so about a real colleague.
+
+  A lead now sets it per person in **Admin → Team**, comma-separated. Blank means every
+  duty. `staffRowsFromMembers` turns a non-empty list into exactly one window with
+  **blank date bounds**, which the wizard mapper then drops entirely — so the engine
+  receives `{ tasks: [...] }` and reads it as "these duties, always".
+
+  ⚠️ **An empty list must reach the engine as no `windows` key at all**, and that is
+  the property most worth its test. Note where the omission happens: the wizard *row*
+  always carries a `windows` array (`createStaffRow` normalises it, empty when
+  unrestricted), and it is `buildDemoRosterV2ConfigFromTables` that omits the key from
+  the engine config — `...(windows.windows.length === 0 ? {} : { windows })`. The engine
+  switches time-bounded eligibility on for the *whole* configuration the moment any
+  staff entry carries a `windows` key, so an unasked-for empty list would start judging
+  a department that has never heard of rotations — and the symptom would be `unfilled`
+  reasons about cohort windows shown to a roster master who set none.
+
+  ⚠️ **It is a limit, not an addition**, and both the editor and the roster drawer say
+  so. Naming duties means the person is rostered for *only* those; leave one out and
+  they silently stop being rostered for it.
+
+- **`shortName` on a membership — the acronym the calendar and the `.ics` use.**
+  `[Exercise Test] Lead: Muhammad Alif, Co: Brandon Feng` spends most of an Outlook
+  event title on names, and on a phone the title is most of what you can see. A lead
+  can now record up to eight characters per person, used in the roster calendar chips
+  and in the VEVENT `SUMMARY`: `[Exercise Test] Lead: MA, Co: BF`.
+
+  **The full names move rather than disappear** — they are appended to the event
+  `DESCRIPTION` whenever the title was shortened, because an acronym only helps if
+  opening the event still answers "who is that?", and a colleague reading somebody
+  else's roster has no reason to know the department's initials.
+
+  **The `.csv` deliberately keeps full names throughout.** A spreadsheet column has no
+  width to run out of, and `MA` under a heading of `Lead` is strictly worse for the
+  analysis a CSV export exists for.
+
+  ⚠️ Commas, semicolons and backslashes are **refused** rather than escaped. Those are
+  RFC 5545 delimiters, and one of them in a `SUMMARY` either truncates the title or
+  splits it into properties the calendar misreads. Refusing at the input is cheaper
+  than escaping at every exporter and hoping none is added later. A newline is
+  collapsed to a space rather than refused.
+
+### Fixed
+
+- **The staff table's "More" drawer offered controls that could not work, and had for a
+  release.** A lead trying to limit themselves to some duties opened the drawer in live
+  mode, pressed **Add availability window**, and nothing happened — so they reasonably
+  concluded the feature was broken. It was not broken; it was unreachable, and the
+  press was a no-op *twice over*:
+
+  1. live rows are `liveStaffRows`, a `useMemo` over the team's membership, while
+     `onStaffChange` is `patchStaffRow`, which calls `setDemoStaffRows` — the table
+     rendered one array and the handler updated a different one; and
+  2. `patchStaffRow` matches on `row.id`, and a live row's id comes from a member uid,
+     so the lookup found nothing in the sandbox array anyway.
+
+  `StaffTable` already *took* a `readOnly` prop and honoured it for **Add row** and
+  **Remove** — it simply never passed it to `StaffRowDetail`. The drawer is now
+  read-only in live mode, **shows** the values, and names **Admin → Team** as where they
+  are set, the same way the table's footnote already did for grade and profession.
+
+  ⚠️ **The guard is behavioural, not just the `readOnly` attribute.** A test proved
+  `fireEvent.change` fires straight through that attribute, because it is enforced by
+  the browser and not by the DOM — so a keystroke that got through would have patched
+  the sandbox array again. Every write in the drawer now passes through a function that
+  is a no-op in live mode; the attribute stays as well, because it is what stops a real
+  browser accepting the keystroke and what tells a screen reader the field is not for
+  editing.
+
+  Hiding the values instead would have been the other wrong answer: a lead looking at
+  somebody limited to two duties needs to see that from the roster screen, even though
+  it is changed elsewhere.
+
+- **The sandbox's own short-name cell was a second dead control, with no consumer at
+  all.** Found by an audit one step after the drawer fix above — which is the point
+  worth recording: the same class of defect (a control that renders, accepts typing and
+  reaches nothing) existed twice in the feature, and fixing the reported instance did
+  not find the unreported one. In demo mode the short-name map was not built from the
+  sandbox rows, so an acronym typed into the sandbox table changed no chip and no
+  export. The map is now built from `demoStaffRows` in demo mode, and from membership in
+  live mode.
+
+- **The unknown-duty error told the reader to edit a field they cannot reach.** It read
+  "an availability window names X, which is not a task in the table below … or leave the
+  task list blank", but a limit can now arrive from a *membership* (`onlyTasks`), and in
+  live mode the staff table is read-only — so the instruction was impossible, and the
+  person who typed the duty name is usually not the person pressing Generate. It now
+  names the duty, lists the duties that *do* exist (the check is case-sensitive and
+  exact, so the correct spelling is the one thing the reader needs), and names **both**
+  places the limit could have come from.
+
+- **`memberProfile.js` imported `./rosterEngineV2` and `../data/mockData` without the
+  `.js` extension.** Harmless under Vite, but `rosterWizard.js` documents that it must
+  resolve under plain Node ESM as well — and it now imports `memberProfile.js`, so the
+  extensionless imports would have broken that guarantee for anything importing the
+  wizard from a script. Both are explicit now, matching the convention the file it
+  imports already follows.
+
+- **A stale comment in `RosterView.jsx` claimed `firestore.rules` is never deployed.**
+  Untrue since v2.0.0, when decision `Q6` was closed and the rules began deploying — a
+  comment that would have talked a future reader out of relying on the rules for exactly
+  the access control they do enforce.
+
+- **The member-editor button's `aria-label` did not mention roster limits**, so a screen
+  reader user opening it was told it edited profession and grade and then found two more
+  fields. It now reads "Edit profession, grade and roster limits for …".
+
+### Verified
+
+- **Four mutations had survived the entire suite, and one more was a JSX-escape.** The
+  `shortNames` memo, the calendar chip, the ICS button and `downloadICS` dropping its
+  options could each be broken without a single test failing — meaning **nothing proved
+  that a typed short name reached a chip or a file**. The feature was tested at its ends
+  (the pure helpers, and the Firestore write) and nowhere across the middle. End-to-end
+  tests in `RosterView.reach.test.jsx` now drive the path a lead actually takes, and all
+  five mutations are caught.
+- **`TeamMembersPanel.test.jsx` had zero references to either field**, despite the panel
+  being where both are set; it now covers the write.
+- **9 assertions added to `scripts/firestore-rules-verify.mjs`** — 149 passed, 0 failed
+  on the emulator, including that a member cannot set either field on themselves.
+- Full suite: **3373 passing**, lint clean.
+
+### Security
+
+- **`firestore.rules`: `shortName` and `onlyTasks` added to the *lead's*
+  `changedKeys().hasOnly` list on a membership update, and deliberately **not** to the
+  member's own.** `shortName` is how colleagues identify somebody on a shared calendar,
+  which is the same argument that keeps `displayName` off the self list. `onlyTasks` is
+  which duties somebody carries: a person who could edit their own could opt out of a
+  duty without telling anybody — the roster would still generate, and nobody would be
+  short until the day itself.
+
+  Neither field grants a lead anything they did not already have; they already control
+  `role`, `rostered`, `fte` and `skills` on the same document.
+
+- **A short name never enters an identity field.** `shift.lead`, `shift.coLead` and
+  `shift.staff` keep full names, and the substitution happens only in text on its way
+  out. Four separate things compare a name by equality — `findAppliedSwapShift`
+  verifies an applied swap with `shift.staff === buildShiftStaffLabel(...)`, the
+  calendar decides "my shift" with `s.lead === user?.name`, and `rosterPersonView`
+  builds somebody's own week the same way — and stored Firestore documents already hold
+  the full-name form. Substituting upstream would have quietly stopped people
+  recognising their own shifts. `buildShiftStaffLabel`'s output format is unchanged, and
+  an export with no short names is byte-identical to the previous release.
+
+### Known limitations
+
+- **A hand-corrected `shift.staff` string is discarded once anybody on that shift has an
+  acronym.** `auraEngine.exports.test.js` pins, on purpose, that a two-person `SUMMARY`
+  uses `staff` verbatim even where it disagrees with `lead`/`coLead` — "a live document
+  whose display string was hand-corrected must keep exporting the hand-corrected
+  string". That pin still holds for the no-short-names path. But the moment anybody on a
+  shift has a short name the label is rebuilt from `lead` and `coLead`, and anything in
+  `staff` not derivable from those two is lost — `(acting)`, for instance. It has to be
+  that way round: the stored string is a full-name sentence, so trusting it would mean
+  ignoring the acronym for exactly the common two-person case. A deliberate trade-off —
+  and as of this release **asserted by a test rather than only stated in a comment**,
+  which is how it was found: stated in a code comment and checked nowhere.
+
+- ⚠️ **An old cached PWA bundle silently ignores `onlyTasks` — backwards-compatible in
+  shape, not in behaviour.** This is the one to watch on rollout. A second lead whose
+  browser still holds a pre-2.6.0 bundle from the service-worker cache presses
+  **Generate**, and their bundle does not know the field exists: it writes a roster that
+  puts the restricted person on **every** duty, and reports success. Nothing errors,
+  nothing warns, and the roster looks legitimate to everyone including the person who
+  generated it. The document shape is additive and no old client fails to *read* it,
+  which is why this release is a minor and not a major — but "the old client ignores the
+  field safely" is true of the data and false of the outcome. Until every lead's bundle
+  has refreshed, a lead who sets `onlyTasks` should confirm the generated roster
+  themselves rather than trust that a colleague's Generate honoured it.
+
+---
+
 ## [2.5.0] - 2026-08-31
 
 Roster a colleague who has not registered yet — because four months of roster should

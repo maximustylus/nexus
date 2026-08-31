@@ -98,6 +98,8 @@ import {
 } from '../utils/rosterWizard';
 import WizardStep from './WizardStep';
 import { STANDARD_CATEGORIES, categoryChipClass, suggestCategoryFor } from '../utils/rosterCategories';
+// One definition of the cap, shared with the member editor that also writes it.
+import { SHORT_NAME_MAX } from '../utils/memberProfile';
 
 // --- 0. THE RESPONSIVE CONTRACT ------------------------------------------------
 //
@@ -1024,18 +1026,51 @@ const STAFF_HEADINGS = Object.freeze({
  * it is the reading a placement or a block rotation actually needs, and it is not the
  * reading the words "availability window" suggest on their own.
  */
-const StaffRowDetail = ({ row, index, departmentMaxPerDay, onChange }) => {
+/**
+ * ⚠️ `readOnly` HERE FIXES A CONTROL THAT LIED FOR A WHOLE RELEASE.
+ *
+ *    `StaffTable` takes `readOnly` and honours it — it hides Add row and Remove —
+ *    but this drawer never received it, so in live mode every input inside it, and
+ *    an "Add availability window" button, stayed fully interactive. They could not
+ *    work: live rows are a `useMemo` over the team's membership, while `onChange` is
+ *    the SANDBOX row setter, which looks its id up in a different array and finds
+ *    nothing. Clicking + was a guaranteed no-op, twice over.
+ *
+ *    A dead control is worse than an absent one. The roster master who reported it
+ *    had been trying to limit themselves to some duties and reasonably concluded
+ *    the feature was broken rather than that it was elsewhere. So live mode now
+ *    SHOWS these values and says where they are set, the same way the table's own
+ *    footnote does for grade and profession.
+ */
+const StaffRowDetail = ({ row, index, departmentMaxPerDay, onChange, readOnly = false }) => {
     const windows = Array.isArray(row.windows) ? row.windows : [];
 
+    /**
+     * ⚠️ THE GUARD IS HERE, NOT ONLY IN THE `readOnly` ATTRIBUTES ON THE INPUTS.
+     *
+     *    A test proved why: `fireEvent.change` on a `readOnly` input fires `change`
+     *    straight through, because the attribute is enforced by the BROWSER and not
+     *    by the DOM. Live mode's `onChange` is the SANDBOX row setter, so a keystroke
+     *    that got through would patch an array this table is not rendering — the
+     *    exact defect this whole change set exists to fix, reintroduced by typing
+     *    instead of by pressing a button.
+     *
+     *    So every write in this drawer goes through `patchRow`, which is a no-op in
+     *    live mode. The inputs keep their `readOnly` attribute as well: that is what
+     *    stops a real browser accepting the keystroke in the first place, and what
+     *    tells a screen reader the field is not for editing.
+     */
+    const patchRow = (id, patch) => { if (!readOnly) onChange(id, patch); };
+
     const patchWindow = (windowId, patch) =>
-        onChange(row.id, {
+        patchRow(row.id, {
             windows: windows.map((entry) => (entry.id === windowId ? { ...entry, ...patch } : entry)),
         });
 
-    const addWindow = () => onChange(row.id, { windows: [...windows, createStaffWindow()] });
+    const addWindow = () => patchRow(row.id, { windows: [...windows, createStaffWindow()] });
 
     const removeWindow = (windowId) =>
-        onChange(row.id, { windows: windows.filter((entry) => entry.id !== windowId) });
+        patchRow(row.id, { windows: windows.filter((entry) => entry.id !== windowId) });
 
     return (
         <tr className={RESPONSIVE_FULL_ROW}>
@@ -1049,12 +1084,13 @@ const StaffRowDetail = ({ row, index, departmentMaxPerDay, onChange }) => {
                                 type="text"
                                 inputMode="numeric"
                                 aria-label={`Staff row ${index + 1} most duties per day`}
+                                readOnly={readOnly}
                                 value={row.maxPerDay}
                                 // The DEPARTMENT'S figure as it currently reads, not the
                                 // engine's shipped 2 — otherwise the placeholder would be a
                                 // lie the moment somebody types 3 in the box above.
                                 placeholder={String(departmentMaxPerDay)}
-                                onChange={(e) => onChange(row.id, { maxPerDay: e.target.value })}
+                                onChange={(e) => patchRow(row.id, { maxPerDay: e.target.value })}
                                 className={NUMBER_FIELD}
                             />
                             <p className="text-[10px] text-slate-500 dark:text-slate-400 leading-relaxed max-w-md">
@@ -1066,6 +1102,42 @@ const StaffRowDetail = ({ row, index, departmentMaxPerDay, onChange }) => {
                             </p>
                         </div>
                     </DrawerGroup>
+
+                    {/* --- the acronym the calendar and the exports use --- */}
+                    <div className={DRAWER_DIVIDER}>
+                        <DrawerGroup label="Short name for calendars">
+                            <div className="flex flex-wrap items-start gap-3">
+                                <input
+                                    type="text"
+                                    aria-label={`Staff row ${index + 1} short name`}
+                                    readOnly={readOnly}
+                                    maxLength={SHORT_NAME_MAX}
+                                    value={row.shortName || ''}
+                                    placeholder="full name"
+                                    onChange={(e) => patchRow(row.id, { shortName: e.target.value })}
+                                    className={`${CELL_INPUT} sm:w-28`}
+                                />
+                                <p className="text-[10px] text-slate-500 dark:text-slate-400 leading-relaxed max-w-md">
+                                    {readOnly ? (
+                                        <>
+                                            Set on their row in <span className="font-bold">Admin &rarr; Team</span>.
+                                            Blank means the calendar and the exports use their full name.
+                                        </>
+                                    ) : (
+                                        <>
+                                            Up to <span className="font-bold">{SHORT_NAME_MAX}</span> characters, used
+                                            in the calendar and in the exported{' '}
+                                            <span className="font-bold">.ics</span> in place of this person&apos;s
+                                            full name &mdash; an event title on a phone shows about thirty
+                                            characters. The <span className="font-bold">.csv</span> keeps full names.
+                                            Blank keeps the full name here too. No commas or semicolons: a calendar
+                                            reads those as separators.
+                                        </>
+                                    )}
+                                </p>
+                            </div>
+                        </DrawerGroup>
+                    </div>
 
                     {/* --- availability windows --- */}
                     <div className={DRAWER_DIVIDER}>
@@ -1088,7 +1160,9 @@ const StaffRowDetail = ({ row, index, departmentMaxPerDay, onChange }) => {
 
                             {windows.length === 0 ? (
                                 <p className="text-[10px] font-bold text-slate-500 dark:text-slate-400 leading-relaxed">
-                                    No windows — available on every date of the run.
+                                    {readOnly
+                                        ? 'Every duty, every date. To limit somebody to some of the department\u2019s duties, set Only these duties on their row in Admin \u2192 Team.'
+                                        : 'No windows \u2014 available on every date of the run.'}
                                 </p>
                             ) : (
                                 <div className="space-y-2">
@@ -1105,6 +1179,7 @@ const StaffRowDetail = ({ row, index, departmentMaxPerDay, onChange }) => {
                                                     id={`window-from-${window.id}`}
                                                     type="text"
                                                     aria-label={`Staff row ${index + 1} window ${windowIndex + 1} from`}
+                                                    readOnly={readOnly}
                                                     value={window.from}
                                                     placeholder="any earlier date"
                                                     onChange={(e) => patchWindow(window.id, { from: e.target.value })}
@@ -1122,6 +1197,7 @@ const StaffRowDetail = ({ row, index, departmentMaxPerDay, onChange }) => {
                                                     id={`window-to-${window.id}`}
                                                     type="text"
                                                     aria-label={`Staff row ${index + 1} window ${windowIndex + 1} to`}
+                                                    readOnly={readOnly}
                                                     value={window.to}
                                                     placeholder="any later date"
                                                     onChange={(e) => patchWindow(window.id, { to: e.target.value })}
@@ -1139,42 +1215,56 @@ const StaffRowDetail = ({ row, index, departmentMaxPerDay, onChange }) => {
                                                     id={`window-tasks-${window.id}`}
                                                     type="text"
                                                     aria-label={`Staff row ${index + 1} window ${windowIndex + 1} tasks`}
+                                                    readOnly={readOnly}
                                                     value={window.tasks}
                                                     placeholder="every task"
                                                     onChange={(e) => patchWindow(window.id, { tasks: e.target.value })}
                                                     className={`${CELL_INPUT} sm:w-48`}
                                                 />
                                             </div>
-                                            <button
-                                                type="button"
-                                                aria-label={`Remove staff row ${index + 1} window ${windowIndex + 1}`}
-                                                title="Remove this window"
-                                                onClick={() => removeWindow(window.id)}
-                                                className={`mb-1 ${ICON_BUTTON}`}
-                                            >
-                                                <Trash2 size={13} />
-                                            </button>
+                                            {!readOnly && (
+                                                <button
+                                                    type="button"
+                                                    aria-label={`Remove staff row ${index + 1} window ${windowIndex + 1}`}
+                                                    title="Remove this window"
+                                                    onClick={() => removeWindow(window.id)}
+                                                    className={`mb-1 ${ICON_BUTTON}`}
+                                                >
+                                                    <Trash2 size={13} />
+                                                </button>
+                                            )}
                                         </div>
                                     ))}
                                 </div>
                             )}
 
-                            <button
-                                type="button"
-                                onClick={addWindow}
-                                title="Add a block of dates this person is available for"
-                                className={ADD_ROW}
-                            >
-                                <Plus size={12} /> {`Add availability window to person ${index + 1}`}
-                            </button>
+                            {!readOnly && (
+                                <button
+                                    type="button"
+                                    onClick={addWindow}
+                                    title="Add a block of dates this person is available for"
+                                    className={ADD_ROW}
+                                >
+                                    <Plus size={12} /> {`Add availability window to person ${index + 1}`}
+                                </button>
+                            )}
 
-                            <p className="text-[10px] text-slate-500 dark:text-slate-400 leading-relaxed">
-                                Dates are <span className="font-bold">YYYY-MM-DD</span>. Leave{' '}
-                                <span className="font-bold">from</span> blank for &ldquo;from the start of
-                                the run&rdquo; and <span className="font-bold">to</span> blank for
-                                &ldquo;until the end of it&rdquo;. Task names must match the task table
-                                below exactly; separate several with commas.
-                            </p>
+                            {readOnly ? (
+                                <p className="text-[10px] text-slate-500 dark:text-slate-400 leading-relaxed">
+                                    These come from the person&apos;s membership, not from this table &mdash; set{' '}
+                                    <span className="font-bold">Only these duties</span> on their row in{' '}
+                                    <span className="font-bold">Admin &rarr; Team</span>. Blank dates mean the
+                                    limit is on WHICH duties they take, not on when.
+                                </p>
+                            ) : (
+                                <p className="text-[10px] text-slate-500 dark:text-slate-400 leading-relaxed">
+                                    Dates are <span className="font-bold">YYYY-MM-DD</span>. Leave{' '}
+                                    <span className="font-bold">from</span> blank for &ldquo;from the start of
+                                    the run&rdquo; and <span className="font-bold">to</span> blank for
+                                    &ldquo;until the end of it&rdquo;. Task names must match the task table
+                                    below exactly; separate several with commas.
+                                </p>
+                            )}
                         </DrawerGroup>
                     </div>
 
@@ -1269,7 +1359,7 @@ export const StaffTable = ({ rows, errors, onChange, onAdd, onRemove, readOnly =
                             // A row whose HIDDEN cells are wrong opens itself, for the
                             // same reason the task table's does: a refusal the visitor
                             // cannot act on is not a refusal, it is a dead end.
-                            const forcedOpen = Boolean(rowErrors?.maxPerDay || rowErrors?.windows);
+                            const forcedOpen = Boolean(rowErrors?.maxPerDay || rowErrors?.windows || rowErrors?.shortName);
                             const open = expandedRows.has(row.id) || forcedOpen;
                             const capSet = typeof row.maxPerDay === 'string' && row.maxPerDay.trim() !== '';
                             const windowCount = Array.isArray(row.windows) ? row.windows.length : 0;
@@ -1412,6 +1502,7 @@ export const StaffTable = ({ rows, errors, onChange, onAdd, onRemove, readOnly =
                                             index={index}
                                             departmentMaxPerDay={departmentMaxPerDay}
                                             onChange={onChange}
+                                            readOnly={readOnly}
                                         />
                                     )}
                                     <RowErrors errors={rowErrors} colSpan={STAFF_COLUMNS} />

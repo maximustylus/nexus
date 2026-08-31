@@ -46,6 +46,10 @@ import {
     buildMemberProfileUpdate,
     buildGradeUpdate,
     validateMemberProfile,
+    buildMemberRosterUpdate,
+    validateMemberRoster,
+    normalizeOnlyTasks,
+    SHORT_NAME_MAX,
 } from '../utils/memberProfile';
 import { MOH_PROFESSION_OPTIONS } from '../data/mockData';
 import { useMemberGrade } from '../hooks/useMemberGrade';
@@ -107,12 +111,20 @@ const TeamMembersPanel = () => {
     /**
      * ── THE PER-MEMBER EDITOR ────────────────────────────────────────────────
      *
-     * Which member is open, and the two draft values. `''` is closed, and closed
+     * Which member is open, and the draft values. `''` is closed, and closed
      * is what clears the grade out of this component's state — see the hook.
      */
     const [editingUid, setEditingUid] = useState('');
     const [draftProfession, setDraftProfession] = useState('');
     const [draftGrade, setDraftGrade] = useState('');
+    /**
+     * The two ROSTER drafts, held as raw strings for the reason the wizard's cells
+     * are: `normalizeShortName` trims, and trimming on every keystroke makes a space
+     * untypeable. `draftOnlyTasks` is the comma-separated form a human types; the
+     * builder splits it.
+     */
+    const [draftShortName, setDraftShortName] = useState('');
+    const [draftOnlyTasks, setDraftOnlyTasks] = useState('');
     /**
      * Whether a human has touched the grade select since this editor opened.
      *
@@ -264,6 +276,11 @@ const TeamMembersPanel = () => {
         setDraftProfession(member.profession || '');
         setDraftGrade('');
         setGradeTouched(false);
+        setDraftShortName(typeof member.shortName === 'string' ? member.shortName : '');
+        // Seeded through the normalizer so a stored array arrives as the same
+        // comma-separated text the field will hand back — otherwise opening the editor
+        // and saving without touching anything would register as a change.
+        setDraftOnlyTasks(normalizeOnlyTasks(member.onlyTasks).join(', '));
         setEditingUid(member.uid);
     };
 
@@ -272,6 +289,8 @@ const TeamMembersPanel = () => {
         setDraftProfession('');
         setDraftGrade('');
         setGradeTouched(false);
+        setDraftShortName('');
+        setDraftOnlyTasks('');
     };
 
     const handleSaveMember = async (member) => {
@@ -281,6 +300,9 @@ const TeamMembersPanel = () => {
 
         const complaint = validateMemberProfile({ grade: draftGrade, profession: draftProfession });
         if (complaint) { setError(complaint); return; }
+
+        const rosterComplaint = validateMemberRoster({ shortName: draftShortName });
+        if (rosterComplaint) { setError(rosterComplaint); return; }
 
         /**
          * ⚠️ A REFUSED READ IS A REFUSAL TO WRITE. `gradeDenied` means this caller
@@ -295,7 +317,27 @@ const TeamMembersPanel = () => {
             return;
         }
 
-        const memberUpdate = buildMemberProfileUpdate({ profession: draftProfession }, member);
+        /**
+         * ⚠️ TWO BUILDERS, ONE WRITE, AND NEITHER MAY BE REPLACED BY A LITERAL.
+         *
+         *    A membership update is refused ENTIRELY if it carries one key outside the
+         *    rule's `changedKeys().hasOnly` list, so the payload is assembled from
+         *    allowlisted builders rather than from the form. They are separate because
+         *    `buildMemberProfileUpdate` is also called by `ProfileView` with a person's
+         *    OWN form object — teaching it `shortName` or `onlyTasks` would make every
+         *    ordinary profile save attempt a lead-only field and fail.
+         *
+         *    Spreading a `null` is `{}`, so this is one object whether none, one or
+         *    both halves changed, and `null` when nothing did.
+         */
+        const profileUpdate = buildMemberProfileUpdate({ profession: draftProfession }, member);
+        const rosterUpdate = buildMemberRosterUpdate(
+            { shortName: draftShortName, onlyTasks: draftOnlyTasks },
+            member,
+        );
+        const memberUpdate = (profileUpdate || rosterUpdate)
+            ? { ...profileUpdate, ...rosterUpdate }
+            : null;
         /**
          * `setBy: 'lead'` whenever this screen writes — including when a lead edits
          * their OWN row, which is true and harmless. What it is NOT is a log of WHO:
@@ -574,7 +616,7 @@ const TeamMembersPanel = () => {
                                     <button
                                         type="button"
                                         onClick={() => (isOpen ? closeEditor() : openEditor(member))}
-                                        aria-label={`Edit profession and grade for ${member.displayName || member.email || member.uid}`}
+                                        aria-label={`Edit profession, grade and roster limits for ${member.displayName || member.email || member.uid}`}
                                         aria-expanded={isOpen}
                                         className="p-2 rounded-lg text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors"
                                     >
@@ -650,6 +692,66 @@ const TeamMembersPanel = () => {
                                                     <option key={grade} value={grade}>{grade}</option>
                                                 ))}
                                             </select>
+                                        </div>
+                                    </div>
+
+                                    {/* HOW THE ROSTER SHOWS THEM, AND WHICH DUTIES THEY TAKE.
+                                        Both are lead-only fields — see the builder's note in
+                                        `memberProfile.js` — and both are set HERE rather than in
+                                        the roster wizard's staff table, because that table is
+                                        deliberately read-only in live mode: the team is the
+                                        membership, and a second editable copy of a person is how
+                                        display-name keying got in last time. */}
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                        <div className="space-y-1.5">
+                                            <label htmlFor={`member-shortname-${member.uid}`} className="text-[10px] font-black text-slate-500 uppercase tracking-widest">
+                                                Short name for calendars
+                                            </label>
+                                            <input
+                                                id={`member-shortname-${member.uid}`}
+                                                type="text"
+                                                value={draftShortName}
+                                                maxLength={SHORT_NAME_MAX}
+                                                placeholder="e.g. MA — blank uses their full name"
+                                                onChange={(e) => setDraftShortName(e.target.value)}
+                                                className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 text-sm outline-none text-slate-800 dark:text-slate-200"
+                                            />
+                                            <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-relaxed">
+                                                Used in the roster calendar and in the exported{' '}
+                                                <span className="font-bold">.ics</span> calendar file in place of
+                                                their full name. An Outlook event title on a phone shows about
+                                                thirty characters, and{' '}
+                                                <span className="font-bold">Lead: …, Co: …</span> spends most of them
+                                                on names. Their full name still appears inside the event, and the{' '}
+                                                <span className="font-bold">.csv</span> export keeps full names
+                                                throughout &mdash; a spreadsheet has no room to run out of.
+                                            </p>
+                                        </div>
+
+                                        <div className="space-y-1.5">
+                                            <label htmlFor={`member-onlytasks-${member.uid}`} className="text-[10px] font-black text-slate-500 uppercase tracking-widest">
+                                                Only these duties
+                                            </label>
+                                            <input
+                                                id={`member-onlytasks-${member.uid}`}
+                                                type="text"
+                                                value={draftOnlyTasks}
+                                                placeholder="blank — every duty"
+                                                onChange={(e) => setDraftOnlyTasks(e.target.value)}
+                                                className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 text-sm outline-none text-slate-800 dark:text-slate-200"
+                                            />
+                                            <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-relaxed">
+                                                For somebody who carries{' '}
+                                                <span className="font-bold">some</span> of the department&apos;s
+                                                duties and not all — a lead who is on the roster for two clinics but
+                                                not the rest. Separate with commas, spelled as in{' '}
+                                                <span className="font-bold">Configure</span>.
+                                            </p>
+                                            <p className="text-[11px] font-bold text-amber-700 dark:text-amber-300 leading-relaxed">
+                                                ⚠ This is a limit, not an addition. Naming duties here means they are
+                                                rostered for <span className="font-bold">only</span> those — leave one
+                                                out and they stop being rostered for it. Blank means every duty.
+                                            </p>
                                         </div>
                                     </div>
 
