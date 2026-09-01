@@ -51,6 +51,39 @@ not changed by this release.
 
 ---
 
+## [2.9.2] - 2026-09-01
+
+### Changed
+
+- **The selected half of the view switcher is a soft indigo tint, not a dark fill.**
+  The owner read `Department` as a different control from `My week` beside it. They were
+  never different designs — same padding, shape, type and size; only the colour differed,
+  and only because one was selected. But `bg-slate-700 text-white` was heavy enough to
+  read as another component. Selected is now `indigo-100` behind `indigo-700` text — the
+  same accent the Export button and the LEAD/CO-LEAD badges already use, so the whole
+  screen is one family. **6.41:1 light, 7.71:1 dark**, pinned in `contrast.test.js`;
+  `text-xs` bold is NORMAL text to WCAG, so the bar is 4.5:1 rather than 3:1.
+
+### Fixed
+
+- **The new tint would have made colour the only cue for which view is selected.** Caught
+  by an assertion written to claim the opposite: white against `indigo-100` is 1.23:1 and
+  `slate-600` against `indigo-700` is **1.04:1**, so the two halves separate by hue and
+  essentially not at all by lightness. Rendered greyscale — a washed-out screen in
+  daylight, or a colour vision deficiency — they were near identical, which is WCAG 1.4.1.
+  The dark fill it replaced never had that problem at 10.35:1.
+
+  The selected half now also carries a **2px inset ring**: a shape cue rather than a
+  colour one, 5.10:1 against its own fill and 6.29:1 against the half beside it, past the
+  3:1 that 1.4.11 asks of a UI part. Inset, so it costs no height.
+
+- **`Configure` had no dark variant at all**, and rendered as a bright white block beside
+  a dark switcher and an indigo Export — the one control in the bar that did not belong
+  to the theme. Found while checking the retint in dark mode. `slate-300` on `slate-800`
+  is 9.85:1.
+
+---
+
 ## [2.9.1] - 2026-09-01
 
 ### Fixed

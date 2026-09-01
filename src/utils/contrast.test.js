@@ -128,3 +128,75 @@ describe('the neutral surfaces', () => {
         expect(check('#64748b', surface).ratio).toBeGreaterThanOrEqual(AA_NORMAL);
     });
 });
+
+/**
+ * ==============================================================================
+ * THE ROSTER'S VIEW SWITCHER — Department | My week
+ * ==============================================================================
+ * The selected half used to be `bg-slate-700` behind white text: a heavy dark
+ * block the owner read as a different control from the half beside it
+ * (2026-09-01). It is now a soft indigo tint in the same family as the Export
+ * button, which is a much lighter background — so the text colour is what has to
+ * be checked, and it is checked here rather than assumed.
+ *
+ * ⚠️ `text-xs font-bold` IS NORMAL TEXT TO WCAG, NOT LARGE. Large starts at 18.66px
+ *    bold; this is 12px. So the bar is AA_NORMAL (4.5), not AA_LARGE (3.0) — the
+ *    easy mistake would be to grade a "small bold label" against 3.0 and ship a
+ *    tint that fails for anybody reading a ward tablet at arm's length.
+ */
+describe('the roster view switcher reads at AA in both themes', () => {
+    // Tailwind v3, as compiled: the classes on the two buttons.
+    const INDIGO_100 = '#e0e7ff';
+    const INDIGO_300 = '#a5b4fc';
+    const INDIGO_700 = '#4338ca';
+    const INDIGO_900 = '#312e81';
+    const SLATE_300 = '#cbd5e1';
+    const SLATE_600 = '#475569';
+    const SLATE_100 = '#f1f5f9';
+    const WHITE = '#ffffff';
+
+    it('carries the SELECTED half in light mode', () => {
+        // `bg-indigo-100 text-indigo-700`
+        expect(check(INDIGO_700, INDIGO_100).passesNormal).toBe(true);
+        expect(check(INDIGO_700, INDIGO_100).ratio).toBeGreaterThanOrEqual(AA_NORMAL);
+    });
+
+    it('carries the SELECTED half in dark mode, composited', () => {
+        // `dark:bg-indigo-900/40 dark:text-indigo-300`, over the card's slate-900.
+        const surface = composite(INDIGO_900, 0.40, '#0f172a');
+        expect(check(INDIGO_300, surface).passesNormal).toBe(true);
+    });
+
+    it('carries the UNSELECTED half, resting and hovered, in both themes', () => {
+        expect(check(SLATE_600, WHITE).passesNormal).toBe(true);
+        expect(check(SLATE_600, SLATE_100).passesNormal).toBe(true);      // hover
+        expect(check(SLATE_300, '#0f172a').passesNormal).toBe(true);      // dark resting
+        expect(check(SLATE_300, '#334155').passesNormal).toBe(true);      // dark hover, slate-700
+    });
+
+    /**
+     * ⚠️ THIS IS THE ASSERTION THAT CAUGHT THE REAL DEFECT, and it was written
+     *    expecting the opposite. The claim being made was "the text colour changes
+     *    too, and that difference is large". It is not: slate-600 and indigo-700
+     *    are 1.04:1 apart. The soft tint separates the two halves by HUE and
+     *    essentially not at all by lightness, which makes colour the sole carrier
+     *    of which view is selected — WCAG 1.4.1. Hence the ring below.
+     */
+    it('cannot tell the halves apart by lightness — the tint is hue, not value', () => {
+        expect(check(WHITE, INDIGO_100).ratio).toBeLessThan(1.3);
+        expect(check(SLATE_600, INDIGO_700).ratio).toBeLessThan(1.3);
+    });
+
+    it('carries the state with a RING, so it survives greyscale', () => {
+        const INDIGO_600 = '#4f46e5';
+        const INDIGO_400 = '#818cf8';
+        // WCAG 1.4.11 asks 3:1 of a UI component's visual boundary — against the
+        // fill it sits on AND against the half beside it, since that is the
+        // comparison a reader actually makes.
+        expect(check(INDIGO_600, INDIGO_100).ratio).toBeGreaterThanOrEqual(AA_LARGE);
+        expect(check(INDIGO_600, WHITE).ratio).toBeGreaterThanOrEqual(AA_LARGE);
+        // Dark mode, over the composited selected fill.
+        const surface = composite(INDIGO_900, 0.40, '#0f172a');
+        expect(check(INDIGO_400, surface).ratio).toBeGreaterThanOrEqual(AA_LARGE);
+    });
+});

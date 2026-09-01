@@ -2474,7 +2474,33 @@ const RosterView = ({ user }) => {
                         for everyone else. DEFAULTS TO DEPARTMENT: an existing user
                         who never presses either one sees exactly what they saw
                         before. Both are pure view changes; neither reads or writes
-                        anything. */}
+                        anything.
+
+                        🎨 THE SELECTED HALF IS A SOFT INDIGO TINT, NOT A DARK FILL.
+                        The two halves have always been the same component with the
+                        same padding, shape and type — only the colour differed, and
+                        only because one was selected. But `bg-slate-700 text-white`
+                        was heavy enough that the owner read it as a different control
+                        altogether (2026-09-01). Selected is now `indigo-100` behind
+                        `indigo-700` text: the same accent the Export button uses, so
+                        the whole bar is one family, and the state still carries in
+                        BOTH the fill and the text colour rather than the fill alone.
+                        Measured at 6.41:1 light and 7.71:1 dark — pinned in
+                        `contrast.test.js`, because `text-xs` bold is NORMAL text to
+                        WCAG and so has to clear 4.5:1, not 3:1.
+
+                        ⚠️ AND A RING, WHICH IS WHY THE TINT ALONE IS NOT ENOUGH. The
+                        soft tint separates the halves by HUE and almost not at all by
+                        lightness: white against indigo-100 is 1.23:1 and slate-600
+                        against indigo-700 is 1.04:1. Rendered greyscale — a washed-out
+                        screen in daylight, or a colour vision deficiency — the two
+                        halves are very nearly identical, which makes colour the sole
+                        carrier of state and fails WCAG 1.4.1. The dark fill it
+                        replaced never had that problem at 10.35:1. So the selected
+                        half also carries a 2px inset ring: a shape cue, 5.10:1
+                        against its own fill and 6.29:1 against the white half beside
+                        it, well past the 3:1 that 1.4.11 asks of a UI part. Inset, so
+                        like the group's own ring it costs no height. */}
                     <div
                         role="group"
                         aria-label="How to show the roster"
@@ -2493,7 +2519,7 @@ const RosterView = ({ user }) => {
                             title="Everybody's duties, as a month grid"
                             className={`flex-1 sm:flex-none flex gap-1.5 items-center justify-center px-3 py-2 min-h-11 sm:min-h-0 font-bold text-xs transition-colors ${
                                 rosterScope === 'department'
-                                    ? 'bg-slate-700 text-white'
+                                    ? 'bg-indigo-100 text-indigo-700 ring-2 ring-inset ring-indigo-600 dark:bg-indigo-900/40 dark:text-indigo-300 dark:ring-indigo-400'
                                     : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700'
                             }`}
                         >
@@ -2506,14 +2532,19 @@ const RosterView = ({ user }) => {
                             title="One person's duties, listed"
                             className={`flex-1 sm:flex-none flex gap-1.5 items-center justify-center px-3 py-2 min-h-11 sm:min-h-0 font-bold text-xs transition-colors ${
                                 rosterScope === 'person'
-                                    ? 'bg-slate-700 text-white'
+                                    ? 'bg-indigo-100 text-indigo-700 ring-2 ring-inset ring-indigo-600 dark:bg-indigo-900/40 dark:text-indigo-300 dark:ring-indigo-400'
                                     : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700'
                             }`}
                         >
                             <User size={14} /> My week
                         </button>
                     </div>
-                    <button onClick={() => setIsConfigOpen(true)} className={`flex gap-2 items-center justify-center px-4 py-2 ${TOUCH} rounded bg-slate-100 font-bold text-xs hover:bg-slate-200 text-slate-600 transition-colors`}>
+                    {/* ⚙️ Configure had NO dark variant at all, so in dark mode it
+                        rendered as a bright white block beside a dark switcher and an
+                        indigo Export — the one control in the bar that did not belong
+                        to the theme. Found while retinting the switcher on 2026-09-01;
+                        slate-300 on slate-800 is 9.85:1. */}
+                    <button onClick={() => setIsConfigOpen(true)} className={`flex gap-2 items-center justify-center px-4 py-2 ${TOUCH} rounded bg-slate-100 text-slate-600 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700 font-bold text-xs transition-colors`}>
                         <Settings size={14} /> Configure
                     </button>
                     {/* 📤 ONE BUTTON, FOUR FORMATS. Every item leads with what the

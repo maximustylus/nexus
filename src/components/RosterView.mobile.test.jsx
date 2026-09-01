@@ -850,6 +850,55 @@ describe('the roster toolbar: one row height, and one export control', () => {
         }
     });
 
+    /**
+     * ⚠️ `contrast.test.js` PROVES THE HEXES PASS AA. It cannot prove the button
+     *    uses them — that reach is exactly where a colour change goes wrong
+     *    silently. These read the classes the component actually renders.
+     */
+    it('marks the selected half with the soft indigo tint, not a heavy dark fill', () => {
+        render(<RosterView user={VISITOR} />);
+
+        const group = screen.getByRole('group', { name: /how to show the roster/i });
+        const [department, myWeek] = Array.from(group.children);
+        expect(department.getAttribute('aria-pressed')).toBe('true');
+
+        expect(department.className).toContain('bg-indigo-100');
+        expect(department.className).toContain('text-indigo-700');
+        expect(department.className).toContain('dark:bg-indigo-900/40');
+        // The dark block the owner read as a different control is gone for good.
+        expect(department.className).not.toContain('bg-slate-700');
+        expect(department.className).not.toContain('text-white');
+
+        // The two halves are otherwise the SAME component — same padding, shape and
+        // type. Only the state classes differ.
+        const structural = (el) => el.className.split(/\s+/)
+            .filter((c) => !/indigo|slate|white|ring/.test(c)).sort().join(' ');
+        expect(structural(department)).toBe(structural(myWeek));
+    });
+
+    it('does not let colour alone say which half is selected', () => {
+        // The tint separates the halves by HUE, barely at all by lightness: 1.23:1
+        // on the fill and 1.04:1 on the text (measured in `contrast.test.js`).
+        // Greyscale — a washed-out screen, or a colour vision deficiency — would
+        // leave them identical. The ring is the cue that survives that.
+        render(<RosterView user={VISITOR} />);
+
+        const group = screen.getByRole('group', { name: /how to show the roster/i });
+        const [department, myWeek] = Array.from(group.children);
+        expect(department.className).toContain('ring-2');
+        expect(department.className).toContain('ring-indigo-600');
+        expect(department.className).toContain('ring-inset');   // costs no height
+        expect(myWeek.className).not.toContain('ring-2');
+    });
+
+    it('gives Configure a dark variant, so it is not a white block in dark mode', () => {
+        render(<RosterView user={VISITOR} />);
+
+        const configure = screen.getByRole('button', { name: /configure/i });
+        expect(configure.className).toContain('dark:bg-slate-800');
+        expect(configure.className).toContain('dark:text-slate-300');
+    });
+
     it('is a two-column grid on a phone and a flex row from `sm:` up', () => {
         // ⚠️ A GRID, AND THE REASON IS MEASURED. Two flex items with `flex: 1 1 0`
         //    should split their line evenly; at 375px they came out 183px and 151px
