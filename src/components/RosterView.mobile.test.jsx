@@ -850,12 +850,36 @@ describe('the roster toolbar: one row height, and one export control', () => {
         }
     });
 
-    it('lets Export fill the row it wraps onto, rather than stranding it centred', () => {
+    it('is a two-column grid on a phone and a flex row from `sm:` up', () => {
+        // ⚠️ A GRID, AND THE REASON IS MEASURED. Two flex items with `flex: 1 1 0`
+        //    should split their line evenly; at 375px they came out 183px and 151px
+        //    and `min-w-0` did not move them. Two `1fr` columns are equal by
+        //    definition, so Configure and Export cannot drift apart again.
         render(<RosterView user={VISITOR} />);
 
-        const trigger = screen.getByRole('button', { name: /^Export$/i });
-        expect(mobileClasses(trigger)).toContain('w-full');
-        expect(trigger.className).toContain('sm:w-auto');
+        const bar = screen.getByRole('group', { name: /how to show the roster/i }).parentElement;
+        expect(mobileClasses(bar)).toContain('grid');
+        expect(mobileClasses(bar)).toContain('grid-cols-2');
+        // ...and the desktop row is untouched.
+        expect(bar.className).toContain('sm:flex');
+        expect(bar.className).toContain('sm:justify-end');
+    });
+
+    it('spans the switcher across both columns, leaving one each for Configure and Export', () => {
+        render(<RosterView user={VISITOR} />);
+
+        const group = screen.getByRole('group', { name: /how to show the roster/i });
+        expect(mobileClasses(group)).toContain('col-span-2');
+        expect(group.className).toContain('sm:col-auto');
+
+        // Neither of the two controls beneath declares a width of its own — the
+        // grid column decides, which is what makes them identical.
+        const bar = group.parentElement;
+        const [, configure, exportCell] = Array.from(bar.children);
+        for (const cell of [configure, exportCell]) {
+            expect(mobileClasses(cell)).not.toContain('flex-1');
+            expect(mobileClasses(cell)).not.toContain('w-full');
+        }
     });
 });
 

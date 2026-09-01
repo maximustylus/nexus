@@ -2447,11 +2447,26 @@ const RosterView = ({ user }) => {
                     </div>
                 </div>
 
-                {/* 📱 `flex-wrap` and `w-full`: four buttons plus a two-button group
-                    is about 470px of controls, which at 375px used to push the ICS
-                    button off the right-hand edge of the card. They wrap onto as many
-                    lines as they need on a phone and sit on one line from `sm:` up. */}
-                <div className="flex flex-wrap gap-2 w-full sm:w-auto justify-center sm:justify-end">
+                {/* 📱 A 2x2 GRID ON A PHONE, ONE ROW FROM `sm:` UP.
+                    The controls total about 440px, so at 375px they must wrap — the
+                    only question is where. Left to itself, flex wrapped them into a
+                    ragged 213 + 114 then a stranded Export, which is what the owner
+                    saw on 2026-09-01. Now the switcher takes the first row and
+                    Configure and Export split the second, so the four controls line
+                    up in two columns of equal width and one height.
+
+                    ⚠️ A GRID, NOT `flex-1`. Two flex items with `flex: 1 1 0`
+                    should split their line evenly and did not — measured at 375px
+                    they came out 183px and 151px, and `min-w-0` did not move them.
+                    Two `1fr` grid columns are equal BY DEFINITION rather than by
+                    free-space distribution, so there is nothing left to be subtle
+                    about. The switcher spans both columns; Configure and Export take
+                    one each.
+
+                    Grid applies BELOW `sm:` ONLY. From `sm:` up the container is a
+                    flex row again and every control returns to its natural width on
+                    one right-aligned line, so no desktop layout changes. */}
+                <div className="grid grid-cols-2 gap-2 w-full sm:flex sm:flex-wrap sm:w-auto sm:justify-end">
                     {/* 👤 THE SAME ROSTER, TWO WAYS OF READING IT.
                         Two buttons rather than a switch, because "which one am I
                         looking at" has to be readable at a glance — `aria-pressed`
@@ -2469,14 +2484,14 @@ const RosterView = ({ user }) => {
                            visibly out of line on a phone. A ring is painted, not
                            laid out, so the group is exactly as tall as its
                            buttons and every control in the bar matches. */
-                        className="flex rounded overflow-hidden ring-1 ring-inset ring-slate-200 dark:ring-slate-600"
+                        className="col-span-2 sm:col-auto flex w-full sm:w-auto rounded overflow-hidden ring-1 ring-inset ring-slate-200 dark:ring-slate-600"
                     >
                         <button
                             type="button"
                             onClick={() => setRosterScope('department')}
                             aria-pressed={rosterScope === 'department'}
                             title="Everybody's duties, as a month grid"
-                            className={`flex gap-1.5 items-center justify-center px-3 py-2 min-h-11 sm:min-h-0 font-bold text-xs transition-colors ${
+                            className={`flex-1 sm:flex-none flex gap-1.5 items-center justify-center px-3 py-2 min-h-11 sm:min-h-0 font-bold text-xs transition-colors ${
                                 rosterScope === 'department'
                                     ? 'bg-slate-700 text-white'
                                     : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700'
@@ -2489,7 +2504,7 @@ const RosterView = ({ user }) => {
                             onClick={() => setRosterScope('person')}
                             aria-pressed={rosterScope === 'person'}
                             title="One person's duties, listed"
-                            className={`flex gap-1.5 items-center justify-center px-3 py-2 min-h-11 sm:min-h-0 font-bold text-xs transition-colors ${
+                            className={`flex-1 sm:flex-none flex gap-1.5 items-center justify-center px-3 py-2 min-h-11 sm:min-h-0 font-bold text-xs transition-colors ${
                                 rosterScope === 'person'
                                     ? 'bg-slate-700 text-white'
                                     : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700'

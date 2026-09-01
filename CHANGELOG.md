@@ -51,6 +51,29 @@ not changed by this release.
 
 ---
 
+## [2.9.1] - 2026-09-01
+
+### Fixed
+
+- **The roster toolbar was a ragged two rows on a phone.** v2.9.0 stopped it wrapping
+  onto three rows, but left the switcher and Configure sharing the first line and Export
+  filling the second. Reported the same day: *"the configure button should move down …
+  configure on the left and export on the right, both equal in height and width and every
+  button aligns nicely."*
+
+  Below `sm:` the bar is now a **two-column grid**: the Department/My week switcher spans
+  both columns, and Configure and Export take one each. Measured at 375px they are
+  **166.5px and 166.5px, both 44px tall** — and the switcher's divider falls on the
+  centreline of the gap beneath it, so the two rows read as one block.
+
+  `flex-1` was tried first and does not work here. Two flex items with `flex: 1 1 0`
+  should split their line evenly; measured, they came out **183px and 151px**, and
+  `min-w-0` did not move them. Two `1fr` grid columns are equal by definition, so there
+  is nothing left to be subtle about. From `sm:` up the container is a flex row again and
+  the desktop layout is byte-identical: one right-aligned line, natural widths, 32px.
+
+---
+
 ## [2.9.0] - 2026-09-01
 
 The roster leaves the screen: a **printable PDF calendar** and an **Excel workbook**,

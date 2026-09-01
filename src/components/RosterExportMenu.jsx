@@ -70,12 +70,12 @@ const RosterExportMenu = ({ formats = [], buttonClassName = '' }) => {
     };
 
     return (
-        /* FULL WIDTH ON A PHONE. Three controls cannot share a 375px row, so the
-           bar wraps and Export lands on its own line. A 116px button centred under
-           two others reads as something that fell off; a full-width one reads as
-           the primary action, which it is. From `sm:` up all three sit on one row
-           and it shrinks back to its label. */
-        <div ref={wrapRef} className="relative w-full sm:w-auto">
+        /* ONE GRID COLUMN ON A PHONE, ITS OWN WIDTH FROM `sm:` UP.
+           The roster toolbar is a two-column grid below `sm:`, so this fills the
+           column it is given and matches whatever sits beside it exactly. Nothing
+           here declares a width: the parent decides, which is what lets the same
+           menu sit in a grid cell on a phone and in a flex row on a desktop. */
+        <div ref={wrapRef} className="relative">
             <button
                 ref={buttonRef}
                 type="button"
