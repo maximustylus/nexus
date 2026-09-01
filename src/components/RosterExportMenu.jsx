@@ -29,7 +29,21 @@ import { Download, ChevronDown } from 'lucide-react';
  * but it is a per-item property rather than a special case, so the next format
  * that needs a moment does not need a change here.
  */
-const RosterExportMenu = ({ formats = [], buttonClassName = '' }) => {
+const RosterExportMenu = ({
+    formats = [],
+    buttonClassName = '',
+    /**
+     * `({ open, busy }) => classes` and `({ open, busy }) => JSX`.
+     *
+     * The TRIGGER'S APPEARANCE BELONGS TO WHOEVER PUTS THE MENU SOMEWHERE — the
+     * roster toolbar renders it as an icon over a 10px label with no box, which is
+     * nothing this module should know about. What stays here is the part that is
+     * easy to get wrong and identical everywhere: the ref, `aria-haspopup`,
+     * `aria-expanded`, `aria-controls`, and the two dismissals.
+     */
+    triggerClassName,
+    renderTrigger,
+}) => {
     const [open, setOpen] = useState(false);
     const wrapRef = useRef(null);
     const buttonRef = useRef(null);
@@ -70,11 +84,10 @@ const RosterExportMenu = ({ formats = [], buttonClassName = '' }) => {
     };
 
     return (
-        /* ONE GRID COLUMN ON A PHONE, ITS OWN WIDTH FROM `sm:` UP.
-           The roster toolbar is a two-column grid below `sm:`, so this fills the
-           column it is given and matches whatever sits beside it exactly. Nothing
-           here declares a width: the parent decides, which is what lets the same
-           menu sit in a grid cell on a phone and in a flex row on a desktop. */
+        /* NOTHING HERE DECLARES A WIDTH — the parent decides. That is what lets the
+           same menu be a full-width button in one layout and one cell of a
+           four-column icon row in another. `right-0` on the popover keeps it under
+           the trigger and on screen either way. */
         <div ref={wrapRef} className="relative">
             <button
                 ref={buttonRef}
@@ -83,11 +96,19 @@ const RosterExportMenu = ({ formats = [], buttonClassName = '' }) => {
                 aria-expanded={open}
                 aria-controls={open ? menuId : undefined}
                 onClick={() => setOpen((was) => !was)}
-                className={`w-full sm:w-auto flex gap-2 items-center justify-center px-4 py-2 min-h-11 sm:min-h-0 rounded bg-indigo-600 text-white font-bold text-xs hover:bg-indigo-700 shadow-lg transition-colors ${buttonClassName}`}
+                className={
+                    triggerClassName
+                        ? triggerClassName({ open, busy })
+                        : `w-full sm:w-auto flex gap-2 items-center justify-center px-4 py-2 min-h-11 sm:min-h-0 rounded bg-indigo-600 text-white font-bold text-xs hover:bg-indigo-700 shadow-lg transition-colors ${buttonClassName}`
+                }
             >
-                <Download size={14} />
-                {busy ? 'Building…' : 'Export'}
-                <ChevronDown size={14} className={`transition-transform ${open ? 'rotate-180' : ''}`} />
+                {renderTrigger ? renderTrigger({ open, busy }) : (
+                    <>
+                        <Download size={14} />
+                        {busy ? 'Building…' : 'Export'}
+                        <ChevronDown size={14} className={`transition-transform ${open ? 'rotate-180' : ''}`} />
+                    </>
+                )}
             </button>
 
             {open && (

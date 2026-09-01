@@ -1,6 +1,6 @@
-# NEXUS: Smart Operations Dashboard v2.9.2 [BETA]
+# NEXUS: Smart Operations Dashboard v2.10.0 [BETA]
 
-![Version](https://img.shields.io/badge/Version-v2.9.2-blue) ![Status](https://img.shields.io/badge/Status-Beta%20Phase-emerald) ![Teams](https://img.shields.io/badge/Multi--Team-28%20AHP%20professions-indigo) ![Roster](https://img.shields.io/badge/Roster%20engine-deterministic-0f766e) ![Assistant](https://img.shields.io/badge/AURA%20assistant-Gemini-purple) ![PWA](https://img.shields.io/badge/PWA-Native%20Push%20Enabled-blue) ![CI/CD](https://img.shields.io/badge/CI%2FCD-GitHub%20Actions-2ea44f)
+![Version](https://img.shields.io/badge/Version-v2.10.0-blue) ![Status](https://img.shields.io/badge/Status-Beta%20Phase-emerald) ![Teams](https://img.shields.io/badge/Multi--Team-28%20AHP%20professions-indigo) ![Roster](https://img.shields.io/badge/Roster%20engine-deterministic-0f766e) ![Assistant](https://img.shields.io/badge/AURA%20assistant-Gemini-purple) ![PWA](https://img.shields.io/badge/PWA-Native%20Push%20Enabled-blue) ![CI/CD](https://img.shields.io/badge/CI%2FCD-GitHub%20Actions-2ea44f)
 
 **NEXUS** (formerly IDC App) is a clinician-led platform for workload management, skill-mix routing and staff wellbeing, built inside an allied health department and now serving departments beyond the one it was written for.
 
@@ -222,7 +222,8 @@ This application is an operational and workload management tool. It is not a cli
 ### Supported Versions
 | Version | Status |
 | ------- | ------ |
-| 2.9.x   | **Active Beta** (multi-team) |
+| 2.10.x  | **Active Beta** (multi-team) |
+| 2.9.x   | Superseded — upgrade to 2.10.x |
 | 2.8.x   | Superseded — upgrade to 2.9.x |
 | 2.7.x   | Superseded — upgrade to 2.9.x |
 | 2.4.x   | Superseded — upgrade to 2.5.x |

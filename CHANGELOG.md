@@ -51,6 +51,51 @@ not changed by this release.
 
 ---
 
+## [2.10.0] - 2026-09-01
+
+The roster toolbar is four icons in one row. No boxes, no containers, no fills.
+
+### Changed
+
+- **Every control in the roster toolbar is now an icon over a 10px label**, drawn
+  straight onto the card — the same pattern the app's own bottom navigation uses, so
+  there is one visual language rather than a second style invented for one toolbar. Two
+  rows of bordered buttons became **one row, 55px instead of 104px**.
+
+  Asked for as *"what if all four items are just icons … no text, no boxes, no
+  containers"*. Icon-only was measured against icon-plus-label and the labels were kept:
+  a gear and a download arrow are guessable, a grid icon versus a person icon is not —
+  and those two are a toggle, so the icon would also have to say which one is on.
+
+  **This retires the whole class of bug the day had been spent on.** There is no fill
+  that can end up the same colour as the card, no ring to keep visible in two themes, no
+  second row to keep aligned, and nothing left to be equal in width.
+
+- **The Export menu's trigger is now styled by whoever places it.** `triggerClassName`
+  and `renderTrigger` moved the appearance out to the caller; the ref, `aria-haspopup`,
+  `aria-expanded`, `aria-controls` and both dismissals stay in the component, because
+  those are the parts that are identical everywhere and easy to get wrong.
+
+### Fixed
+
+- **`Configure` was invisible in dark mode.** Its fill was `slate-800` and the card
+  behind it is also `slate-800` — **1.00:1**, no box at all. Introduced the same day by
+  the fix for it having no dark variant, which is exactly the trap of correcting a colour
+  without measuring it against what it sits on. Moot now: nothing in the toolbar has a
+  fill.
+
+### Accessibility
+
+- **The selected view carries two cues that survive greyscale**: a 2px underline and a
+  heavier icon stroke. Colour alone cannot do it — indigo against slate is close in
+  lightness, the same finding that put a ring on the boxed version.
+- **The toolbar does NOT copy the bottom navigation's inactive grey.** `slate-400` on a
+  white card is **2.56:1**, below AA for 10px text; the toolbar uses `slate-500` at
+  4.76:1. Pinned in `contrast.test.js` so the departure reads as a decision. The bottom
+  navigation itself is unchanged — different surface, separate decision.
+
+---
+
 ## [2.9.2] - 2026-09-01
 
 ### Changed

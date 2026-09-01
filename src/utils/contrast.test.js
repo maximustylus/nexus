@@ -131,72 +131,68 @@ describe('the neutral surfaces', () => {
 
 /**
  * ==============================================================================
- * THE ROSTER'S VIEW SWITCHER — Department | My week
+ * THE ROSTER TOOLBAR — FOUR ICONS OVER 10px LABELS, ON NO BACKGROUND
  * ==============================================================================
- * The selected half used to be `bg-slate-700` behind white text: a heavy dark
- * block the owner read as a different control from the half beside it
- * (2026-09-01). It is now a soft indigo tint in the same family as the Export
- * button, which is a much lighter background — so the text colour is what has to
- * be checked, and it is checked here rather than assumed.
+ * The toolbar has no fills left. Every control is an icon and a label drawn
+ * straight onto the card, so the ONLY thing standing between a roster master and
+ * an unreadable control is the ink colour — which makes this file, rather than a
+ * screenshot, the place the design is held.
  *
- * ⚠️ `text-xs font-bold` IS NORMAL TEXT TO WCAG, NOT LARGE. Large starts at 18.66px
- *    bold; this is 12px. So the bar is AA_NORMAL (4.5), not AA_LARGE (3.0) — the
- *    easy mistake would be to grade a "small bold label" against 3.0 and ship a
- *    tint that fails for anybody reading a ward tablet at arm's length.
+ * ⚠️ A 10px LABEL IS SMALL TEXT. Large starts at 18.66px bold. So these clear
+ *    AA_NORMAL (4.5), not AA_LARGE (3.0) — the easy mistake is to grade a "tiny
+ *    caption" against 3.0 and ship something nobody can read on a ward tablet.
  */
-describe('the roster view switcher reads at AA in both themes', () => {
-    // Tailwind v3, as compiled: the classes on the two buttons.
-    const INDIGO_100 = '#e0e7ff';
-    const INDIGO_300 = '#a5b4fc';
-    const INDIGO_700 = '#4338ca';
-    const INDIGO_900 = '#312e81';
-    const SLATE_300 = '#cbd5e1';
-    const SLATE_600 = '#475569';
-    const SLATE_100 = '#f1f5f9';
-    const WHITE = '#ffffff';
+describe('the roster toolbar reads at AA in both themes', () => {
+    // Tailwind v3, as compiled.
+    const INDIGO_400 = '#818cf8';
+    const INDIGO_600 = '#4f46e5';
+    const SLATE_400 = '#94a3b8';
+    const SLATE_500 = '#64748b';
+    const WHITE = '#ffffff';        // the card, light mode
+    const SLATE_800 = '#1e293b';    // the card, dark mode
 
-    it('carries the SELECTED half in light mode', () => {
-        // `bg-indigo-100 text-indigo-700`
-        expect(check(INDIGO_700, INDIGO_100).passesNormal).toBe(true);
-        expect(check(INDIGO_700, INDIGO_100).ratio).toBeGreaterThanOrEqual(AA_NORMAL);
+    it('carries the SELECTED item in both themes', () => {
+        expect(check(INDIGO_600, WHITE).passesNormal).toBe(true);          // 6.29
+        expect(check(INDIGO_400, SLATE_800).passesNormal).toBe(true);      // 4.90
     });
 
-    it('carries the SELECTED half in dark mode, composited', () => {
-        // `dark:bg-indigo-900/40 dark:text-indigo-300`, over the card's slate-900.
-        const surface = composite(INDIGO_900, 0.40, '#0f172a');
-        expect(check(INDIGO_300, surface).passesNormal).toBe(true);
-    });
-
-    it('carries the UNSELECTED half, resting and hovered, in both themes', () => {
-        expect(check(SLATE_600, WHITE).passesNormal).toBe(true);
-        expect(check(SLATE_600, SLATE_100).passesNormal).toBe(true);      // hover
-        expect(check(SLATE_300, '#0f172a').passesNormal).toBe(true);      // dark resting
-        expect(check(SLATE_300, '#334155').passesNormal).toBe(true);      // dark hover, slate-700
+    it('carries the UNSELECTED items in both themes', () => {
+        expect(check(SLATE_500, WHITE).passesNormal).toBe(true);           // 4.76
+        expect(check(SLATE_400, SLATE_800).passesNormal).toBe(true);       // 5.71
     });
 
     /**
-     * ⚠️ THIS IS THE ASSERTION THAT CAUGHT THE REAL DEFECT, and it was written
-     *    expecting the opposite. The claim being made was "the text colour changes
-     *    too, and that difference is large". It is not: slate-600 and indigo-700
-     *    are 1.04:1 apart. The soft tint separates the two halves by HUE and
-     *    essentially not at all by lightness, which makes colour the sole carrier
-     *    of which view is selected — WCAG 1.4.1. Hence the ring below.
+     * ⚠️ WHY THE TOOLBAR DOES NOT SIMPLY COPY THE BOTTOM NAVIGATION. It was built
+     *    to match `ResponsiveLayout`'s icon-over-label pattern, and that component
+     *    uses `slate-400` for an inactive item — which on a white surface is
+     *    2.56:1, below AA for text this small. The toolbar uses `slate-500`
+     *    instead. This is pinned so the departure reads as a decision rather than
+     *    an inconsistency, and so anyone tempted to "align them" sees the cost.
+     *
+     *    The bottom navigation itself is NOT changed here: different surface,
+     *    separate decision, and not this change's to make.
      */
-    it('cannot tell the halves apart by lightness — the tint is hue, not value', () => {
-        expect(check(WHITE, INDIGO_100).ratio).toBeLessThan(1.3);
-        expect(check(SLATE_600, INDIGO_700).ratio).toBeLessThan(1.3);
+    it('does not copy the bottom navigation inactive grey, which fails AA on white', () => {
+        expect(check(SLATE_400, WHITE).passesNormal).toBe(false);
+        expect(check(SLATE_400, WHITE).ratio).toBeLessThan(AA_NORMAL);
     });
 
-    it('carries the state with a RING, so it survives greyscale', () => {
-        const INDIGO_600 = '#4f46e5';
-        const INDIGO_400 = '#818cf8';
-        // WCAG 1.4.11 asks 3:1 of a UI component's visual boundary — against the
-        // fill it sits on AND against the half beside it, since that is the
-        // comparison a reader actually makes.
-        expect(check(INDIGO_600, INDIGO_100).ratio).toBeGreaterThanOrEqual(AA_LARGE);
+    /**
+     * The underline under the selected item is a GRAPHIC, not text, so 1.4.11's
+     * 3:1 applies rather than 4.5. It exists because colour cannot carry the state
+     * on its own: indigo and slate sit close in lightness, so in greyscale the
+     * items would be near identical. The stroke weight thickens for the same
+     * reason — the two cues that survive without colour.
+     */
+    it('draws the selected underline well past the 3:1 a graphic needs', () => {
         expect(check(INDIGO_600, WHITE).ratio).toBeGreaterThanOrEqual(AA_LARGE);
-        // Dark mode, over the composited selected fill.
-        const surface = composite(INDIGO_900, 0.40, '#0f172a');
-        expect(check(INDIGO_400, surface).ratio).toBeGreaterThanOrEqual(AA_LARGE);
+        expect(check(INDIGO_400, SLATE_800).ratio).toBeGreaterThanOrEqual(AA_LARGE);
+    });
+
+    it('shows why the underline is needed: the two states are close in lightness', () => {
+        // Selected indigo against unselected slate, light mode — near identical
+        // once colour is removed. This is the measurement that put the underline
+        // and the stroke weight there, and it is kept so nobody removes them.
+        expect(check(INDIGO_600, SLATE_500).ratio).toBeLessThan(1.5);
     });
 });

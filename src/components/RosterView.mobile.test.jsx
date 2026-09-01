@@ -800,135 +800,111 @@ describe('live mode: the responsive work stopped at the branch', () => {
 
 /**
  * ==============================================================================
- * THE ROSTER TOOLBAR, AND THE ROW HEIGHTS IT USED TO GET WRONG
+ * THE ROSTER TOOLBAR — FOUR ICONS, ONE ROW, NO BOXES
  *
- * Reported by the owner on 2026-09-01 and then MEASURED in a real 375px viewport
- * rather than argued about: the toolbar wrapped onto THREE rows, and its rows were
- * 46px and then 44px tall, because a wrapping flex row stretches to its tallest
- * item and the first row held a bordered group. Four export buttons were what made
- * it wrap that far.
+ * This surface has now been through four shapes in one day, each fixing the last:
+ * four coloured buttons wrapped onto three rows of two heights; a 2x2 grid of
+ * boxes; a retint that made colour the only cue; and finally an outlined box whose
+ * dark fill measured 1.00:1 against the card behind it. Every one of those was a
+ * BOX problem.
  *
- * jsdom cannot measure any of that — it has no layout. What it CAN hold is the two
- * declarations that caused it, and those are what regress: a `border` creeping back
- * onto the group, or a fifth export button being added beside the menu instead of
- * inside it.
+ * The boxes are gone. Each control is an icon over a 10px label, the pattern the
+ * app's own bottom navigation already uses. What has to hold now is different, so
+ * the old assertions were deleted rather than adapted: there is no ring to keep
+ * visible, no fill to keep distinct, no two rows to keep aligned.
+ *
+ * jsdom has no layout, so what is pinned here is the DECLARATIONS — which is what
+ * regressed every time. The geometry was measured in a real 375px viewport.
  * ==============================================================================
  */
-describe('the roster toolbar: one row height, and one export control', () => {
+describe('the roster toolbar: four icons in one row, and no boxes at all', () => {
+    const toolbar = () => screen.getByRole('group', { name: /how to show the roster/i }).parentElement;
+    const items = () => Array.from(toolbar().querySelectorAll('button'));
+
+    it('is a four-column grid on a phone and a flex row from `sm:` up', () => {
+        render(<RosterView user={VISITOR} />);
+
+        const bar = toolbar();
+        expect(mobileClasses(bar)).toContain('grid-cols-4');
+        expect(bar.className).toContain('sm:flex');
+        expect(bar.className).toContain('sm:justify-end');
+        // Four controls, one row. It replaced two rows of buttons.
+        expect(items()).toHaveLength(4);
+    });
+
+    it('declares no fill, no ring and no border on any of the four', () => {
+        // The whole class of bug this design retires. A fill can end up the same
+        // colour as the card (it did: 1.00:1), and a ring has to be kept visible in
+        // two themes. Neither exists now.
+        render(<RosterView user={VISITOR} />);
+
+        for (const item of items()) {
+            expect(item.className).not.toMatch(/(^|\s)(sm:|dark:)?bg-/);
+            expect(item.className).not.toMatch(/(^|\s)(sm:|dark:)?ring-/);
+            expect(item.className).not.toMatch(/(^|\s)(sm:|dark:)?border/);
+        }
+    });
+
+    it('labels every icon, so nobody has to guess what a grid means', () => {
+        // Icon-only was on the table and was not taken: a gear and a download arrow
+        // are guessable, a grid versus a person is not — and they are a toggle, so
+        // the icon would also have to say which is on.
+        render(<RosterView user={VISITOR} />);
+
+        for (const [item, label] of items().map((el, i) => [el, ['Department', 'My week', 'Configure', 'Export'][i]])) {
+            expect(item.querySelector('svg')).toBeTruthy();
+            expect(item.textContent.trim()).toBe(label);
+        }
+    });
+
+    it('carries the selected view with TWO cues that survive greyscale', () => {
+        // Colour cannot do this alone — indigo and slate are close in lightness,
+        // which is the trap the boxed version fell into. The underline is a shape;
+        // the stroke weight is a thickness. Both read without colour.
+        render(<RosterView user={VISITOR} />);
+
+        const [department, myWeek] = items();
+        expect(department.getAttribute('aria-pressed')).toBe('true');
+
+        // 1. the underline bar
+        const bar = (el) => Array.from(el.children).find((c) => c.getAttribute('aria-hidden') === 'true');
+        expect(bar(department).className).toContain('bg-indigo-600');
+        expect(bar(myWeek).className).toContain('bg-transparent');
+        // ...always rendered, so the row cannot change height when the selection moves.
+        expect(bar(myWeek)).toBeTruthy();
+
+        // 2. the heavier stroke
+        expect(department.querySelector('svg').getAttribute('stroke-width')).toBe('2.5');
+        expect(myWeek.querySelector('svg').getAttribute('stroke-width')).toBe('2');
+    });
+
+    it('keeps a 44px thumb target on every item despite having no box', () => {
+        render(<RosterView user={VISITOR} />);
+        for (const item of items()) {
+            expect(mobileClasses(item)).toContain('min-h-11');
+            expect(item.className).toContain('sm:min-h-0');
+        }
+    });
+
     it('offers a single Export trigger, not one button per file extension', () => {
         render(<RosterView user={VISITOR} />);
 
         expect(screen.getByRole('button', { name: /^Export$/i })).toBeTruthy();
-        // The four that used to sit in the toolbar are inside the menu now. A new
-        // format added as a toolbar button rather than a menu item turns this red.
         for (const gone of [/^CSV$/i, /^ICS$/i, /^Excel$/i, /^PDF$/i]) {
             expect(screen.queryByRole('button', { name: gone })).toBeNull();
         }
     });
 
-    it('gives the view switcher a RING, never a border, so it cannot out-grow the row', () => {
+    it('marks the Export trigger while its menu is open, in the same language', () => {
         render(<RosterView user={VISITOR} />);
 
-        const group = screen.getByRole('group', { name: /how to show the roster/i });
-        // A border is laid out and adds 2px to the group's height; a ring is only
-        // painted. That 2px was the whole of the "boxes of different size".
-        expect(group.className).toContain('ring-1');
-        expect(group.className).toContain('ring-inset');
-        expect(group.className).not.toMatch(/(^|\s)border(\s|$)/);
-    });
+        const trigger = screen.getByRole('button', { name: /^Export$/i });
+        expect(trigger.className).toContain('text-slate-500');
 
-    it('declares the same 44px floor on every control in the bar', () => {
-        render(<RosterView user={VISITOR} />);
-
-        const group = screen.getByRole('group', { name: /how to show the roster/i });
-        const bar = group.parentElement;
-        for (const child of Array.from(bar.children)) {
-            // The group carries its floor on its buttons; everything else on itself.
-            const declares = (el) => el.className.includes('min-h-11')
-                || Array.from(el.querySelectorAll('button')).some((b) => b.className.includes('min-h-11'));
-            expect(declares(child)).toBe(true);
-        }
-    });
-
-    /**
-     * ⚠️ `contrast.test.js` PROVES THE HEXES PASS AA. It cannot prove the button
-     *    uses them — that reach is exactly where a colour change goes wrong
-     *    silently. These read the classes the component actually renders.
-     */
-    it('marks the selected half with the soft indigo tint, not a heavy dark fill', () => {
-        render(<RosterView user={VISITOR} />);
-
-        const group = screen.getByRole('group', { name: /how to show the roster/i });
-        const [department, myWeek] = Array.from(group.children);
-        expect(department.getAttribute('aria-pressed')).toBe('true');
-
-        expect(department.className).toContain('bg-indigo-100');
-        expect(department.className).toContain('text-indigo-700');
-        expect(department.className).toContain('dark:bg-indigo-900/40');
-        // The dark block the owner read as a different control is gone for good.
-        expect(department.className).not.toContain('bg-slate-700');
-        expect(department.className).not.toContain('text-white');
-
-        // The two halves are otherwise the SAME component — same padding, shape and
-        // type. Only the state classes differ.
-        const structural = (el) => el.className.split(/\s+/)
-            .filter((c) => !/indigo|slate|white|ring/.test(c)).sort().join(' ');
-        expect(structural(department)).toBe(structural(myWeek));
-    });
-
-    it('does not let colour alone say which half is selected', () => {
-        // The tint separates the halves by HUE, barely at all by lightness: 1.23:1
-        // on the fill and 1.04:1 on the text (measured in `contrast.test.js`).
-        // Greyscale — a washed-out screen, or a colour vision deficiency — would
-        // leave them identical. The ring is the cue that survives that.
-        render(<RosterView user={VISITOR} />);
-
-        const group = screen.getByRole('group', { name: /how to show the roster/i });
-        const [department, myWeek] = Array.from(group.children);
-        expect(department.className).toContain('ring-2');
-        expect(department.className).toContain('ring-indigo-600');
-        expect(department.className).toContain('ring-inset');   // costs no height
-        expect(myWeek.className).not.toContain('ring-2');
-    });
-
-    it('gives Configure a dark variant, so it is not a white block in dark mode', () => {
-        render(<RosterView user={VISITOR} />);
-
-        const configure = screen.getByRole('button', { name: /configure/i });
-        expect(configure.className).toContain('dark:bg-slate-800');
-        expect(configure.className).toContain('dark:text-slate-300');
-    });
-
-    it('is a two-column grid on a phone and a flex row from `sm:` up', () => {
-        // ⚠️ A GRID, AND THE REASON IS MEASURED. Two flex items with `flex: 1 1 0`
-        //    should split their line evenly; at 375px they came out 183px and 151px
-        //    and `min-w-0` did not move them. Two `1fr` columns are equal by
-        //    definition, so Configure and Export cannot drift apart again.
-        render(<RosterView user={VISITOR} />);
-
-        const bar = screen.getByRole('group', { name: /how to show the roster/i }).parentElement;
-        expect(mobileClasses(bar)).toContain('grid');
-        expect(mobileClasses(bar)).toContain('grid-cols-2');
-        // ...and the desktop row is untouched.
-        expect(bar.className).toContain('sm:flex');
-        expect(bar.className).toContain('sm:justify-end');
-    });
-
-    it('spans the switcher across both columns, leaving one each for Configure and Export', () => {
-        render(<RosterView user={VISITOR} />);
-
-        const group = screen.getByRole('group', { name: /how to show the roster/i });
-        expect(mobileClasses(group)).toContain('col-span-2');
-        expect(group.className).toContain('sm:col-auto');
-
-        // Neither of the two controls beneath declares a width of its own — the
-        // grid column decides, which is what makes them identical.
-        const bar = group.parentElement;
-        const [, configure, exportCell] = Array.from(bar.children);
-        for (const cell of [configure, exportCell]) {
-            expect(mobileClasses(cell)).not.toContain('flex-1');
-            expect(mobileClasses(cell)).not.toContain('w-full');
-        }
+        fireEvent.click(trigger);
+        const open = screen.getByRole('button', { name: /^Export$/i });
+        expect(open.className).toContain('text-indigo-600');
+        expect(open.querySelector('svg').getAttribute('stroke-width')).toBe('2.5');
     });
 });
 

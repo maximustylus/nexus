@@ -13,7 +13,7 @@ import { db } from '../firebase';
 // approve). Nothing about that sequence is reimplemented here; see
 // `respondToCoverageRequest`.
 import { doc, onSnapshot, setDoc, collection, addDoc, serverTimestamp, query, where, getDoc, updateDoc } from 'firebase/firestore';
-import { Calendar, Settings, ChevronLeft, ChevronRight, Play, FileSpreadsheet, ShieldAlert, ArrowRightLeft, X, Users, FlaskConical, CheckCircle2, Info, LayoutGrid, User, CalendarCheck, UserCheck, FileText, Table2, CalendarPlus } from 'lucide-react';
+import { Calendar, Download, Settings, ChevronLeft, ChevronRight, Play, FileSpreadsheet, ShieldAlert, ArrowRightLeft, X, Users, FlaskConical, CheckCircle2, Info, LayoutGrid, User, CalendarCheck, UserCheck, FileText, Table2, CalendarPlus } from 'lucide-react';
 import {
     downloadICS,
     downloadCSV,
@@ -215,6 +215,42 @@ const STATUS_AUTO_DISMISS_MS = 6000;
  * captions are exempt because they cannot be focused.
  */
 const TOUCH = 'min-h-11 sm:min-h-0';
+
+/**
+ * 🧭 ONE ROSTER-TOOLBAR ITEM: an icon over a 10px label, and no box at all.
+ *
+ * The same shape as the app's own bottom navigation (`ResponsiveLayout`), chosen
+ * on 2026-09-01 so the app speaks one language rather than growing a second style
+ * for one toolbar. Boxes, fills, rings and containers are all gone — four items
+ * that used to be two rows of bordered buttons are now one row about 52px shorter.
+ *
+ * ⚠️ THE INACTIVE COLOUR IS `slate-500`, NOT the bottom nav's `slate-400`. That is
+ *    a deliberate departure, measured: `slate-400` on a white card is 2.56:1, and
+ *    a 10px label is small text, so it needs 4.5:1. `slate-500` is 4.76:1. The
+ *    bottom nav has the same problem and is NOT changed here — it is a different
+ *    surface and a separate decision.
+ */
+const TOOLBAR_ITEM = 'flex flex-col items-center justify-center gap-1 px-1 py-1.5 '
+    + 'min-h-11 sm:min-h-0 sm:px-2 font-bold transition-colors rounded-lg';
+const TOOLBAR_ON = 'text-indigo-600 dark:text-indigo-400';
+const TOOLBAR_OFF = 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200';
+
+/**
+ * The 2px bar under a selected item — the cue that survives greyscale.
+ *
+ * Always rendered, transparent when off, so every item is the same height and the
+ * row cannot shift when the selection moves. Colour alone cannot carry this: the
+ * indigo and the slate are close in lightness, the same trap the boxed version
+ * fell into (see `contrast.test.js`). Stroke weight thickens too, for the same
+ * reason — two non-colour cues, neither of which is a container.
+ */
+const ToolbarUnderline = ({ on }) => (
+    <span
+        aria-hidden="true"
+        className={`h-0.5 w-6 rounded-full transition-colors ${on ? 'bg-indigo-600 dark:bg-indigo-400' : 'bg-transparent'}`}
+    />
+);
+
 const FIELD_TEXT_SM = 'text-base sm:text-sm';
 
 /**
@@ -2447,111 +2483,87 @@ const RosterView = ({ user }) => {
                     </div>
                 </div>
 
-                {/* 📱 A 2x2 GRID ON A PHONE, ONE ROW FROM `sm:` UP.
-                    The controls total about 440px, so at 375px they must wrap — the
-                    only question is where. Left to itself, flex wrapped them into a
-                    ragged 213 + 114 then a stranded Export, which is what the owner
-                    saw on 2026-09-01. Now the switcher takes the first row and
-                    Configure and Export split the second, so the four controls line
-                    up in two columns of equal width and one height.
+                {/* 🧭 FOUR ICONS IN ONE ROW. NO BOXES, NO CONTAINERS, NO FILLS.
+                    The owner's ask, 2026-09-01: *"what if all four items are just
+                    icons that reacts to dark and light, then its super minimalist
+                    and clean"* — settled on icons WITH the 10px labels the app's own
+                    bottom navigation already uses, so a colleague who opens the app
+                    twice a month is not guessing what a grid icon means, and so the
+                    app has one visual language instead of two.
 
-                    ⚠️ A GRID, NOT `flex-1`. Two flex items with `flex: 1 1 0`
-                    should split their line evenly and did not — measured at 375px
-                    they came out 183px and 151px, and `min-w-0` did not move them.
-                    Two `1fr` grid columns are equal BY DEFINITION rather than by
-                    free-space distribution, so there is nothing left to be subtle
-                    about. The switcher spans both columns; Configure and Export take
-                    one each.
+                    It replaces two rows of bordered buttons with one row about 52px
+                    shorter, and it retires the whole boxes problem: no fill to blend
+                    into the card, no ring to keep visible, nothing to keep aligned.
 
-                    Grid applies BELOW `sm:` ONLY. From `sm:` up the container is a
-                    flex row again and every control returns to its natural width on
-                    one right-aligned line, so no desktop layout changes. */}
-                <div className="grid grid-cols-2 gap-2 w-full sm:flex sm:flex-wrap sm:w-auto sm:justify-end">
+                    A FOUR-COLUMN GRID BELOW `sm:`, so the four are exactly equal;
+                    a flex row from `sm:` up, where they take their natural widths and
+                    sit right-aligned as before. */}
+                <div className="grid grid-cols-4 w-full sm:flex sm:w-auto sm:gap-1 sm:justify-end">
                     {/* 👤 THE SAME ROSTER, TWO WAYS OF READING IT.
                         Two buttons rather than a switch, because "which one am I
-                        looking at" has to be readable at a glance — `aria-pressed`
-                        carries the state for a screen reader and the tint carries it
-                        for everyone else. DEFAULTS TO DEPARTMENT: an existing user
-                        who never presses either one sees exactly what they saw
-                        before. Both are pure view changes; neither reads or writes
-                        anything.
-
-                        🎨 THE SELECTED HALF IS A SOFT INDIGO TINT, NOT A DARK FILL.
-                        The two halves have always been the same component with the
-                        same padding, shape and type — only the colour differed, and
-                        only because one was selected. But `bg-slate-700 text-white`
-                        was heavy enough that the owner read it as a different control
-                        altogether (2026-09-01). Selected is now `indigo-100` behind
-                        `indigo-700` text: the same accent the Export button uses, so
-                        the whole bar is one family, and the state still carries in
-                        BOTH the fill and the text colour rather than the fill alone.
-                        Measured at 6.41:1 light and 7.71:1 dark — pinned in
-                        `contrast.test.js`, because `text-xs` bold is NORMAL text to
-                        WCAG and so has to clear 4.5:1, not 3:1.
-
-                        ⚠️ AND A RING, WHICH IS WHY THE TINT ALONE IS NOT ENOUGH. The
-                        soft tint separates the halves by HUE and almost not at all by
-                        lightness: white against indigo-100 is 1.23:1 and slate-600
-                        against indigo-700 is 1.04:1. Rendered greyscale — a washed-out
-                        screen in daylight, or a colour vision deficiency — the two
-                        halves are very nearly identical, which makes colour the sole
-                        carrier of state and fails WCAG 1.4.1. The dark fill it
-                        replaced never had that problem at 10.35:1. So the selected
-                        half also carries a 2px inset ring: a shape cue, 5.10:1
-                        against its own fill and 6.29:1 against the white half beside
-                        it, well past the 3:1 that 1.4.11 asks of a UI part. Inset, so
-                        like the group's own ring it costs no height. */}
+                        looking at" has to be readable at a glance. `aria-pressed`
+                        carries the state for a screen reader; for everyone else it is
+                        the indigo, the underline and the heavier stroke — two of
+                        which survive greyscale. DEFAULTS TO DEPARTMENT. Both are pure
+                        view changes; neither reads nor writes anything. */}
                     <div
                         role="group"
                         aria-label="How to show the roster"
-                        /* ⚠️ `ring-1 ring-inset`, NOT `border`. A border adds 2px to
-                           this group's height, so in a wrapping flex row it made
-                           the whole first row 46px against its 44px neighbours —
-                           visibly out of line on a phone. A ring is painted, not
-                           laid out, so the group is exactly as tall as its
-                           buttons and every control in the bar matches. */
-                        className="col-span-2 sm:col-auto flex w-full sm:w-auto rounded overflow-hidden ring-1 ring-inset ring-slate-200 dark:ring-slate-600"
+                        className="col-span-2 grid grid-cols-2 sm:col-auto sm:flex sm:gap-1"
                     >
                         <button
                             type="button"
                             onClick={() => setRosterScope('department')}
                             aria-pressed={rosterScope === 'department'}
                             title="Everybody's duties, as a month grid"
-                            className={`flex-1 sm:flex-none flex gap-1.5 items-center justify-center px-3 py-2 min-h-11 sm:min-h-0 font-bold text-xs transition-colors ${
-                                rosterScope === 'department'
-                                    ? 'bg-indigo-100 text-indigo-700 ring-2 ring-inset ring-indigo-600 dark:bg-indigo-900/40 dark:text-indigo-300 dark:ring-indigo-400'
-                                    : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700'
-                            }`}
+                            className={`${TOOLBAR_ITEM} ${rosterScope === 'department' ? TOOLBAR_ON : TOOLBAR_OFF}`}
                         >
-                            <LayoutGrid size={14} /> Department
+                            <LayoutGrid size={18} strokeWidth={rosterScope === 'department' ? 2.5 : 2} />
+                            <span className="text-[10px] tracking-wide">Department</span>
+                            <ToolbarUnderline on={rosterScope === 'department'} />
                         </button>
                         <button
                             type="button"
                             onClick={() => setRosterScope('person')}
                             aria-pressed={rosterScope === 'person'}
                             title="One person's duties, listed"
-                            className={`flex-1 sm:flex-none flex gap-1.5 items-center justify-center px-3 py-2 min-h-11 sm:min-h-0 font-bold text-xs transition-colors ${
-                                rosterScope === 'person'
-                                    ? 'bg-indigo-100 text-indigo-700 ring-2 ring-inset ring-indigo-600 dark:bg-indigo-900/40 dark:text-indigo-300 dark:ring-indigo-400'
-                                    : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700'
-                            }`}
+                            className={`${TOOLBAR_ITEM} ${rosterScope === 'person' ? TOOLBAR_ON : TOOLBAR_OFF}`}
                         >
-                            <User size={14} /> My week
+                            <User size={18} strokeWidth={rosterScope === 'person' ? 2.5 : 2} />
+                            <span className="text-[10px] tracking-wide">My week</span>
+                            <ToolbarUnderline on={rosterScope === 'person'} />
                         </button>
                     </div>
-                    {/* ⚙️ Configure had NO dark variant at all, so in dark mode it
-                        rendered as a bright white block beside a dark switcher and an
-                        indigo Export — the one control in the bar that did not belong
-                        to the theme. Found while retinting the switcher on 2026-09-01;
-                        slate-300 on slate-800 is 9.85:1. */}
-                    <button onClick={() => setIsConfigOpen(true)} className={`flex gap-2 items-center justify-center px-4 py-2 ${TOUCH} rounded bg-slate-100 text-slate-600 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700 font-bold text-xs transition-colors`}>
-                        <Settings size={14} /> Configure
+
+                    <button
+                        type="button"
+                        onClick={() => setIsConfigOpen(true)}
+                        title="Set up the roster: staff, duties and rules"
+                        className={`${TOOLBAR_ITEM} ${TOOLBAR_OFF}`}
+                    >
+                        <Settings size={18} strokeWidth={2} />
+                        <span className="text-[10px] tracking-wide">Configure</span>
+                        <ToolbarUnderline on={false} />
                     </button>
-                    {/* 📤 ONE BUTTON, FOUR FORMATS. Every item leads with what the
-                        file is FOR, because "CSV" does not answer "how do I put
-                        this on the noticeboard". See `RosterExportMenu` for what
-                        the row of four buttons measured on a phone. */}
+
+                    {/* 📤 ONE CONTROL, FOUR FORMATS. Every item leads with what the
+                        file is FOR, because "CSV" does not answer "how do I put this
+                        on the noticeboard". The trigger is styled here rather than in
+                        the menu, so it matches the three items beside it exactly. */}
                     <RosterExportMenu
+                        /* `w-full` because this one sits inside the menu's own
+                           positioning wrapper rather than directly in the grid,
+                           so it does not inherit the column's width the way the
+                           other three do. Without it the Export target was 43px
+                           against their 85px. */
+                        triggerClassName={({ open }) => `${TOOLBAR_ITEM} w-full sm:w-auto ${open ? TOOLBAR_ON : TOOLBAR_OFF}`}
+                        renderTrigger={({ open, busy }) => (
+                            <>
+                                <Download size={18} strokeWidth={open ? 2.5 : 2} />
+                                <span className="text-[10px] tracking-wide">{busy ? 'Building…' : 'Export'}</span>
+                                <ToolbarUnderline on={open} />
+                            </>
+                        )}
                         formats={[
                             {
                                 id: 'pdf',
