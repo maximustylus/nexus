@@ -45,7 +45,7 @@
 
 import React from 'react';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { render, screen, cleanup, fireEvent, within } from '@testing-library/react';
+import { render, screen, cleanup, fireEvent, within, waitFor } from '@testing-library/react';
 
 // --- MOCKS (hoisted above the imports below by Vitest) ------------------------
 
@@ -1246,12 +1246,27 @@ describe('a short name a visitor types reaches the calendar and the file', () =>
      * the button into `buildICS` — which is precisely the reach that let four
      * mutations survive.
      */
+    /**
+     * Open the Export menu and choose one format.
+     *
+     * The four coloured export buttons became one menu on 2026-09-01, because on a
+     * 375px phone they wrapped the toolbar onto three rows of two different
+     * heights. These tests click what a roster master clicks, so they go through
+     * the menu — and matching on the FORMAT NAME rather than the extension is
+     * deliberate: the label is what the person reads, and a test that only knew
+     * "CSV" would pass over a menu whose descriptions had all gone wrong.
+     */
+    const chooseExport = (item) => {
+        fireEvent.click(screen.getByRole('button', { name: /^Export$/i }));
+        fireEvent.click(screen.getByRole('menuitem', { name: item }));
+    };
+
     const captureICS = async () => {
         const original = URL.createObjectURL;
         let captured = null;
         URL.createObjectURL = (blob) => { captured = blob; return 'blob:captured'; };
         try {
-            fireEvent.click(screen.getByRole('button', { name: /^ICS$/i }));
+            chooseExport(/Add to my calendar/i);
         } finally {
             URL.createObjectURL = original;
         }
@@ -1324,7 +1339,7 @@ describe('a short name a visitor types reaches the calendar and the file', () =>
         let captured = null;
         URL.createObjectURL = (blob) => { captured = blob; return 'blob:captured'; };
         try {
-            fireEvent.click(screen.getByRole('button', { name: /^CSV$/i }));
+            chooseExport(/Raw duty list/i);
         } finally {
             URL.createObjectURL = original;
         }
@@ -1408,5 +1423,68 @@ describe('a short name a visitor types reaches the calendar and the file', () =>
         expect(drawer.textContent).not.toMatch(/u2014|u2192|u2019|\\u/);
         // The editable branch is the one on screen here, so its copy is what was read.
         expect(drawer.textContent).toMatch(/available on every date of the run/i);
+    });
+
+    /**
+     * ⚠️ THE TWO NEW EXPORT BUTTONS, ASSERTED ON THE FILE THEY PRODUCE.
+     *
+     * Same reason as the ICS and CSV tests above: the failure this surface has
+     * already shipped is a control that is present, enabled, documented, and wired
+     * to nothing. `buildRosterXlsx` being correct proves nothing about whether the
+     * button reaches it with the acronym map — that reach is exactly where four
+     * mutations survived last time.
+     */
+    it('the Excel button writes a workbook, with the acronyms in it', async () => {
+        generateWithAcronyms();
+
+        const original = URL.createObjectURL;
+        let captured = null;
+        URL.createObjectURL = (blob) => { captured = blob; return 'blob:captured'; };
+        try {
+            chooseExport(/Calendar workbook/i);
+        } finally {
+            URL.createObjectURL = original;
+        }
+        if (!captured) throw new Error('The Excel button produced no Blob.');
+
+        expect(captured.type).toMatch(/spreadsheetml\.sheet/);
+        // The entries are STORED, not deflated, so the sheet XML is literally in
+        // these bytes — which is what lets this read the file rather than the writer.
+        const text = await captured.text();
+        expect(text).toContain('September 2026');
+        expect(text).toContain('Lead: AN, Co: BT');
+        expect(text).not.toContain('Adaeze Nwosu');
+    });
+
+    it('the PDF button builds a document and clears its busy state', async () => {
+        generateWithAcronyms();
+
+        // ⚠️ CAPTURED THE SAME WAY THE ICS AND CSV TESTS CAPTURE THEIRS, because
+        //    `downloadRosterPdf` now delivers the file through the same anchor
+        //    dance. It used to call jsPDF's own `save()`, which chose a path this
+        //    environment could not observe at all — no Blob, no anchor, nothing to
+        //    assert on. The export was changed rather than the assertion weakened.
+        const originalCreate = URL.createObjectURL;
+        let captured = null;
+        URL.createObjectURL = (blob) => { captured = blob; return 'blob:captured'; };
+        try {
+            chooseExport(/Printable calendar/i);
+            //    `act` alone would NOT be enough: `downloadRosterPdf` reaches jsPDF
+            //    through a dynamic `import()`, which settles over several ticks
+            //    rather than one microtask.
+            await waitFor(() => expect(captured).toBeTruthy(), { timeout: 10000 });
+        } finally {
+            URL.createObjectURL = originalCreate;
+        }
+
+        expect(captured.type).toBe('application/pdf');
+        expect(await captured.slice(0, 5).text()).toBe('%PDF-');
+        // A real document, not an empty shell: twelve month pages plus the matrix.
+        expect(captured.size).toBeGreaterThan(20000);
+        // The trigger reverts from "Building…" to "Export", so a second export is
+        // possible and the button never strands itself mid-build.
+        expect(screen.getByRole('button', { name: /^Export$/i })).toBeTruthy();
+        // ...and no failure banner: a caught error would have put one on screen.
+        expect(screen.queryByText(/The PDF could not be built/)).toBeNull();
     });
 });

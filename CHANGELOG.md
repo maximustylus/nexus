@@ -51,6 +51,92 @@ not changed by this release.
 
 ---
 
+## [2.9.0] - 2026-09-01
+
+The roster leaves the screen: a **printable PDF calendar** and an **Excel workbook**,
+and the four export buttons became one `Export` menu.
+
+### Added
+
+- **PDF export — a wall calendar, one page per month.** Asked for as *"a full january to
+  december calendar"*. Duties sit in the day squares in the department's own category
+  colours, using the acronyms configured for the calendar chips, so the paper and the
+  screen cannot disagree. A crowded day **shrinks its type rather than hiding duties**
+  behind a "+2 more" — the owner's choice when the trade-off was put to them.
+
+  Drawn with jsPDF's vector API, **not** through `html2canvas` as `ResultPage` does: a
+  photographed page cannot be searched, goes soft on zoom, and runs to megabytes. A
+  fifteen-page year is **234 kB and fully searchable**.
+
+- **Excel export — a calendar tab per month.** Asked for as *"12 tabs jan to dec and
+  roster are in boxes just like a calendar"*. Each tab is a seven-column grid with the
+  duties in coloured, bordered boxes; the weekday strip is frozen and the sheet is set to
+  print landscape, one page wide.
+
+  **Written by hand rather than with a library.** SheetJS cannot colour a cell — fills
+  are its paid tier — so the obvious dependency cannot do the one thing the request is
+  about, and ExcelJS is several hundred kilobytes of general-purpose object model to emit
+  a shape we already know. `zipWriter.js` and `rosterXlsx.js` are ours, tested by
+  unzipping the bytes and reading the XML back, and verified to open in an independent
+  reader (`openpyxl`) rather than only in the writer that produced them.
+
+- **A staff-by-week matrix**, at the back of the PDF and as the workbook's last tab. Rows
+  are people, columns are the engine's week numbers, cells are the duties they held —
+  leads in the category colour, seconds in grey. It is the sheet that makes the v2.7.0
+  weekly rotation checkable at a glance; a month grid spreads that evidence over twelve
+  pages and can never show it.
+
+- **One `Export` control** in place of four coloured buttons, each format described by
+  what it is *for* rather than by its extension. Dismissable by Escape, by tapping away,
+  and by choosing.
+
+### Fixed
+
+- **The roster toolbar was three rows of two different heights on a phone.** Measured in
+  a real 375px viewport, not argued about: the bar wrapped onto three rows with `ICS`
+  stranded alone, and the rows were **46px then 44px** because the view switcher carried
+  a `border` — which is laid out and adds 2px — and a wrapping flex row stretches to its
+  tallest item. The switcher now uses `ring-1 ring-inset`, which is painted rather than
+  laid out. **Two rows, one height.**
+
+- **A "My week" row's height depended on what the clinic was called.** 68px, 69px and
+  73px for rows that are the same kind of thing: `items-baseline` resolved a padded
+  badge, a 16px duty name and a 14px date to a different line box per combination, and
+  the date shared a line with the duty so a long name wrapped where a short one did not.
+  Centred, with the date on its own line below `sm:`. **72–73px throughout.**
+
+- **The staff-by-week counts read "0 lead · 1 duties".** Both exporters now pluralise
+  from one shared helper.
+
+- **`downloadRosterPdf` no longer calls jsPDF's `save()`.** That method picks its
+  delivery from whatever it finds in the environment — a Blob URL, `msSaveBlob`, or
+  navigating the window to a data URI — and it was observed taking the navigation path,
+  which produces no download at all. It now builds the Blob and uses the same
+  append/click/remove dance `downloadICS` and `downloadCSV` use, so delivery is one known
+  thing and a test can capture the file the button produced.
+
+### Changed
+
+- **`STANDARD_CATEGORIES` entries gained a `print` hex triple**, and `printSwatchFor`
+  resolves any category — including a non-standard one such as `VC` — to the colour the
+  calendar chip already shows it in. A PDF rectangle and a spreadsheet fill have no
+  stylesheet to fall through to, so the fallback chain lives in the palette module once
+  rather than in each exporter.
+
+- **Exports cost +8 kB gzipped** (822 → 830 kB). jsPDF was already a dependency; the
+  workbook writer adds no new package.
+
+### Known limits
+
+- **A standby prints as a co-lead.** `standbySecond` is a property of the task and is
+  re-derived at audit time; the shift written into `rosterData` carries only `lead` and
+  `coLead`, so no export can see it — the same limit `.ics` and `.csv` already have.
+- **A spreadsheet edit does not reach AURA.** The next export overwrites it.
+- **The workbook is stored, not deflated,** so it is larger than a compressed one. This
+  buys no compressor in the browser bundle and byte-identical output between runs.
+- **Verified with `openpyxl`, not with Microsoft Excel**, which was not available on the
+  machine that built this release.
+
 ## [2.8.0] - 2026-08-31
 
 The second person on a shift may now be a **standby** — named to step in, not present.

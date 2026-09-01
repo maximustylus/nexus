@@ -796,3 +796,124 @@ describe('live mode: the responsive work stopped at the branch', () => {
         expect(grid.className).toContain('sm:grid-cols-7');
     });
 });
+
+
+/**
+ * ==============================================================================
+ * THE ROSTER TOOLBAR, AND THE ROW HEIGHTS IT USED TO GET WRONG
+ *
+ * Reported by the owner on 2026-09-01 and then MEASURED in a real 375px viewport
+ * rather than argued about: the toolbar wrapped onto THREE rows, and its rows were
+ * 46px and then 44px tall, because a wrapping flex row stretches to its tallest
+ * item and the first row held a bordered group. Four export buttons were what made
+ * it wrap that far.
+ *
+ * jsdom cannot measure any of that — it has no layout. What it CAN hold is the two
+ * declarations that caused it, and those are what regress: a `border` creeping back
+ * onto the group, or a fifth export button being added beside the menu instead of
+ * inside it.
+ * ==============================================================================
+ */
+describe('the roster toolbar: one row height, and one export control', () => {
+    it('offers a single Export trigger, not one button per file extension', () => {
+        render(<RosterView user={VISITOR} />);
+
+        expect(screen.getByRole('button', { name: /^Export$/i })).toBeTruthy();
+        // The four that used to sit in the toolbar are inside the menu now. A new
+        // format added as a toolbar button rather than a menu item turns this red.
+        for (const gone of [/^CSV$/i, /^ICS$/i, /^Excel$/i, /^PDF$/i]) {
+            expect(screen.queryByRole('button', { name: gone })).toBeNull();
+        }
+    });
+
+    it('gives the view switcher a RING, never a border, so it cannot out-grow the row', () => {
+        render(<RosterView user={VISITOR} />);
+
+        const group = screen.getByRole('group', { name: /how to show the roster/i });
+        // A border is laid out and adds 2px to the group's height; a ring is only
+        // painted. That 2px was the whole of the "boxes of different size".
+        expect(group.className).toContain('ring-1');
+        expect(group.className).toContain('ring-inset');
+        expect(group.className).not.toMatch(/(^|\s)border(\s|$)/);
+    });
+
+    it('declares the same 44px floor on every control in the bar', () => {
+        render(<RosterView user={VISITOR} />);
+
+        const group = screen.getByRole('group', { name: /how to show the roster/i });
+        const bar = group.parentElement;
+        for (const child of Array.from(bar.children)) {
+            // The group carries its floor on its buttons; everything else on itself.
+            const declares = (el) => el.className.includes('min-h-11')
+                || Array.from(el.querySelectorAll('button')).some((b) => b.className.includes('min-h-11'));
+            expect(declares(child)).toBe(true);
+        }
+    });
+
+    it('lets Export fill the row it wraps onto, rather than stranding it centred', () => {
+        render(<RosterView user={VISITOR} />);
+
+        const trigger = screen.getByRole('button', { name: /^Export$/i });
+        expect(mobileClasses(trigger)).toContain('w-full');
+        expect(trigger.className).toContain('sm:w-auto');
+    });
+});
+
+/**
+ * "MY WEEK": ONE ROW RHYTHM, NOT ONE PER DUTY NAME.
+ *
+ * Measured at 375px: 68px, 69px and 73px for rows that are the same kind of thing.
+ * Two causes, both declarations. `items-baseline` puts a padded badge, a 16px duty
+ * name and a 14px date on one baseline, and each combination resolves to a
+ * different line box. And the date shared a line with the duty, so a long duty name
+ * wrapped where a short one did not — the row height depended on what the clinic
+ * was called.
+ */
+describe('the my-week list: every row the same height on a phone', () => {
+    /**
+     * ⚠️ A ROSTER MUST BE GENERATED FIRST, and this is not a detail.
+     *
+     * Without one the panel renders an explanatory paragraph and NO list, so the
+     * two assertions below iterated an empty collection and the tests passed while
+     * checking nothing at all. They were written that way, caught by asserting the
+     * list exists, and are only meaningful because of these six lines.
+     */
+    const openMyWeek = () => {
+        render(<RosterView user={VISITOR} />);
+        openConfigure();
+        fireEvent.change(screen.getByLabelText('Staff row 1 name'), { target: { value: 'Peter Parker' } });
+        fireEvent.click(screen.getAllByRole('button', { name: /add row/i })[0]);
+        fireEvent.change(screen.getByLabelText('Staff row 2 name'), { target: { value: 'Carol Danvers' } });
+        fireEvent.change(screen.getByLabelText('Task row 1 name'), { target: { value: 'Ward Round' } });
+        fireEvent.click(screen.getByRole('button', { name: /^draft roster$/i }));
+        fireEvent.click(screen.getByRole('button', { name: /my week/i }));
+        return document.querySelector('[data-roster-view="person"]');
+    };
+
+    it('centres the row rather than sitting it on a shared baseline', () => {
+        const panel = openMyWeek();
+        const list = panel.querySelector('ul');
+        expect(list).toBeTruthy();
+        expect(list.children.length).toBeGreaterThan(0);
+        for (const row of Array.from(list.children)) {
+            expect(row.className).toContain('items-center');
+            expect(row.className).not.toContain('items-baseline');
+        }
+    });
+
+    it('gives the date its own line on a phone, so the break cannot depend on the duty name', () => {
+        const panel = openMyWeek();
+        const list = panel.querySelector('ul');
+        expect(list).toBeTruthy();
+        expect(list.children.length).toBeGreaterThan(0);
+        for (const row of Array.from(list.children)) {
+            const date = row.firstElementChild;
+            expect(mobileClasses(date)).toContain('w-full');
+            expect(date.className).toContain('sm:w-auto');
+            // The 9rem column is what lines the dates up on a DESKTOP, and it must
+            // stay gated: unconditional, it would reserve 144px of a 375px screen.
+            expect(date.className).toContain('sm:min-w-[9rem]');
+            expect(date.className).not.toMatch(/(^|\s)min-w-\[9rem\]/);
+        }
+    });
+});

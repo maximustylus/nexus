@@ -31,27 +31,36 @@
  *          chip sits beside the existing VC and default chips without shouting.
  *          Brown has no Tailwind scale, so it is spelled in hex — same tint
  *          logic, hand-mixed.
+ * `print` — the SAME tints as `chip`, resolved to hex, because a PDF page and an
+ *          .xlsx cell cannot read a Tailwind class name. These are the literal
+ *          values Tailwind v3 compiles `chip` to, so a printed calendar and the
+ *          on-screen one are the same colour rather than merely similar. There is
+ *          no dark variant: paper has one theme.
  */
 export const STANDARD_CATEGORIES = Object.freeze([
     Object.freeze({
         name: 'Clinical',
         css: 'brown',
         chip: 'bg-[#f2e6d8] text-[#6b4423] border border-[#dcc4a4] dark:bg-[#3f2d1d] dark:text-[#d4a97c] dark:border-[#6b4423]/60',
+        print: Object.freeze({ bg: '#f2e6d8', fg: '#6b4423', border: '#dcc4a4' }),
     }),
     Object.freeze({
         name: 'Education',
         css: 'orange',
         chip: 'bg-orange-50 text-orange-800 border border-orange-100 dark:bg-orange-900/30 dark:text-orange-400 dark:border-orange-800/50',
+        print: Object.freeze({ bg: '#fff7ed', fg: '#9a3412', border: '#ffedd5' }),
     }),
     Object.freeze({
         name: 'Research',
         css: 'limegreen',
         chip: 'bg-lime-50 text-lime-800 border border-lime-200 dark:bg-lime-900/30 dark:text-lime-400 dark:border-lime-800/50',
+        print: Object.freeze({ bg: '#f7fee7', fg: '#3f6212', border: '#d9f99d' }),
     }),
     Object.freeze({
         name: 'Management',
         css: 'yellow',
         chip: 'bg-yellow-50 text-yellow-800 border border-yellow-200 dark:bg-yellow-900/30 dark:text-yellow-300 dark:border-yellow-800/50',
+        print: Object.freeze({ bg: '#fefce8', fg: '#854d0e', border: '#fef08a' }),
     }),
 ]);
 
@@ -74,6 +83,49 @@ export const categoryCssColor = (value) => normalizeCategory(value)?.css ?? null
 
 /** Free text -> the chip classes, or `null` so the caller keeps its own fallback. */
 export const categoryChipClass = (value) => normalizeCategory(value)?.chip ?? null;
+
+/**
+ * Free text -> the print hex triple, or `null` for a non-standard category.
+ *
+ * Deliberately the same contract as `categoryCssColor` and `categoryChipClass`:
+ * silence, never a guess. A team that types `WEEKEND` has not chosen a colour and
+ * this module will not invent one for them.
+ */
+export const categoryPrintColors = (value) => normalizeCategory(value)?.print ?? null;
+
+/**
+ * Free text -> a print hex triple that is NEVER null. For paper and spreadsheets.
+ *
+ * WHY THIS EXISTS SEPARATELY FROM `categoryPrintColors`. A screen chip may fall
+ * through to a CSS class the stylesheet already defines; a PDF rectangle and an
+ * .xlsx cell fill have no stylesheet to fall through to — something must be
+ * painted, so somebody has to name the fallback colour. Rather than let each
+ * exporter pick its own (which is how the calendar and a downloaded file start
+ * telling different stories), the chain lives here, once:
+ *
+ *   1. one of the four standard categories -> the owner's palette, in hex;
+ *   2. `VC` -> the live team's long-standing video-clinic orange, which
+ *      `RosterView`'s chip fallback has used since before the palette existed;
+ *   3. anything else -> the calendar's default blue.
+ *
+ * Steps 2 and 3 are the hex forms of the two literal fallbacks in `RosterView`'s
+ * chip expression, in the same order, so a printed square matches the square on
+ * screen for EVERY category — not just the four with a formal entry.
+ */
+export const printSwatchFor = (value) => {
+    const standard = categoryPrintColors(value);
+    if (standard) return standard;
+
+    const raw = typeof value === 'string' ? value.trim().toUpperCase() : '';
+    if (raw === 'VC') return VC_PRINT;
+    return DEFAULT_PRINT;
+};
+
+/** `bg-orange-50 text-orange-800 border-orange-100`, in hex. */
+const VC_PRINT = Object.freeze({ bg: '#fff7ed', fg: '#9a3412', border: '#ffedd5' });
+
+/** `bg-blue-50 text-blue-700 border-blue-100`, in hex. */
+const DEFAULT_PRINT = Object.freeze({ bg: '#eff6ff', fg: '#1d4ed8', border: '#dbeafe' });
 
 /**
  * A task NAME -> a suggested category, with the word that earned it — or `null`.

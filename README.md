@@ -1,6 +1,6 @@
-# NEXUS: Smart Operations Dashboard v2.8.0 [BETA]
+# NEXUS: Smart Operations Dashboard v2.9.0 [BETA]
 
-![Version](https://img.shields.io/badge/Version-v2.8.0-blue) ![Status](https://img.shields.io/badge/Status-Beta%20Phase-emerald) ![Teams](https://img.shields.io/badge/Multi--Team-28%20AHP%20professions-indigo) ![Roster](https://img.shields.io/badge/Roster%20engine-deterministic-0f766e) ![Assistant](https://img.shields.io/badge/AURA%20assistant-Gemini-purple) ![PWA](https://img.shields.io/badge/PWA-Native%20Push%20Enabled-blue) ![CI/CD](https://img.shields.io/badge/CI%2FCD-GitHub%20Actions-2ea44f)
+![Version](https://img.shields.io/badge/Version-v2.9.0-blue) ![Status](https://img.shields.io/badge/Status-Beta%20Phase-emerald) ![Teams](https://img.shields.io/badge/Multi--Team-28%20AHP%20professions-indigo) ![Roster](https://img.shields.io/badge/Roster%20engine-deterministic-0f766e) ![Assistant](https://img.shields.io/badge/AURA%20assistant-Gemini-purple) ![PWA](https://img.shields.io/badge/PWA-Native%20Push%20Enabled-blue) ![CI/CD](https://img.shields.io/badge/CI%2FCD-GitHub%20Actions-2ea44f)
 
 **NEXUS** (formerly IDC App) is a clinician-led platform for workload management, skill-mix routing and staff wellbeing, built inside an allied health department and now serving departments beyond the one it was written for.
 
@@ -222,8 +222,9 @@ This application is an operational and workload management tool. It is not a cli
 ### Supported Versions
 | Version | Status |
 | ------- | ------ |
-| 2.8.x   | **Active Beta** (multi-team) |
-| 2.7.x   | Superseded — upgrade to 2.8.x |
+| 2.9.x   | **Active Beta** (multi-team) |
+| 2.8.x   | Superseded — upgrade to 2.9.x |
+| 2.7.x   | Superseded — upgrade to 2.9.x |
 | 2.4.x   | Superseded — upgrade to 2.5.x |
 | 2.3.x   | Superseded — upgrade to 2.4.x |
 | 2.2.x   | Superseded — upgrade to 2.3.x |
@@ -342,7 +343,26 @@ Beta testers should utilise Demo Mode to verify system integrity:
 
 ## Release History
 
-### NEXUS v2.7.0 [Current Beta] — A duty is somebody's for the week
+### NEXUS v2.9.0 [Current Beta] — Take the roster off the screen
+
+**Two new exports.** A **PDF** wall calendar — one page per month, duties in the day
+squares in the department's own colours — and an **Excel workbook** with a calendar tab
+per month, in boxes that can be edited and printed. Both end with a *staff-by-week*
+sheet: rows are people, columns are weeks, so a rotation can be checked at a glance
+rather than across twelve pages. Neither adds a runtime dependency.
+
+**One `Export` control** in place of four file-extension buttons, each format described
+by what it is *for*. On a 375px phone the old row wrapped the toolbar onto three rows of
+two different heights; it is now two rows of one height.
+
+### NEXUS v2.8.0 — A standby is named to step in, not a second pair of hands
+
+**`secondPerson: 'standby'`.** The second person on a shift may be named as a backup
+rather than counted as an attendee, so their daily duty cap and contracted hours are no
+longer billed for a session they do not attend. On the department that asked for it:
+**19 unfilled slots over 17 weeks → 0**, at an unchanged cap. Off by default.
+
+### NEXUS v2.7.0 — A duty is somebody's for the week
 
 **Weekly rotation.** A department can now say "we rotate duties weekly" and mean it:
 one person leads a duty for the whole week, then it passes to whoever has been away

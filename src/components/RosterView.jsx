@@ -13,7 +13,7 @@ import { db } from '../firebase';
 // approve). Nothing about that sequence is reimplemented here; see
 // `respondToCoverageRequest`.
 import { doc, onSnapshot, setDoc, collection, addDoc, serverTimestamp, query, where, getDoc, updateDoc } from 'firebase/firestore';
-import { Calendar, Download, Settings, ChevronLeft, ChevronRight, Play, FileSpreadsheet, ShieldAlert, ArrowRightLeft, X, Users, FlaskConical, CheckCircle2, Info, LayoutGrid, User, CalendarCheck, UserCheck } from 'lucide-react';
+import { Calendar, Settings, ChevronLeft, ChevronRight, Play, FileSpreadsheet, ShieldAlert, ArrowRightLeft, X, Users, FlaskConical, CheckCircle2, Info, LayoutGrid, User, CalendarCheck, UserCheck, FileText, Table2, CalendarPlus } from 'lucide-react';
 import {
     downloadICS,
     downloadCSV,
@@ -120,6 +120,9 @@ import {
 } from '../utils/rosterEngineV2';
 // 🧪 SANDBOX WIZARD — the structured tables that replaced the two textareas in
 // demo mode, and the ONE pure function that turns them into an engine config.
+import { downloadRosterPdf } from '../utils/rosterPdf.js';
+import { downloadRosterXlsx } from '../utils/rosterXlsx.js';
+import RosterExportMenu from './RosterExportMenu';
 import RosterDemoWizardTables from './RosterDemoWizardTables';
 import WizardStep from './WizardStep';
 import {
@@ -445,8 +448,20 @@ const PersonRosterPanel = ({
                 <>
                     <ul className="mt-3 divide-y divide-slate-200 dark:divide-slate-700">
                         {duties.map((duty) => (
-                            <li key={duty.key} className="py-3 flex flex-wrap items-baseline gap-x-3 gap-y-1">
-                                <span className="text-sm font-black text-slate-500 dark:text-slate-400 tabular-nums min-w-[9rem]">
+                            /* ⚠️ THE ROW HEIGHT USED TO DEPEND ON THE DUTY'S NAME.
+                               Measured on a phone: 68px, 69px and 73px for rows
+                               that are the same kind of thing, because
+                               `items-baseline` puts a padded badge, a 16px duty
+                               name and a 14px date on one baseline and each
+                               combination resolves to a different line box — and
+                               because a long name wrapped where a short one did
+                               not. `items-center` removes the first cause; giving
+                               the date the full width below `sm:` removes the
+                               second, by making the break deterministic instead of
+                               dependent on how many characters the duty is called.
+                               The floor then holds every row to one rhythm. */
+                            <li key={duty.key} className="py-3 flex flex-wrap items-center gap-x-3 gap-y-1 min-h-[4.25rem] sm:min-h-0">
+                                <span className="w-full sm:w-auto text-sm font-black text-slate-500 dark:text-slate-400 tabular-nums sm:min-w-[9rem]">
                                     {formatRosterDateKey(duty.date)}
                                 </span>
                                 <span className="text-base font-black text-slate-800 dark:text-white">
@@ -903,6 +918,35 @@ const RosterView = ({ user }) => {
         }
         return Object.keys(map).length > 0 ? map : null;
     }, [isDemo, demoStaffRows, rosteredMembers]);
+
+    /**
+     * THE PDF BUTTON, WHICH IS THE ONLY EXPORT THAT CAN TAKE A MOMENT.
+     *
+     * `downloadRosterPdf` imports jsPDF dynamically, so the FIRST press pays for
+     * fetching it — on a ward tablet over hospital wi-fi that is visible time. A
+     * button that looks unchanged while that happens is a button a roster master
+     * presses again, and the whole reason this state exists is that a control which
+     * silently does nothing is the defect this surface has already shipped once.
+     *
+     * A failure is REPORTED, not swallowed: `rosterError` is the same banner a
+     * rules denial uses, so an export that could not be built says so in the place
+     * the user is already looking.
+     */
+    const [pdfBusy, setPdfBusy] = useState(false);
+    const handleDownloadPdf = useCallback(async () => {
+        setPdfBusy(true);
+        try {
+            const summary = await downloadRosterPdf(rosterData, { shortNames });
+            if (summary.pages === 0) {
+                setRosterError('There is no roster to export yet. Generate one first.');
+            }
+        } catch (error) {
+            console.error('[NEXUS] PDF export failed', error);
+            setRosterError('The PDF could not be built. The CSV and ICS exports are unaffected.');
+        } finally {
+            setPdfBusy(false);
+        }
+    }, [rosterData, shortNames]);
 
     const [storedSettings, setStoredSettings] = useState(null);
     const [settingsError, setSettingsError] = useState(null);
@@ -2419,7 +2463,13 @@ const RosterView = ({ user }) => {
                     <div
                         role="group"
                         aria-label="How to show the roster"
-                        className="flex rounded overflow-hidden border border-slate-200 dark:border-slate-600"
+                        /* ⚠️ `ring-1 ring-inset`, NOT `border`. A border adds 2px to
+                           this group's height, so in a wrapping flex row it made
+                           the whole first row 46px against its 44px neighbours —
+                           visibly out of line on a phone. A ring is painted, not
+                           laid out, so the group is exactly as tall as its
+                           buttons and every control in the bar matches. */
+                        className="flex rounded overflow-hidden ring-1 ring-inset ring-slate-200 dark:ring-slate-600"
                     >
                         <button
                             type="button"
@@ -2451,12 +2501,47 @@ const RosterView = ({ user }) => {
                     <button onClick={() => setIsConfigOpen(true)} className={`flex gap-2 items-center justify-center px-4 py-2 ${TOUCH} rounded bg-slate-100 font-bold text-xs hover:bg-slate-200 text-slate-600 transition-colors`}>
                         <Settings size={14} /> Configure
                     </button>
-                    <button onClick={() => downloadCSV(rosterData, { shortNames })} className={`flex gap-2 items-center justify-center px-4 py-2 ${TOUCH} rounded bg-green-100 text-green-700 font-bold text-xs hover:bg-green-200 transition-colors`}>
-                        <FileSpreadsheet size={14} /> CSV
-                    </button>
-                    <button onClick={() => downloadICS(rosterData, { shortNames })} className={`flex gap-2 items-center justify-center px-4 py-2 ${TOUCH} rounded bg-indigo-600 text-white font-bold text-xs hover:bg-indigo-700 shadow-lg transition-colors`}>
-                        <Download size={14} /> ICS
-                    </button>
+                    {/* 📤 ONE BUTTON, FOUR FORMATS. Every item leads with what the
+                        file is FOR, because "CSV" does not answer "how do I put
+                        this on the noticeboard". See `RosterExportMenu` for what
+                        the row of four buttons measured on a phone. */}
+                    <RosterExportMenu
+                        formats={[
+                            {
+                                id: 'pdf',
+                                label: 'Printable calendar',
+                                ext: 'PDF',
+                                hint: 'One page per month, plus a who-leads-what-by-week page at the back.',
+                                icon: FileText,
+                                onSelect: handleDownloadPdf,
+                                busy: pdfBusy,
+                            },
+                            {
+                                id: 'xlsx',
+                                label: 'Calendar workbook',
+                                ext: 'Excel',
+                                hint: 'A tab per month, duties in coloured boxes you can edit and print.',
+                                icon: Table2,
+                                onSelect: () => downloadRosterXlsx(rosterData, { shortNames }),
+                            },
+                            {
+                                id: 'ics',
+                                label: 'Add to my calendar',
+                                ext: 'ICS',
+                                hint: 'Imports into Outlook, Google or Apple Calendar as all-day events.',
+                                icon: CalendarPlus,
+                                onSelect: () => downloadICS(rosterData, { shortNames }),
+                            },
+                            {
+                                id: 'csv',
+                                label: 'Raw duty list',
+                                ext: 'CSV',
+                                hint: 'One row per duty, for your own spreadsheet or analysis.',
+                                icon: FileSpreadsheet,
+                                onSelect: () => downloadCSV(rosterData, { shortNames }),
+                            },
+                        ]}
+                    />
                 </div>
             </div>
 
