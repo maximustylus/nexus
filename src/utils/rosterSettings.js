@@ -231,6 +231,10 @@ export const toStoredSettings = ({
              * change later.
              */
             rotateWeekly: rules.rotateWeekly === true,
+            // A switch, so off IS an answer and is written — the reason `rotateWeekly`
+            // is stored rather than omitted. A plain boolean: never an array, and never
+            // parked in `extraRules`, which the nested-array guard does not walk.
+            standbySecond: rules.standbySecond === true,
         },
         extraRules: isPlainObject(extraRules) ? extraRules : null,
         updatedAt: now || undefined,
@@ -319,6 +323,7 @@ export const fromStoredSettings = (data) => {
         // `=== true` rather than truthiness: a document written before this field
         // existed has no key at all, and a stored `'false'` string must not read as on.
         rules.rotateWeekly = data.rules.rotateWeekly === true;
+        rules.standbySecond = data.rules.standbySecond === true;
     }
 
     return {

@@ -51,6 +51,64 @@ not changed by this release.
 
 ---
 
+## [2.8.0] - 2026-08-31
+
+The second person on a shift may now be a **standby** — named to step in, not present.
+
+### Added
+
+- **`rules.secondPerson` / `task.secondPerson`: `'alongside'` | `'standby'`.** Asked what
+  a co-lead means to them, a department answered: *"all of my team's clinics does not
+  require two staff, but i need a lead and co-lead because if the lead is down for
+  whatever reason, the co-lead automatically knows what to do and covers."*
+
+  The engine had been charging that person as a second pair of hands — their daily duty
+  cap and their contracted hours both billed for a session they do not attend. On that
+  department's own roster it produced **19 unfilled co-lead slots over 17 weeks**: a
+  shortfall that did not exist, because five people were being asked to supply ten bodies
+  for five clinics that need five. With `standby` the same team, same cap, fills it
+  completely — **19 → 0 unfilled, and nobody leads more clinics in a day than before.**
+
+  A standby costs nothing and still **must be somebody who could run the clinic**: grade
+  and skill gating are unchanged, and `taskPerDay` stays un-exempt so nobody is both the
+  lead and the standby of the same shift. It still counts as a *duty* for FTE fairness —
+  knowing a clinic is work — but not as *hours*, because they are not there.
+
+  Departmental setting with a per-task override, the shape `maxConcurrentPerDay` already
+  uses. **Off by default**, so every existing tenant is byte-identical.
+
+### Fixed
+
+- **The structural capacity warning contradicted the roster beneath it.** Counting
+  standby seats as demand made the engine announce *"asks for 80 duty slots but the team
+  can hold at most 50"* over a roster it had just filled completely. Demand is now
+  measured in occupied seats; the warning still fires where the team genuinely cannot
+  hold the work.
+
+- **The rotation/continuity refusal briefly stopped firing.** A neighbouring validation
+  block was nested one level too deep, so the refusal only ran for departments that had
+  also set a second-person mode. Caught by its own test before release.
+
+### Verified
+
+- **3416 tests, lint clean.** The five compatibility gate files
+  (`rosterEngineV2{,.grades,.psych,.hours,.slots}.test.js`) are **untouched** — that, not
+  intention, is the guarantee that no existing roster moves.
+- `auditHardConstraints` and `scoreRoster` exempt a standby in step with the generator.
+  Without that pairing the engine re-derives the constraints from the finished roster,
+  disagrees with itself, and reports *"AURA detected a hard-constraint violation … do not
+  publish this roster"* over a correct roster. Pinned by its own test.
+
+### Known limitations
+
+- **AURA cannot yet check that a standby is free at that hour.** It knows how long a duty
+  takes but not when it starts, so it will not stop somebody being standby for a clinic
+  that clashes with one they are leading. Said plainly in the control's own copy rather
+  than implied. Closing it needs clock times on a task — a larger change, and the same one
+  audiology asked for on 2026-08-17 (`Q13`).
+- A standby still satisfies a quota. Someone can meet "two Saturdays a month" by being
+  named on two without working either.
+
 ## [2.7.4] - 2026-08-31
 
 ### Fixed

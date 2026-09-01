@@ -368,6 +368,15 @@ export const EMPTY_RULES_INPUTS = () => ({
      * generated before this existed used.
      */
     rotateWeekly: false,
+    /**
+     * WHAT THE SECOND PERSON ON A SHIFT IS. `false` = they work alongside the lead
+     * (today's behaviour); `true` = they are a STANDBY, named in advance to step in
+     * if the lead cannot, and therefore not present and not charged for the session.
+     *
+     * A boolean here rather than the engine's `'alongside' | 'standby'` because the
+     * control is a switch; the mapper turns it into the engine's word.
+     */
+    standbySecond: false,
 });
 
 // --- ROW FACTORIES ------------------------------------------------------------
@@ -1931,6 +1940,9 @@ export const buildDemoRosterV2ConfigFromTables = ({
          * record that a department did NOT ask for something.
          */
         ...(rulesInputs?.rotateWeekly === true ? { rotateWeekly: true } : {}),
+        // Absent when off, like every control above it: a department that has never
+        // been asked the question must not have an answer recorded for it.
+        ...(rulesInputs?.standbySecond === true ? { secondPerson: 'standby' } : {}),
     };
 
     return {

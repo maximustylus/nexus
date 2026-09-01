@@ -1746,9 +1746,22 @@ const compilePairedPositions = (task, leadRegions, windowsActive = false) => {
     for (let i = 0; i < task.coLeads; i += 1) {
         positions.push(Object.freeze({
             index: positions.length,
+            /**
+             * ⚠️ `role` STAYS `ROLE_CO_LEAD` EVEN FOR A STANDBY, and that is not
+             *    laziness. `anchorRoleOf`, the pairing composer and both phase loops
+             *    key on this value, `shift.coLead` is the field every stored roster
+             *    already uses, and `firestore.rules` admits only `'lead'` and
+             *    `'coLead'` as a swap role. A third role token would be a schema
+             *    change across every tenant to express a fact about ACCOUNTING.
+             *
+             *    What differs is `standby`: whether this seat is a person WORKING
+             *    alongside the lead, or a person NAMED IN ADVANCE to step in if the
+             *    lead cannot. The second consumes none of their day.
+             */
             role: ROLE_CO_LEAD,
             phase: PHASE_ATTACHED,
-            label: ROLE_CO_LEAD,
+            label: task.standbySecond === true ? 'standby' : ROLE_CO_LEAD,
+            standby: task.standbySecond === true,
             eligibility: coLeadEligibility,
             entry: null,
         }));
@@ -1763,6 +1776,26 @@ const compilePairedPositions = (task, leadRegions, windowsActive = false) => {
  * tasks beside it.
  */
 const perDayDemand = (task) => task.positions.length;
+
+/**
+ * How many people does one occurrence of this task actually OCCUPY?
+ *
+ * ⚠️ NOT THE SAME QUESTION AS `perDayDemand`, and the difference is the whole point
+ *    of a standby. A standby seat is a person NAMED to step in, not a person present,
+ *    so it consumes none of the team's capacity — and the two structural warnings at
+ *    the end of a run compare demand against exactly that capacity (`maxPerDay`
+ *    summed, and contracted hours summed).
+ *
+ *    Counting standby seats as demand made the engine announce
+ *    "asks for 80 duty slots but the team can hold at most 50"
+ *    over a roster it had just filled completely, for the one kind of department the
+ *    feature was built for. Measured: 0 unfilled, warning present.
+ *
+ *    `perDayDemand` keeps counting every position and is still right where it is
+ *    used — the skill-shortfall warning needs HEADCOUNT, because a standby must be
+ *    someone who could genuinely run the clinic.
+ */
+const workingDemand = (task) => task.positions.filter((position) => position.standby !== true).length;
 
 /** `['CPET']` -> `'skill CPET'`; `['CPET','ICSI']` -> `'skills CPET and ICSI'`. */
 const skillsPhrase = (skills) =>
@@ -2432,6 +2465,17 @@ export const CAPACITY_LIMITS = Object.freeze([
         limitOf: (person) => person.maxPerDay,
         usedBy: (person, ctx) => ctx.dutiesOnDate.get(person.name) || 0,
         cost: () => 1,
+        /**
+         * ⚠️ A STANDBY SEAT COSTS THE PERSON NOTHING, and `exempt` is the only hook
+         *    that can say so. `cost: () => 0` would be a silent no-op here:
+         *    `capacityBreached` returns `used >= ceiling` for a DISCRETE meter and
+         *    never calls `cost` at all.
+         *
+         *    `ctx.position?.` and not `ctx.position.` — `capacityBreached` is
+         *    exported and `primitives.test.js`'s own `capacityContext()` builds a
+         *    context with no `position` key.
+         */
+        exempt: (person, ctx) => ctx.position?.standby === true,
     }),
     Object.freeze({
         id: 'hoursPerDay',
@@ -2443,6 +2487,8 @@ export const CAPACITY_LIMITS = Object.freeze([
         limitOf: (person) => person.dailyHoursCap,
         usedBy: (person, ctx) => ctx.hoursOnDate.get(person.name) || 0,
         cost: (ctx) => ctx.task.hours,
+        // A standby is not present, so none of this task's hours are theirs.
+        exempt: (person, ctx) => ctx.position?.standby === true,
     }),
     Object.freeze({
         id: 'hoursPerWeek',
@@ -2454,6 +2500,8 @@ export const CAPACITY_LIMITS = Object.freeze([
         limitOf: (person) => person.weeklyHoursCap,
         usedBy: (person, ctx) => ctx.hoursThisWeek.get(person.name) || 0,
         cost: (ctx) => ctx.task.hours,
+        // A standby is not present, so none of this task's hours are theirs.
+        exempt: (person, ctx) => ctx.position?.standby === true,
     }),
     Object.freeze({
         id: 'consecutiveDays',
@@ -3512,6 +3560,32 @@ export const validateRosterV2Config = (config) => {
         // spelled as a plain flag. A non-boolean is refused rather than coerced:
         // `continuity: 'yes'` is truthy, and a typo must not be able to change
         // who leads a clinic for a year.
+        /**
+         * ⚠️ REFUSED, NEVER COERCED — the rule `continuity` states just below. The
+         *    engine reads `=== 'standby'`, so a typo would be silently ALONGSIDE and
+         *    a department would be charged for hours nobody worked, having asked for
+         *    the opposite.
+         */
+        if (task.secondPerson !== undefined && task.secondPerson !== null) {
+            if (task.secondPerson !== 'alongside' && task.secondPerson !== 'standby') {
+                return invalid(`Task ${name}'s secondPerson must be "alongside" or "standby" — "standby" means the second person is named to step in if the lead cannot, and is not present, so the shift costs them no hours.`);
+            }
+            /**
+             * ⚠️ EXACTLY ONE CO-LEAD, AND THIS REFUSAL IS LOAD-BEARING RATHER THAN
+             *    FUSSY. Only `coLeads[0]` reaches `shift.coLead`; any further attached
+             *    fills are indistinguishable inside `assignees`. The audit and the
+             *    score both identify the standby seat as `name === shift.coLead`, so
+             *    with two of them they would charge the wrong person for the hours.
+             *    Refusing the shape turns an inference into a fact.
+             */
+            if (task.secondPerson === 'standby') {
+                const declared = isNonNegativeInt(task.coLeads) ? task.coLeads : ROSTER_V2_DEFAULTS.coLeads;
+                if (declared !== 1) {
+                    return invalid(`Task ${name} has secondPerson "standby" with ${declared} co-leads — a standby is one named person who steps in for the lead, so the task needs exactly one.`);
+                }
+            }
+        }
+
         if (task.continuity !== undefined && task.continuity !== null) {
             if (typeof task.continuity !== 'boolean') {
                 return invalid(`Task ${name}'s continuity must be true or false — true asks for the same lead on every occurrence of the task.`);
@@ -3563,6 +3637,12 @@ export const validateRosterV2Config = (config) => {
             // a combination at all. `true` is.
             if (task.continuity === true) {
                 return invalid(`Task ${name} sets both slots and continuity — continuity keeps the same LEAD across occurrences, and with slots the lead is derived from the grades on the shift rather than configured, so there would be no lead slot to keep. Remove continuity, or staff the task with leads/coLeads.`);
+            }
+            if (task.secondPerson !== undefined && task.secondPerson !== null) {
+                // Same reason as continuity above: a slotted shift has no configured
+                // second person to reclassify — its assignees are a list and its lead
+                // is whoever holds the highest grade on the day.
+                return invalid(`Task ${name} sets both slots and secondPerson — with slots a shift is a list of assignees rather than a lead plus a named second, so there is nobody for "standby" to describe. Remove secondPerson, or staff the task with leads/coLeads.`);
             }
 
             for (let s = 0; s < task.slots.length; s += 1) {
@@ -3786,12 +3866,25 @@ export const validateRosterV2Config = (config) => {
              *    that has stated both has made a mistake, and being told is better
              *    than the engine quietly preferring one — which is what it would do,
              *    because continuity is checked first.
+             *
+             * ⚠️ THIS CHECK BELONGS TO `rotateWeekly` AND NOT TO ITS NEIGHBOUR. It was
+             *    briefly nested inside the `secondPerson` block below, where it only
+             *    ran for a department that had ALSO set a second-person mode — so the
+             *    refusal silently stopped firing for everybody else. Caught by
+             *    `rosterRotation.test.js`; recorded because the two blocks look alike
+             *    and the next edit here will be tempted to merge them again.
              */
             if (rules.rotateWeekly === true) {
                 const held = (Array.isArray(tasks) ? tasks : []).find((task) => isPlainObject(task) && task.continuity === true);
                 if (held) {
                     return invalid(`Task ${held.name} asks for continuity while the department rotates weekly — continuity keeps the SAME lead on every occurrence and a weekly rotation hands it on each week, so they cannot both hold. Turn off weekly rotation, or drop continuity from that task.`);
                 }
+            }
+        }
+
+        if (rules.secondPerson !== undefined && rules.secondPerson !== null) {
+            if (rules.secondPerson !== 'alongside' && rules.secondPerson !== 'standby') {
+                return invalid('rules.secondPerson must be "alongside" or "standby" — it says what the second person on every shift IS by default, and a task may override it.');
             }
         }
 
@@ -3873,7 +3966,7 @@ export const validateRosterV2Config = (config) => {
             bands,
             hoursRules,
         );
-        const normalisedTasks = normaliseTasks(tasks, scale, windowsActive);
+        const normalisedTasks = normaliseTasks(tasks, scale, windowsActive, departmentStandby(rules));
         const start = snapToMonday(parseLocalDateKey(startDate));
         const effectiveStart = toLocalDateKey(start);
         const horizonEndKey = toLocalDateKey(addDays(start, weeks * DAYS_PER_WEEK - 1));
@@ -4047,7 +4140,31 @@ const normaliseLeadBands = (value, scale = ALLIED_HEALTH_SCALE) => {
  * sugar-specific sentences name them, and because a normalised task that
  * describes itself honestly is worth the four extra keys. Nothing gates on them.
  */
-const normaliseTasks = (tasks, scale = ALLIED_HEALTH_SCALE, windowsActive = false) =>
+/**
+ * ⚠️ `defaultStandby` IS A FOURTH PARAMETER BECAUSE THIS FUNCTION CANNOT SEE `rules`.
+ *
+ *    "The second person on our clinics is a standby, not a second pair of hands" is a
+ *    statement about a DEPARTMENT, with a per-task override for the clinic that really
+ *    is staffed by two. That is the same shape as `maxConcurrentPerDay` — a
+ *    departmental figure any one person may override — rather than a per-task-only
+ *    flag like `continuity`.
+ *
+ *    Every call site already holds `rules`, so resolving it there costs nothing and
+ *    keeps this function what it is: a pure compile of tasks to primitives.
+ */
+/**
+ * The department's answer to "what is the second person on a shift?" — `true` when
+ * they are a STANDBY (named in advance, not present, costs them nothing) and `false`
+ * for today's behaviour, somebody working alongside the lead.
+ *
+ * ⚠️ ABSENT MEANS `false`, AND THAT IS THE COMPATIBILITY GUARANTEE. No stored
+ *    configuration in the estate carries this key, so every existing tenant resolves
+ *    to `false`, every position is built exactly as before, and every roster comes out
+ *    byte-identical. The same principle as `rotateWeekly`.
+ */
+const departmentStandby = (rules) => isPlainObject(rules) && rules.secondPerson === 'standby';
+
+const normaliseTasks = (tasks, scale = ALLIED_HEALTH_SCALE, windowsActive = false, defaultStandby = false) =>
     tasks.map((rawTask) => {
         // A monthly task has NO weekly days, and says so rather than carrying the
         // default Mon–Fri list it will never use.
@@ -4083,6 +4200,15 @@ const normaliseTasks = (tasks, scale = ALLIED_HEALTH_SCALE, windowsActive = fals
             /** THE calendar. One question, one answer, whichever sugar was used. */
             temporal: compileTemporal(rawTask),
             continuity: rawTask.continuity === true,
+            /**
+             * The resolved answer, always a boolean, never absent — the same contract
+             * `continuity` has. A slotted task is never standby: it has no configured
+             * second person to reclassify, its lead is derived from grades on the day.
+             */
+            standbySecond: slotted
+                ? false
+                : (rawTask.secondPerson === 'standby'
+                    || (rawTask.secondPerson === undefined && defaultStandby === true)),
             leads,
             coLeads,
             category: isNonEmptyString(rawTask.category) ? rawTask.category : ROSTER_V2_DEFAULTS.category,
@@ -4163,7 +4289,7 @@ const CONTINUITY_REJECTION_PROSE = Object.freeze({
  * `validateRosterV2Config` has already accepted.
  */
 export const compileTaskPrimitives = (task, rules = null, windowsActive = false) =>
-    normaliseTasks([task], resolveGradeScale(rules), windowsActive)[0];
+    normaliseTasks([task], resolveGradeScale(rules), windowsActive, departmentStandby(rules))[0];
 
 /**
  * THE GATES, IN ORDER — one row per primitive that can refuse a position.
@@ -5058,7 +5184,7 @@ export const auditHardConstraints = (roster, config) => {
     // `unmatchableAssignees`, whose question is the date-less one, and the dated
     // question is `HARD_RULE_WINDOW`'s below. See section 0e's table of the three
     // callers — this is the third row, spelled out at the call site.
-    const tasks = normaliseTasks(config.tasks, resolveGradeScale(rules));
+    const tasks = normaliseTasks(config.tasks, resolveGradeScale(rules), false, departmentStandby(rules));
     const byName = new Map(staff.map((person) => [person.name, person]));
     const byTask = new Map(tasks.map((task) => [task.name, task]));
     const affinities = resolveAffinities(forbidPairs, tasks, staff.map((person) => person.name));
@@ -5173,13 +5299,35 @@ export const auditHardConstraints = (roster, config) => {
                         shift.task,
                     );
                 }
-                dutiesToday.set(name, (dutiesToday.get(name) || 0) + 1);
+                /**
+                 * ⚠️ THE AUDIT MUST EXEMPT A STANDBY EXACTLY AS THE GENERATOR DOES,
+                 *    AND THIS PAIRING IS THE WHOLE REASON THEY SHIP TOGETHER.
+                 *
+                 *    This function re-derives the hard constraints from the FINISHED
+                 *    roster and does not trust the generator's counters — deliberately
+                 *    (post-mortem A-RC4: the counter that decided the roster is not
+                 *    evidence about the roster). So if the generator stops charging a
+                 *    standby and this does not, a perfectly legal roster comes back
+                 *    with `hardViolations`, and `generateRosterV2` reports
+                 *    "AURA detected N hard-constraint violation(s) … do not publish
+                 *    this roster" — the engine accusing itself of a defect it does
+                 *    not have, on the roster the department asked for.
+                 *
+                 *    `name === shift.coLead` identifies the seat exactly, because
+                 *    validation refuses `secondPerson: 'standby'` with anything other
+                 *    than exactly one co-lead: with two, only the first reaches
+                 *    `shift.coLead` and the rest are indistinguishable inside
+                 *    `assignees`.
+                 */
+                const standbySeat = task?.standbySecond === true && name === shift.coLead;
+
+                if (!standbySeat) dutiesToday.set(name, (dutiesToday.get(name) || 0) + 1);
                 // A shift whose task is not in the configuration has no knowable
                 // duration, so it contributes no hours rather than a guessed 4 —
                 // the same reason the skill and band rules above say nothing about
                 // a task they cannot look up. It is already reported by whichever
                 // rule noticed the person or the shape.
-                if (hoursActive && task) {
+                if (hoursActive && task && !standbySeat) {
                     hoursToday.set(name, (hoursToday.get(name) || 0) + task.hours);
                 }
                 onTask.get(shift.task).push(name);
@@ -5373,7 +5521,7 @@ export const scoreRoster = (roster, config) => {
         resolveGradeBands(rules),
         resolveHoursRules(rules),
     );
-    const tasks = normaliseTasks(config.tasks, resolveGradeScale(rules));
+    const tasks = normaliseTasks(config.tasks, resolveGradeScale(rules), false, departmentStandby(rules));
     const byTaskName = new Map(tasks.map((task) => [task.name, task]));
 
     const duties = new Map(staff.map((person) => [person.name, 0]));
@@ -5399,7 +5547,26 @@ export const scoreRoster = (roster, config) => {
                 // knowable duration, and contributes no hours rather than a
                 // guessed default — the same rule the audit follows.
                 const definition = byTaskName.get(shift.task);
-                if (hoursActive && definition) {
+                /**
+                 * ⚠️ HOURS ONLY. `duties` above KEEPS counting a standby, and the
+                 *    asymmetry is deliberate rather than an oversight:
+                 *
+                 *      duties  is what FTE fairness and `loadImbalance` are measured
+                 *              in, and being named standby eight times IS a share of
+                 *              the department's work — somebody has to know those
+                 *              clinics. Stop counting it and the fairness score would
+                 *              call a standby-heavy person under-used.
+                 *      hours   is time on the premises. A standby is not there, and
+                 *              billing them for it is exactly the mis-measurement
+                 *              this feature exists to end.
+                 *
+                 *    `load.hours` is published from the generator's ledger and
+                 *    `hoursImbalance` from this recount, so the two must agree about
+                 *    which seats cost hours or a department sees two different totals
+                 *    for one roster.
+                 */
+                const standbySeat = definition?.standbySecond === true && name === shift.coLead;
+                if (hoursActive && definition && !standbySeat) {
                     hours.set(name, hours.get(name) + definition.hours);
                 }
             }
@@ -5626,7 +5793,7 @@ export const generateRosterV2 = (config) => {
     const windowsActive = cohortWindowsRequested(config);
 
     const staff = normaliseStaff(config.staff, maxConcurrentPerDay, bands, hoursRules, scale);
-    const tasks = normaliseTasks(config.tasks, scale, windowsActive);
+    const tasks = normaliseTasks(config.tasks, scale, windowsActive, departmentStandby(rules));
     const affinities = resolveAffinities(forbidPairs, tasks, staff.map((person) => person.name));
     const quotas = resolveQuotas(config);
     /**
@@ -6014,11 +6181,11 @@ export const generateRosterV2 = (config) => {
             // week its Monday opened.
             const hoursThisWeek = hoursByWeek[week];
 
-            for (const task of running) totalDemand += perDayDemand(task);
+            for (const task of running) totalDemand += workingDemand(task);
             for (const person of staff) {
                 if (!person.unavailable.has(dateKey)) totalCapacity += person.maxPerDay;
             }
-            for (const task of running) totalDemandHours += perDayDemand(task) * task.hours;
+            for (const task of running) totalDemandHours += workingDemand(task) * task.hours;
 
             /**
              * taskName -> { onTaskToday, fills } for this date.
@@ -6290,17 +6457,46 @@ export const generateRosterV2 = (config) => {
                 // chose them on. Every other use is `candidate.name`, unchanged.
                 const { name } = candidate;
 
-                duties.set(name, duties.get(name) + 1);
-                dutiesOnDate.set(name, (dutiesOnDate.get(name) || 0) + 1);
+                /**
+                 * ⚠️ A STANDBY SEAT WRITES NO CAPACITY LEDGER, AND THIS IS THE HALF
+                 *    THE GATE CANNOT DO ALONE. `exempt` stops the gate REFUSING a
+                 *    standby; this stops the assignment being COUNTED against them
+                 *    afterwards. Exempt without this and the second standby of the
+                 *    day is refused by a ledger the first one wrote.
+                 *
+                 *    Four writes are skipped and the rest are not:
+                 *      SKIPPED  dutiesOnDate      the daily duty cap
+                 *      SKIPPED  hoursOnDate       daily hours
+                 *      SKIPPED  hoursThisWeek     weekly hours
+                 *      SKIPPED  assignmentsOnDate the sessions an hours refusal lists
+                 *      KEPT     duties            FTE fairness — a standby duty is
+                 *                                 still a duty somebody was given
+                 *      KEPT     dutiesByTask, onTaskToday, quota counts, fills
+                 *
+                 *    `onTaskToday` in particular MUST stay: it is what stops one
+                 *    person being both the lead and the standby of the same shift.
+                 */
+                const consumesCapacity = slot.position.standby !== true;
 
-                // The hours ledger the gate reads. Kept up to date on EVERY
-                // assignment, hours model or not, so that the two states cannot
-                // drift apart depending on a flag — the flag decides whether the
-                // gate consults them, not whether they are true.
-                hoursOnDate.set(name, (hoursOnDate.get(name) || 0) + task.hours);
-                hoursThisWeek.set(name, (hoursThisWeek.get(name) || 0) + task.hours);
-                if (!assignmentsOnDate.has(name)) assignmentsOnDate.set(name, []);
-                assignmentsOnDate.get(name).push({ task: task.name, hours: task.hours });
+                duties.set(name, duties.get(name) + 1);
+                if (consumesCapacity) dutiesOnDate.set(name, (dutiesOnDate.get(name) || 0) + 1);
+
+                // The hours ledger the gate reads. Kept up to date on every assignment
+                // that COSTS the person hours, hours model or not, so that the two
+                // states cannot drift apart depending on a flag — the flag decides
+                // whether the gate consults them, not whether they are true.
+                //
+                // ⚠️ "EVERY assignment" was true until standby existed, and this
+                //    comment used to say so. A standby is not present, so a roster in
+                //    which somebody is named on eight of them is not a person working
+                //    eight sessions, and an hours ledger that said otherwise would
+                //    refuse them a ninth for hours they never worked.
+                if (consumesCapacity) {
+                    hoursOnDate.set(name, (hoursOnDate.get(name) || 0) + task.hours);
+                    hoursThisWeek.set(name, (hoursThisWeek.get(name) || 0) + task.hours);
+                    if (!assignmentsOnDate.has(name)) assignmentsOnDate.set(name, []);
+                    assignmentsOnDate.get(name).push({ task: task.name, hours: task.hours });
+                }
 
                 const byTask = dutiesByTask.get(name);
                 byTask.set(task.name, (byTask.get(task.name) || 0) + 1);

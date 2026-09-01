@@ -893,6 +893,43 @@ export const DepartmentLimitsEditor = ({ inputs, onChange, errors, staffNames = 
                 AURA uses the figure shown in it.
             </p>
 
+            {/* THE SECOND PERSON. Beside the rotation switch and above the limits for
+                the same reason: it changes what the roster MEANS rather than capping
+                it, and it changes what every hours and capacity figure in the
+                department is measuring. */}
+            <div className="mb-4 p-3 rounded-lg border border-teal-200 dark:border-teal-800/60 bg-teal-50/60 dark:bg-teal-900/20">
+                <div className="flex items-start gap-2.5">
+                    <CheckBox
+                        checked={inputs?.standbySecond === true}
+                        onChange={(next) => onChange('standbySecond', next)}
+                        ariaLabel="The second person is a standby"
+                        title="The second person is named to step in if the lead cannot, and is not present"
+                    />
+                    <div className="min-w-0">
+                        <p className="text-[11px] font-black text-slate-700 dark:text-slate-200 uppercase tracking-wide">
+                            The second person is a standby
+                        </p>
+                        <p className="mt-1 text-[10px] text-slate-500 dark:text-slate-400 leading-relaxed">
+                            Tick this if your second person is <span className="font-bold">named to step in</span> when
+                            the lead cannot make it — they know the clinic, but they are not in the room. AURA then
+                            stops charging them the session&apos;s hours and stops counting it against their
+                            duties-per-day, because they are not working it.
+                        </p>
+                        <p className="mt-1 text-[10px] text-slate-500 dark:text-slate-400 leading-relaxed">
+                            Leave it <span className="font-bold">off</span> if the second person genuinely works the
+                            session alongside the lead. That is how AURA has always counted them, and every roster
+                            already generated assumed it.
+                        </p>
+                        <p className="mt-1 text-[10px] font-bold text-amber-700 dark:text-amber-300 leading-relaxed">
+                            ⚠ A standby still has to be somebody who could run the clinic — the same grade and skill
+                            rules apply. What AURA cannot yet check is whether they are free at that hour: it knows how
+                            long a duty takes but not when it starts, so it will not stop somebody being standby for a
+                            clinic that clashes with one they are leading.
+                        </p>
+                    </div>
+                </div>
+            </div>
+
             {/* ⚠️ FIRST, AND IN ITS OWN BOX, BECAUSE IT CHANGES THE SHAPE OF THE WHOLE
                 ROSTER rather than capping it. The controls below are limits — they
                 say what may not happen. This one says how the work is handed round,
