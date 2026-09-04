@@ -267,12 +267,61 @@ const runChecks = (names, { raw, parsed, ok, error }) => {
 const args = process.argv.slice(2);
 const dryRun = args.includes('--dry-run');
 const outPath = (args.find((a) => a.startsWith('--out=')) || '--out=P8.8-transcript.md').slice(6);
-const model = (args.find((a) => a.startsWith('--model=')) || '--model=models/gemini-2.5-pro').slice(8);
+const modelOverride = (args.find((a) => a.startsWith('--model=')) || '').slice(8);
 const KEY = process.env.GEMINI_API_KEY;
+
+/**
+ * ⚠️ RESOLVED, NOT HARDCODED — and the first version of this file got that wrong.
+ *
+ *    It defaulted to `models/gemini-2.5-pro`. `functions/index.js` does no such
+ *    thing: `resolveModel()` asks the API which models the key can actually see
+ *    and walks `MODEL_PRIORITY` for the first match. On a key without that exact
+ *    model every call 404s, all eighteen turns fail identically, and the run
+ *    reports 52 mechanical failures that say nothing whatever about AURA.
+ *
+ *    Which is the same defect this harness exists to avoid: a test that asserts
+ *    against its own idea of the system rather than the system. `MODEL_PRIORITY`
+ *    is read out of `functions/index.js` so the list cannot drift either.
+ */
+const MODEL_PRIORITY = (() => {
+    const from = indexSrc.indexOf('const MODEL_PRIORITY = [');
+    if (from === -1) throw new Error('MODEL_PRIORITY not found in functions/index.js');
+    const open = indexSrc.indexOf('[', from);
+    const close = indexSrc.indexOf('];', open);
+    return new Function(`return ${indexSrc.slice(open, close + 1)}`)();
+})();
+
+const resolveModel = async () => {
+    if (modelOverride) return modelOverride;
+    const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${KEY}`,
+        { signal: AbortSignal.timeout(20000) });
+    const data = await res.json();
+    if (!res.ok) throw new Error(`model list failed: ${data?.error?.message || res.status}`);
+    const available = (data.models || []).map((m) => m.name);
+    for (const candidate of MODEL_PRIORITY) {
+        const hit = available.find((n) => n === `models/${candidate}`);
+        if (hit) return hit;
+    }
+    throw new Error(
+        `none of ${MODEL_PRIORITY.join(', ')} is available to this key. `
+        + `It can see: ${available.slice(0, 8).join(', ')}${available.length > 8 ? ' …' : ''}`,
+    );
+};
 
 if (!dryRun && !KEY) {
     console.error('No GEMINI_API_KEY. Run with --dry-run to inspect the payloads, or export the key.');
     process.exit(2);
+}
+
+let model = modelOverride || '(resolving)';
+if (!dryRun) {
+    try {
+        model = await resolveModel();
+        console.log(`Model resolved: ${model}`);
+    } catch (e) {
+        console.error(`\nCould not resolve a model — nothing was run.\n  ${e.message}\n`);
+        process.exit(3);
+    }
 }
 
 const callModel = async (payload) => {
@@ -307,6 +356,7 @@ const lines = [
 ];
 
 let failures = 0;
+let firstError = null;
 for (const block of BLOCKS) {
     lines.push(`\n## Block ${block.name}`, '');
     if (block.persona) lines.push(`*Persona: \`${block.persona}\` — temperature ${PRECISION_PERSONAS.includes(block.persona) ? 0.1 : 0.4}.*`, '');
@@ -334,6 +384,10 @@ for (const block of BLOCKS) {
             raw = await callModel(payload);
         } catch (e) {
             err = e.message;
+            if (!firstError) {
+                firstError = err;
+                console.error(`\n⚠️  Turn ${turn.id} failed: ${err}\n`);
+            }
         }
         const parsedResult = err ? { ok: false, error: err } : C.parseAuraJson(raw);
         const checks = runChecks(turn.checks, { raw, ...parsedResult, parsed: parsedResult.parsed });
@@ -363,3 +417,10 @@ lines.push('', '---', '',
 
 writeFileSync(resolve(process.cwd(), outPath), lines.join('\n'));
 console.log(`${dryRun ? 'DRY RUN' : 'RUN'} complete — ${outPath}${dryRun ? '' : ` (${failures} mechanical failures)`}`);
+if (firstError) {
+    console.error(
+        '\n⚠️  At least one turn never reached the model, so those failures say nothing\n'
+        + '   about AURA. First error was:\n'
+        + `     ${firstError}\n`,
+    );
+}
