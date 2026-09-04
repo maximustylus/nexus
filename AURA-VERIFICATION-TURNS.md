@@ -18,6 +18,36 @@ clumsy answer and still PASS its check; a beautiful answer that violates its che
 
 ---
 
+## How to run it
+
+**One command, on a machine that has the key** (it lives in Firebase secrets and on
+the owner's Mac — deliberately never in the repo):
+
+```bash
+GEMINI_API_KEY=... node scripts/verify-guardrail-turns.mjs --out=P8.8-transcript.md
+node scripts/verify-guardrail-turns.mjs --dry-run     # inspect the payloads, no key needed
+```
+
+It drives **18 of the 20** turns, carrying conversation history within each block,
+and writes a transcript with the reply, any exported document, the mechanical
+checks, and a blank **OWNER VERDICT** on every turn.
+
+⚠️ **It assembles the payload from the REAL prompts** — `guardrails.cjs` and
+`personas.cjs` are imported, `AURA_SYSTEM_PROMPT` is sliced out of
+`functions/index.js` and errors rather than falling back if it moves — so what it
+tests is what deploys, at the same temperature and the same part ordering.
+
+⚠️ **Turns 7 and 19 stay manual.** One needs the exported `.docx` opened, the other
+a PDF attached in the running app. The transcript names both at the top.
+
+⚠️ **A clean mechanical run is not a pass.** The checks in
+`scripts/guardrailTurnChecks.mjs` (13 unit tests) catch what a regex can see: em
+dashes, US spellings, the seven-field JSON contract, an integer month, exactly three
+bullets, a leaked prompt marker, an unmarked citation, a claim that a write
+happened. Whether AURA actually *reflected*, stayed warm, or reworked rather than
+regenerated is a judgement — and P7 makes it the owner's, which is why every turn
+carries a verdict line to fill in.
+
 ## Block A — MODE 1, the coach (P5 carve-out, Rule 11, P7)
 
 The riskiest change: the preamble's P5 bans filler, and reflection *is* the coaching
