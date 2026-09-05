@@ -51,6 +51,66 @@ not changed by this release.
 
 ---
 
+## [2.12.0] - 2026-09-05
+
+AURA can now be told it shortened a document it said it had not.
+
+### Added
+
+- **`AU33` — when a "change only X" edit comes back much shorter, the application
+  says so.** Asked to turn an SOP into a memo and *"change only what that
+  requires"*, AURA condensed the body and reported *"I kept the procedural steps
+  exactly the same"* — on **four live runs out of four**, including one that
+  invented a change to report (*"removed the SOP title and document control
+  block"*, where no document control block existed). Two prompt rules were
+  written for it, the second naming the failure explicitly. The model ignored
+  both, every run.
+
+  `src/utils/reworkNote.js` appends one sentence when three things hold together:
+  a previous document exists, the user asked for a targeted edit and **not** a
+  shorter one, and the new document is under **70%** of the previous length.
+
+  > Note from NEXUS: this version is 48% the length of the previous one. You asked
+  > for a targeted change, so check that nothing you needed was dropped.
+
+  It **appends, never substitutes** — AURA's reply reaches the clinician word for
+  word. It reports a measurement, not an accusation, so the worst false positive
+  is a harmless fact.
+
+  Client-side, deliberately, and the module's header says why: the callable's
+  `history` carries each turn's reply only, so the previous *document* never
+  reaches the server. This is a truthfulness note to the reader, not an
+  authorization decision.
+
+- **`.github/workflows/verify-aura.yml` prints the transcript to the job log** as
+  well as the run summary, so the twenty-turn read can be done from a phone.
+
+### Fixed
+
+- **The P8.8 runner retries a turn that never reached the model** — a timeout or
+  transport error, once, announced in the log and recorded in the transcript. A
+  refusal or a malformed reply is an answer and still stands. Cloud run 3 lost a
+  turn to a timeout and reported three failures that belonged to the network.
+
+### Verification
+
+- **`reworkNote.test.js` — 33 tests**, with both cloud runs as fixtures: run 2
+  fires at 48%, run 1 (same length, nothing carried) correctly does not.
+- **`AuraPulseBot.au33.test.jsx` — 4 tests** driving real turns through the
+  mounted panel: the note appears on screen with the right figure, AURA's own
+  sentence stays beside it unedited, and it appears on none of the three cases
+  that must stay quiet. Writing it exposed two things about the composer that no
+  unit test would have — it has no `onSubmit`, and `SEND_COOLDOWN_MS` returns
+  silently for two seconds — either of which would have produced a green test
+  that proved nothing.
+- **Verified live** on cloud run 3: turn 8 came back at 53% claiming the body
+  *"remains exactly the same"*, and the note fired with the true figure. It fired
+  on no other turn.
+
+3,644 tests across 107 files; lint clean; build clean.
+
+---
+
 ## [2.11.0] - 2026-09-05
 
 AURA's guardrails have now been verified against real model turns, three times. The

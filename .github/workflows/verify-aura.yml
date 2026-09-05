@@ -77,6 +77,17 @@ jobs:
         if: always()
         run: cat results.md >> "$GITHUB_STEP_SUMMARY"
 
+      # The artifact lives on Azure blob storage, which a remote Claude session's
+      # egress policy cannot reach, and the summary page is not API-readable. The
+      # job log is. So the transcript goes there too — the one place every reader
+      # (phone, browser, API) can get it from.
+      - name: Print the transcript to the log
+        if: always()
+        run: |
+          echo "===== BEGIN results.md ====="
+          cat results.md
+          echo "===== END results.md ====="
+
       - uses: actions/upload-artifact@v4
         if: always()
         with:

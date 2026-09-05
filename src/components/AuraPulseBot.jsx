@@ -54,6 +54,7 @@ import {
 // still contains one; with no listener here, it behaves as a plain replacement.
 import { resetMessagesPreservingAlerts } from '../utils/auraEngine';
 import { sanitizeWellbeingLog, PHASE_BANDS } from '../utils/wellbeingLog';
+import { reworkNote, withReworkNote } from '../utils/reworkNote';
 import { legacyPulseKeys } from '../utils/pulseKeys';
 
 // ─── CLOUD FUNCTION LINK ──────────────────────────────────────────────────────
@@ -428,9 +429,31 @@ export default function AuraPulseBot({ isOpen, onClose, onOpen: _onOpen, user })
                 throw new Error('Incomplete response from AURA.');
             }
 
+            /**
+             * `AU33` — a "change only X" edit that comes back much shorter is
+             * reported, because four live runs out of four showed the model
+             * asserting it kept the steps the same while condensing them. The
+             * note is appended, never substituted: `analysis.reply` reaches the
+             * clinician word for word, with one true measurement after it. See
+             * `src/utils/reworkNote.js` for why this lives here and not in the
+             * Cloud Function (the previous document never reaches the server).
+             */
+            const previousDocument = [...messages].reverse()
+                .find(m => m.role === 'bot' && typeof m.action === 'string' && m.action.trim().length > 0)?.action;
+            const note = reworkNote({
+                userText: text,
+                previousDocument,
+                newDocument: analysis.action,
+            });
+            if (note) {
+                console.warn('[AURA] AU33: targeted edit came back shorter.', {
+                    previous: previousDocument.length, next: String(analysis.action).length,
+                });
+            }
+
             setMessages(prev => [...prev, {
                 role: 'bot',
-                text: analysis.reply,
+                text: withReworkNote(analysis.reply, note),
                 mode: analysis.mode || 'COACH',
                 action: analysis.action,
                 db_workload: analysis.db_workload,
