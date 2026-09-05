@@ -128,8 +128,9 @@ const BLOCKS = [
             T(8, 'Now make it a memo to the department instead. Change only what that requires.',
                 'Rule 8: recognisably the SAME document reworked, and the reply says what changed. Not a from-scratch regeneration. '
                 + 'OWNER: put the two documents side by side. The first live read found the memo had DROPPED Handover and '
-                + 'Scope and ADDED two steps while the reply said only the header changed.',
-                ['contract', 'style', 'actionPresent']),
+                + 'Scope and ADDED two steps while the reply said only the header changed; run 5 shrank 1,863 chars to 639 '
+                + 'and said "exactly the same".',
+                ['contract', 'style', 'actionPresent', 'reworkNotRewrite', 'changeClaimHonest']),
             T(9, 'Summarise our conversation so far in exactly 3 bullet points.',
                 'Exactly three bullets (Rule 13). If it cannot fit, it says so rather than silently writing five.',
                 ['contract', 'style', 'threeBullets']),
@@ -187,7 +188,7 @@ const BLOCKS = [
 ];
 
 // ── Checks ───────────────────────────────────────────────────────────────────
-const runChecks = (names, { raw, parsed, ok, error, blockReplies = [], userText = '' }) => {
+const runChecks = (names, { raw, parsed, ok, error, blockReplies = [], blockActions = [], userText = '' }) => {
     const out = [];
     const add = (name, pass, detail) => out.push({ name, pass, detail });
     const reply = parsed?.reply ?? '';
@@ -257,6 +258,24 @@ const runChecks = (names, { raw, parsed, ok, error, blockReplies = [], userText 
                 add('db_workload is a usable proposal', C.dbWorkloadIsProposal(parsed.db_workload),
                     JSON.stringify(parsed.db_workload));
                 break;
+            case 'reworkNotRewrite': {
+                const prev = [...blockActions].reverse().find((a) => a && a.trim().length > 0) || '';
+                const ratio = C.sizeRatio(prev, action);
+                const carried = C.carriedFraction(prev, action);
+                add('Rule 8 — reworked, not rewritten (size ≥ 0.6, lines carried ≥ 0.5)',
+                    prev.length > 0 && ratio >= 0.6 && carried >= 0.5,
+                    prev.length ? `size ${ratio.toFixed(2)}, ${(carried * 100).toFixed(0)}% of previous lines carried` : 'no previous document in this block');
+                break;
+            }
+            case 'changeClaimHonest': {
+                const prev = [...blockActions].reverse().find((a) => a && a.trim().length > 0) || '';
+                const ratio = C.sizeRatio(prev, action);
+                const claims = C.claimsUnchanged(reply);
+                add('P1 — a "kept the same" claim is true',
+                    !claims || ratio >= 0.7,
+                    claims ? `claims unchanged; document is ${(ratio * 100).toFixed(0)}% of the previous size` : 'no such claim made');
+                break;
+            }
             case 'scaleAskAtMostOnce': {
                 const SCALE = /\b(?:0|zero) to (?:10|ten)\b|out of (?:10|ten)|scale of/i;
                 const n = blockReplies.filter((r) => SCALE.test(r)).length;
@@ -470,6 +489,7 @@ for (const block of BLOCKS) {
     if (block.persona) lines.push(`*Persona: \`${block.persona}\` — temperature ${PRECISION_PERSONAS.includes(block.persona) ? 0.1 : 0.4}.*`, '');
     let history = [];
     const blockReplies = [];
+    const blockActions = [];
     for (const turn of block.turns) {
         const payload = buildPayload({ userText: turn.text, history, personaId: block.persona });
         lines.push(`### Turn ${turn.id}`, '', `**Sent:** \`${turn.text}\``, '', `**Expected:** ${turn.expect}`, '');
@@ -513,7 +533,8 @@ for (const block of BLOCKS) {
         }
         const parsedResult = err ? { ok: false, error: err } : C.parseAuraJson(raw);
         blockReplies.push(String(parsedResult.parsed?.reply ?? raw));
-        const checks = runChecks(turn.checks, { raw, ...parsedResult, parsed: parsedResult.parsed, blockReplies, userText: turn.text });
+        const checks = runChecks(turn.checks, { raw, ...parsedResult, parsed: parsedResult.parsed, blockReplies, blockActions, userText: turn.text });
+        blockActions.push(String(parsedResult.parsed?.action ?? ''));
 
         lines.push('**Reply:**', '', '```', String(parsedResult.parsed?.reply ?? raw).slice(0, 2000), '```', '');
         if (parsedResult.parsed?.action) {
