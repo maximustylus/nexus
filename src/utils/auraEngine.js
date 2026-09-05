@@ -149,16 +149,22 @@ export const generateRoster = (config) => {
             }
         });
 
-        // --- B. VC TASKS (Tue & Sat) ---
+        // --- B. VIDEO CONSULTATIONS (Thu & Sat mornings) ---
+        //
+        // MOVED FROM TUESDAY TO THURSDAY on 2026-08-15: the service changed and this
+        // code had not caught up. Both slots are the INDIVIDUAL consultation, and that
+        // follows from the department's own constraint rather than from a preference —
+        // every group session runs in the afternoon because the children are at school
+        // in the morning, so a morning slot cannot be a group one.
         const vcLead = staff[w % staff.length];
         const vcCoLead = staff[(w + 1) % staff.length];
 
-        // Tuesday (Index 1) — genuinely a Tuesday now that `weekStart` is a Monday.
-        const tueKey = toDateKey(addDays(weekStart, 1));
+        // Thursday (Index 3) — `weekStart` is a Monday, so index 3 is genuinely a Thursday.
+        const tueKey = toDateKey(addDays(weekStart, 3));
 
         if (!roster[tueKey]) roster[tueKey] = [];
         roster[tueKey].push({ 
-            task: "VC (PM)",
+            task: "Video Consultation Individual",
             lead: vcLead,
             coLead: vcCoLead,
             staff: buildShiftStaffLabel(vcLead, vcCoLead),
@@ -171,7 +177,7 @@ export const generateRoster = (config) => {
 
         if (!roster[satKey]) roster[satKey] = [];
         roster[satKey].push({ 
-            task: "VC (AM)",
+            task: "Video Consultation Individual",
             lead: vcLead,
             coLead: vcCoLead,
             staff: buildShiftStaffLabel(vcLead, vcCoLead),
@@ -251,8 +257,48 @@ const MONTH_LABELS = [
  *    The TASKS stay: duty names describe the work, not a person.
  */
 export const LIVE_ROSTER_DEFAULTS = Object.freeze({
+    // ⚠️ EMPTY ON PURPOSE, from main: the four real colleagues' names were removed
+    // from the shipped bundle (AN14). Do not repopulate this — a name here is a name
+    // in every visitor's download.
     staff: Object.freeze([]),
-    tasks: Object.freeze(['EFT', 'IPT+SKG', 'NC', 'FSG+WI']),
+    // THE DUTY NAMES, SPELLED OUT — the acronyms were retired on 2026-08-15 at the
+    // roster owner's request, because NEXUS is being offered to other departments
+    // and `IPT+SKG` means nothing outside this one service.
+    //
+    // TWO OF THEM WERE COMPOUNDS carrying two duties in one string, and they are
+    // split here, which is why four names became nine:
+    //   EFT      -> Exercise Test
+    //   IPT+SKG  -> Inpatient Exercise  +  Paediatrics Group Session
+    //   NC       -> New Case
+    //   FSG+WI   -> Adolescent Group Session  +  Walk-in
+    // and Physical Activity Counseling, Individual Session and Video Consultation
+    // Group are duties the service runs that this list never carried.
+    //
+    // THE GROUP SESSIONS ARE NAMED BY AGE BAND, NOT BY THE LOCAL PROGRAMME NAME.
+    // The department calls them Super Kids (12 and under) and Fitness Superstars
+    // (13 and above); another institution would not know those words, and this list
+    // is now read by people outside this team. The programme names are recorded here
+    // rather than on the roster.
+    //
+    // ⚠️ AFTERNOON-ONLY IS NOT EXPRESSIBLE HERE. Every group session runs in the
+    // afternoon, because the children are at school in the morning — and this engine
+    // has no concept of time of day at all (`rosterEngineV2.js:6577` says the same
+    // thing about `unavailable`: "for the morning only" is unsayable). The old names
+    // smuggled it into the string — `VC (AM)`, `VC (PM)` — which is exactly the
+    // information-in-a-label pattern this rename removes. It is now written down
+    // where a reader can see it instead of encoded where only a human could decode
+    // it, and it is a gap in the model rather than a gap in the documentation.
+    tasks: Object.freeze([
+        'Physical Activity Counseling',
+        'Exercise Test',
+        'New Case',
+        'Walk-in',
+        'Individual Session',
+        'Inpatient Exercise',
+        'Paediatrics Group Session',      // afternoon — Super Kids, 12 and under
+        'Adolescent Group Session',       // afternoon — Fitness Superstars, 13 and above
+        'Video Consultation Group',       // afternoon
+    ]),
     startDate: '2026-02-01',
     weeks: 4,
 });
@@ -1025,17 +1071,72 @@ const shiftAssigneeNames = (shift) => {
  * a count would not satisfy "list every assignee", so the names are spelled out.
  * The commas are escaped by `escapeICSText` on the way into SUMMARY.
  */
-const shiftPeopleText = (shift) => {
-    const names = shiftAssigneeNames(shift);
-
-    if (names.length > 2) {
-        return `Lead: ${names[0]}, Co: ${names[1]}, Also: ${names.slice(2).join(', ')}`;
-    }
-    if (typeof shift.staff === 'string' && shift.staff.trim() !== '') return shift.staff;
-    if (names.length === 0) return '';
-    return buildShiftStaffLabel(names[0], names[1]);
+/**
+ * One person's name as an export should PRINT it: their short name when the team has
+ * recorded one, otherwise their full name.
+ *
+ * ⚠️ A DISPLAY SUBSTITUTION AND NOTHING MORE. `shift.lead` and `shift.coLead` are
+ *    IDENTITY, and four separate things compare them to a name by equality —
+ *    `findAppliedSwapShift` below verifies an applied swap with
+ *    `shift.staff === buildShiftStaffLabel(...)`, the calendar decides "my shift"
+ *    with `s.lead === user?.name`, `rosterPersonView` builds somebody's own week the
+ *    same way, and stored Firestore documents already hold the full-name form. So a
+ *    short name is allowed to exist only in text on its way OUT, and never in a
+ *    field the roster is keyed by. Substituting one upstream would silently stop
+ *    people recognising their own shifts.
+ */
+export const displayNameFor = (name, shortNames = null) => {
+    if (typeof name !== 'string' || name === '' || !shortNames) return name;
+    const short = shortNames[name];
+    return typeof short === 'string' && short.trim() !== '' ? short.trim() : name;
 };
 
+const shiftPeopleText = (shift, shortNames = null) => {
+    const names = shiftAssigneeNames(shift);
+    const show = (name) => displayNameFor(name, shortNames);
+
+    if (names.length > 2) {
+        return `Lead: ${show(names[0])}, Co: ${show(names[1])}, Also: ${names.slice(2).map(show).join(', ')}`;
+    }
+    /**
+     * ⚠️ THE CACHED STRING IS ONLY USABLE WHEN NOTHING IS BEING SHORTENED. `shift.staff`
+     *    is a full-name sentence built at generation time and stored, so returning it
+     *    while a short name exists would ignore the substitution for exactly the
+     *    common two-person case. Tested per shift rather than "are there any short
+     *    names at all", so a team where only one person has an acronym keeps the
+     *    stored string — and its byte-exact export pins — for everybody else.
+     */
+    const shortened = names.some((name) => show(name) !== name);
+    if (!shortened && typeof shift.staff === 'string' && shift.staff.trim() !== '') return shift.staff;
+    if (names.length === 0) return '';
+    return buildShiftStaffLabel(show(names[0]), show(names[1]));
+};
+
+
+/**
+ * The CALENDAR CHIP's text — the roster grid's one line per shift.
+ *
+ * ⚠️ NOT `shiftPeopleText`, and the difference is not stylistic. The chip prints
+ *    the third-and-later assignees on a second line of its own, so borrowing the
+ *    exporter's `Lead: A, Co: B, Also: C` form would print those people twice.
+ *
+ * Returns the STORED string untouched whenever nothing is being shortened, which
+ * covers every team that has set no acronyms and every shift altered by a swap —
+ * `applyShiftSubstitution` rebuilds `staff` itself, and second-guessing it here
+ * would make the chip disagree with the document.
+ */
+export const shiftStaffDisplay = (shift, shortNames = null) => {
+    const stored = typeof shift?.staff === 'string' ? shift.staff : '';
+    if (!shortNames) return stored;
+
+    const lead = displayNameFor(shift?.lead, shortNames);
+    const coLead = displayNameFor(shift?.coLead, shortNames);
+    // Nothing shortened on this shift, or no lead to build a label around.
+    if (lead === shift?.lead && coLead === shift?.coLead) return stored;
+    if (typeof lead !== 'string' || lead.trim() === '') return stored;
+
+    return buildShiftStaffLabel(lead, coLead);
+};
 
 // --- 2a. ICS (RFC 5545) ------------------------------------------------------
 
@@ -1114,6 +1215,14 @@ export const buildICS = (rosterData, options = {}) => {
     const stampSource =
         options.now instanceof Date && !Number.isNaN(options.now.getTime()) ? options.now : new Date();
     const dtStamp = formatICSTimestampUTC(stampSource);
+    /**
+     * `{ 'Muhammad Alif': 'MA' }`, or absent. Absent is the default and the default
+     * is the old behaviour exactly — every existing caller and every byte-exact pin
+     * in `auraEngine.exports.test.js` passes nothing and gets full names.
+     */
+    const shortNames = options.shortNames && typeof options.shortNames === 'object'
+        ? options.shortNames
+        : null;
 
     const lines = [
         'BEGIN:VCALENDAR',
@@ -1135,13 +1244,28 @@ export const buildICS = (rosterData, options = {}) => {
             uidCounts.set(base, seen);
             const uid = `${seen === 1 ? base : `${base}-${seen}`}${ICS_UID_DOMAIN}`;
 
-            const summary = `[${exportText(shift.task)}] ${shiftPeopleText(shift)}`.trimEnd();
+            const summary = `[${exportText(shift.task)}] ${shiftPeopleText(shift, shortNames)}`.trimEnd();
 
             // A shift with no `week` (demo transform, legacy documents) drops the
             // prefix entirely rather than printing `Week undefined -` (audit M7).
             const week = exportText(shift.week).trim();
             const category = exportText(shift.category).trim();
-            const description = [week === '' ? '' : `Week ${week}`, category].filter(Boolean).join(' - ');
+            /**
+             * ⚠️ FULL NAMES GO IN THE BODY WHENEVER THE TITLE WAS SHORTENED, so an
+             *    acronym never LOSES information — it moves it. `MA` in a phone's
+             *    event title is only an improvement if opening the event still
+             *    answers "who is that?", and a colleague reading somebody else's
+             *    roster has no reason to know the department's initials. Appended
+             *    only when the two actually differ, so an export with no short names
+             *    keeps the DESCRIPTION it has always had, byte for byte.
+             */
+            const fullNames = shiftPeopleText(shift);
+            const shortened = summary !== `[${exportText(shift.task)}] ${fullNames}`.trimEnd();
+            const description = [
+                week === '' ? '' : `Week ${week}`,
+                category,
+                shortened ? fullNames : '',
+            ].filter(Boolean).join(' - ');
 
             lines.push(
                 'BEGIN:VEVENT',
@@ -1224,7 +1348,26 @@ const ASSIGNEE_SEPARATOR = '; ';
  * never the string `undefined` (M7), and that now covers the new column too — a
  * shift with no readable assignee gets an empty cell, not `undefined`.
  */
-export const buildCSV = (rosterData) => {
+/**
+ * ⚠️ THE CSV USES SHORT NAMES TOO, AND IT DID NOT AT FIRST — THAT WAS MY CALL AND IT
+ *    WAS THE WRONG ONE.
+ *
+ *    When short names shipped, this exporter deliberately kept full names, reasoning
+ *    that a spreadsheet has no width to run out of and `MA` under a column headed
+ *    `Lead` is worse for the analysis a CSV exists for. That reasoning is fine and it
+ *    was not a decision to take on a department's behalf: somebody who has typed an
+ *    acronym against a colleague has said how they want that colleague written down.
+ *    The owner configured acronyms, opened the CSV, found full names and asked what
+ *    was going on — which is the right question.
+ *
+ *    So the rule is now simply: an acronym is used wherever one is set. A department
+ *    that wants full names in the spreadsheet gets them by not setting an acronym,
+ *    which is a choice they can make and undo without anybody's help.
+ */
+export const buildCSV = (rosterData, options = {}) => {
+    const shortNames = options.shortNames && typeof options.shortNames === 'object'
+        ? options.shortNames
+        : null;
     const header = ['Date', 'Week', 'Task', 'Category', 'Lead', 'Co-Lead', 'Assignees'];
     const rows = [header.map(csvField).join(',')];
 
@@ -1238,9 +1381,10 @@ export const buildCSV = (rosterData) => {
                 // `csvField` quotes the cell if a name contains a comma, a quote
                 // or a newline, and de-weaponises a leading `=`/`+`/`-`/`@`
                 // exactly as it does for every other field (M10).
-                const assignees = shiftAssigneeNames(s).join(ASSIGNEE_SEPARATOR);
+                const show = (name) => displayNameFor(name, shortNames);
+                const assignees = shiftAssigneeNames(s).map(show).join(ASSIGNEE_SEPARATOR);
                 rows.push(
-                    [date, s.week, s.task, s.category, s.lead, s.coLead, assignees]
+                    [date, s.week, s.task, s.category, show(s.lead), show(s.coLead), assignees]
                         .map(csvField)
                         .join(','),
                 );
@@ -1270,12 +1414,16 @@ const downloadBlob = (contents, type, filename) => {
     document.body.removeChild(link);
 };
 
-export const downloadICS = (rosterData) => {
-    downloadBlob(buildICS(rosterData), 'text/calendar', 'AURA_Roster_Merged.ics');
+/**
+ * `options` is forwarded whole, so `{ shortNames }` reaches `buildICS`. Optional and
+ * absent by default: every existing caller keeps producing full names.
+ */
+export const downloadICS = (rosterData, options = {}) => {
+    downloadBlob(buildICS(rosterData, options), 'text/calendar', 'AURA_Roster_Merged.ics');
 };
 
-export const downloadCSV = (rosterData) => {
-    downloadBlob(buildCSV(rosterData), 'text/csv', 'AURA_Roster_Merged.csv');
+export const downloadCSV = (rosterData, options = {}) => {
+    downloadBlob(buildCSV(rosterData, options), 'text/csv', 'AURA_Roster_Merged.csv');
 };
 
 

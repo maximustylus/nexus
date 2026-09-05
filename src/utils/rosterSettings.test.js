@@ -169,7 +169,55 @@ describe('nothing about a PERSON is stored', () => {
      */
     it('DOES store forbidPairs names, which is the one accepted exception', () => {
         const stored = toStoredSettings(configured());
-        expect(stored.rules.forbidPairs).toEqual([['Alif', 'Nisa']]);
+        expect(stored.rules.forbidPairs).toEqual([{ a: 'Alif', b: 'Nisa' }]);
+    });
+
+    /**
+     * ⚠️ THE SHAPE IS `{ a, b }` BECAUSE FIRESTORE FORBIDS AN ARRAY INSIDE AN ARRAY,
+     *    AND GETTING THIS WRONG LOST A DEPARTMENT'S WHOLE CONFIGURATION.
+     *
+     *    It was `[['Alif','Nisa']]`, which is a nested array, so `setDoc` threw
+     *    "Nested arrays are not supported" and the ENTIRE settings document failed to
+     *    write — tasks, bands, hours, everything, not just the pairs. The department
+     *    was told "you may have to set it up again next time" with no indication that
+     *    one control had caused it. The owner had to read the reason out of a browser
+     *    console.
+     *
+     *    So this asserts the property rather than the spelling: nothing the writer
+     *    produces may be an array whose entries are arrays.
+     */
+    it('writes nothing Firestore would reject as a nested array', () => {
+        const stored = toStoredSettings(configured());
+        const offenders = [];
+        const walk = (value, path) => {
+            if (Array.isArray(value)) {
+                value.forEach((entry, i) => {
+                    if (Array.isArray(entry)) offenders.push(`${path}[${i}]`);
+                    walk(entry, `${path}[${i}]`);
+                });
+                return;
+            }
+            if (value && typeof value === 'object') {
+                for (const [key, inner] of Object.entries(value)) walk(inner, `${path}.${key}`);
+            }
+        };
+        walk(stored, 'settings');
+        expect(offenders, `nested arrays at: ${offenders.join(', ')}`).toEqual([]);
+    });
+
+    it('reads the pair back as the two names the wizard works in', () => {
+        const stored = toStoredSettings(configured());
+        const back = fromStoredSettings({ version: 1, tasks: [{ name: 'EFT' }], rules: stored.rules });
+        expect(back.rulesInputs.forbidPairs).toEqual([['Alif', 'Nisa']]);
+    });
+
+    it('still reads a legacy two-element array, so nothing is lost on the way in', () => {
+        const back = fromStoredSettings({
+            version: 1,
+            tasks: [{ name: 'EFT' }],
+            rules: { forbidPairs: [['Alif', 'Nisa']] },
+        });
+        expect(back.rulesInputs.forbidPairs).toEqual([['Alif', 'Nisa']]);
     });
 
     it('reads back no staff either, so a stored one could not resurface', () => {

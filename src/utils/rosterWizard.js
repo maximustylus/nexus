@@ -98,7 +98,15 @@ import {
     validateGradeBands,
 // The `.js` extension is explicit, matching `rosterEngineV2.js`'s own import of
 // `auraEngine.js`, so this module resolves under plain Node ESM as well as Vite.
+    NON_NURSING_GRADE_ALIASES,
 } from './rosterEngineV2.js';
+/**
+ * ONE definition of each, shared rather than re-implemented here. `memberProfile.js`
+ * validates what a lead types into the member editor; this module turns the stored
+ * result into wizard rows, and two normalizers would drift the moment one gained a
+ * rule the other did not. It does not import this module back, so there is no cycle.
+ */
+import { isValidShortName, normalizeOnlyTasks, normalizeShortName } from './memberProfile.js';
 
 /**
  * The band names, lowest first — four of them today (nonExempt, junior, senior,
@@ -353,6 +361,22 @@ export const EMPTY_RULES_INPUTS = () => ({
     maxConcurrentPerDay: '',
     maxConsecutiveDays: '',
     forbidPairs: [],
+    /**
+     * WEEKLY ROTATION — a BOOLEAN, and the only control in this object that is not a
+     * raw string, because it is a switch rather than something typed. `false` is the
+     * default and means the engine's per-day fairness, which is what every roster
+     * generated before this existed used.
+     */
+    rotateWeekly: false,
+    /**
+     * WHAT THE SECOND PERSON ON A SHIFT IS. `false` = they work alongside the lead
+     * (today's behaviour); `true` = they are a STANDBY, named in advance to step in
+     * if the lead cannot, and therefore not present and not charged for the session.
+     *
+     * A boolean here rather than the engine's `'alongside' | 'standby'` because the
+     * control is a switch; the mapper turns it into the engine's word.
+     */
+    standbySecond: false,
 });
 
 // --- ROW FACTORIES ------------------------------------------------------------
@@ -398,6 +422,18 @@ export const createStaffRow = (seed = {}) => ({
     // an unasked-for empty list here would start judging a department that has never
     // heard of rotations. Seeded from a config's own `windows` so a fixture round-trips.
     windows: Array.isArray(seed.windows) ? seed.windows.map((entry) => createStaffWindow(entry)) : [],
+    /**
+     * THE ACRONYM THE EXPORTS USE INSTEAD OF A FULL NAME — `'MA'` rather than
+     * `Muhammad Alif` — because a phone shows an Outlook event title in about thirty
+     * characters and `[Exercise Test] Lead: …, Co: …` spends most of them on names.
+     *
+     * A RAW STRING, and DELIBERATELY NOT NORMALIZED HERE. `normalizeShortName`
+     * trims, and trimming on every keystroke makes a space untypeable: type `A`,
+     * type ` `, get `A` back, and a two-word acronym can never be entered. So the
+     * cell holds what was typed and the MAPPER normalizes — the same division `fte`
+     * and `maxPerDay` already use. `''` means "use their full name".
+     */
+    shortName: typeof seed.shortName === 'string' ? seed.shortName : '',
 });
 
 /**
@@ -566,24 +602,45 @@ export const createEmptyStaffRows = (count = DEFAULT_STAFF_ROWS) =>
 export const staffRowsFromMembers = (members = [], grades = {}) =>
     (Array.isArray(members) ? members : [])
         .filter((person) => person && typeof person.uid === 'string' && person.uid !== '')
-        .map((person) => ({
-            ...createStaffRow({
-                name: person.displayName || person.email || person.uid,
-                grade: typeof grades[person.uid] === 'string' ? grades[person.uid] : '',
-                fte: person.fte,
-                unavailable: person.unavailable,
-                skills: person.skills,
-                maxPerDay: person.maxPerDay,
-            }),
+        .map((person) => {
             /**
-             * ⚠️ CARRIED THROUGH SO THE ROSTER CAN BE KEYED BY IT LATER. The engine
-             *    still works in names — that is `D-names`, a documented limitation
-             *    with its own risk budget — but a row that has FORGOTTEN which uid
-             *    it came from cannot be fixed later without asking the roster master
-             *    to identify people by spelling all over again.
+             * ⚠️ AN EMPTY LIST MUST PRODUCE NO WINDOW AT ALL, NOT AN EMPTY ONE.
+             *
+             *    `createStaffRow`'s own note says why: the engine switches
+             *    time-bounded eligibility on for the WHOLE configuration the moment
+             *    any staff entry carries a `windows` key. A department where nobody
+             *    is restricted would start being judged against rotations it has
+             *    never heard of, and the roster would sprout `unfilled` reasons
+             *    mentioning cohort windows to a roster master who set none.
+             *
+             * ⚠️ AND `from`/`to` STAY BLANK. The restriction a lead expresses here is
+             *    "these duties, always" — not "these duties, this fortnight". Blank
+             *    bounds are what the parser reads as unbounded, so the window narrows
+             *    WHICH tasks without narrowing WHEN. A default date would silently
+             *    make somebody ineligible outside it.
              */
-            uid: person.uid,
-        }));
+            const onlyTasks = normalizeOnlyTasks(person.onlyTasks);
+            return {
+                ...createStaffRow({
+                    name: person.displayName || person.email || person.uid,
+                    grade: typeof grades[person.uid] === 'string' ? grades[person.uid] : '',
+                    fte: person.fte,
+                    unavailable: person.unavailable,
+                    skills: person.skills,
+                    maxPerDay: person.maxPerDay,
+                    windows: onlyTasks.length > 0 ? [{ from: '', to: '', tasks: onlyTasks }] : [],
+                    shortName: person.shortName,
+                }),
+                /**
+                 * ⚠️ CARRIED THROUGH SO THE ROSTER CAN BE KEYED BY IT LATER. The engine
+                 *    still works in names — that is `D-names`, a documented limitation
+                 *    with its own risk budget — but a row that has FORGOTTEN which uid
+                 *    it came from cannot be fixed later without asking the roster master
+                 *    to identify people by spelling all over again.
+                 */
+                uid: person.uid,
+            };
+        });
 
 /** `DEFAULT_TASK_ROWS` blank task rows, each defaulting to Mon–Fri. */
 export const createEmptyTaskRows = (count = DEFAULT_TASK_ROWS) =>
@@ -1432,12 +1489,20 @@ export const parseForbidPairs = (pairs) => {
     return { ok: true, pairs: out, reason: null };
 };
 
-/** Is this string one of `GRADE_SCALE`? `''` (not recorded) is fine too. */
+/**
+ * Is this a grade on the scale? `''` (not recorded) is fine too.
+ *
+ * ⚠️ EXACT MATCH OVER BOTH SPELLINGS. `GRADE_SCALE.includes` alone refused `NN8`,
+ *    the Non-Nursing spelling this wizard's own dropdown offers. `parseRank` would
+ *    have accepted it — and also `ah13` and `AH07`, which are fine to read and wrong
+ *    to store. So both label sets, matched exactly, the same rule
+ *    `memberProfile.isValidGrade` applies.
+ */
 const gradeCellReason = (raw) => {
     const trimmed = typeof raw === 'string' ? raw.trim() : '';
     if (trimmed === '') return null;
-    if (GRADE_SCALE.includes(trimmed)) return null;
-    return `Grade "${trimmed}" is not on the allied-health scale (${GRADE_SCALE[0]}–${GRADE_SCALE[GRADE_SCALE.length - 1]}). Leave it blank if it is not recorded.`;
+    if (GRADE_SCALE.includes(trimmed) || NON_NURSING_GRADE_ALIASES.includes(trimmed)) return null;
+    return `Grade "${trimmed}" is not on the allied-health scale (${GRADE_SCALE[0]}–${GRADE_SCALE[GRADE_SCALE.length - 1]}, or NN7–NN10 for the support grades). Leave it blank if it is not recorded.`;
 };
 
 // --- THE MAPPING --------------------------------------------------------------
@@ -1609,13 +1674,30 @@ export const buildDemoRosterV2ConfigFromTables = ({
         const windows = parseStaffWindows(row?.windows);
         if (!windows.ok) errors.windows = windows.reason;
 
+        /**
+         * ⚠️ REFUSED HERE AND NOT ONLY IN THE MEMBER EDITOR, because there are two
+         *    ways into this field: a lead typing into Admin → Team, which validates,
+         *    and a sandbox visitor typing into the drawer, which is this path. A
+         *    comma reaching `buildICS` is not a cosmetic problem — it is an RFC 5545
+         *    delimiter, so the calendar splits the title into properties it then
+         *    misreads. Cheaper to refuse the character than to escape it in every
+         *    exporter and hope none is added later.
+         */
+        const shortName = normalizeShortName(row?.shortName);
+        if (!isValidShortName(row?.shortName)) {
+            errors.shortName = 'A short name can use letters, numbers, spaces and . - / only — '
+                + 'no commas or semicolons, because calendars read those as separators.';
+        }
+
         if (name === '') {
             // An untouched row is silence. A row with content but no name is a
             // half-finished row, and saying nothing would drop that content — which
             // now includes a daily cap and an availability window, both of which are
             // behind the drawer and both of which would otherwise vanish silently.
             const hasHiddenContent =
-                trimmed(row?.maxPerDay) !== '' || (Array.isArray(row?.windows) && row.windows.length > 0);
+                trimmed(row?.maxPerDay) !== ''
+                || (Array.isArray(row?.windows) && row.windows.length > 0)
+                || shortName !== '';
             if (grade !== '' || away.trim() !== '' || hasHiddenContent) {
                 errors.name = 'This row has a grade, leave dates or a limit but nobody to apply them to — add a name, or clear the row.';
             }
@@ -1627,7 +1709,7 @@ export const buildDemoRosterV2ConfigFromTables = ({
         if (Object.keys(errors).length > 0) {
             staffErrors[row.id] = errors;
             if (!firstStaffReason) {
-                firstStaffReason = `${name}: ${errors.grade || errors.fte || errors.away || errors.maxPerDay || errors.windows}`;
+                firstStaffReason = `${name}: ${errors.grade || errors.fte || errors.away || errors.maxPerDay || errors.windows || errors.shortName}`;
             }
             continue;
         }
@@ -1650,6 +1732,9 @@ export const buildDemoRosterV2ConfigFromTables = ({
             // Absent while there are no windows: stating even an empty list would
             // switch time-bounded eligibility on for everybody in the department.
             ...(windows.windows.length === 0 ? {} : { windows: windows.windows }),
+            // Absent while blank, so an exporter reads "not set" from the key being
+            // missing rather than having to tell `''` apart from "no acronym wanted".
+            ...(shortName === '' ? {} : { shortName }),
         });
     }
 
@@ -1784,7 +1869,31 @@ export const buildDemoRosterV2ConfigFromTables = ({
         for (const ref of windowRefs) {
             const missing = ref.taskNames.filter((named) => !taskNames.has(named));
             if (missing.length === 0) continue;
-            const message = `${ref.name}: an availability window names ${missing.map((named) => `"${named}"`).join(', ')}, which ${missing.length === 1 ? 'is not a task' : 'are not tasks'} in the table below. Check the spelling, or leave the task list blank so the window covers every task.`;
+            /**
+             * ⚠️ THE WORDING IS DELIBERATE, AND THE OLD WORDING WAS UNACTIONABLE IN
+             *    LIVE MODE. It said "an availability window names X, which is not a
+             *    task in the table below. …or leave the task list blank" — but a
+             *    limit can now arrive from a MEMBERSHIP (`onlyTasks`, set in
+             *    Admin → Team), and in live mode the staff table is read-only, so it
+             *    instructed the reader to edit a field they cannot reach. Worse, the
+             *    person who typed the duty name is usually not the person pressing
+             *    Generate.
+             *
+             *    So: name the duty, list the duties that DO exist — the check is
+             *    case-sensitive and exact, and the correct spelling is the one thing
+             *    the reader actually needs — and name BOTH places the limit could
+             *    have come from.
+             */
+            const known = [...taskNames];
+            const shown = known.slice(0, 12).join(', ') + (known.length > 12 ? ', …' : '');
+            const message = `${ref.name}: ${missing.map((named) => `"${named}"`).join(', ')} `
+                + `${missing.length === 1 ? 'is not one of' : 'are not among'} this roster's duties, `
+                + `so nobody can be limited to ${missing.length === 1 ? 'it' : 'them'}. `
+                + `The duties are: ${shown}. `
+                + 'Spelling and capitals have to match exactly. Fix it where it was set: '
+                + 'a person\'s own limit is "Only these duties" on their row in Admin → Team, '
+                + 'and a typed availability window is in the staff table above. '
+                + 'Clearing it lets them take every duty.';
             staffErrors[ref.rowId] = { ...(staffErrors[ref.rowId] || {}), windows: message };
             crossReason = message;
             break;
@@ -1824,6 +1933,16 @@ export const buildDemoRosterV2ConfigFromTables = ({
         // into the config that was generated from — the same aliasing rule `skills`
         // and `leadBands` follow.
         ...(pairShape.pairs.length === 0 ? {} : { forbidPairs: pairShape.pairs.map((pair) => [...pair]) }),
+        /**
+         * ABSENT WHEN OFF, like every control above it. The engine reads
+         * `rules.rotateWeekly === true`, so a `false` would behave identically — but
+         * emitting it would put a key into every saved configuration in the estate to
+         * record that a department did NOT ask for something.
+         */
+        ...(rulesInputs?.rotateWeekly === true ? { rotateWeekly: true } : {}),
+        // Absent when off, like every control above it: a department that has never
+        // been asked the question must not have an answer recorded for it.
+        ...(rulesInputs?.standbySecond === true ? { secondPerson: 'standby' } : {}),
     };
 
     return {

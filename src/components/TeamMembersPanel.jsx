@@ -37,7 +37,7 @@ import { getFunctions, httpsCallable } from 'firebase/functions';
 import { doc, updateDoc, setDoc } from 'firebase/firestore';
 import {
     UserPlus, Trash2, Loader2, AlertCircle, CheckCircle2, Users, ShieldCheck, Eye, Stethoscope,
-    Pencil, X, Lock,
+    Pencil, X, Lock, ShieldAlert,
 } from 'lucide-react';
 import { useTeam } from '../context/TeamContext';
 import {
@@ -46,12 +46,17 @@ import {
     buildMemberProfileUpdate,
     buildGradeUpdate,
     validateMemberProfile,
+    buildMemberRosterUpdate,
+    validateMemberRoster,
+    normalizeOnlyTasks,
+    SHORT_NAME_MAX,
 } from '../utils/memberProfile';
 import { MOH_PROFESSION_OPTIONS } from '../data/mockData';
 import { useMemberGrade } from '../hooks/useMemberGrade';
 import { memberPath, gradePath } from '../utils/teamPaths';
 import { db } from '../firebase';
 import { useNexus } from '../context/NexusContext';
+import { useDomainAllowlist } from '../hooks/useDomainAllowlist';
 
 // Pinned region, as at every other call site (`AuraChat.jsx`, `FeedsView.jsx`,
 // `LeadRequestsPanel.jsx`). An unpinned `getFunctions()` defaults to the same region
@@ -87,6 +92,11 @@ const readError = (error) => error?.message || 'Something went wrong.';
 const TeamMembersPanel = () => {
     const { teamId, team, members, isLead } = useTeam();
     const { isDemo } = useNexus();
+    // Is `config/domains` actually set up? Not the same question as "what are"
+    // "the domains" — the hook always HAS a list, because it falls back so the
+    // login screen keeps working. This asks whether the document yielded one,
+    // because `inviteMember` on the server refuses everybody when it did not.
+    const { configured: domainsConfigured, loaded: domainsLoaded } = useDomainAllowlist();
 
     const [email, setEmail] = useState('');
     const [displayName, setDisplayName] = useState('');
@@ -101,12 +111,20 @@ const TeamMembersPanel = () => {
     /**
      * ── THE PER-MEMBER EDITOR ────────────────────────────────────────────────
      *
-     * Which member is open, and the two draft values. `''` is closed, and closed
+     * Which member is open, and the draft values. `''` is closed, and closed
      * is what clears the grade out of this component's state — see the hook.
      */
     const [editingUid, setEditingUid] = useState('');
     const [draftProfession, setDraftProfession] = useState('');
     const [draftGrade, setDraftGrade] = useState('');
+    /**
+     * The two ROSTER drafts, held as raw strings for the reason the wizard's cells
+     * are: `normalizeShortName` trims, and trimming on every keystroke makes a space
+     * untypeable. `draftOnlyTasks` is the comma-separated form a human types; the
+     * builder splits it.
+     */
+    const [draftShortName, setDraftShortName] = useState('');
+    const [draftOnlyTasks, setDraftOnlyTasks] = useState('');
     /**
      * Whether a human has touched the grade select since this editor opened.
      *
@@ -258,6 +276,11 @@ const TeamMembersPanel = () => {
         setDraftProfession(member.profession || '');
         setDraftGrade('');
         setGradeTouched(false);
+        setDraftShortName(typeof member.shortName === 'string' ? member.shortName : '');
+        // Seeded through the normalizer so a stored array arrives as the same
+        // comma-separated text the field will hand back — otherwise opening the editor
+        // and saving without touching anything would register as a change.
+        setDraftOnlyTasks(normalizeOnlyTasks(member.onlyTasks).join(', '));
         setEditingUid(member.uid);
     };
 
@@ -266,6 +289,8 @@ const TeamMembersPanel = () => {
         setDraftProfession('');
         setDraftGrade('');
         setGradeTouched(false);
+        setDraftShortName('');
+        setDraftOnlyTasks('');
     };
 
     const handleSaveMember = async (member) => {
@@ -275,6 +300,9 @@ const TeamMembersPanel = () => {
 
         const complaint = validateMemberProfile({ grade: draftGrade, profession: draftProfession });
         if (complaint) { setError(complaint); return; }
+
+        const rosterComplaint = validateMemberRoster({ shortName: draftShortName });
+        if (rosterComplaint) { setError(rosterComplaint); return; }
 
         /**
          * ⚠️ A REFUSED READ IS A REFUSAL TO WRITE. `gradeDenied` means this caller
@@ -289,7 +317,27 @@ const TeamMembersPanel = () => {
             return;
         }
 
-        const memberUpdate = buildMemberProfileUpdate({ profession: draftProfession }, member);
+        /**
+         * ⚠️ TWO BUILDERS, ONE WRITE, AND NEITHER MAY BE REPLACED BY A LITERAL.
+         *
+         *    A membership update is refused ENTIRELY if it carries one key outside the
+         *    rule's `changedKeys().hasOnly` list, so the payload is assembled from
+         *    allowlisted builders rather than from the form. They are separate because
+         *    `buildMemberProfileUpdate` is also called by `ProfileView` with a person's
+         *    OWN form object — teaching it `shortName` or `onlyTasks` would make every
+         *    ordinary profile save attempt a lead-only field and fail.
+         *
+         *    Spreading a `null` is `{}`, so this is one object whether none, one or
+         *    both halves changed, and `null` when nothing did.
+         */
+        const profileUpdate = buildMemberProfileUpdate({ profession: draftProfession }, member);
+        const rosterUpdate = buildMemberRosterUpdate(
+            { shortName: draftShortName, onlyTasks: draftOnlyTasks },
+            member,
+        );
+        const memberUpdate = (profileUpdate || rosterUpdate)
+            ? { ...profileUpdate, ...rosterUpdate }
+            : null;
         /**
          * `setBy: 'lead'` whenever this screen writes — including when a lead edits
          * their OWN row, which is true and harmless. What it is NOT is a log of WHO:
@@ -364,6 +412,48 @@ const TeamMembersPanel = () => {
                 <div role="status" className="flex gap-3 p-4 rounded-xl bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800/50">
                     <CheckCircle2 className="text-emerald-500 shrink-0" size={18} />
                     <p className="text-xs font-medium text-emerald-700 dark:text-emerald-300">{notice}</p>
+                </div>
+            )}
+
+            {/*
+              * ⚠️ SAID BEFORE THEY PRESS ADD, NOT AFTER IT FAILS.
+              *
+              * `config/domains` is what tells the server which institutions NEXUS
+              * serves, and until that document exists `inviteMember` refuses EVERY
+              * address — correctly, because a gate that opens when its configuration
+              * is missing is not a gate. But nothing said so, so the first a lead knew
+              * was a refusal naming their own hospital, which reads as "your
+              * institution is not welcome here". It is not: it is a setup step nobody
+              * has done. The owner hit this on 2026-08-31 on `kkh.com.sg`.
+              *
+              * WHY HERE AND NOT ON THE LOGIN SCREEN: the hook's own header argues that
+              * a red banner on the login screen of a clinical tool costs more than it
+              * buys, and that is still right — a visitor can do nothing about it and
+              * the fallback lets them in anyway. A lead standing in front of the Add
+              * form is the opposite case: they are about to take an action that will
+              * fail, and they are usually the person who can get it fixed.
+              *
+              * `domainsLoaded` gates it so the notice does not flash while the read is
+              * in flight, which would train people to ignore it.
+              *
+              * ⚠️ AND `!error` — IT HIDES ONCE THE SERVER HAS SAID IT. The first version
+              * of this notice was three sentences and sat directly above the refusal
+              * banner, which says the same thing in more words. The owner's verdict on
+              * seeing both at once was that it "feels vulgar", and they were right: two
+              * banners making one point is noise, and the longer one was mine. It is now
+              * one line, and it steps aside the moment the server has spoken for itself.
+              */}
+            {isLead && domainsLoaded && !domainsConfigured && !error && (
+                /* `role="note"`, not `status`: this is persistent, rendered on mount, and
+                   a live region announces CHANGES — it would also collide with the
+                   transient status banner above, which tests address by that role. */
+                <div role="note" className="flex gap-2.5 p-3 rounded-xl bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800/50">
+                    <ShieldAlert className="text-amber-500 shrink-0 mt-0.5" size={15} />
+                    <p className="text-xs font-medium text-amber-800 dark:text-amber-300 leading-relaxed">
+                        <span className="font-black">Setup outstanding:</span> no organisation is registered yet,
+                        so adding anybody will be refused. Whoever installed NEXUS needs to register your email
+                        domain.
+                    </p>
                 </div>
             )}
 
@@ -526,7 +616,7 @@ const TeamMembersPanel = () => {
                                     <button
                                         type="button"
                                         onClick={() => (isOpen ? closeEditor() : openEditor(member))}
-                                        aria-label={`Edit profession and grade for ${member.displayName || member.email || member.uid}`}
+                                        aria-label={`Edit profession, grade and roster limits for ${member.displayName || member.email || member.uid}`}
                                         aria-expanded={isOpen}
                                         className="p-2 rounded-lg text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors"
                                     >
@@ -602,6 +692,82 @@ const TeamMembersPanel = () => {
                                                     <option key={grade} value={grade}>{grade}</option>
                                                 ))}
                                             </select>
+                                        </div>
+                                    </div>
+
+                                    {/* HOW THE ROSTER SHOWS THEM, AND WHICH DUTIES THEY TAKE.
+                                        Both are lead-only fields — see the builder's note in
+                                        `memberProfile.js` — and both are set HERE rather than in
+                                        the roster wizard's staff table, because that table is
+                                        deliberately read-only in live mode: the team is the
+                                        membership, and a second editable copy of a person is how
+                                        display-name keying got in last time. */}
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                        <div className="space-y-1.5">
+                                            <label htmlFor={`member-shortname-${member.uid}`} className="text-[10px] font-black text-slate-500 uppercase tracking-widest">
+                                                Short name for calendars
+                                            </label>
+                                            <input
+                                                id={`member-shortname-${member.uid}`}
+                                                type="text"
+                                                value={draftShortName}
+                                                maxLength={SHORT_NAME_MAX}
+                                                placeholder="e.g. MA — blank uses their full name"
+                                                onChange={(e) => setDraftShortName(e.target.value)}
+                                                className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 text-sm outline-none text-slate-800 dark:text-slate-200"
+                                            />
+                                            <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-relaxed">
+                                                Used in the roster calendar and in the exported{' '}
+                                                <span className="font-bold">.ics</span> calendar file in place of
+                                                their full name. An Outlook event title on a phone shows about
+                                                thirty characters, and{' '}
+                                                <span className="font-bold">Lead: …, Co: …</span> spends most of them
+                                                on names. Their full name still appears inside the event, and the{' '}
+                                                <span className="font-bold">.csv</span> export keeps full names
+                                                throughout &mdash; a spreadsheet has no room to run out of.
+                                            </p>
+                                        </div>
+
+                                        <div className="space-y-1.5">
+                                            <label htmlFor={`member-onlytasks-${member.uid}`} className="text-[10px] font-black text-slate-500 uppercase tracking-widest">
+                                                Only these duties
+                                            </label>
+                                            <input
+                                                id={`member-onlytasks-${member.uid}`}
+                                                type="text"
+                                                value={draftOnlyTasks}
+                                                placeholder="blank — every duty"
+                                                onChange={(e) => setDraftOnlyTasks(e.target.value)}
+                                                className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 text-sm outline-none text-slate-800 dark:text-slate-200"
+                                            />
+                                            <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-relaxed">
+                                                For somebody who carries{' '}
+                                                <span className="font-bold">some</span> of the department&apos;s
+                                                duties and not all — a lead who is on the roster for two clinics but
+                                                not the rest. Separate with commas, spelled as in{' '}
+                                                <span className="font-bold">Configure</span>.
+                                            </p>
+                                            <p className="text-[11px] font-bold text-amber-700 dark:text-amber-300 leading-relaxed">
+                                                ⚠ This is a limit, not an addition. Naming duties here means they are
+                                                rostered for <span className="font-bold">only</span> those — leave one
+                                                out and they stop being rostered for it. Blank means every duty.
+                                            </p>
+                                            {/* ⚠️ THE COMBINATION NOBODY WAS TOLD ABOUT. Each setting is accurate on
+                                                its own, and together they contradict: a duty limit says "never
+                                                anything else" while a weekly rotation passes every duty round the
+                                                whole team. The owner set both and found out from a spreadsheet —
+                                                their own row led nothing in 8 weeks of 17 while the rest of the team
+                                                covered more duties than there were people. The engine warns at
+                                                generation too; this is the earlier of the two chances to say it. */}
+                                            <p className="mt-1 text-[11px] font-bold text-amber-700 dark:text-amber-300 leading-relaxed">
+                                                ⚠ Leave this blank if your department has{' '}
+                                                <span className="font-bold">Rotate duties weekly</span> switched on in
+                                                Configure. A limit keeps somebody out of the rotation: in the weeks
+                                                their duty passes to a colleague they are eligible for nothing. To give
+                                                a roster master a lighter load, lower their{' '}
+                                                <span className="font-bold">FTE</span> instead — that keeps them in the
+                                                rotation for everything and simply gives them fewer shifts.
+                                            </p>
                                         </div>
                                     </div>
 

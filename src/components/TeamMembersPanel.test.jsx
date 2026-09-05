@@ -30,6 +30,28 @@ import { render, screen, cleanup, fireEvent, act } from '@testing-library/react'
 vi.mock('../firebase', () => ({ db: {}, auth: {}, storage: {} }));
 
 /**
+ * ⚠️ THE DOMAIN ALLOWLIST IS MOCKED, AND `configured: true` IS THE DEFAULT.
+ *
+ * The panel reads `config/domains` on mount to decide whether to warn a lead that
+ * adding anybody will be refused. Left real, that read appears in `getDocSpy` and
+ * breaks the grade tests below, which assert the EXACT set of documents read — and
+ * rightly so: "reads exactly one grade document" is the point of them, and an
+ * unrelated read making it two would be a real regression they must keep catching.
+ *
+ * `true` is the default because it is the configured, working state — so every
+ * existing assertion runs against a panel with no setup notice, exactly as before.
+ * The notice's own tests set it false.
+ */
+const domainState = vi.hoisted(() => ({ configured: true, loaded: true }));
+vi.mock('../hooks/useDomainAllowlist', () => ({
+    useDomainAllowlist: () => ({
+        domains: ['kkh.com.sg'],
+        loaded: domainState.loaded,
+        configured: domainState.configured,
+    }),
+}));
+
+/**
  * ⚠️ THE FIRESTORE MOCK IDENTIFIES A CALL BY ITS PATH, NEVER BY SUBTRACTION.
  *
  *    Three helpers in this repository used to identify a listener as "the one that
@@ -121,6 +143,83 @@ beforeEach(() => {
 afterEach(() => cleanup());
 
 // ── 1. ADDING ────────────────────────────────────────────────────────────────
+
+/**
+ * ==============================================================================
+ * THE SETUP NOTICE — said before the lead presses Add, not after it fails
+ * ==============================================================================
+ *
+ * Until `config/domains` exists, `inviteMember` refuses EVERY address — correctly,
+ * because a gate that opens when its configuration is missing is not a gate. But
+ * nothing said so, so the first a lead knew was a refusal naming their own
+ * hospital, which reads as "your institution is not welcome". Reported from the
+ * field on 2026-08-31, by the owner, on `kkh.com.sg`.
+ */
+describe('the domain allowlist is not configured yet', () => {
+    beforeEach(() => {
+        team = asTeam();
+        domainState.configured = true;
+        domainState.loaded = true;
+    });
+    afterEach(() => { domainState.configured = true; domainState.loaded = true; });
+
+    it('warns the lead that adding anybody will be refused, and why', () => {
+        domainState.configured = false;
+        render(<TeamMembersPanel />);
+
+        const notice = screen.getByRole('note');
+        // It must name this as SETUP rather than as a refusal of their institution —
+        // that conflation is the whole reason the notice exists.
+        expect(notice.textContent).toMatch(/setup outstanding/i);
+        expect(notice.textContent).toMatch(/no organisation is registered/i);
+        // …say who can fix it…
+        expect(notice.textContent).toMatch(/installed NEXUS/i);
+        // …not send a clinician to a database path…
+        expect(notice.textContent).not.toMatch(/config\/domains/i);
+        // …and stay SHORT. It sits above a form, not in place of one, and the first
+        // version was three sentences that repeated the refusal banner beneath it.
+        expect(notice.textContent.trim().length).toBeLessThan(220);
+    });
+
+    it('steps aside once the server has said it — two banners for one point is noise', async () => {
+        // The refusal from `inviteMember` covers the same ground in more words. Showing
+        // both at once was the owner's "feels vulgar", and it was a fair verdict.
+        domainState.configured = false;
+        invited.mockReturnValue(refused('NEXUS has not been set up with any organisations yet.'));
+        render(<TeamMembersPanel />);
+        expect(screen.getByRole('note')).toBeTruthy();
+
+        fill({ email: 'brandon@kkh.com.sg' });
+        await act(async () => {
+            fireEvent.click(screen.getByRole('button', { name: /add to team/i }));
+        });
+
+        expect(screen.getByText(/has not been set up with any organisations/i)).toBeTruthy();
+        expect(screen.queryByRole('note'), 'the notice stacked under the refusal').toBeNull();
+    });
+
+    it('says nothing at all once the allowlist IS configured', () => {
+        domainState.configured = true;
+        render(<TeamMembersPanel />);
+        expect(screen.queryByRole('note')).toBeNull();
+    });
+
+    it('does not flash while the read is still in flight', () => {
+        // A notice that appears and vanishes on every mount is one people learn to
+        // ignore, and then miss the time it matters.
+        domainState.configured = false;
+        domainState.loaded = false;
+        render(<TeamMembersPanel />);
+        expect(screen.queryByRole('note')).toBeNull();
+    });
+
+    it('is for the lead only — a staff member can do nothing about it', () => {
+        domainState.configured = false;
+        team = asTeam({ isLead: false });
+        render(<TeamMembersPanel />);
+        expect(screen.queryByRole('note')).toBeNull();
+    });
+});
 
 describe('adding a colleague', () => {
     it('sends the team, the address and the role the lead chose', async () => {
@@ -374,7 +473,7 @@ const memberDocOf = (uid) => `teams/${TEAM_ID}/members/${uid}`;
 
 const openEditorFor = async (name) => {
     await act(async () => {
-        fireEvent.click(screen.getByRole('button', { name: new RegExp(`edit profession and grade for ${name}`, 'i') }));
+        fireEvent.click(screen.getByRole('button', { name: new RegExp(`edit profession, grade and roster limits for ${name}`, 'i') }));
     });
 };
 
@@ -390,12 +489,12 @@ const save = async () => {
 describe('4. a lead sets profession and grade for a member', () => {
     it('offers an editor per member to a lead, and none at all to a non-lead', async () => {
         render(<TeamMembersPanel />);
-        expect(screen.getAllByRole('button', { name: /edit profession and grade/i })).toHaveLength(2);
+        expect(screen.getAllByRole('button', { name: /edit profession, grade and roster limits/i })).toHaveLength(2);
 
         cleanup();
         team = asTeam({ isLead: false });
         render(<TeamMembersPanel />);
-        expect(screen.queryByRole('button', { name: /edit profession and grade/i })).toBeNull();
+        expect(screen.queryByRole('button', { name: /edit profession, grade and roster limits/i })).toBeNull();
     });
 
     /**
@@ -554,5 +653,116 @@ describe('4. a lead sets profession and grade for a member', () => {
 
         expect(setDocSpy).toHaveBeenCalledTimes(1);
         expect(setDocSpy.mock.calls[0][1].grade).toBe('AH13');
+    });
+});
+
+// =============================================================================
+// 5. THE ROSTER LIMITS — SHORT NAME AND DUTIES
+// =============================================================================
+/**
+ * ⚠️ THIS SECTION EXISTS BECAUSE AN AUDIT FOUND IT MISSING ENTIRELY. When `shortName`
+ *    and `onlyTasks` shipped, this file contained ZERO references to either — and
+ *    this editor is the ONLY place in live NEXUS where they are set. The value layer
+ *    was well covered and the write was not covered at all.
+ */
+describe('5. a lead sets the roster limits: short name and duties', () => {
+    const setShortName = (uid, value) =>
+        fireEvent.change(document.getElementById(`member-shortname-${uid}`), { target: { value } });
+    const setOnlyTasks = (uid, value) =>
+        fireEvent.change(document.getElementById(`member-onlytasks-${uid}`), { target: { value } });
+
+    it('writes both fields to the membership, and only those keys', async () => {
+        render(<TeamMembersPanel />);
+        await openEditorFor('Brandon');
+        setShortName(STAFF.uid, 'BF');
+        setOnlyTasks(STAFF.uid, 'Exercise Test, New Case');
+        await save();
+
+        expect(updateDocSpy).toHaveBeenCalledTimes(1);
+        const [path, payload] = updateDocSpy.mock.calls[0];
+        expect(path).toBe(memberDocOf(STAFF.uid));
+        expect(Object.keys(payload).sort()).toEqual(['onlyTasks', 'shortName']);
+        expect(payload.shortName).toBe('BF');
+        // Split, trimmed and de-duplicated on the way in.
+        expect(payload.onlyTasks).toEqual(['Exercise Test', 'New Case']);
+    });
+
+    /**
+     * ⚠️ ONE WRITE, ASSEMBLED FROM TWO ALLOWLISTED BUILDERS. A membership update
+     *    carrying a single key outside the rule's `changedKeys().hasOnly` list is
+     *    refused ENTIRELY, so the payload cannot be built from the form. The builders
+     *    are separate because `buildMemberProfileUpdate` is also called by
+     *    `ProfileView` with a person's OWN form object — teaching it these two keys
+     *    would make every ordinary profile save attempt a lead-only field and fail.
+     */
+    it('merges a profession change and both limits into a single write', async () => {
+        render(<TeamMembersPanel />);
+        await openEditorFor('Brandon');
+        chooseProfession(STAFF.uid, 'physiotherapist');
+        setShortName(STAFF.uid, 'BF');
+        setOnlyTasks(STAFF.uid, 'Clinic');
+        await save();
+
+        expect(updateDocSpy).toHaveBeenCalledTimes(1);
+        const [, payload] = updateDocSpy.mock.calls[0];
+        expect(Object.keys(payload).sort()).toEqual(['onlyTasks', 'profession', 'shortName']);
+    });
+
+    it('refuses a comma in a short name and writes nothing at all', async () => {
+        render(<TeamMembersPanel />);
+        await openEditorFor('Brandon');
+        setShortName(STAFF.uid, 'A,B');
+        // Set a VALID duty list too, so the test proves the refusal blocks the whole
+        // save rather than merely skipping the bad field.
+        setOnlyTasks(STAFF.uid, 'Clinic');
+        await save();
+
+        expect(updateDocSpy).not.toHaveBeenCalled();
+        expect(setDocSpy).not.toHaveBeenCalled();
+        expect(screen.getByText(/commas or semicolons/i)).toBeTruthy();
+    });
+
+    it('writes nothing when the editor is opened and saved untouched', async () => {
+        // The fields are seeded through the normalizer, so reopening and saving must
+        // not register as an edit — otherwise every visit writes to Firestore.
+        team = asTeam({
+            isLead: true,
+            members: [OWNER, { ...STAFF, shortName: 'BF', onlyTasks: ['Clinic', 'Ward'] }],
+        });
+        getDocImpl = () => Promise.resolve({ exists: () => true, data: () => ({ grade: 'AH11' }) });
+        render(<TeamMembersPanel />);
+        await openEditorFor('Brandon');
+
+        expect(document.getElementById(`member-shortname-${STAFF.uid}`).value).toBe('BF');
+        expect(document.getElementById(`member-onlytasks-${STAFF.uid}`).value).toBe('Clinic, Ward');
+
+        await save();
+        expect(updateDocSpy).not.toHaveBeenCalled();
+    });
+
+    it('can clear a restriction back to every duty', async () => {
+        // The field that gives duties BACK has to work as reliably as the one that
+        // takes them away, or a lead cannot undo a mistake.
+        team = asTeam({
+            isLead: true,
+            members: [OWNER, { ...STAFF, onlyTasks: ['Clinic'] }],
+        });
+        render(<TeamMembersPanel />);
+        await openEditorFor('Brandon');
+        setOnlyTasks(STAFF.uid, '');
+        await save();
+
+        expect(updateDocSpy).toHaveBeenCalledTimes(1);
+        const [, payload] = updateDocSpy.mock.calls[0];
+        expect(payload.onlyTasks).toEqual([]);
+    });
+
+    it('tells the lead that naming duties is a LIMIT, not an addition', async () => {
+        // The one thing somebody can get catastrophically wrong here is assuming this
+        // adds duties. Leave one out and the person silently stops being rostered for
+        // it, and nobody notices until the day.
+        render(<TeamMembersPanel />);
+        await openEditorFor('Brandon');
+        expect(screen.getByText(/limit, not an addition/i)).toBeTruthy();
     });
 });

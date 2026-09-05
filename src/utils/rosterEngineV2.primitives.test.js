@@ -692,8 +692,22 @@ describe('CAPACITY: the representation', () => {
     it('gates ONLY the two hours ceilings on the opt-in predicate', () => {
         expect(CAPACITY_LIMITS.filter((limit) => limit.active !== undefined).map((limit) => limit.id))
             .toEqual(['hoursPerDay', 'hoursPerWeek']);
+        /**
+         * ⚠️ `exempt` NOW CARRIES TWO DISTINCT MEANINGS, AND THE LIST GREW ON PURPOSE.
+         *
+         *    It began as one thing: `consecutiveDays` — "already working today, so
+         *    this duty does not lengthen your run". A STANDBY seat added the second:
+         *    "this seat costs the person nothing at all", which the three capacity
+         *    ceilings need and which `cost: () => 0` cannot express, because
+         *    `capacityBreached` returns `used >= ceiling` for a DISCRETE meter and
+         *    never calls `cost`.
+         *
+         *    So the enumeration is four, not one. `taskPerDay` is deliberately NOT
+         *    among them: it is what stops one person being both the lead and the
+         *    standby of the same shift.
+         */
         expect(CAPACITY_LIMITS.filter((limit) => limit.exempt !== undefined).map((limit) => limit.id))
-            .toEqual(['consecutiveDays']);
+            .toEqual(['dutiesPerDay', 'hoursPerDay', 'hoursPerWeek', 'consecutiveDays']);
     });
 
     it('counts DISCRETE meters as "holding the limit means one more would exceed it"', () => {

@@ -65,6 +65,7 @@ import {
     DEFAULT_WEEKLY_HOURS,
     GRADE_SCALE,
     ROSTER_V2_DEFAULTS,
+    NON_NURSING_GRADE_ALIASES,
 } from '../utils/rosterEngineV2';
 import {
     ANY_BAND,
@@ -97,6 +98,8 @@ import {
 } from '../utils/rosterWizard';
 import WizardStep from './WizardStep';
 import { STANDARD_CATEGORIES, categoryChipClass, suggestCategoryFor } from '../utils/rosterCategories';
+// One definition of the cap, shared with the member editor that also writes it.
+import { SHORT_NAME_MAX } from '../utils/memberProfile';
 
 // --- 0. THE RESPONSIVE CONTRACT ------------------------------------------------
 //
@@ -240,11 +243,23 @@ const CheckBox = ({ checked, onChange, ariaLabel, title }) => (
         aria-label={ariaLabel}
         title={title}
         onClick={() => onChange(!checked)}
-        className={`inline-flex items-center justify-center ${TOUCH} min-w-11 sm:min-w-0 w-11 sm:w-auto`}
+        /**
+         * ⚠️ `shrink-0` IS LOAD-BEARING. A checkbox is a fixed-size mark, but a flex
+         *    item defaults to `flex-shrink: 1` — so the first time this control was
+         *    placed in a flex row beside a paragraph of explanation (the weekly
+         *    rotation panel), the text squeezed it from 16px wide to 8.1px and it
+         *    rendered as a vertical BAR rather than a box. Measured, not guessed: the
+         *    co-lead checkbox in the task table was 16×16 and this one 8.1×16.
+         *
+         *    Fixed on the component rather than at that one call site, because every
+         *    future placement inside a flex container would hit the same thing and
+         *    a control that silently changes shape is not obviously a checkbox.
+         */
+        className={`inline-flex shrink-0 items-center justify-center ${TOUCH} min-w-11 sm:min-w-0 w-11 sm:w-auto`}
     >
         <span
             aria-hidden="true"
-            className={`flex items-center justify-center w-5 h-5 sm:w-4 sm:h-4 rounded border-2 transition-colors ${
+            className={`flex shrink-0 items-center justify-center w-5 h-5 sm:w-4 sm:h-4 rounded border-2 transition-colors ${
                 checked
                     ? 'bg-emerald-600 border-emerald-600 text-white'
                     : 'bg-white dark:bg-slate-900 border-slate-300 dark:border-slate-600'
@@ -878,6 +893,79 @@ export const DepartmentLimitsEditor = ({ inputs, onChange, errors, staffNames = 
                 AURA uses the figure shown in it.
             </p>
 
+            {/* THE SECOND PERSON. Beside the rotation switch and above the limits for
+                the same reason: it changes what the roster MEANS rather than capping
+                it, and it changes what every hours and capacity figure in the
+                department is measuring. */}
+            <div className="mb-4 p-3 rounded-lg border border-teal-200 dark:border-teal-800/60 bg-teal-50/60 dark:bg-teal-900/20">
+                <div className="flex items-start gap-2.5">
+                    <CheckBox
+                        checked={inputs?.standbySecond === true}
+                        onChange={(next) => onChange('standbySecond', next)}
+                        ariaLabel="The second person is a standby"
+                        title="The second person is named to step in if the lead cannot, and is not present"
+                    />
+                    <div className="min-w-0">
+                        <p className="text-[11px] font-black text-slate-700 dark:text-slate-200 uppercase tracking-wide">
+                            The second person is a standby
+                        </p>
+                        <p className="mt-1 text-[10px] text-slate-500 dark:text-slate-400 leading-relaxed">
+                            Tick this if your second person is <span className="font-bold">named to step in</span> when
+                            the lead cannot make it — they know the clinic, but they are not in the room. AURA then
+                            stops charging them the session&apos;s hours and stops counting it against their
+                            duties-per-day, because they are not working it.
+                        </p>
+                        <p className="mt-1 text-[10px] text-slate-500 dark:text-slate-400 leading-relaxed">
+                            Leave it <span className="font-bold">off</span> if the second person genuinely works the
+                            session alongside the lead. That is how AURA has always counted them, and every roster
+                            already generated assumed it.
+                        </p>
+                        <p className="mt-1 text-[10px] font-bold text-amber-700 dark:text-amber-300 leading-relaxed">
+                            ⚠ A standby still has to be somebody who could run the clinic — the same grade and skill
+                            rules apply. What AURA cannot yet check is whether they are free at that hour: it knows how
+                            long a duty takes but not when it starts, so it will not stop somebody being standby for a
+                            clinic that clashes with one they are leading.
+                        </p>
+                    </div>
+                </div>
+            </div>
+
+            {/* ⚠️ FIRST, AND IN ITS OWN BOX, BECAUSE IT CHANGES THE SHAPE OF THE WHOLE
+                ROSTER rather than capping it. The controls below are limits — they
+                say what may not happen. This one says how the work is handed round,
+                and a department that wants it is usually describing the single most
+                important fact about how it runs. */}
+            <div className="mb-4 p-3 rounded-lg border border-indigo-200 dark:border-indigo-800/60 bg-indigo-50/60 dark:bg-indigo-900/20">
+                <div className="flex items-start gap-2.5">
+                    <CheckBox
+                        checked={inputs?.rotateWeekly === true}
+                        onChange={(next) => onChange('rotateWeekly', next)}
+                        ariaLabel="Rotate duties weekly"
+                        title="One person leads a duty for the whole week, then it passes to somebody else"
+                    />
+                    <div className="min-w-0">
+                        <p className="text-[11px] font-black text-slate-700 dark:text-slate-200 uppercase tracking-wide">
+                            Rotate duties weekly
+                        </p>
+                        <p className="mt-1 text-[10px] text-slate-500 dark:text-slate-400 leading-relaxed">
+                            One person leads a duty for the <span className="font-bold">whole week</span>, then it
+                            passes to whoever has been away from it longest — so in a team of five, a duty comes
+                            back to the same person every fifth week. It applies to every duty, including one that
+                            only runs a day or two.
+                        </p>
+                        <p className="mt-1 text-[10px] text-slate-500 dark:text-slate-400 leading-relaxed">
+                            Leave it <span className="font-bold">off</span> and AURA decides each day on its own.
+                            That shares the work evenly, but it moves people between duties most mornings.
+                        </p>
+                        <p className="mt-1 text-[10px] text-slate-500 dark:text-slate-400 leading-relaxed">
+                            Leave still applies. If the week&apos;s lead is away on the Wednesday, somebody stands
+                            in for that day and they take the duty back on the Thursday — the week does not change
+                            hands over one absence.
+                        </p>
+                    </div>
+                </div>
+            </div>
+
             <div className="flex flex-wrap gap-x-4 gap-y-3">
                 <div>
                     <label className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase block mb-1" htmlFor="demo-max-concurrent">
@@ -1023,18 +1111,51 @@ const STAFF_HEADINGS = Object.freeze({
  * it is the reading a placement or a block rotation actually needs, and it is not the
  * reading the words "availability window" suggest on their own.
  */
-const StaffRowDetail = ({ row, index, departmentMaxPerDay, onChange }) => {
+/**
+ * ⚠️ `readOnly` HERE FIXES A CONTROL THAT LIED FOR A WHOLE RELEASE.
+ *
+ *    `StaffTable` takes `readOnly` and honours it — it hides Add row and Remove —
+ *    but this drawer never received it, so in live mode every input inside it, and
+ *    an "Add availability window" button, stayed fully interactive. They could not
+ *    work: live rows are a `useMemo` over the team's membership, while `onChange` is
+ *    the SANDBOX row setter, which looks its id up in a different array and finds
+ *    nothing. Clicking + was a guaranteed no-op, twice over.
+ *
+ *    A dead control is worse than an absent one. The roster master who reported it
+ *    had been trying to limit themselves to some duties and reasonably concluded
+ *    the feature was broken rather than that it was elsewhere. So live mode now
+ *    SHOWS these values and says where they are set, the same way the table's own
+ *    footnote does for grade and profession.
+ */
+const StaffRowDetail = ({ row, index, departmentMaxPerDay, onChange, readOnly = false }) => {
     const windows = Array.isArray(row.windows) ? row.windows : [];
 
+    /**
+     * ⚠️ THE GUARD IS HERE, NOT ONLY IN THE `readOnly` ATTRIBUTES ON THE INPUTS.
+     *
+     *    A test proved why: `fireEvent.change` on a `readOnly` input fires `change`
+     *    straight through, because the attribute is enforced by the BROWSER and not
+     *    by the DOM. Live mode's `onChange` is the SANDBOX row setter, so a keystroke
+     *    that got through would patch an array this table is not rendering — the
+     *    exact defect this whole change set exists to fix, reintroduced by typing
+     *    instead of by pressing a button.
+     *
+     *    So every write in this drawer goes through `patchRow`, which is a no-op in
+     *    live mode. The inputs keep their `readOnly` attribute as well: that is what
+     *    stops a real browser accepting the keystroke in the first place, and what
+     *    tells a screen reader the field is not for editing.
+     */
+    const patchRow = (id, patch) => { if (!readOnly) onChange(id, patch); };
+
     const patchWindow = (windowId, patch) =>
-        onChange(row.id, {
+        patchRow(row.id, {
             windows: windows.map((entry) => (entry.id === windowId ? { ...entry, ...patch } : entry)),
         });
 
-    const addWindow = () => onChange(row.id, { windows: [...windows, createStaffWindow()] });
+    const addWindow = () => patchRow(row.id, { windows: [...windows, createStaffWindow()] });
 
     const removeWindow = (windowId) =>
-        onChange(row.id, { windows: windows.filter((entry) => entry.id !== windowId) });
+        patchRow(row.id, { windows: windows.filter((entry) => entry.id !== windowId) });
 
     return (
         <tr className={RESPONSIVE_FULL_ROW}>
@@ -1048,12 +1169,13 @@ const StaffRowDetail = ({ row, index, departmentMaxPerDay, onChange }) => {
                                 type="text"
                                 inputMode="numeric"
                                 aria-label={`Staff row ${index + 1} most duties per day`}
+                                readOnly={readOnly}
                                 value={row.maxPerDay}
                                 // The DEPARTMENT'S figure as it currently reads, not the
                                 // engine's shipped 2 — otherwise the placeholder would be a
                                 // lie the moment somebody types 3 in the box above.
                                 placeholder={String(departmentMaxPerDay)}
-                                onChange={(e) => onChange(row.id, { maxPerDay: e.target.value })}
+                                onChange={(e) => patchRow(row.id, { maxPerDay: e.target.value })}
                                 className={NUMBER_FIELD}
                             />
                             <p className="text-[10px] text-slate-500 dark:text-slate-400 leading-relaxed max-w-md">
@@ -1065,6 +1187,42 @@ const StaffRowDetail = ({ row, index, departmentMaxPerDay, onChange }) => {
                             </p>
                         </div>
                     </DrawerGroup>
+
+                    {/* --- the acronym the calendar and the exports use --- */}
+                    <div className={DRAWER_DIVIDER}>
+                        <DrawerGroup label="Short name for calendars">
+                            <div className="flex flex-wrap items-start gap-3">
+                                <input
+                                    type="text"
+                                    aria-label={`Staff row ${index + 1} short name`}
+                                    readOnly={readOnly}
+                                    maxLength={SHORT_NAME_MAX}
+                                    value={row.shortName || ''}
+                                    placeholder="full name"
+                                    onChange={(e) => patchRow(row.id, { shortName: e.target.value })}
+                                    className={`${CELL_INPUT} sm:w-28`}
+                                />
+                                <p className="text-[10px] text-slate-500 dark:text-slate-400 leading-relaxed max-w-md">
+                                    {readOnly ? (
+                                        <>
+                                            Set on their row in <span className="font-bold">Admin &rarr; Team</span>.
+                                            Blank means the calendar and the exports use their full name.
+                                        </>
+                                    ) : (
+                                        <>
+                                            Up to <span className="font-bold">{SHORT_NAME_MAX}</span> characters, used
+                                            in the calendar and in the exported{' '}
+                                            <span className="font-bold">.ics</span> in place of this person&apos;s
+                                            full name &mdash; an event title on a phone shows about thirty
+                                            characters. The <span className="font-bold">.csv</span> keeps full names.
+                                            Blank keeps the full name here too. No commas or semicolons: a calendar
+                                            reads those as separators.
+                                        </>
+                                    )}
+                                </p>
+                            </div>
+                        </DrawerGroup>
+                    </div>
 
                     {/* --- availability windows --- */}
                     <div className={DRAWER_DIVIDER}>
@@ -1087,7 +1245,9 @@ const StaffRowDetail = ({ row, index, departmentMaxPerDay, onChange }) => {
 
                             {windows.length === 0 ? (
                                 <p className="text-[10px] font-bold text-slate-500 dark:text-slate-400 leading-relaxed">
-                                    No windows — available on every date of the run.
+                                    {readOnly
+                                        ? 'Every duty, every date. To limit somebody to some of the department\u2019s duties, set Only these duties on their row in Admin \u2192 Team.'
+                                        : 'No windows \u2014 available on every date of the run.'}
                                 </p>
                             ) : (
                                 <div className="space-y-2">
@@ -1104,6 +1264,7 @@ const StaffRowDetail = ({ row, index, departmentMaxPerDay, onChange }) => {
                                                     id={`window-from-${window.id}`}
                                                     type="text"
                                                     aria-label={`Staff row ${index + 1} window ${windowIndex + 1} from`}
+                                                    readOnly={readOnly}
                                                     value={window.from}
                                                     placeholder="any earlier date"
                                                     onChange={(e) => patchWindow(window.id, { from: e.target.value })}
@@ -1121,6 +1282,7 @@ const StaffRowDetail = ({ row, index, departmentMaxPerDay, onChange }) => {
                                                     id={`window-to-${window.id}`}
                                                     type="text"
                                                     aria-label={`Staff row ${index + 1} window ${windowIndex + 1} to`}
+                                                    readOnly={readOnly}
                                                     value={window.to}
                                                     placeholder="any later date"
                                                     onChange={(e) => patchWindow(window.id, { to: e.target.value })}
@@ -1138,42 +1300,56 @@ const StaffRowDetail = ({ row, index, departmentMaxPerDay, onChange }) => {
                                                     id={`window-tasks-${window.id}`}
                                                     type="text"
                                                     aria-label={`Staff row ${index + 1} window ${windowIndex + 1} tasks`}
+                                                    readOnly={readOnly}
                                                     value={window.tasks}
                                                     placeholder="every task"
                                                     onChange={(e) => patchWindow(window.id, { tasks: e.target.value })}
                                                     className={`${CELL_INPUT} sm:w-48`}
                                                 />
                                             </div>
-                                            <button
-                                                type="button"
-                                                aria-label={`Remove staff row ${index + 1} window ${windowIndex + 1}`}
-                                                title="Remove this window"
-                                                onClick={() => removeWindow(window.id)}
-                                                className={`mb-1 ${ICON_BUTTON}`}
-                                            >
-                                                <Trash2 size={13} />
-                                            </button>
+                                            {!readOnly && (
+                                                <button
+                                                    type="button"
+                                                    aria-label={`Remove staff row ${index + 1} window ${windowIndex + 1}`}
+                                                    title="Remove this window"
+                                                    onClick={() => removeWindow(window.id)}
+                                                    className={`mb-1 ${ICON_BUTTON}`}
+                                                >
+                                                    <Trash2 size={13} />
+                                                </button>
+                                            )}
                                         </div>
                                     ))}
                                 </div>
                             )}
 
-                            <button
-                                type="button"
-                                onClick={addWindow}
-                                title="Add a block of dates this person is available for"
-                                className={ADD_ROW}
-                            >
-                                <Plus size={12} /> {`Add availability window to person ${index + 1}`}
-                            </button>
+                            {!readOnly && (
+                                <button
+                                    type="button"
+                                    onClick={addWindow}
+                                    title="Add a block of dates this person is available for"
+                                    className={ADD_ROW}
+                                >
+                                    <Plus size={12} /> {`Add availability window to person ${index + 1}`}
+                                </button>
+                            )}
 
-                            <p className="text-[10px] text-slate-500 dark:text-slate-400 leading-relaxed">
-                                Dates are <span className="font-bold">YYYY-MM-DD</span>. Leave{' '}
-                                <span className="font-bold">from</span> blank for &ldquo;from the start of
-                                the run&rdquo; and <span className="font-bold">to</span> blank for
-                                &ldquo;until the end of it&rdquo;. Task names must match the task table
-                                below exactly; separate several with commas.
-                            </p>
+                            {readOnly ? (
+                                <p className="text-[10px] text-slate-500 dark:text-slate-400 leading-relaxed">
+                                    These come from the person&apos;s membership, not from this table &mdash; set{' '}
+                                    <span className="font-bold">Only these duties</span> on their row in{' '}
+                                    <span className="font-bold">Admin &rarr; Team</span>. Blank dates mean the
+                                    limit is on WHICH duties they take, not on when.
+                                </p>
+                            ) : (
+                                <p className="text-[10px] text-slate-500 dark:text-slate-400 leading-relaxed">
+                                    Dates are <span className="font-bold">YYYY-MM-DD</span>. Leave{' '}
+                                    <span className="font-bold">from</span> blank for &ldquo;from the start of
+                                    the run&rdquo; and <span className="font-bold">to</span> blank for
+                                    &ldquo;until the end of it&rdquo;. Task names must match the task table
+                                    below exactly; separate several with commas.
+                                </p>
+                            )}
                         </DrawerGroup>
                     </div>
 
@@ -1268,7 +1444,7 @@ export const StaffTable = ({ rows, errors, onChange, onAdd, onRemove, readOnly =
                             // A row whose HIDDEN cells are wrong opens itself, for the
                             // same reason the task table's does: a refusal the visitor
                             // cannot act on is not a refusal, it is a dead end.
-                            const forcedOpen = Boolean(rowErrors?.maxPerDay || rowErrors?.windows);
+                            const forcedOpen = Boolean(rowErrors?.maxPerDay || rowErrors?.windows || rowErrors?.shortName);
                             const open = expandedRows.has(row.id) || forcedOpen;
                             const capSet = typeof row.maxPerDay === 'string' && row.maxPerDay.trim() !== '';
                             const windowCount = Array.isArray(row.windows) ? row.windows.length : 0;
@@ -1318,6 +1494,25 @@ export const StaffTable = ({ rows, errors, onChange, onAdd, onRemove, readOnly =
                                                 {GRADE_SCALE.map((grade) => (
                                                     <option key={grade} value={grade}>{grade}</option>
                                                 ))}
+                                                {/* ⚠️ THE SAME GRADES UNDER THE NAME HALF THE
+                                                    DEPARTMENT USES. AH7–AH10 are "sometimes known
+                                                    as NN7–NN10, ie Non-Nursing" — the roster
+                                                    owner, 2026-08-31 — and these are the support
+                                                    grades: administrators, assistants,
+                                                    associates, technologists, who are very often
+                                                    the roster master. Somebody looking for their
+                                                    own grade and finding only `AH` concludes the
+                                                    tool is not for them.
+
+                                                    They are SYNONYMS, not extra grades: the
+                                                    engine parses `NN8` to rank 8, exactly as
+                                                    `AH8`. The band, the gating and the roster are
+                                                    identical whichever is chosen. */}
+                                                <optgroup label="Non-Nursing — the same grades, the other name">
+                                                    {NON_NURSING_GRADE_ALIASES.map((grade) => (
+                                                        <option key={grade} value={grade}>{grade}</option>
+                                                    ))}
+                                                </optgroup>
                                             </select>
                                         </Cell>
                                         <Cell label={STAFF_HEADINGS.fte} className="py-1 pr-2 align-top">
@@ -1392,6 +1587,7 @@ export const StaffTable = ({ rows, errors, onChange, onAdd, onRemove, readOnly =
                                             index={index}
                                             departmentMaxPerDay={departmentMaxPerDay}
                                             onChange={onChange}
+                                            readOnly={readOnly}
                                         />
                                     )}
                                     <RowErrors errors={rowErrors} colSpan={STAFF_COLUMNS} />

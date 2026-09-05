@@ -998,9 +998,15 @@ const AuraChatbot = () => {
         setIsComplete(true);
         setMessages(prev => [...prev, {
           sender: 'bot',
-          // Merge of v2.1.3's lay-person copy ("activity level", not "PAVS score")
-          // with `AC14` (no domain badge on the completion message — the constant
-          // it referenced is deleted).
+          /*
+           * Merge note (PR #2 -> PR #4): main's community branch reworded this
+           * message (lay-person copy) AND still carried `step: TOTAL_STEPS - 1`,
+           * which `AC14` had deleted on this side — the constant was a stale
+           * count and the badge it produced on the final plan was wrong. The
+           * copy is kept; the `step` field stays deleted, per AC14's comment
+           * above the config array. Lint caught the half-merged state before
+           * it could ship as a ReferenceError on the completion path.
+           */
           text: 'Here is your personalised community health plan based on your activity level and health profile. Save or screenshot this screen, then tap anywhere to continue.',
           ctaData,
         }]);

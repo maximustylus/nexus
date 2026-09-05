@@ -45,16 +45,30 @@ if (!API_KEY) {
 }
 
 /**
- * `AU30` — A MODEL IN THE LIST IS NOT A MODEL YOU MAY CALL. The candidate order,
- * the fallback and the rule for reading a probe live in one module so the
- * deployed function and `scripts/verify-guardrail-turns.mjs` cannot disagree
- * about which model AURA runs on. See `functions/modelAvailability.cjs` for why
- * an ambiguous refusal must never demote a model.
+ * `AU30` — A MODEL IN THE LIST IS NOT A MODEL YOU MAY CALL. Found twice,
+ * independently, and the two halves are complementary:
+ *
+ *   - `modelQuota.cjs` (main, 2026-08-28): a free-tier key LISTS `gemini-2.5-pro`
+ *     with zero generate quota. Fix at CALL time — `geminiGenerate` demotes on a
+ *     quota refusal (30-minute TTL) and retries the same body once.
+ *   - `modelAvailability.cjs` (aura, 2026-09-05): a new key LISTS `gemini-2.5-pro`
+ *     and is refused with "no longer available to new users"; and the list had
+ *     rotted — three of four names, and the fallback, no longer exist. Fix at
+ *     RESOLUTION time — a candidate is probed with a real generation before the
+ *     resolution is cached, and the list lives in one module the P8.8 runner
+ *     imports too, so harness and deployment cannot disagree.
+ *
+ * `modelAvailability.cjs` owns the list and the fallback; `modelQuota.cjs` owns
+ * the demotion registry and the client-facing sentence. A probe that says `'no'`
+ * demotes through the same registry the quota path uses, so both mechanisms
+ * share one memory and one TTL.
  */
 const modelAvailability = require('./modelAvailability.cjs');
+const modelQuota = require('./modelQuota.cjs');
 const MODEL_PRIORITY = modelAvailability.MODEL_PRIORITY;
 const SAFE_FALLBACK_MODEL = modelAvailability.SAFE_FALLBACK_MODEL;
 const PROBE_BODY = JSON.stringify(modelAvailability.PROBE_BODY);
+const modelDemotions = modelQuota.createDemotions();
 
 /**
  * Does this model actually generate for THIS key? `'yes'` / `'no'` / `'unknown'`.
@@ -73,6 +87,14 @@ async function modelAnswers(modelName) {
         );
         if (res.ok) return 'yes';
         const body = await res.text().catch(() => '');
+        // `classifyProbe` keeps 429 as 'unknown' on purpose — it is pure and
+        // knows nothing about how long a demotion lasts. HERE the demotion is
+        // TTL-bounded (thirty minutes, `modelQuota`), so a quota refusal at
+        // probe time is worth demoting on: the alternative is the first user
+        // call after cold start paying for the same refusal, per model, in turn.
+        let parsed = null;
+        try { parsed = JSON.parse(body); } catch (e) { /* not JSON */ }
+        if (modelQuota.isQuotaExhausted(res.status, parsed)) return 'no';
         return modelAvailability.classifyProbe(res.status, body);
     } catch (e) {
         return 'unknown';
@@ -119,13 +141,23 @@ async function resolveModel() {
                 const match = available.find(name => name === 'models/' + candidate);
                 if (!match) continue;
 
+                // `AU30`, the quota half: a model that refused within the last
+                // DEMOTION_TTL_MS is skipped without spending a probe on it.
+                if (modelDemotions.isDemoted(match, Date.now())) {
+                    logger.warn('[NEXUS] Skipping demoted model: ' + match);
+                    continue;
+                }
+
                 const verdict = await modelAnswers(match);
                 if (verdict === 'yes') {
                     logger.info('[NEXUS] Model resolved: ' + match);
                     return match;
                 }
                 if (verdict === 'no') {
-                    logger.warn('[NEXUS] ' + match + ' is listed but refuses calls. Skipping it.');
+                    // Same registry, same TTL as a quota refusal: a retired model
+                    // stays out; a mis-read refusal recovers in thirty minutes.
+                    modelDemotions.demote(match, Date.now());
+                    logger.warn('[NEXUS] ' + match + ' is listed but refuses calls. Demoted.');
                     continue;
                 }
                 // `AU30` + `AU16`: an inconclusive probe is transient, so serve this
@@ -149,6 +181,78 @@ async function resolveModel() {
     })();
 
     return modelResolutionPromise;
+}
+
+/** One generateContent request, no policy: fetch and parse, nothing else. */
+async function geminiGenerateOnce(modelName, bodyString, timeoutMs) {
+    var url = 'https://generativelanguage.googleapis.com/v1beta/' + modelName
+            + ':generateContent?key=' + API_KEY;
+    var response = await fetch(url, {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        signal:  AbortSignal.timeout(timeoutMs),
+        body:    bodyString,
+    });
+    var data = await response.json();
+    return { response: response, data: data };
+}
+
+/**
+ * `AU30` — the one generate path all four callables use. Policy lives here so
+ * it cannot diverge per endpoint:
+ *
+ *   - a quota refusal (429 / RESOURCE_EXHAUSTED) demotes the model for this
+ *     container, clears the resolution cache, and retries the SAME body ONCE
+ *     on the next usable model — one retry, because a second refusal means the
+ *     tier is the problem and more attempts are latency, not recovery;
+ *   - a 404 clears the resolution cache (the pre-existing behaviour, now in
+ *     one place instead of four);
+ *   - any remaining failure is logged in full server-side and thrown as an
+ *     `HttpsError` whose message is `modelQuota.clientMessage()` — NEVER the
+ *     upstream text, which carried quota metrics and billing URLs to the
+ *     browser console (row 6.6's middle item, seen live 2026-08-28).
+ *
+ * Returns `{ modelName, data }` — `modelName` is whichever model actually
+ * answered, which is what `aiProvenance` must record (Rule 12).
+ */
+async function geminiGenerate(bodyString, timeoutMs, label) {
+    var modelName = await resolveModel();
+    var attempt = await geminiGenerateOnce(modelName, bodyString, timeoutMs);
+
+    // `AU30`, both halves: a quota refusal OR an availability refusal ("no longer
+    // available", 404) demotes the model and retries once. The probe catches most
+    // of the second kind at resolution; this catches a model retired mid-life.
+    var refusedForQuota = modelQuota.isQuotaExhausted(attempt.response.status, attempt.data);
+    var refusedAsUnavailable = !attempt.response.ok
+        && modelAvailability.classifyProbe(attempt.response.status, JSON.stringify(attempt.data || '')) === 'no';
+    if (refusedForQuota || refusedAsUnavailable) {
+        modelDemotions.demote(modelName, Date.now());
+        modelResolutionPromise = null;
+        var retryModel = modelQuota.nextUsable(modelDemotions, Date.now());
+        logger.warn(label + (refusedForQuota ? ' quota exhausted' : ' model unavailable'), {
+            model:   modelName,
+            message: attempt.data && attempt.data.error && attempt.data.error.message,
+            retryOn: retryModel,
+        });
+        if (retryModel && retryModel !== modelName) {
+            modelName = retryModel;
+            attempt = await geminiGenerateOnce(modelName, bodyString, timeoutMs);
+        }
+    }
+
+    if (!attempt.response.ok) {
+        logger.error(label + ' API failure', {
+            status:  attempt.response.status,
+            message: attempt.data && attempt.data.error && attempt.data.error.message,
+            model:   modelName,
+        });
+        throw new HttpsError(
+            attempt.response.status === 429 ? 'resource-exhausted' : 'internal',
+            modelQuota.clientMessage(attempt.response.status),
+        );
+    }
+
+    return { modelName: modelName, data: attempt.data };
 }
 
 const MAX_USER_TEXT    = 500;
@@ -476,8 +580,6 @@ exports.chatWithAura = onCall({
     });
 
     try {
-        var modelName = await resolveModel();
-        var url = 'https://generativelanguage.googleapis.com/v1beta/' + modelName + ':generateContent?key=' + API_KEY;
         var turnIndex      = history.length;
         var diagnosisReady = turnIndex >= 4;
 
@@ -564,11 +666,7 @@ exports.chatWithAura = onCall({
 
         var trimmedHistory = history.slice(-MAX_HISTORY_LEN).map(function(h) { return { role: h.role, parts: h.parts }; });
 
-        var response = await fetch(url, {
-            method:  'POST',
-            headers: { 'Content-Type': 'application/json' },
-            signal:  AbortSignal.timeout(90000),
-            body: JSON.stringify({
+        var requestBody = JSON.stringify({
                 systemInstruction: {
                     /**
                      * The persona is an INSTRUCTION and belongs here — `AU28`. An
@@ -601,24 +699,13 @@ exports.chatWithAura = onCall({
                     maxOutputTokens:  8192,
                     responseMimeType: 'application/json',
                 },
-            }),
         });
 
-        var data = await response.json();
-
-        if (response.status === 404) {
-            logger.warn('[NEXUS] Model 404 — clearing cache for re-discovery.');
-            modelResolutionPromise = null;
-        }
-
-        if (!response.ok) {
-            logger.error('[AURA] API Failure', {
-                status:  response.status,
-                message: data.error && data.error.message,
-                model:   modelName,
-            });
-            throw new Error((data.error && data.error.message) || 'API Error');
-        }
+        // `AU30`: quota fallback, 404 cache-clear and the clean client error all
+        // live in `geminiGenerate`; `modelName` is whichever model ANSWERED.
+        var gen = await geminiGenerate(requestBody, 90000, '[AURA]');
+        var modelName = gen.modelName;
+        var data = gen.data;
 
         var rawText = extractText(data);
 
@@ -731,9 +818,6 @@ exports.generateSmartAnalysis = onCall({
     validateAnalysisInput({ targetYear: targetYear, staffProfiles: staffProfiles, yearData: yearData });
 
     try {
-        var modelName = await resolveModel();
-        var url = 'https://generativelanguage.googleapis.com/v1beta/' + modelName + ':generateContent?key=' + API_KEY;
-
         var promptText = 'TEAM IDENTITY: ' + teamName + '\n' +
         'Generate a comprehensive staff wellbeing audit report for the year ' + targetYear + ' for the team identified above.\n\n' +
         'STAFF PROFILES (' + staffProfiles.length + ' records):\n' +
@@ -753,29 +837,25 @@ exports.generateSmartAnalysis = onCall({
         '- All three fields are REQUIRED. If you cannot produce one, return it as a short honest sentence rather than omitting it.\n\n' +
         'Return ONLY the JSON object. No markdown.';
 
-        var response = await fetch(url, {
-            method:  'POST',
-            headers: { 'Content-Type': 'application/json' },
-            signal:  AbortSignal.timeout(30000),
-            body: JSON.stringify({
-                systemInstruction: {
-                    parts: [{ text: GUARDRAIL_PREAMBLE }, { text: SMART_ANALYSIS_SYSTEM_PROMPT }],
-                },
-                contents: [{
-                    role:  'user',
-                    parts: [{ text: promptText }],
-                }],
-                generationConfig: {
-                    temperature:      0.2,
-                    maxOutputTokens:  4096,
-                    responseMimeType: 'application/json',
-                },
-            }),
+        var requestBody = JSON.stringify({
+            systemInstruction: {
+                parts: [{ text: GUARDRAIL_PREAMBLE }, { text: SMART_ANALYSIS_SYSTEM_PROMPT }],
+            },
+            contents: [{
+                role:  'user',
+                parts: [{ text: promptText }],
+            }],
+            generationConfig: {
+                temperature:      0.2,
+                maxOutputTokens:  4096,
+                responseMimeType: 'application/json',
+            },
         });
 
-        var genData = await response.json();
-
-        if (!response.ok) throw new Error((genData.error && genData.error.message) || 'Audit API Error');
+        // `AU30`: quota fallback and the clean client error live in `geminiGenerate`.
+        var gen = await geminiGenerate(requestBody, 30000, '[SMART_ANALYSIS]');
+        var modelName = gen.modelName;
+        var genData = gen.data;
 
         var rawText = extractText(genData);
         /**
@@ -1013,16 +1093,9 @@ exports.processFeedPost = onCall({ secrets: ['GEMINI_API_KEY'] }, async (request
     ].join('\n');
 
     try {
-        var modelName = await resolveModel();
-        var url = 'https://generativelanguage.googleapis.com/v1beta/' + modelName + ':generateContent?key=' + API_KEY;
-
         var userContent = rawText ? rawText : '[Image Post with no text]';
 
-        var response = await fetch(url, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            signal: AbortSignal.timeout(30000),
-            body: JSON.stringify({
+        var requestBody = JSON.stringify({
                 /**
                  * ⚠️ THE BRIEF PREAMBLE IS HERE FOR ONE LINE OF IT: RULE 15. This
                  *    function feeds a staff-authored post to a model and acts on the
@@ -1037,15 +1110,11 @@ exports.processFeedPost = onCall({ secrets: ['GEMINI_API_KEY'] }, async (request
                     temperature: 0.2,
                     responseMimeType: 'application/json',
                 },
-            }),
         });
 
-        var genData = await response.json();
-
-        if (!response.ok) {
-            console.error('[AURA GUARD API Error]', genData);
-            throw new Error((genData.error && genData.error.message) || 'AURA API Error');
-        }
+        // `AU30`: quota fallback and the clean client error live in `geminiGenerate`.
+        var gen = await geminiGenerate(requestBody, 30000, '[AURA GUARD]');
+        var genData = gen.data;
 
         var rawResponseText = extractText(genData);
         var analysisResult = parseJsonResponse(rawResponseText, ['is_approved']);
@@ -1435,17 +1504,9 @@ exports.communityAck = onCall({
     if (!checked.ok) throw new HttpsError('invalid-argument', checked.message);
 
     try {
-        const modelName = await resolveModel();
-        const url = 'https://generativelanguage.googleapis.com/v1beta/' + modelName
-                  + ':generateContent?key=' + API_KEY;
-
         const turn = communityAckRules.buildAckTurn(checked);
 
-        const response = await fetch(url, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            signal: AbortSignal.timeout(20000),
-            body: JSON.stringify({
+        const requestBody = JSON.stringify({
                 // The brief variant, not the full one: this endpoint returns one
                 // sentence under a 200-token ceiling, and prefixing it with four
                 // hundred words on citation practice would be padding on a public,
@@ -1458,23 +1519,14 @@ exports.communityAck = onCall({
                     // a 40-word acknowledgement is two orders of magnitude of slack.
                     maxOutputTokens: 200,
                 },
-            }),
         });
 
-        const data = await response.json();
-        if (response.status === 404) {
-            logger.warn('[NEXUS] Model 404 — clearing cache for re-discovery.');
-            modelResolutionPromise = null;
-        }
-        if (!response.ok) {
-            logger.error('[communityAck] API failure', {
-                status: response.status,
-                message: data.error && data.error.message,
-            });
-            throw new Error((data.error && data.error.message) || 'API Error');
-        }
+        // `AU30`: quota fallback, 404 cache-clear and the clean client error all
+        // live in `geminiGenerate` — this public endpoint most of all must not
+        // forward upstream billing text to an anonymous browser.
+        const gen = await geminiGenerate(requestBody, 20000, '[communityAck]');
 
-        return { text: String(extractText(data) || '').trim() };
+        return { text: String(extractText(gen.data) || '').trim() };
 
     } catch (error) {
         if (error instanceof HttpsError) throw error;
@@ -1951,9 +2003,23 @@ async function readTeamContext(db, request) {
         throw new HttpsError('permission-denied', 'You are not a lead of that team.');
     }
 
+    /**
+     * ⚠️ THE EMAIL COMES FROM THE TOKEN, AND ONLY WHEN VERIFIED. `request.data.email`
+     *    would be a claim by whoever called. `email_verified` is Firebase's own
+     *    assertion that this person can receive mail at that address, and it is what
+     *    makes "their own domain" mean anything — an unverified token yields `null`
+     *    here, so the same-institution rule in `assertInvitable` simply does not
+     *    apply and the allowlist decides, as before.
+     */
+    var token = request.auth.token || {};
+    var callerEmail = token.email_verified === true && typeof token.email === 'string'
+        ? token.email.trim().toLowerCase()
+        : null;
+
     return {
         teamId: teamId,
         callerUid: callerUid,
+        callerEmail: callerEmail,
         team: teamSnap.data(),
         callerMembership: callerSnap.data(),
     };
@@ -2018,6 +2084,7 @@ exports.inviteMember = onCall({ cors: true }, async (request) => {
         var refusal = teamMembership.assertInvitable({
             teamId: context.teamId,
             callerMembership: context.callerMembership,
+            callerEmail: context.callerEmail,
             invitee: { uid: null, email: email, emailVerified: false },
             role: role,
             allowedDomains: domains,
@@ -2045,6 +2112,7 @@ exports.inviteMember = onCall({ cors: true }, async (request) => {
     var verdict = teamMembership.assertInvitable({
         teamId: context.teamId,
         callerMembership: context.callerMembership,
+        callerEmail: context.callerEmail,
         invitee: invitee,
         role: role,
         existingMembership: existingSnap && existingSnap.exists ? existingSnap.data() : null,
@@ -2073,6 +2141,32 @@ exports.inviteMember = onCall({ cors: true }, async (request) => {
         now: new Date().toISOString(),
     });
 
+    /**
+     * ⚠️ THE PLACEHOLDER FOR THIS PERSON, IF THERE IS ONE, GOES IN THE SAME BATCH.
+     *
+     *    `scripts/add-pending-member.cjs` writes a rosterable member for somebody who
+     *    has not registered yet, so a department can build next month's roster without
+     *    waiting on a registration relay. Those rows carry `pendingEmail` and an id
+     *    prefixed `pending-`.
+     *
+     *    When that person finally registers and a lead adds them here, a membership is
+     *    created under their REAL uid — and without this, the placeholder would still
+     *    be sitting in the staff pool. The department would then have TWO of the same
+     *    colleague: both rostered, both eligible, and the engine would happily give one
+     *    person two duties at once while believing they were two people. That is a
+     *    double-booking a roster master would have to spot by eye.
+     *
+     *    IN THE SAME BATCH, deliberately: a separate delete could succeed while the
+     *    membership write failed, or fail after it succeeded, and either order leaves
+     *    the department in the state this exists to prevent.
+     *
+     *    Matched on `pendingEmail`, not on the id: the id is derived from the address
+     *    and is for humans reading a console. The field is the contract.
+     */
+    var placeholders = await db.collection('teams/' + context.teamId + '/members')
+        .where('pendingEmail', '==', email)
+        .get();
+
     var batch = db.batch();
     batch.set(db.doc(writes.member.path.join('/')), writes.member.data);
     batch.set(
@@ -2085,7 +2179,20 @@ exports.inviteMember = onCall({ cors: true }, async (request) => {
         },
         { merge: true },
     );
+    placeholders.forEach(function (placeholder) {
+        // The grade travels with the person, not with the placeholder: their real
+        // membership gets its own `grades/{uid}` document when a lead sets one. The
+        // placeholder's is removed with it so no orphan grade is left addressed to an
+        // id nobody will look up again.
+        batch.delete(placeholder.ref);
+        batch.delete(db.doc('teams/' + context.teamId + '/grades/' + placeholder.id));
+    });
     await batch.commit();
+
+    if (!placeholders.empty) {
+        logger.info('[TEAMS] replaced ' + placeholders.size + ' placeholder(s) for ' + email
+            + ' in ' + context.teamId);
+    }
 
     logger.info('[TEAMS] ' + context.callerUid + ' added ' + invitee.uid + ' to ' + context.teamId);
     return { success: true, alreadyMember: false, uid: invitee.uid, role: role };

@@ -796,3 +796,173 @@ describe('live mode: the responsive work stopped at the branch', () => {
         expect(grid.className).toContain('sm:grid-cols-7');
     });
 });
+
+
+/**
+ * ==============================================================================
+ * THE ROSTER TOOLBAR — FOUR ICONS, ONE ROW, NO BOXES
+ *
+ * This surface has now been through four shapes in one day, each fixing the last:
+ * four coloured buttons wrapped onto three rows of two heights; a 2x2 grid of
+ * boxes; a retint that made colour the only cue; and finally an outlined box whose
+ * dark fill measured 1.00:1 against the card behind it. Every one of those was a
+ * BOX problem.
+ *
+ * The boxes are gone. Each control is an icon over a 10px label, the pattern the
+ * app's own bottom navigation already uses. What has to hold now is different, so
+ * the old assertions were deleted rather than adapted: there is no ring to keep
+ * visible, no fill to keep distinct, no two rows to keep aligned.
+ *
+ * jsdom has no layout, so what is pinned here is the DECLARATIONS — which is what
+ * regressed every time. The geometry was measured in a real 375px viewport.
+ * ==============================================================================
+ */
+describe('the roster toolbar: four icons in one row, and no boxes at all', () => {
+    const toolbar = () => screen.getByRole('group', { name: /how to show the roster/i }).parentElement;
+    const items = () => Array.from(toolbar().querySelectorAll('button'));
+
+    it('is a four-column grid on a phone and a flex row from `sm:` up', () => {
+        render(<RosterView user={VISITOR} />);
+
+        const bar = toolbar();
+        expect(mobileClasses(bar)).toContain('grid-cols-4');
+        expect(bar.className).toContain('sm:flex');
+        expect(bar.className).toContain('sm:justify-end');
+        // Four controls, one row. It replaced two rows of buttons.
+        expect(items()).toHaveLength(4);
+    });
+
+    it('declares no fill, no ring and no border on any of the four', () => {
+        // The whole class of bug this design retires. A fill can end up the same
+        // colour as the card (it did: 1.00:1), and a ring has to be kept visible in
+        // two themes. Neither exists now.
+        render(<RosterView user={VISITOR} />);
+
+        for (const item of items()) {
+            expect(item.className).not.toMatch(/(^|\s)(sm:|dark:)?bg-/);
+            expect(item.className).not.toMatch(/(^|\s)(sm:|dark:)?ring-/);
+            expect(item.className).not.toMatch(/(^|\s)(sm:|dark:)?border/);
+        }
+    });
+
+    it('labels every icon, so nobody has to guess what a grid means', () => {
+        // Icon-only was on the table and was not taken: a gear and a download arrow
+        // are guessable, a grid versus a person is not — and they are a toggle, so
+        // the icon would also have to say which is on.
+        render(<RosterView user={VISITOR} />);
+
+        for (const [item, label] of items().map((el, i) => [el, ['Department', 'My week', 'Configure', 'Export'][i]])) {
+            expect(item.querySelector('svg')).toBeTruthy();
+            expect(item.textContent.trim()).toBe(label);
+        }
+    });
+
+    it('carries the selected view with TWO cues that survive greyscale', () => {
+        // Colour cannot do this alone — indigo and slate are close in lightness,
+        // which is the trap the boxed version fell into. The underline is a shape;
+        // the stroke weight is a thickness. Both read without colour.
+        render(<RosterView user={VISITOR} />);
+
+        const [department, myWeek] = items();
+        expect(department.getAttribute('aria-pressed')).toBe('true');
+
+        // 1. the underline bar
+        const bar = (el) => Array.from(el.children).find((c) => c.getAttribute('aria-hidden') === 'true');
+        expect(bar(department).className).toContain('bg-indigo-600');
+        expect(bar(myWeek).className).toContain('bg-transparent');
+        // ...always rendered, so the row cannot change height when the selection moves.
+        expect(bar(myWeek)).toBeTruthy();
+
+        // 2. the heavier stroke
+        expect(department.querySelector('svg').getAttribute('stroke-width')).toBe('2.5');
+        expect(myWeek.querySelector('svg').getAttribute('stroke-width')).toBe('2');
+    });
+
+    it('keeps a 44px thumb target on every item despite having no box', () => {
+        render(<RosterView user={VISITOR} />);
+        for (const item of items()) {
+            expect(mobileClasses(item)).toContain('min-h-11');
+            expect(item.className).toContain('sm:min-h-0');
+        }
+    });
+
+    it('offers a single Export trigger, not one button per file extension', () => {
+        render(<RosterView user={VISITOR} />);
+
+        expect(screen.getByRole('button', { name: /^Export$/i })).toBeTruthy();
+        for (const gone of [/^CSV$/i, /^ICS$/i, /^Excel$/i, /^PDF$/i]) {
+            expect(screen.queryByRole('button', { name: gone })).toBeNull();
+        }
+    });
+
+    it('marks the Export trigger while its menu is open, in the same language', () => {
+        render(<RosterView user={VISITOR} />);
+
+        const trigger = screen.getByRole('button', { name: /^Export$/i });
+        expect(trigger.className).toContain('text-slate-500');
+
+        fireEvent.click(trigger);
+        const open = screen.getByRole('button', { name: /^Export$/i });
+        expect(open.className).toContain('text-indigo-600');
+        expect(open.querySelector('svg').getAttribute('stroke-width')).toBe('2.5');
+    });
+});
+
+/**
+ * "MY WEEK": ONE ROW RHYTHM, NOT ONE PER DUTY NAME.
+ *
+ * Measured at 375px: 68px, 69px and 73px for rows that are the same kind of thing.
+ * Two causes, both declarations. `items-baseline` puts a padded badge, a 16px duty
+ * name and a 14px date on one baseline, and each combination resolves to a
+ * different line box. And the date shared a line with the duty, so a long duty name
+ * wrapped where a short one did not — the row height depended on what the clinic
+ * was called.
+ */
+describe('the my-week list: every row the same height on a phone', () => {
+    /**
+     * ⚠️ A ROSTER MUST BE GENERATED FIRST, and this is not a detail.
+     *
+     * Without one the panel renders an explanatory paragraph and NO list, so the
+     * two assertions below iterated an empty collection and the tests passed while
+     * checking nothing at all. They were written that way, caught by asserting the
+     * list exists, and are only meaningful because of these six lines.
+     */
+    const openMyWeek = () => {
+        render(<RosterView user={VISITOR} />);
+        openConfigure();
+        fireEvent.change(screen.getByLabelText('Staff row 1 name'), { target: { value: 'Peter Parker' } });
+        fireEvent.click(screen.getAllByRole('button', { name: /add row/i })[0]);
+        fireEvent.change(screen.getByLabelText('Staff row 2 name'), { target: { value: 'Carol Danvers' } });
+        fireEvent.change(screen.getByLabelText('Task row 1 name'), { target: { value: 'Ward Round' } });
+        fireEvent.click(screen.getByRole('button', { name: /^draft roster$/i }));
+        fireEvent.click(screen.getByRole('button', { name: /my week/i }));
+        return document.querySelector('[data-roster-view="person"]');
+    };
+
+    it('centres the row rather than sitting it on a shared baseline', () => {
+        const panel = openMyWeek();
+        const list = panel.querySelector('ul');
+        expect(list).toBeTruthy();
+        expect(list.children.length).toBeGreaterThan(0);
+        for (const row of Array.from(list.children)) {
+            expect(row.className).toContain('items-center');
+            expect(row.className).not.toContain('items-baseline');
+        }
+    });
+
+    it('gives the date its own line on a phone, so the break cannot depend on the duty name', () => {
+        const panel = openMyWeek();
+        const list = panel.querySelector('ul');
+        expect(list).toBeTruthy();
+        expect(list.children.length).toBeGreaterThan(0);
+        for (const row of Array.from(list.children)) {
+            const date = row.firstElementChild;
+            expect(mobileClasses(date)).toContain('w-full');
+            expect(date.className).toContain('sm:w-auto');
+            // The 9rem column is what lines the dates up on a DESKTOP, and it must
+            // stay gated: unconditional, it would reserve 144px of a 375px screen.
+            expect(date.className).toContain('sm:min-w-[9rem]');
+            expect(date.className).not.toMatch(/(^|\s)min-w-\[9rem\]/);
+        }
+    });
+});

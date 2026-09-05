@@ -30,8 +30,8 @@ const MODEL_PRIORITY = [
     'gemini-pro-latest',
     'gemini-2.5-pro',
     'gemini-3.5-flash',
-    'gemini-flash-latest',
     'gemini-2.5-flash',
+    'gemini-flash-latest',
 ];
 
 /**
@@ -41,8 +41,11 @@ const MODEL_PRIORITY = [
  * an expiry date. The cost of an alias is that it may move under us, which is why
  * `aiProvenance` records what actually answered.
  *
- * INVARIANT (asserted in the tests): it must name a member of `MODEL_PRIORITY`,
- * so the fallback can never be a name nothing else ever checks.
+ * INVARIANT (asserted in the tests): it must be the LAST member of
+ * `MODEL_PRIORITY` — a member, so the fallback can never be a name nothing else
+ * checks; and last, because `modelQuota.nextUsable()` returns null only once the
+ * whole list including the fallback has refused, and that reasoning needs the
+ * fallback to be in the list it walks.
  */
 const SAFE_FALLBACK_MODEL = 'models/gemini-flash-latest';
 
@@ -74,8 +77,10 @@ function classifyProbe(status, body) {
     if (status >= 200 && status < 300) return 'yes';
     if (status === 404) return 'no';
 
-    // 429 and 5xx are transient by definition and are never allowed to demote,
-    // whatever prose they carry — an overload page can say anything.
+    // 429 and 5xx are transient by definition and are never allowed to demote
+    // HERE, whatever prose they carry — an overload page can say anything. The
+    // caller may layer a quota rule on top (`index.js` does, because its
+    // demotions expire); this function stays pure and conservative.
     if (status === 429 || status >= 500) return 'unknown';
 
     const text = typeof body === 'string' ? body : '';

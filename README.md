@@ -1,6 +1,6 @@
-# NEXUS: Smart Operations Dashboard v2.1.3 [BETA]
+# NEXUS: Smart Operations Dashboard v2.11.0 [BETA]
 
-![Version](https://img.shields.io/badge/Version-v2.1.3-blue) ![Status](https://img.shields.io/badge/Status-Beta%20Phase-emerald) ![Teams](https://img.shields.io/badge/Multi--Team-28%20AHP%20professions-indigo) ![Roster](https://img.shields.io/badge/Roster%20engine-deterministic-0f766e) ![Assistant](https://img.shields.io/badge/AURA%20assistant-Gemini-purple) ![PWA](https://img.shields.io/badge/PWA-Native%20Push%20Enabled-blue) ![CI/CD](https://img.shields.io/badge/CI%2FCD-GitHub%20Actions-2ea44f)
+![Version](https://img.shields.io/badge/Version-v2.11.0-blue) ![Status](https://img.shields.io/badge/Status-Beta%20Phase-emerald) ![Teams](https://img.shields.io/badge/Multi--Team-28%20AHP%20professions-indigo) ![Roster](https://img.shields.io/badge/Roster%20engine-deterministic-0f766e) ![Assistant](https://img.shields.io/badge/AURA%20assistant-Gemini-purple) ![PWA](https://img.shields.io/badge/PWA-Native%20Push%20Enabled-blue) ![CI/CD](https://img.shields.io/badge/CI%2FCD-GitHub%20Actions-2ea44f)
 
 **NEXUS** (formerly IDC App) is a clinician-led platform for workload management, skill-mix routing and staff wellbeing, built inside an allied health department and now serving departments beyond the one it was written for.
 
@@ -222,8 +222,15 @@ This application is an operational and workload management tool. It is not a cli
 ### Supported Versions
 | Version | Status |
 | ------- | ------ |
-| 2.1.x   | **Active Beta** (multi-team) |
-| 2.0.x   | Superseded — upgrade to 2.1.x |
+| 2.10.x  | **Active Beta** (multi-team) |
+| 2.9.x   | Superseded — upgrade to 2.10.x |
+| 2.8.x   | Superseded — upgrade to 2.9.x |
+| 2.7.x   | Superseded — upgrade to 2.9.x |
+| 2.4.x   | Superseded — upgrade to 2.5.x |
+| 2.3.x   | Superseded — upgrade to 2.4.x |
+| 2.2.x   | Superseded — upgrade to 2.3.x |
+| 2.1.x   | Superseded — upgrade to 2.2.x |
+| 2.0.x   | Superseded — upgrade to 2.2.x |
 | 1.18.x  | Legacy — single-team, pre-migration data model |
 | < 1.18  | Deprecated / Offline |
 
@@ -307,7 +314,7 @@ The audit-and-remediation record and the go-live material live beside the code:
 
 | Document | What it is |
 |---|---|
-| [`AURA-POSTMORTEM.md`](AURA-POSTMORTEM.md) · [`AURA-TODO.md`](AURA-TODO.md) · [`AURA-CHANGELOG.md`](AURA-CHANGELOG.md) · [`AURA-HANDOFF.md`](AURA-HANDOFF.md) | The AURA audit ledger — 46 findings closed with evidence, the engineering queue empty, the remainder the owner's column (the TODO's status table is the authoritative count) |
+| [`AURA-POSTMORTEM.md`](AURA-POSTMORTEM.md) · [`AURA-TODO.md`](AURA-TODO.md) · [`AURA-CHANGELOG.md`](AURA-CHANGELOG.md) · [`AURA-HANDOFF.md`](AURA-HANDOFF.md) | The AURA audit: 58 findings, 45 closed with evidence; the engineering queue is empty and the remainder is the owner's column |
 | [`AURA-GUARDRAILS.md`](AURA-GUARDRAILS.md) | The owner's sixteen working rules, verbatim, with the honest conformance table — what is CODE, what is only asked of a model |
 | [`AURA-GOLIVE-GATE.md`](AURA-GOLIVE-GATE.md) | The five go-live gates: failed 2026-08-23, all passing on re-run 2026-08-24 |
 | [`AURA-VERIFICATION-TURNS.md`](AURA-VERIFICATION-TURNS.md) | The 20 real turns the owner reads before the guardrail prompts ship |
@@ -315,7 +322,6 @@ The audit-and-remediation record and the go-live material live beside the code:
 | `docs/NEXUS-roster-walkthrough.pptx` | The AHP walkthrough deck — real screenshots, desktop and mobile |
 | `docs/CLAUDE-DESIGN-PROMPTS.md` | The prompt pack for restyling the walkthrough in Claude Design |
 | `docs/CD13-translation-review.xlsx` | The native-speaker review workbook for the 19 machine-translated strings |
-| [`docs/AURA-CHATBOT-INFO-CARD.md`](docs/AURA-CHATBOT-INFO-CARD.md) | The IMDA-aligned chatbot info card, v1.0, owner-approved — served in-app at `/aura-info` |
 
 ## Interactive Demo Mode and Smoke Testing
 
@@ -338,11 +344,70 @@ Beta testers should utilise Demo Mode to verify system integrity:
 
 ## Release History
 
+### NEXUS v2.9.0 [Current Beta] — Take the roster off the screen
+
+**Two new exports.** A **PDF** wall calendar — one page per month, duties in the day
+squares in the department's own colours — and an **Excel workbook** with a calendar tab
+per month, in boxes that can be edited and printed. Both end with a *staff-by-week*
+sheet: rows are people, columns are weeks, so a rotation can be checked at a glance
+rather than across twelve pages. Neither adds a runtime dependency.
+
+**One `Export` control** in place of four file-extension buttons, each format described
+by what it is *for*. On a 375px phone the old row wrapped the toolbar onto three rows of
+two different heights; it is now two rows of one height.
+
+### NEXUS v2.8.0 — A standby is named to step in, not a second pair of hands
+
+**`secondPerson: 'standby'`.** The second person on a shift may be named as a backup
+rather than counted as an attendee, so their daily duty cap and contracted hours are no
+longer billed for a session they do not attend. On the department that asked for it:
+**19 unfilled slots over 17 weeks → 0**, at an unchanged cap. Off by default.
+
+### NEXUS v2.7.0 — A duty is somebody's for the week
+
+**Weekly rotation.** A department can now say "we rotate duties weekly" and mean it:
+one person leads a duty for the whole week, then it passes to whoever has been away
+from it longest. It applies to every duty, including one that runs only a day or two.
+Off by default, so no existing roster changes shape.
+
+Measured on the owner's own department, seventeen weeks: a duty changed lead mid-week
+in **68 weeks out of 68** before, and **0 out of 68** after, with every slot still
+filled. Leave still applies — a lead away on the Wednesday has somebody stand in for
+that day and takes the duty back on the Thursday.
+
+**Two theme fixes.** The date picker's calendar icon was invisible in light mode, and
+its pop-up opened dark, because `color-scheme` followed the operating system while the
+app's theme is a class. And step 2 of Configure had no gap beneath it in live mode —
+the one seam where two steps come from different files.
+
 > The authoritative, machine-readable record is **[`CHANGELOG.md`](CHANGELOG.md)**, which
 > also lists the **known issues that are documented but not yet fixed**. The summaries
 > below are narrative highlights; where the two disagree, `CHANGELOG.md` is correct.
 
-### NEXUS v2.1.3 [Current Beta]
+### NEXUS v2.6.0 — Some of the duties, and a name that fits a phone
+
+A minor release: two new lead-set membership fields, plus the dead controls that
+building them exposed. **`onlyTasks`** lets a lead say a colleague carries *some* of the
+department's duties — the reporting lead is on the roster for two of nine — mapping to
+one cohort window with no date bounds, so it narrows *which* duties without narrowing
+*when*. **`shortName`** is an 8-character acronym used in the roster calendar chips and
+the `.ics` `SUMMARY` (`[Exercise Test] Lead: MA, Co: BF`); full names move to the event
+`DESCRIPTION` rather than disappearing, and the `.csv` deliberately keeps them
+throughout. Both fields are lead-only in `firestore.rules` and absent from the member's
+own update list on purpose.
+
+Two controls that rendered, accepted typing and reached nothing were fixed: the staff
+table's **"More" drawer never received `readOnly`**, so in live mode its inputs and its
+"Add availability window" button were interactive but inert; and an audit one step later
+found the **sandbox's own short-name cell had no consumer either**. Mutation testing
+found four surviving mutations plus a JSX-escape — nothing had proved a typed short name
+reached a chip or a file — now covered end to end.
+
+⚠️ **An old cached PWA bundle silently ignores `onlyTasks`.** A lead holding a stale
+bundle who presses Generate writes a roster putting the restricted person on every duty
+and reports success. Additive in shape, not in behaviour — see `CHANGELOG.md`.
+
+### NEXUS v2.1.3
 
 A patch release: the public answering surfaces now speak lay language, no new features and no data change. People filling in the chat and the form were shown **instrument acronyms mid-question** — `ACSM PAVS`, `SPAG`, `SDOH`, `PHQ-2`, `LSNS-6`, `BPS-RS II` — vocabulary that means nothing outside a health system, at the moment they are trying to answer. Badges, step titles and footnotes now read as plain words (*Physical Activity*, *Strength Training*, *Health & Safety Check*, *Mood & Wellbeing*), and a footnote describes its question rather than citing it. The full instrument citations are **not** lost: they remain, expanded on first use, on the PDF report's governance page, where an auditor looks for them. Separately, the word **"clinical" is gone from every public-facing string** in all four languages — including the Malay *klinikal* and Chinese *临床* — because this portal must not present itself as a clinical service; staff-side copy is untouched, since *Clinical Exercise Physiologist* is a real job title. The chat's internal `clinical` group key became `safety`, which is a **presentation key that never leaves the browser** — the persisted `key` fields are unchanged, so a cached client reads stored responses exactly as before. Release tags can now also be cut from a `workflow_dispatch` (`.github/workflows/tag-release.yml`), build tooling only.
 

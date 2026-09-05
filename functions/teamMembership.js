@@ -169,6 +169,12 @@ const INVITE_REASONS = {
 const assertInvitable = ({
     teamId,
     callerMembership,
+    /**
+     * The VERIFIED email of the lead making the call, from the auth token — never
+     * from `request.data`, which would be a claim. See `sameInstitution` below for
+     * what it is for and why it is safe.
+     */
+    callerEmail = null,
     invitee,
     role = 'staff',
     existingMembership = null,
@@ -215,13 +221,66 @@ const assertInvitable = ({
         return no(INVITE_REASONS.BAD_EMAIL, 'That does not look like an email address.');
     }
 
-    if (!isAllowedEmail(invitee.email, domains)) {
+    /**
+     * ⚠️ A LEAD MAY ALWAYS ADD A COLLEAGUE ON THEIR OWN DOMAIN, and this is the
+     *    rule that stops NEXUS being unable to start itself.
+     *
+     *    THE OBJECTION THAT PRODUCED IT, from the owner on 2026-08-31: *"why do I
+     *    need to register my organisation when I'm the one building it, it doesn't
+     *    make sense."* It did not. `config/domains` is unwritable by any client, so
+     *    a freshly deployed NEXUS refused the first lead the right to add the first
+     *    colleague at their own hospital — the base case, and the one that has to
+     *    work before anything else can.
+     *
+     *    WHY THIS IS SAFE, and narrower than it looks. All four hold at once:
+     *      • the caller is authenticated and is a LEAD of this team (checked above);
+     *      • their email is VERIFIED — an unverified token is not accepted below,
+     *        so the domain is one Firebase confirmed they can receive mail at;
+     *      • the invitee ALREADY has a NEXUS account, or the `NO_ACCOUNT` refusal
+     *        further down catches them — so they passed registration themselves;
+     *      • and it admits exactly ONE domain: the lead's own.
+     *    "A verified lead adds a colleague at their own institution" is not the
+     *    threat the allowlist exists for. Placing an ARBITRARY address, or one at
+     *    ANOTHER institution, still needs `config/domains`, which is what it was
+     *    always for.
+     *
+     *    It is deliberately NOT a fallback to `DEFAULT_ALLOWED_DOMAINS`. That would
+     *    hardcode two hospitals into the server and re-create the coupling the
+     *    config document removed; this derives the answer from who is calling.
+     */
+    const sameInstitution = typeof callerEmail === 'string'
+        && emailDomain(callerEmail) !== null
+        && emailDomain(callerEmail) === emailDomain(invitee.email);
+
+    if (!sameInstitution && !isAllowedEmail(invitee.email, domains)) {
         const domain = emailDomain(invitee.email);
+        /**
+         * TWO REFUSALS, NOT ONE, because they need different actions from the person
+         * reading them — and the old single sentence conflated them.
+         *
+         *   • NOTHING CONFIGURED. Nobody can be added to any team, at any
+         *     institution. That is a SETUP step somebody has not done yet, and it
+         *     says nothing about the institution in the address. The old message
+         *     read "NEXUS is not open to kkh.com.sg… none configured", which tells a
+         *     lead their hospital was considered and rejected. It was not.
+         *   • CONFIGURED, BUT NOT THIS ONE. Their institution genuinely is not
+         *     registered, and the list is worth showing so they can see what is.
+         *
+         * NEITHER NAMES `config/domains`. A Firestore path is not an action a
+         * clinical lead can take, and it was the first thing the old message asked
+         * of them. The path is in the code, the runbook and the CHANGELOG, where the
+         * person who can act on it is looking.
+         */
         return no(
             INVITE_REASONS.DOMAIN_NOT_ALLOWED,
-            'NEXUS is not open to ' + domain + '. Registered organisations: '
-            + (domains.length > 0 ? domains.join(', ') : 'none configured')
-            + '. If this institution should be here, the owner adds it to config/domains.',
+            domains.length === 0
+                ? 'NEXUS has not been set up with any organisations yet, so nobody can be '
+                  + 'added to a team — including ' + domain + '. This is a setup step that is '
+                  + 'still outstanding, not a decision about your institution. Ask whoever '
+                  + 'installed NEXUS to register your organisation, then add this person again.'
+                : 'NEXUS is not open to ' + domain + ' yet. Registered organisations: '
+                  + domains.join(', ') + '. If your institution should be here, ask whoever '
+                  + 'installed NEXUS to register it.',
         );
     }
 

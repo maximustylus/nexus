@@ -73,7 +73,8 @@ const weekdayOfKey = (key) => new Date(`${key}T00:00:00Z`).getUTCDay();
 
 const SUNDAY = 0;
 const MONDAY = 1;
-const TUESDAY = 2;
+// TUESDAY is gone with the video consultation, which moved to Thursday on 2026-08-15.
+const THURSDAY = 4;
 const SATURDAY = 6;
 
 /** The weekdays a "Mon-Fri" core block is allowed to occupy. */
@@ -203,11 +204,18 @@ describe('generateRoster — observed output volume (4 staff / 4 tasks / 4 weeks
         );
     });
 
-    it('splits VC evenly into 4 "VC (PM)" and 4 "VC (AM)" shifts', () => {
+    // CHANGED 2026-08-15 with the duty rename. Both video-consult slots are now
+    // "Video Consultation Individual" — the department's group sessions are all
+    // afternoon (the children are at school in the morning), so a MORNING slot
+    // cannot be a group one. The two are therefore told apart by their DAY, which
+    // is the honest key: the name never identified them, the day always did.
+    it('splits the video consultation evenly into 4 Thursday and 4 Saturday shifts', () => {
         const roster = generateRoster(baseConfig());
 
-        expect(shiftsWhere(roster, (s) => s.task === 'VC (PM)')).toHaveLength(4);
-        expect(shiftsWhere(roster, (s) => s.task === 'VC (AM)')).toHaveLength(4);
+        const vc = shiftsWhere(roster, (s) => s.task === 'Video Consultation Individual');
+        expect(vc).toHaveLength(8);
+        expect(vc.filter(({ key }) => weekdayOfKey(key) === THURSDAY)).toHaveLength(4);
+        expect(vc.filter(({ key }) => weekdayOfKey(key) === SATURDAY)).toHaveLength(4);
     });
 });
 
@@ -279,8 +287,9 @@ describe('generateRoster — weekday correctness after the Monday snap (post-mor
      *   Engine intent            Offset   Before P4          After P4
      *   ----------------------   ------   ----------------   ---------------
      *   Core block "Mon-Fri"     +0..+4   Sun 1 -> Thu 5     Mon 2 -> Fri 6
-     *   "VC (PM)" "Tuesday"      +1       MONDAY 2 Feb       Tuesday 3 Feb
-     *   "VC (AM)" "Saturday"     +5       Friday 6 Feb       Saturday 7 Feb
+     *   video consult  "Thursday"   +3       MONDAY 2 Feb       Thursday 5 Feb
+     *   video consult  "Saturday"   +5       Friday 6 Feb       Saturday 7 Feb
+     *   (was Tuesday +1 until 2026-08-15; the service moved it to Thursday.)
      *
      * `generateRoster` now snaps its start to the Monday of the requested week.
      * A failure here means the snap has been removed or the week convention has
@@ -305,31 +314,34 @@ describe('generateRoster — weekday correctness after the Monday snap (post-mor
         expect(coreWeekdays).toEqual(WEEKDAYS_MON_TO_FRI);
     });
 
-    it('shift labelled "VC (PM)" lands on the intended Tuesday', () => {
+    it('the Thursday video consultation lands on a genuine Thursday', () => {
         const roster = generateRoster(baseConfig());
 
-        const vcPm = shiftsWhere(roster, (shift) => shift.task === 'VC (PM)');
-        expect(vcPm).toHaveLength(4);
+        // Told apart by DAY, not by name: both consult slots share one task name now.
+        const thu = shiftsWhere(roster, (shift) => shift.task === 'Video Consultation Individual')
+            .filter(({ key }) => weekdayOfKey(key) === THURSDAY);
+        expect(thu).toHaveLength(4);
 
-        // The task label says PM Tuesday clinic, and it is now a Tuesday.
-        vcPm.forEach(({ key }) => {
-            expect(weekdayOfKey(key)).toBe(TUESDAY);
+        thu.forEach(({ key }) => {
+            expect(weekdayOfKey(key)).toBe(THURSDAY);
         });
 
-        // Each key is exactly one day later than the pre-P4 pin it replaces
-        // (which was 02-02 / 09 / 16 / 23 — Mondays).
-        expect(vcPm.map(({ key }) => key).sort()).toEqual([
-            '2026-02-03',
-            '2026-02-10',
-            '2026-02-17',
-            '2026-02-24',
+        // MOVED 2026-08-15: was Tuesday (02-03 / 10 / 17 / 24). The service changed the
+        // consult to Thursday morning, so these keys move two days later — a deliberate
+        // change to live output, not a regression this pin failed to catch.
+        expect(thu.map(({ key }) => key).sort()).toEqual([
+            '2026-02-05',
+            '2026-02-12',
+            '2026-02-19',
+            '2026-02-26',
         ]);
     });
 
-    it('shift labelled "VC (AM)" lands on the intended Saturday', () => {
+    it('the Saturday video consultation lands on a genuine Saturday', () => {
         const roster = generateRoster(baseConfig());
 
-        const vcAm = shiftsWhere(roster, (shift) => shift.task === 'VC (AM)');
+        const vcAm = shiftsWhere(roster, (shift) => shift.task === 'Video Consultation Individual')
+            .filter(({ key }) => weekdayOfKey(key) === SATURDAY);
         expect(vcAm).toHaveLength(4);
 
         vcAm.forEach(({ key }) => {
@@ -379,13 +391,19 @@ describe('generateRoster — every generated key falls on the weekday its task c
             Object.keys(roster).filter((key) => roster[key].some(predicate));
         return {
             core: keysWith((s) => s.category === 'CORE'),
-            vcPm: keysWith((s) => s.task === 'VC (PM)'),
-            vcAm: keysWith((s) => s.task === 'VC (AM)'),
+            // Both consult slots carry ONE task name now, so they are partitioned by
+            // day — Thursday and Saturday — rather than by label.
+            vcPm: Object.keys(roster).filter((key) =>
+                roster[key].some((s) => s.task === 'Video Consultation Individual')
+                && weekdayOfKey(key) === THURSDAY),
+            vcAm: Object.keys(roster).filter((key) =>
+                roster[key].some((s) => s.task === 'Video Consultation Individual')
+                && weekdayOfKey(key) === SATURDAY),
         };
     };
 
     EVERY_START_WEEKDAY.forEach((startDate) => {
-        it(`start ${startDate} (${weekdayOfKey(startDate)}): CORE is Mon-Fri, VC (PM) Tuesday, VC (AM) Saturday`, () => {
+        it(`start ${startDate} (${weekdayOfKey(startDate)}): CORE is Mon-Fri, consults Thursday and Saturday`, () => {
             const { core, vcPm, vcAm } = partition(
                 generateRoster({ ...baseConfig(), startDate, weeks: 4 }),
             );
@@ -394,7 +412,7 @@ describe('generateRoster — every generated key falls on the weekday its task c
             core.forEach((key) => {
                 expect(WEEKDAYS_MON_TO_FRI).toContain(weekdayOfKey(key));
             });
-            vcPm.forEach((key) => expect(weekdayOfKey(key)).toBe(TUESDAY));
+            vcPm.forEach((key) => expect(weekdayOfKey(key)).toBe(THURSDAY));
             vcAm.forEach((key) => expect(weekdayOfKey(key)).toBe(SATURDAY));
         });
     });
@@ -405,7 +423,7 @@ describe('generateRoster — every generated key falls on the weekday its task c
                 generateRoster({ ...baseConfig(), startDate, weeks: 3 }),
             );
             core.forEach((key) => expect(WEEKDAYS_MON_TO_FRI).toContain(weekdayOfKey(key)));
-            vcPm.forEach((key) => expect(weekdayOfKey(key)).toBe(TUESDAY));
+            vcPm.forEach((key) => expect(weekdayOfKey(key)).toBe(THURSDAY));
             vcAm.forEach((key) => expect(weekdayOfKey(key)).toBe(SATURDAY));
         }
     });
@@ -438,7 +456,7 @@ describe('generateRoster — every generated key falls on the weekday its task c
 
         const { core, vcPm, vcAm } = partition(roster);
         core.forEach((key) => expect(WEEKDAYS_MON_TO_FRI).toContain(weekdayOfKey(key)));
-        vcPm.forEach((key) => expect(weekdayOfKey(key)).toBe(TUESDAY));
+        vcPm.forEach((key) => expect(weekdayOfKey(key)).toBe(THURSDAY));
         vcAm.forEach((key) => expect(weekdayOfKey(key)).toBe(SATURDAY));
     });
 
@@ -555,6 +573,12 @@ describe('generateRoster is byte-compatible for a Monday start (ROSTER_TODO.md P
      * identical output. They are not re-derived from the new source.
      */
     const LIVE_STAFF = ['Brandon', 'Ying Xian', 'Derlinder', 'Fadzlynn'];
+    // ⚠️ THE OLD ACRONYMS ON PURPOSE, AND THEY MUST STAY. This block pins the
+    // PRE-P4 engine's output verbatim, to prove the date fix changed nothing. It is a
+    // historical record, so its fixture is the task list that engine actually ran with.
+    // Renaming it to the 2026-08-15 duty names would compare today's engine against
+    // today's names and prove nothing at all — the comparison is the whole point.
+    // The live list's rename is pinned separately, in `auraEngine.guards.test.js`.
     const LIVE_TASKS = ['EFT', 'IPT+SKG', 'NC', 'FSG+WI'];
     const mondayConfig = () => ({
         staff: [...LIVE_STAFF],
@@ -585,26 +609,36 @@ describe('generateRoster is byte-compatible for a Monday start (ROSTER_TODO.md P
         ]);
     });
 
-    it('keeps the week-1 Tuesday VC (PM) exactly where it was', () => {
-        // 2026-02-03 carried 4 CORE shifts plus VC (PM) before P4, and still does.
-        const tuesday = generateRoster(mondayConfig())['2026-02-03'];
+    // MOVED DELIBERATELY, 2026-08-15. This pin existed to catch an UNINTENDED change
+    // to live output, and the change it is now recording is intended: the service moved
+    // the video consultation from Tuesday afternoon to Thursday morning, and the duty
+    // acronyms were spelled out. The pin is updated rather than deleted — its job is
+    // still to fail if the output moves again without somebody meaning it to.
+    it('keeps the week-1 Thursday video consultation exactly where it now belongs', () => {
+        const roster = generateRoster(mondayConfig());
 
-        expect(tuesday).toHaveLength(5);
-        expect(tuesday[4]).toEqual({
-            task: 'VC (PM)', lead: 'Brandon', coLead: 'Ying Xian',
+        // Tuesday no longer carries a consult at all — it is 4 CORE shifts again.
+        expect(roster['2026-02-03']).toHaveLength(4);
+
+        // Thursday carries the 4 CORE shifts plus the consult.
+        const thursday = roster['2026-02-05'];
+        expect(thursday).toHaveLength(5);
+        expect(thursday[4]).toEqual({
+            task: 'Video Consultation Individual', lead: 'Brandon', coLead: 'Ying Xian',
             staff: 'Lead: Brandon, Co: Ying Xian', category: 'VC', week: 1,
         });
     });
 
-    it('keeps the week-1 and week-4 Saturday VC (AM) exactly where they were', () => {
+    it('keeps the week-1 and week-4 Saturday video consultation exactly where they were', () => {
         const roster = generateRoster(mondayConfig());
 
+        // The Saturday slot did NOT move — only its name changed.
         expect(roster['2026-02-07']).toEqual([{
-            task: 'VC (AM)', lead: 'Brandon', coLead: 'Ying Xian',
+            task: 'Video Consultation Individual', lead: 'Brandon', coLead: 'Ying Xian',
             staff: 'Lead: Brandon, Co: Ying Xian', category: 'VC', week: 1,
         }]);
         expect(roster['2026-02-28']).toEqual([{
-            task: 'VC (AM)', lead: 'Fadzlynn', coLead: 'Brandon',
+            task: 'Video Consultation Individual', lead: 'Fadzlynn', coLead: 'Brandon',
             staff: 'Lead: Fadzlynn, Co: Brandon', category: 'VC', week: 4,
         }]);
     });

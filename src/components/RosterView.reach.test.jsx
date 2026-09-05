@@ -45,7 +45,7 @@
 
 import React from 'react';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { render, screen, cleanup, fireEvent, within } from '@testing-library/react';
+import { render, screen, cleanup, fireEvent, within, waitFor } from '@testing-library/react';
 
 // --- MOCKS (hoisted above the imports below by Vitest) ------------------------
 
@@ -873,7 +873,20 @@ describe('availability windows, configured from the wizard', () => {
         setWindow(2, 1, { from: '2026-09-07', to: '2026-12-31', tasks: 'Wardd Round' });
 
         expect(generateIsDisabled()).toBe(true);
-        expectOnScreen(/an availability window names "Wardd Round"/i);
+        /**
+         * ⚠️ WORDING CHANGED DELIBERATELY AT v2.6.0, and this assertion changed with
+         *    it rather than being loosened. It used to read "an availability window
+         *    names …, which is not a task in the table below. …or leave the task list
+         *    blank", which became unactionable: a duty limit can now arrive from a
+         *    MEMBERSHIP (`onlyTasks`, set in Admin → Team), and in live mode the staff
+         *    table is READ-ONLY, so the sentence told the reader to edit a field they
+         *    cannot reach. The message now names the duty, lists the duties that do
+         *    exist — the exact spelling being the one thing the reader needs, since
+         *    the check is case-sensitive — and names both places it could have been set.
+         */
+        expectOnScreen(/"Wardd Round" is not one of/i);
+        expectOnScreen(/The duties are:/i);
+        expectOnScreen(/Only these duties/i);
 
         setWindow(2, 1, { tasks: 'Ward Round' });
         expect(generateIsDisabled()).toBe(false);
@@ -1155,5 +1168,323 @@ describe('leaving and re-entering the sandbox', () => {
         // …and the pair picker is back to saying there is nobody to pair, because the
         // staff table was cleared with it.
         expect(screen.getByText(/at least two named people/i)).toBeTruthy();
+    });
+});
+
+// =============================================================================
+// SHORT NAMES — THE FOUR LINKS AN AUDIT FOUND UNPINNED
+// =============================================================================
+/**
+ * ⚠️ WHY THIS SECTION EXISTS, IN THE AUDIT'S OWN TERMS. When `shortName` shipped,
+ *    `buildICS` was tested with a hand-built map and `memberProfile` was tested as a
+ *    value — and FOUR mutations still survived the whole suite:
+ *
+ *      • `RosterView`'s `shortNames` memo forced to `null`        → 3359 passed
+ *      • the calendar chip reverted to rendering `{s.staff}`      → 3359 passed
+ *      • the ICS button stopped passing `{ shortNames }`          → 3359 passed
+ *      • `downloadICS` dropped its `options` before `buildICS`    → 3359 passed
+ *
+ *    So nothing in CI proved that a short name somebody TYPES ever reaches a
+ *    calendar chip or a `.ics` file. That is the same producer-covered,
+ *    consumer-unpinned split this file was created to close, one feature over.
+ *
+ *    A fifth mutation survived and is covered here too: the SANDBOX branch of the
+ *    drawer's help text was the one string with no assertion on it, and turning its
+ *    `—` into JSX text — which renders as those six literal characters — passed
+ *    the whole suite. That defect had already been shipped once, one branch away.
+ */
+describe('the weekly-rotation checkbox is a checkbox', () => {
+    /**
+     * ⚠️ IT RENDERED AS A VERTICAL BAR. A checkbox is a fixed-size mark, but a flex
+     *    item defaults to `flex-shrink: 1`, and this control sits in a flex row beside
+     *    a paragraph of explanation — so the text squeezed it. Measured in a real
+     *    browser: the co-lead checkbox in the task table was 16x16 and this one
+     *    8.1x16, which reads as a thin line rather than a box. The owner reported it
+     *    as "not shaped like a box".
+     *
+     *    jsdom does no layout, so the WIDTH cannot be asserted here. What can be
+     *    asserted is the class that prevents it, on the control the defect appeared
+     *    on — and `shrink-0` is now on the shared component, so no future placement
+     *    inside a flex container can reintroduce it.
+     */
+    it('carries shrink-0, so a flex row cannot squash it', () => {
+        render(<RosterView user={VISITOR} />);
+        openConfigure();
+        const rotate = screen.getByRole('checkbox', { name: /rotate duties weekly/i });
+        expect(rotate.className).toMatch(/\bshrink-0\b/);
+        // The mark drawn inside it is protected too.
+        expect(rotate.querySelector('span').className).toMatch(/\bshrink-0\b/);
+    });
+
+    it('is the same control as the co-lead checkbox it is meant to match', () => {
+        render(<RosterView user={VISITOR} />);
+        openConfigure();
+        const rotate = screen.getByRole('checkbox', { name: /rotate duties weekly/i });
+        const coLead = screen.getByRole('checkbox', { name: /task row 1: co-lead/i });
+        // Same component, so the box classes that decide its shape must agree.
+        for (const cls of ['shrink-0', 'rounded', 'border-2']) {
+            expect(rotate.querySelector('span').className, `rotate box lost ${cls}`).toMatch(cls);
+            expect(coLead.querySelector('span').className, `co-lead box lost ${cls}`).toMatch(cls);
+        }
+    });
+});
+
+describe('a short name a visitor types reaches the calendar and the file', () => {
+    /** The acronym cell lives behind the row's own disclosure. */
+    const setShortName = (row, value) => {
+        fireEvent.change(
+            screen.getByLabelText(`Staff row ${row} short name`),
+            { target: { value } },
+        );
+    };
+
+    /**
+     * The bytes the ICS button actually hands the browser.
+     *
+     * `downloadBlob` builds a Blob and passes it to `URL.createObjectURL`, so
+     * capturing that argument is the only way to read the file WITHOUT reaching past
+     * the button into `buildICS` — which is precisely the reach that let four
+     * mutations survive.
+     */
+    /**
+     * Open the Export menu and choose one format.
+     *
+     * The four coloured export buttons became one menu on 2026-09-01, because on a
+     * 375px phone they wrapped the toolbar onto three rows of two different
+     * heights. These tests click what a roster master clicks, so they go through
+     * the menu — and matching on the FORMAT NAME rather than the extension is
+     * deliberate: the label is what the person reads, and a test that only knew
+     * "CSV" would pass over a menu whose descriptions had all gone wrong.
+     */
+    const chooseExport = (item) => {
+        fireEvent.click(screen.getByRole('button', { name: /^Export$/i }));
+        fireEvent.click(screen.getByRole('menuitem', { name: item }));
+    };
+
+    const captureICS = async () => {
+        const original = URL.createObjectURL;
+        let captured = null;
+        URL.createObjectURL = (blob) => { captured = blob; return 'blob:captured'; };
+        try {
+            chooseExport(/Add to my calendar/i);
+        } finally {
+            URL.createObjectURL = original;
+        }
+        if (!captured) throw new Error('The ICS button produced no Blob.');
+        return captured.text();
+    };
+
+    /** Two people, two acronyms, one duty they share, generated. */
+    const generateWithAcronyms = () => {
+        render(<RosterView user={VISITOR} />);
+        openConfigure();
+        setRun({ startDate: '2026-09-07', weeks: 1 });
+        setStaffRow(1, { name: 'Adaeze Nwosu', grade: 'AH14' });
+        setStaffRow(2, { name: 'Benedict Tan', grade: 'AH13' });
+
+        toggleStaffMore(1);
+        setShortName(1, 'AN');
+        toggleStaffMore(1);
+        toggleStaffMore(2);
+        setShortName(2, 'BT');
+        toggleStaffMore(2);
+
+        setTaskName(1, 'Ward Round');
+        onlyDays(1, [1]);
+        // NB: `coLead` defaults to TRUE on a task row, so the checkbox is left alone —
+        // clicking it would turn the co-lead OFF and the shift would carry one name.
+
+        expect(generateIsDisabled()).toBe(false);
+        clickGenerate();
+    };
+
+    it('shows the acronym in the calendar chip, not the full name', () => {
+        generateWithAcronyms();
+
+        const shifts = renderedLeadsFor('Ward Round');
+        expect(shifts.length).toBeGreaterThan(0);
+        // Read off the rendered chip, which is what a roster master actually sees.
+        for (const shift of shifts) {
+            expect([shift.lead, shift.coLead].sort()).toEqual(['AN', 'BT']);
+        }
+        // And the full name is NOT on the chip — the whole point is the width.
+        // Scoped to the chips: the full name is legitimately still on screen in the
+        // staff table above, because the wizard is open. A bare `queryByText` here
+        // matched that and failed for a reason unrelated to the calendar.
+        const chipText = screen.getAllByText('Ward Round')
+            .map((label) => label.closest('button'))
+            .filter(Boolean)
+            .map((button) => button.textContent)
+            .join(' | ');
+        expect(chipText).not.toMatch(/Adaeze Nwosu/);
+        expect(chipText).toMatch(/AN/);
+    });
+
+    it('writes the acronym into the .ics SUMMARY and the full name into DESCRIPTION', async () => {
+        generateWithAcronyms();
+        const ics = await captureICS();
+
+        // ⚠️ Asserted on the FILE the button produced, not on `buildICS` called
+        //    directly — the two mutations that survived both lived between them.
+        expect(ics).toMatch(/SUMMARY:\[Ward Round\] Lead: (AN|BT)\\, Co: (AN|BT)/);
+        expect(ics).not.toMatch(/SUMMARY:.*Adaeze Nwosu/);
+        // Nothing is lost: opening the event still answers "who is that?".
+        expect(ics).toMatch(/DESCRIPTION:.*Adaeze Nwosu/);
+        expect(ics).toMatch(/DESCRIPTION:.*Benedict Tan/);
+    });
+
+    it('uses the acronym in the .csv too', async () => {
+        generateWithAcronyms();
+        const original = URL.createObjectURL;
+        let captured = null;
+        URL.createObjectURL = (blob) => { captured = blob; return 'blob:captured'; };
+        try {
+            chooseExport(/Raw duty list/i);
+        } finally {
+            URL.createObjectURL = original;
+        }
+        const csv = await captured.text();
+        // ⚠️ THIS ASSERTION USED TO BE THE OPPOSITE. The CSV kept full names by a
+        //    decision taken on the department's behalf — sound reasoning about
+        //    spreadsheets, wrong person deciding. Somebody who types an acronym has
+        //    said how they want that colleague written down, everywhere.
+        expect(csv).toMatch(/AN/);
+        expect(csv).toMatch(/BT/);
+        expect(csv).not.toMatch(/Adaeze Nwosu/);
+    });
+
+    it('falls back to full names when nobody has an acronym', () => {
+        // The companion property: a department that sets none must be byte-for-byte
+        // where it was, on screen as well as in the file.
+        render(<RosterView user={VISITOR} />);
+        openConfigure();
+        setRun({ startDate: '2026-09-07', weeks: 1 });
+        setStaffRow(1, { name: 'Adaeze Nwosu', grade: 'AH14' });
+        setStaffRow(2, { name: 'Benedict Tan', grade: 'AH13' });
+        setTaskName(1, 'Ward Round');
+        onlyDays(1, [1]);
+        clickGenerate();
+
+        for (const shift of renderedLeadsFor('Ward Round')) {
+            expect([shift.lead, shift.coLead].sort()).toEqual(['Adaeze Nwosu', 'Benedict Tan']);
+        }
+    });
+
+    it('an acronym equal to the full name changes nothing', () => {
+        // Guards the map builder's own rule: an entry equal to the name is dropped, so
+        // it can never be mistaken downstream for "this shift was shortened" — which
+        // is what decides whether the stored `staff` string is trusted.
+        render(<RosterView user={VISITOR} />);
+        openConfigure();
+        setRun({ startDate: '2026-09-07', weeks: 1 });
+        setStaffRow(1, { name: 'Ada', grade: 'AH14' });
+        setStaffRow(2, { name: 'Ben', grade: 'AH13' });
+        toggleStaffMore(1);
+        setShortName(1, 'Ada');
+        toggleStaffMore(1);
+        setTaskName(1, 'Ward Round');
+        onlyDays(1, [1]);
+        clickGenerate();
+
+        for (const shift of renderedLeadsFor('Ward Round')) {
+            expect([shift.lead, shift.coLead].sort()).toEqual(['Ada', 'Ben']);
+        }
+    });
+
+    it('refuses a comma in an acronym, and says why', () => {
+        render(<RosterView user={VISITOR} />);
+        openConfigure();
+        setRun({ startDate: '2026-09-07', weeks: 1 });
+        setStaffRow(1, { name: 'Ada', grade: 'AH14' });
+        setTaskName(1, 'Ward Round');
+
+        toggleStaffMore(1);
+        setShortName(1, 'A,B');
+        // A calendar reads a comma in a SUMMARY as a field separator, so it is refused
+        // at the input rather than escaped downstream.
+        expect(generateIsDisabled()).toBe(true);
+        expectOnScreen(/no commas or semicolons/i);
+    });
+
+    /**
+     * ⚠️ THE SANDBOX BRANCH OF THE DRAWER'S HELP TEXT, which was the one string in
+     *    this feature with no assertion on it. `—` written into JSX TEXT renders
+     *    as those six characters; written inside a JS string literal it renders as an
+     *    em dash. Both forms exist in this component, and only one is correct.
+     */
+    it('renders real punctuation in the drawer, not literal escape sequences', () => {
+        render(<RosterView user={VISITOR} />);
+        openConfigure();
+        setStaffRow(1, { name: 'Ada' });
+        toggleStaffMore(1);
+
+        const drawer = screen.getByLabelText('Staff row 1 short name').closest('div.rounded-lg');
+        expect(drawer).not.toBeNull();
+        expect(drawer.textContent).not.toMatch(/u2014|u2192|u2019|\\u/);
+        // The editable branch is the one on screen here, so its copy is what was read.
+        expect(drawer.textContent).toMatch(/available on every date of the run/i);
+    });
+
+    /**
+     * ⚠️ THE TWO NEW EXPORT BUTTONS, ASSERTED ON THE FILE THEY PRODUCE.
+     *
+     * Same reason as the ICS and CSV tests above: the failure this surface has
+     * already shipped is a control that is present, enabled, documented, and wired
+     * to nothing. `buildRosterXlsx` being correct proves nothing about whether the
+     * button reaches it with the acronym map — that reach is exactly where four
+     * mutations survived last time.
+     */
+    it('the Excel button writes a workbook, with the acronyms in it', async () => {
+        generateWithAcronyms();
+
+        const original = URL.createObjectURL;
+        let captured = null;
+        URL.createObjectURL = (blob) => { captured = blob; return 'blob:captured'; };
+        try {
+            chooseExport(/Calendar workbook/i);
+        } finally {
+            URL.createObjectURL = original;
+        }
+        if (!captured) throw new Error('The Excel button produced no Blob.');
+
+        expect(captured.type).toMatch(/spreadsheetml\.sheet/);
+        // The entries are STORED, not deflated, so the sheet XML is literally in
+        // these bytes — which is what lets this read the file rather than the writer.
+        const text = await captured.text();
+        expect(text).toContain('September 2026');
+        expect(text).toContain('Lead: AN, Co: BT');
+        expect(text).not.toContain('Adaeze Nwosu');
+    });
+
+    it('the PDF button builds a document and clears its busy state', async () => {
+        generateWithAcronyms();
+
+        // ⚠️ CAPTURED THE SAME WAY THE ICS AND CSV TESTS CAPTURE THEIRS, because
+        //    `downloadRosterPdf` now delivers the file through the same anchor
+        //    dance. It used to call jsPDF's own `save()`, which chose a path this
+        //    environment could not observe at all — no Blob, no anchor, nothing to
+        //    assert on. The export was changed rather than the assertion weakened.
+        const originalCreate = URL.createObjectURL;
+        let captured = null;
+        URL.createObjectURL = (blob) => { captured = blob; return 'blob:captured'; };
+        try {
+            chooseExport(/Printable calendar/i);
+            //    `act` alone would NOT be enough: `downloadRosterPdf` reaches jsPDF
+            //    through a dynamic `import()`, which settles over several ticks
+            //    rather than one microtask.
+            await waitFor(() => expect(captured).toBeTruthy(), { timeout: 10000 });
+        } finally {
+            URL.createObjectURL = originalCreate;
+        }
+
+        expect(captured.type).toBe('application/pdf');
+        expect(await captured.slice(0, 5).text()).toBe('%PDF-');
+        // A real document, not an empty shell: twelve month pages plus the matrix.
+        expect(captured.size).toBeGreaterThan(20000);
+        // The trigger reverts from "Building…" to "Export", so a second export is
+        // possible and the button never strands itself mid-build.
+        expect(screen.getByRole('button', { name: /^Export$/i })).toBeTruthy();
+        // ...and no failure banner: a caught error would have put one on screen.
+        expect(screen.queryByText(/The PDF could not be built/)).toBeNull();
     });
 });

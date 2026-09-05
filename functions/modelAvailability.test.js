@@ -42,9 +42,12 @@ describe('MODEL_PRIORITY (AU30)', () => {
      * and no test would ever touch it — which is how `gemini-1.5-flash` stayed in
      * this file for months after Google withdrew it.
      */
-    it('the fallback is itself one of the candidates', () => {
+    it('the fallback is the LAST candidate — a member, and the end of the walk', () => {
         expect(SAFE_FALLBACK_MODEL.startsWith('models/')).toBe(true);
         expect(MODEL_PRIORITY).toContain(SAFE_FALLBACK_MODEL.replace('models/', ''));
+        // `modelQuota.nextUsable()` returns null only once everything including
+        // the fallback has refused; that needs the fallback inside the walk.
+        expect(SAFE_FALLBACK_MODEL).toBe('models/' + MODEL_PRIORITY[MODEL_PRIORITY.length - 1]);
     });
 
     it('has no duplicates and no empty entries', () => {
@@ -171,6 +174,12 @@ describe('resolveModel wires the probe in (AU30 + AU16)', () => {
         expect(reset).toBeGreaterThan(-1);
         expect(ret).toBeGreaterThan(-1);
         expect(reset).toBeLessThan(ret);
+    });
+
+    it('a quota refusal at probe time demotes — the registry is TTL-bounded now', () => {
+        const probe = src.slice(src.indexOf('async function modelAnswers'), src.indexOf('let modelResolutionPromise'));
+        expect(probe).toContain('modelQuota.isQuotaExhausted(');
+        expect(probe.indexOf('isQuotaExhausted')).toBeLessThan(probe.indexOf('classifyProbe'));
     });
 
     it('the list and the fallback come from the shared module, not a second copy', () => {

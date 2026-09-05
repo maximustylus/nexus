@@ -128,3 +128,71 @@ describe('the neutral surfaces', () => {
         expect(check('#64748b', surface).ratio).toBeGreaterThanOrEqual(AA_NORMAL);
     });
 });
+
+/**
+ * ==============================================================================
+ * THE ROSTER TOOLBAR — FOUR ICONS OVER 10px LABELS, ON NO BACKGROUND
+ * ==============================================================================
+ * The toolbar has no fills left. Every control is an icon and a label drawn
+ * straight onto the card, so the ONLY thing standing between a roster master and
+ * an unreadable control is the ink colour — which makes this file, rather than a
+ * screenshot, the place the design is held.
+ *
+ * ⚠️ A 10px LABEL IS SMALL TEXT. Large starts at 18.66px bold. So these clear
+ *    AA_NORMAL (4.5), not AA_LARGE (3.0) — the easy mistake is to grade a "tiny
+ *    caption" against 3.0 and ship something nobody can read on a ward tablet.
+ */
+describe('the roster toolbar reads at AA in both themes', () => {
+    // Tailwind v3, as compiled.
+    const INDIGO_400 = '#818cf8';
+    const INDIGO_600 = '#4f46e5';
+    const SLATE_400 = '#94a3b8';
+    const SLATE_500 = '#64748b';
+    const WHITE = '#ffffff';        // the card, light mode
+    const SLATE_800 = '#1e293b';    // the card, dark mode
+
+    it('carries the SELECTED item in both themes', () => {
+        expect(check(INDIGO_600, WHITE).passesNormal).toBe(true);          // 6.29
+        expect(check(INDIGO_400, SLATE_800).passesNormal).toBe(true);      // 4.90
+    });
+
+    it('carries the UNSELECTED items in both themes', () => {
+        expect(check(SLATE_500, WHITE).passesNormal).toBe(true);           // 4.76
+        expect(check(SLATE_400, SLATE_800).passesNormal).toBe(true);       // 5.71
+    });
+
+    /**
+     * ⚠️ WHY THE TOOLBAR DOES NOT SIMPLY COPY THE BOTTOM NAVIGATION. It was built
+     *    to match `ResponsiveLayout`'s icon-over-label pattern, and that component
+     *    uses `slate-400` for an inactive item — which on a white surface is
+     *    2.56:1, below AA for text this small. The toolbar uses `slate-500`
+     *    instead. This is pinned so the departure reads as a decision rather than
+     *    an inconsistency, and so anyone tempted to "align them" sees the cost.
+     *
+     *    The bottom navigation itself is NOT changed here: different surface,
+     *    separate decision, and not this change's to make.
+     */
+    it('does not copy the bottom navigation inactive grey, which fails AA on white', () => {
+        expect(check(SLATE_400, WHITE).passesNormal).toBe(false);
+        expect(check(SLATE_400, WHITE).ratio).toBeLessThan(AA_NORMAL);
+    });
+
+    /**
+     * The underline under the selected item is a GRAPHIC, not text, so 1.4.11's
+     * 3:1 applies rather than 4.5. It exists because colour cannot carry the state
+     * on its own: indigo and slate sit close in lightness, so in greyscale the
+     * items would be near identical. The stroke weight thickens for the same
+     * reason — the two cues that survive without colour.
+     */
+    it('draws the selected underline well past the 3:1 a graphic needs', () => {
+        expect(check(INDIGO_600, WHITE).ratio).toBeGreaterThanOrEqual(AA_LARGE);
+        expect(check(INDIGO_400, SLATE_800).ratio).toBeGreaterThanOrEqual(AA_LARGE);
+    });
+
+    it('shows why the underline is needed: the two states are close in lightness', () => {
+        // Selected indigo against unselected slate, light mode — near identical
+        // once colour is removed. This is the measurement that put the underline
+        // and the stroke weight there, and it is kept so nobody removes them.
+        expect(check(INDIGO_600, SLATE_500).ratio).toBeLessThan(1.5);
+    });
+});

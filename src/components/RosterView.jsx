@@ -13,10 +13,12 @@ import { db } from '../firebase';
 // approve). Nothing about that sequence is reimplemented here; see
 // `respondToCoverageRequest`.
 import { doc, onSnapshot, setDoc, collection, addDoc, serverTimestamp, query, where, getDoc, updateDoc } from 'firebase/firestore';
-import { Calendar, Download, Settings, ChevronLeft, ChevronRight, Play, FileSpreadsheet, ShieldAlert, ArrowRightLeft, X, Users, FlaskConical, CheckCircle2, Info, LayoutGrid, User, CalendarCheck, UserCheck } from 'lucide-react';
+import { Calendar, Download, Settings, ChevronLeft, ChevronRight, Play, FileSpreadsheet, ShieldAlert, ArrowRightLeft, X, Users, FlaskConical, CheckCircle2, Info, LayoutGrid, User, CalendarCheck, UserCheck, FileText, Table2, CalendarPlus } from 'lucide-react';
 import {
     downloadICS,
     downloadCSV,
+    shiftStaffDisplay,
+    displayNameFor,
     // 🛡️ P1 SAFETY GUARDS — pure, unit-tested in auraEngine.guards.test.js
     restoreLiveRosterConfig,
     validateRosterConfig,
@@ -118,6 +120,9 @@ import {
 } from '../utils/rosterEngineV2';
 // 🧪 SANDBOX WIZARD — the structured tables that replaced the two textareas in
 // demo mode, and the ONE pure function that turns them into an engine config.
+import { downloadRosterPdf } from '../utils/rosterPdf.js';
+import { downloadRosterXlsx } from '../utils/rosterXlsx.js';
+import RosterExportMenu from './RosterExportMenu';
 import RosterDemoWizardTables from './RosterDemoWizardTables';
 import WizardStep from './WizardStep';
 import {
@@ -138,6 +143,9 @@ import {
     wizardStepLabel,
     staffRowsFromMembers,
 } from '../utils/rosterWizard';
+// One definition of the trimming and the eight-character cap, shared with the member
+// editor that writes the field — two normalizers would drift the moment one changed.
+import { normalizeShortName } from '../utils/memberProfile';
 import { categoryChipClass } from '../utils/rosterCategories';
 // 👤 ONE PERSON'S DUTIES — pure, unit-tested in rosterPersonView.test.js, and used
 // by BOTH universes: "my week" is a re-reading of the roster already on screen, so
@@ -207,6 +215,42 @@ const STATUS_AUTO_DISMISS_MS = 6000;
  * captions are exempt because they cannot be focused.
  */
 const TOUCH = 'min-h-11 sm:min-h-0';
+
+/**
+ * 🧭 ONE ROSTER-TOOLBAR ITEM: an icon over a 10px label, and no box at all.
+ *
+ * The same shape as the app's own bottom navigation (`ResponsiveLayout`), chosen
+ * on 2026-09-01 so the app speaks one language rather than growing a second style
+ * for one toolbar. Boxes, fills, rings and containers are all gone — four items
+ * that used to be two rows of bordered buttons are now one row about 52px shorter.
+ *
+ * ⚠️ THE INACTIVE COLOUR IS `slate-500`, NOT the bottom nav's `slate-400`. That is
+ *    a deliberate departure, measured: `slate-400` on a white card is 2.56:1, and
+ *    a 10px label is small text, so it needs 4.5:1. `slate-500` is 4.76:1. The
+ *    bottom nav has the same problem and is NOT changed here — it is a different
+ *    surface and a separate decision.
+ */
+const TOOLBAR_ITEM = 'flex flex-col items-center justify-center gap-1 px-1 py-1.5 '
+    + 'min-h-11 sm:min-h-0 sm:px-2 font-bold transition-colors rounded-lg';
+const TOOLBAR_ON = 'text-indigo-600 dark:text-indigo-400';
+const TOOLBAR_OFF = 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200';
+
+/**
+ * The 2px bar under a selected item — the cue that survives greyscale.
+ *
+ * Always rendered, transparent when off, so every item is the same height and the
+ * row cannot shift when the selection moves. Colour alone cannot carry this: the
+ * indigo and the slate are close in lightness, the same trap the boxed version
+ * fell into (see `contrast.test.js`). Stroke weight thickens too, for the same
+ * reason — two non-colour cues, neither of which is a container.
+ */
+const ToolbarUnderline = ({ on }) => (
+    <span
+        aria-hidden="true"
+        className={`h-0.5 w-6 rounded-full transition-colors ${on ? 'bg-indigo-600 dark:bg-indigo-400' : 'bg-transparent'}`}
+    />
+);
+
 const FIELD_TEXT_SM = 'text-base sm:text-sm';
 
 /**
@@ -440,8 +484,20 @@ const PersonRosterPanel = ({
                 <>
                     <ul className="mt-3 divide-y divide-slate-200 dark:divide-slate-700">
                         {duties.map((duty) => (
-                            <li key={duty.key} className="py-3 flex flex-wrap items-baseline gap-x-3 gap-y-1">
-                                <span className="text-sm font-black text-slate-500 dark:text-slate-400 tabular-nums min-w-[9rem]">
+                            /* ⚠️ THE ROW HEIGHT USED TO DEPEND ON THE DUTY'S NAME.
+                               Measured on a phone: 68px, 69px and 73px for rows
+                               that are the same kind of thing, because
+                               `items-baseline` puts a padded badge, a 16px duty
+                               name and a 14px date on one baseline and each
+                               combination resolves to a different line box — and
+                               because a long name wrapped where a short one did
+                               not. `items-center` removes the first cause; giving
+                               the date the full width below `sm:` removes the
+                               second, by making the break deterministic instead of
+                               dependent on how many characters the duty is called.
+                               The floor then holds every row to one rhythm. */
+                            <li key={duty.key} className="py-3 flex flex-wrap items-center gap-x-3 gap-y-1 min-h-[4.25rem] sm:min-h-0">
+                                <span className="w-full sm:w-auto text-sm font-black text-slate-500 dark:text-slate-400 tabular-nums sm:min-w-[9rem]">
                                     {formatRosterDateKey(duty.date)}
                                 </span>
                                 <span className="text-base font-black text-slate-800 dark:text-white">
@@ -845,6 +901,89 @@ const RosterView = ({ user }) => {
         [rosteredMembers, memberGrades],
     );
 
+    /**
+     * FULL NAME → ACRONYM, for the calendar chips and the `.ics` export.
+     *
+     * ⚠️ `null` WHEN NOBODY HAS ONE, AND THAT IS LOAD-BEARING RATHER THAN TIDY. Both
+     *    `shiftStaffDisplay` and `buildICS` treat an absent map as "print what is
+     *    stored", which is how a department that has set no acronyms keeps byte-identical
+     *    exports and chips. An empty object would take the same branch, but saying
+     *    `null` makes the intent checkable — and an entry equal to the full name is
+     *    dropped here so it can never mean "shortened" downstream.
+     *
+     * ⚠️ BUILT FROM THE MEMBERSHIP, NOT FROM THE WIZARD CONFIG, so it is the same map
+     *    whichever engine produced the roster: the v1 live path persists only a flat
+     *    array of display names, and a roster read back from Firestore carries no
+     *    acronyms at all. Keyed by `displayName` because that is what the engine puts
+     *    in `shift.lead` — the `D-names` limitation, borrowed here rather than fought.
+     */
+    const shortNames = useMemo(() => {
+        const map = {};
+        const add = (rawFull, rawShort) => {
+            /**
+             * ⚠️ KEYED BY THE **TRIMMED** NAME. The mapper trims a row's name before it
+             *    reaches the config, so that is what the engine writes into
+             *    `shift.lead` — a key carrying the untrimmed spelling would simply
+             *    never match and the acronym would silently not appear.
+             */
+            const full = typeof rawFull === 'string' ? rawFull.trim() : '';
+            const short = normalizeShortName(rawShort);
+            if (full !== '' && short !== '' && short !== full) map[full] = short;
+        };
+
+        /**
+         * ⚠️ TWO SOURCES, BECAUSE THE SANDBOX HAS NO MEMBERSHIP TO READ. Built from
+         *    `rosteredMembers` alone, the wizard's own short-name cell wrote to a row
+         *    nothing ever read: the cell was editable, its help text promised the
+         *    calendar and the `.ics` would use it, and neither did — a dead control,
+         *    which is the precise defect this change set exists to remove. An audit
+         *    caught it one commit after the drawer fix that prompted it.
+         *
+         *    Read from `demoStaffRows` rather than from `demoWizard.config`, which is
+         *    declared further down this component: referencing it here would be a
+         *    temporal dead zone, and the rows carry the same value.
+         */
+        if (isDemo) {
+            for (const row of Array.isArray(demoStaffRows) ? demoStaffRows : []) {
+                add(row?.name, row?.shortName);
+            }
+        } else {
+            for (const person of Array.isArray(rosteredMembers) ? rosteredMembers : []) {
+                add(person?.displayName, person?.shortName);
+            }
+        }
+        return Object.keys(map).length > 0 ? map : null;
+    }, [isDemo, demoStaffRows, rosteredMembers]);
+
+    /**
+     * THE PDF BUTTON, WHICH IS THE ONLY EXPORT THAT CAN TAKE A MOMENT.
+     *
+     * `downloadRosterPdf` imports jsPDF dynamically, so the FIRST press pays for
+     * fetching it — on a ward tablet over hospital wi-fi that is visible time. A
+     * button that looks unchanged while that happens is a button a roster master
+     * presses again, and the whole reason this state exists is that a control which
+     * silently does nothing is the defect this surface has already shipped once.
+     *
+     * A failure is REPORTED, not swallowed: `rosterError` is the same banner a
+     * rules denial uses, so an export that could not be built says so in the place
+     * the user is already looking.
+     */
+    const [pdfBusy, setPdfBusy] = useState(false);
+    const handleDownloadPdf = useCallback(async () => {
+        setPdfBusy(true);
+        try {
+            const summary = await downloadRosterPdf(rosterData, { shortNames });
+            if (summary.pages === 0) {
+                setRosterError('There is no roster to export yet. Generate one first.');
+            }
+        } catch (error) {
+            console.error('[NEXUS] PDF export failed', error);
+            setRosterError('The PDF could not be built. The CSV and ICS exports are unaffected.');
+        } finally {
+            setPdfBusy(false);
+        }
+    }, [rosterData, shortNames]);
+
     const [storedSettings, setStoredSettings] = useState(null);
     const [settingsError, setSettingsError] = useState(null);
     // Whether the wizard's rows came from a stored document. `false` means either
@@ -908,11 +1047,16 @@ const RosterView = ({ user }) => {
     // 🛡️ M12: signatures of the swap requests this component has already sent.
     // NOTE: client-side and in-memory only — it does not survive a reload, a
     // second tab, or a second device. A real guard is a uniqueness constraint in
-    // `firestore.rules`, which cannot be DEPLOYED until blocked decision Q6 is
-    // settled. The file itself exists and is tracked — it is inert, because
-    // `firebase.json` declares only `hosting` and `functions`, so nothing deploys
-    // it. (Q6 was written `D6` before 2026-08-14; `D6` now names only the ESLint
-    // defect, which is a different thing entirely.)
+    // `firestore.rules` — which is a change nobody has written, not a change nobody
+    // can deploy. (Q6 was written `D6` before 2026-08-14; `D6` now names only the
+    // ESLint defect, which is a different thing entirely.)
+    //
+    // ⚠️ CORRECTED 2026-08-31: this said the rules file "is inert, because
+    //    `firebase.json` declares only `hosting` and `functions`, so nothing deploys
+    //    it". That stopped being true at v2.0.0 — Q6 is closed, the rules DO deploy,
+    //    and `README.md` says so. Left standing, it hands a reviewer a false model of
+    //    exactly the boundary they are checking, which is how a rules change gets
+    //    waved through.  
     const [sentSwapSignatures, setSentSwapSignatures] = useState(() => new Set());
 
     // Default Config — the live staff pool and task list now live in
@@ -1237,7 +1381,8 @@ const RosterView = ({ user }) => {
      * ==========================================================================
      *
      * Team #1 has been rostering for months. Its tasks live in `config.tasks` —
-     * `['EFT', 'IPT+SKG', 'NC', 'FSG+WI']` — because that is what the round-robin
+     * historically `['EFT', 'IPT+SKG', 'NC', 'FSG+WI']`, and since 2026-08-31 the
+     * spelled-out nine — because that is what the round-robin
      * engine consumed, and it has no `settings/roster` document because that
      * document did not exist until today.
      *
@@ -1737,11 +1882,20 @@ const RosterView = ({ user }) => {
                 { now: new Date().toISOString(), by: user?.uid || null },
             );
 
+            // THREE OUTCOMES, NOT TWO, and the third is why this is not one boolean.
+            // `settingsSaved` alone conflated "written" with "there was nothing to
+            // write" — both left it `true`. The banner below now tells the roster
+            // master their setup was kept, and it may only say so when a write
+            // actually happened: announcing a save on a generation that changed
+            // nothing would be claiming an action that did not occur, which is the
+            // failure this whole subsystem's post-mortem is about.
             let settingsSaved = true;
+            let settingsWritten = false;
             if (nextSettings && settingsChanged(storedSettings, nextSettings)) {
                 try {
                     await setDoc(doc(db, ...rosterSettingsPath(teamId)), nextSettings);
                     setStoredSettings(nextSettings);
+                    settingsWritten = true;
                 } catch (settingsWriteError) {
                     console.error('[NEXUS] roster settings not saved', settingsWriteError);
                     settingsSaved = false;
@@ -1756,7 +1910,18 @@ const RosterView = ({ user }) => {
                 ? `Roster saved: ${generationPlan.dayCount} days, ${formatRosterDateKey(generationPlan.firstDate)} → ${formatRosterDateKey(generationPlan.lastDate)}.`
                 : 'Roster saved.';
 
-            if (settingsSaved) {
+            if (settingsSaved && settingsWritten) {
+                // ⚠️ THE SAVE WAS SILENT UNTIL NOW, and that was the actual gap: the
+                // configuration has been persisted on every Generate since `R4`, but
+                // nothing said so, so a roster master had no way to learn it had
+                // happened and reasonably assumed they would be retyping their
+                // department next time. The failure case had a sentence and the
+                // success case did not, which is the wrong way round — the quiet
+                // outcome is the one nobody can verify for themselves.
+                showStatus('success', `${rosterSentence} Your department's setup is saved, `
+                    + 'so you will not have to enter it again.');
+            } else if (settingsSaved) {
+                // Nothing changed, so nothing was written. Say only what happened.
                 showStatus('success', rosterSentence);
             } else {
                 // Not an error tone: the roster — the thing they pressed the button
@@ -2318,60 +2483,123 @@ const RosterView = ({ user }) => {
                     </div>
                 </div>
 
-                {/* 📱 `flex-wrap` and `w-full`: four buttons plus a two-button group
-                    is about 470px of controls, which at 375px used to push the ICS
-                    button off the right-hand edge of the card. They wrap onto as many
-                    lines as they need on a phone and sit on one line from `sm:` up. */}
-                <div className="flex flex-wrap gap-2 w-full sm:w-auto justify-center sm:justify-end">
+                {/* 🧭 FOUR ICONS IN ONE ROW. NO BOXES, NO CONTAINERS, NO FILLS.
+                    The owner's ask, 2026-09-01: *"what if all four items are just
+                    icons that reacts to dark and light, then its super minimalist
+                    and clean"* — settled on icons WITH the 10px labels the app's own
+                    bottom navigation already uses, so a colleague who opens the app
+                    twice a month is not guessing what a grid icon means, and so the
+                    app has one visual language instead of two.
+
+                    It replaces two rows of bordered buttons with one row about 52px
+                    shorter, and it retires the whole boxes problem: no fill to blend
+                    into the card, no ring to keep visible, nothing to keep aligned.
+
+                    A FOUR-COLUMN GRID BELOW `sm:`, so the four are exactly equal;
+                    a flex row from `sm:` up, where they take their natural widths and
+                    sit right-aligned as before. */}
+                <div className="grid grid-cols-4 w-full sm:flex sm:w-auto sm:gap-1 sm:justify-end">
                     {/* 👤 THE SAME ROSTER, TWO WAYS OF READING IT.
                         Two buttons rather than a switch, because "which one am I
-                        looking at" has to be readable at a glance — `aria-pressed`
-                        carries the state for a screen reader and the tint carries it
-                        for everyone else. DEFAULTS TO DEPARTMENT: an existing user
-                        who never presses either one sees exactly what they saw
-                        before. Both are pure view changes; neither reads or writes
-                        anything. */}
+                        looking at" has to be readable at a glance. `aria-pressed`
+                        carries the state for a screen reader; for everyone else it is
+                        the indigo, the underline and the heavier stroke — two of
+                        which survive greyscale. DEFAULTS TO DEPARTMENT. Both are pure
+                        view changes; neither reads nor writes anything. */}
                     <div
                         role="group"
                         aria-label="How to show the roster"
-                        className="flex rounded overflow-hidden border border-slate-200 dark:border-slate-600"
+                        className="col-span-2 grid grid-cols-2 sm:col-auto sm:flex sm:gap-1"
                     >
                         <button
                             type="button"
                             onClick={() => setRosterScope('department')}
                             aria-pressed={rosterScope === 'department'}
                             title="Everybody's duties, as a month grid"
-                            className={`flex gap-1.5 items-center justify-center px-3 py-2 min-h-11 sm:min-h-0 font-bold text-xs transition-colors ${
-                                rosterScope === 'department'
-                                    ? 'bg-slate-700 text-white'
-                                    : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700'
-                            }`}
+                            className={`${TOOLBAR_ITEM} ${rosterScope === 'department' ? TOOLBAR_ON : TOOLBAR_OFF}`}
                         >
-                            <LayoutGrid size={14} /> Department
+                            <LayoutGrid size={18} strokeWidth={rosterScope === 'department' ? 2.5 : 2} />
+                            <span className="text-[10px] tracking-wide">Department</span>
+                            <ToolbarUnderline on={rosterScope === 'department'} />
                         </button>
                         <button
                             type="button"
                             onClick={() => setRosterScope('person')}
                             aria-pressed={rosterScope === 'person'}
                             title="One person's duties, listed"
-                            className={`flex gap-1.5 items-center justify-center px-3 py-2 min-h-11 sm:min-h-0 font-bold text-xs transition-colors ${
-                                rosterScope === 'person'
-                                    ? 'bg-slate-700 text-white'
-                                    : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700'
-                            }`}
+                            className={`${TOOLBAR_ITEM} ${rosterScope === 'person' ? TOOLBAR_ON : TOOLBAR_OFF}`}
                         >
-                            <User size={14} /> My week
+                            <User size={18} strokeWidth={rosterScope === 'person' ? 2.5 : 2} />
+                            <span className="text-[10px] tracking-wide">My week</span>
+                            <ToolbarUnderline on={rosterScope === 'person'} />
                         </button>
                     </div>
-                    <button onClick={() => setIsConfigOpen(true)} className={`flex gap-2 items-center justify-center px-4 py-2 ${TOUCH} rounded bg-slate-100 font-bold text-xs hover:bg-slate-200 text-slate-600 transition-colors`}>
-                        <Settings size={14} /> Configure
+
+                    <button
+                        type="button"
+                        onClick={() => setIsConfigOpen(true)}
+                        title="Set up the roster: staff, duties and rules"
+                        className={`${TOOLBAR_ITEM} ${TOOLBAR_OFF}`}
+                    >
+                        <Settings size={18} strokeWidth={2} />
+                        <span className="text-[10px] tracking-wide">Configure</span>
+                        <ToolbarUnderline on={false} />
                     </button>
-                    <button onClick={() => downloadCSV(rosterData)} className={`flex gap-2 items-center justify-center px-4 py-2 ${TOUCH} rounded bg-green-100 text-green-700 font-bold text-xs hover:bg-green-200 transition-colors`}>
-                        <FileSpreadsheet size={14} /> CSV
-                    </button>
-                    <button onClick={() => downloadICS(rosterData)} className={`flex gap-2 items-center justify-center px-4 py-2 ${TOUCH} rounded bg-indigo-600 text-white font-bold text-xs hover:bg-indigo-700 shadow-lg transition-colors`}>
-                        <Download size={14} /> ICS
-                    </button>
+
+                    {/* 📤 ONE CONTROL, FOUR FORMATS. Every item leads with what the
+                        file is FOR, because "CSV" does not answer "how do I put this
+                        on the noticeboard". The trigger is styled here rather than in
+                        the menu, so it matches the three items beside it exactly. */}
+                    <RosterExportMenu
+                        /* `w-full` because this one sits inside the menu's own
+                           positioning wrapper rather than directly in the grid,
+                           so it does not inherit the column's width the way the
+                           other three do. Without it the Export target was 43px
+                           against their 85px. */
+                        triggerClassName={({ open }) => `${TOOLBAR_ITEM} w-full sm:w-auto ${open ? TOOLBAR_ON : TOOLBAR_OFF}`}
+                        renderTrigger={({ open, busy }) => (
+                            <>
+                                <Download size={18} strokeWidth={open ? 2.5 : 2} />
+                                <span className="text-[10px] tracking-wide">{busy ? 'Building…' : 'Export'}</span>
+                                <ToolbarUnderline on={open} />
+                            </>
+                        )}
+                        formats={[
+                            {
+                                id: 'pdf',
+                                label: 'Printable calendar',
+                                ext: 'PDF',
+                                hint: 'One page per month, plus a who-leads-what-by-week page at the back.',
+                                icon: FileText,
+                                onSelect: handleDownloadPdf,
+                                busy: pdfBusy,
+                            },
+                            {
+                                id: 'xlsx',
+                                label: 'Calendar workbook',
+                                ext: 'Excel',
+                                hint: 'A tab per month, duties in coloured boxes you can edit and print.',
+                                icon: Table2,
+                                onSelect: () => downloadRosterXlsx(rosterData, { shortNames }),
+                            },
+                            {
+                                id: 'ics',
+                                label: 'Add to my calendar',
+                                ext: 'ICS',
+                                hint: 'Imports into Outlook, Google or Apple Calendar as all-day events.',
+                                icon: CalendarPlus,
+                                onSelect: () => downloadICS(rosterData, { shortNames }),
+                            },
+                            {
+                                id: 'csv',
+                                label: 'Raw duty list',
+                                ext: 'CSV',
+                                hint: 'One row per duty, for your own spreadsheet or analysis.',
+                                icon: FileSpreadsheet,
+                                onSelect: () => downloadCSV(rosterData, { shortNames }),
+                            },
+                        ]}
+                    />
                 </div>
             </div>
 
@@ -2544,7 +2772,7 @@ const RosterView = ({ user }) => {
                                         >
                                             <span className="uppercase tracking-tighter opacity-80">{s.task}</span>
                                             <span className={`text-slate-800 dark:text-slate-200 ${isMyShift ? 'text-indigo-600 dark:text-indigo-400 font-black' : ''}`}>
-                                                {s.staff}
+                                                {shiftStaffDisplay(s, shortNames)}
                                             </span>
                                             {/* The same `Also:` wording the ICS export
                                                 uses for three or more people, so the
@@ -2555,7 +2783,7 @@ const RosterView = ({ user }) => {
                                                 in a 9px cell, not one string. */}
                                             {alsoOnShift.length > 0 && (
                                                 <span className="text-slate-800 dark:text-slate-200">
-                                                    Also: {alsoOnShift.join(', ')}
+                                                    Also: {alsoOnShift.map((name) => displayNameFor(name, shortNames)).join(', ')}
                                                 </span>
                                             )}
                                             {coverAsks.length > 0 && (
@@ -3569,9 +3797,16 @@ const RosterView = ({ user }) => {
                                 it, which read as a gap in the sequence rather than as a step.
                                 Live mode keeps it bare and unnumbered — the classes are
                                 conditional, not a second copy of the markup. */}
+                            {/* ⚠️ `mb-4` ON BOTH BRANCHES. It used to be on the Sandbox one
+                                only, so in LIVE mode this step butted straight against
+                                step 3 with no gap at all — the one seam in the wizard
+                                where two steps come from different files, and so the one
+                                nobody owned. Every other panel gets its breathing room
+                                from a `pb-4` inside `RosterDemoWizardTables`; this is the
+                                same rhythm, applied to the step that sits outside it. */}
                             <div className={isDemo
                                 ? 'mb-4 p-3 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 grid grid-cols-3 gap-3'
-                                : 'grid grid-cols-2 gap-4'}
+                                : 'mb-4 grid grid-cols-2 gap-4'}
                             >
                                 {/* TWO THIRDS TO THE DATE, one to Weeks — in Sandbox only.
                                     Equal halves left the date field 151px, and the native

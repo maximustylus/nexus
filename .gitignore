@@ -87,3 +87,7 @@ nexus-backup-*.json
 # P8.8 runner output — a transcript of a live model run, never source
 P8.8-transcript.md
 results.md
+
+# macOS Finder metadata — never useful in a repo.
+.DS_Store
+**/.DS_Store

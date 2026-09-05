@@ -1935,7 +1935,11 @@ describe('SCALING TABLE — generateRoster (V1) vs generateRosterV2', () => {
             staff,
         );
         expect(v1.maxDutiesPerPersonPerDay).toBe(5);
-        expect(v1.busiestDay).toBe('S02 on 2026-02-03');
+        // MOVED 2026-08-15: the busiest day is wherever V1's extra video consultation
+        // lands, and the service moved that consult from Tuesday to Thursday. Nothing
+        // about the LOAD changed — five duties at once is still V1's worst case; only
+        // the date carrying it did. This pin doing its job is the evidence.
+        expect(v1.busiestDay).toBe('S02 on 2026-02-05');
 
         const v2 = measureRosterLoad(generateRosterV2(scalingConfig(6, 10)).roster, staff);
         expect(v2.maxDutiesPerPersonPerDay).toBe(2);
@@ -1980,7 +1984,17 @@ describe('generateRoster (V1) is unaffected by V2', () => {
     it('still produces its documented output after V2 has run', () => {
         const config = {
             staff: ['Brandon', 'Ying Xian', 'Derlinder', 'Fadzlynn'],
-            tasks: ['EFT', 'IPT+SKG', 'NC', 'FSG+WI'],
+            tasks: [
+            'Physical Activity Counseling',
+            'Exercise Test',
+            'New Case',
+            'Walk-in',
+            'Individual Session',
+            'Inpatient Exercise',
+            'Paediatrics Group Session',
+            'Adolescent Group Session',
+            'Video Consultation Group',
+        ],
             startDate: '2026-02-01',
             weeks: 4,
         };

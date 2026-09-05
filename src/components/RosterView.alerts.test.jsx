@@ -363,6 +363,47 @@ describe('demo mode raises no native dialog (P8.3)', () => {
 // ─── 3. P8.3 — NO NATIVE DIALOG ON THE LIVE WRITE PATHS ───────────────────────
 
 describe('live mode raises no native dialog (P8.3)', () => {
+    it('claims the setup was saved ONLY when something was actually written', async () => {
+        // The integrity half of the banner. `settingsChanged` means a second Generate
+        // that altered nothing writes nothing — and a banner that announced a save
+        // anyway would be claiming an action that did not happen, which is the exact
+        // failure mode this subsystem's post-mortem is named for. One boolean could
+        // not express this: `settingsSaved` was `true` both when a write succeeded
+        // and when there was nothing to write.
+        vi.useFakeTimers();
+        render(<RosterView user={BRANDON} />);
+
+        const generateOnce = async () => {
+            openConfigure();
+            fireEvent.click(screen.getByRole('button', { name: /generate roster/i }));
+            fireEvent.click(screen.getByRole('button', { name: /^ok$/i }));
+            await act(async () => { await vi.advanceTimersByTimeAsync(0); });
+        };
+
+        // FIRST generation: the configuration is new, so it is written and announced.
+        await generateOnce();
+        expect(screen.getByText(/your department's setup is saved/i)).toBeTruthy();
+        const settingsWrites = () => setDoc.mock.calls
+            .map(([ref]) => ref.path)
+            .filter((path) => path.endsWith('/settings/roster')).length;
+        expect(settingsWrites()).toBe(1);
+
+        // Let the banner clear, then generate again having changed NOTHING.
+        await act(async () => { await vi.advanceTimersByTimeAsync(6000); });
+        await generateOnce();
+
+        // The roster is still written — it is regenerated over itself — but the
+        // configuration is not, and the banner must not say it was.
+        expect(settingsWrites(), 'the unchanged configuration was written again').toBe(1);
+        expect(screen.getByText(/roster saved/i)).toBeTruthy();
+        expect(
+            screen.queryByText(/your department's setup is saved/i),
+            'the banner claimed a save on a generation that wrote nothing',
+        ).toBeNull();
+
+        vi.useRealTimers();
+    });
+
     it('confirms a successful generation in a banner that clears itself', async () => {
         vi.useFakeTimers();
         render(<RosterView user={BRANDON} />);
@@ -392,6 +433,20 @@ describe('live mode raises no native dialog (P8.3)', () => {
         expect(written, 'the configuration was not stored').toContain(`teams/${TEAM_ID}/settings/roster`);
         expect(written, 'an unexpected third document was written').toHaveLength(2);
         expect(screen.getByText(/roster saved/i)).toBeTruthy();
+
+        /**
+         * ⚠️ AND IT SAYS THE SETUP WAS KEPT. The configuration has been written on
+         *    every Generate since `R1`, but the banner said nothing about it, so a
+         *    roster master had no way to know and would reasonably assume they were
+         *    retyping their department next time. The failure case had a sentence
+         *    and the success case did not — the wrong way round, because the quiet
+         *    outcome is the one nobody can verify for themselves.
+         *
+         *    Asserted on the same node as the roster sentence: two banners would be
+         *    two things to dismiss, and the setup line is a clause of the outcome,
+         *    not a second event.
+         */
+        expect(screen.getByText(/your department's setup is saved/i)).toBeTruthy();
 
         // Success is transient; the banner clears itself rather than needing a
         // click. The timer is cleared on unmount, so nothing lands after this.

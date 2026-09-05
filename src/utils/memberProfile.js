@@ -82,8 +82,8 @@
  *    they never chose is deciding which shifts they lead.
  */
 
-import { GRADE_SCALE, DEFAULT_GRADE_BANDS, bandOfGrade } from './rosterEngineV2';
-import { MOH_PROFESSION_LEAVES } from '../data/mohAlliedHealth';
+import { GRADE_SCALE, DEFAULT_GRADE_BANDS, bandOfGrade, NON_NURSING_GRADE_ALIASES } from './rosterEngineV2.js';
+import { SELECTABLE_PROFESSION_LEAVES } from '../data/mockData.js';
 
 /** `'AH7' … 'AH17'`. The engine's own scale, not a second list that can drift. */
 export const GRADE_OPTIONS = GRADE_SCALE;
@@ -95,15 +95,37 @@ export const GRADE_OPTIONS = GRADE_SCALE;
  * with `grade: ''`, because neither of them knows it. A screen that refused to save
  * until a grade was chosen would block somebody from fixing their bio.
  */
-export const isValidGrade = (value) => value === '' || GRADE_SCALE.includes(value);
+/**
+ * ⚠️ EXACT MATCH OVER BOTH SPELLINGS — not `parseRank`, and the difference matters.
+ *
+ *    This was `GRADE_SCALE.includes(value)`, which accepts exactly `AH7`…`AH17`, so
+ *    `NN8` — added to the dropdown on 2026-08-31 as the Non-Nursing spelling of the
+ *    same grade — rendered as an option and would have been refused on save.
+ *
+ *    The first fix used `parseRank`, and a test caught it: `parseRank` is a LEXER and
+ *    accepts `ah13`, ` AH13 `, `AH07`. Those are fine to READ and wrong to STORE — a
+ *    validator whose job is "may this be written to the member document" has to
+ *    insist on the canonical spelling, or two members end up with the same grade
+ *    written two ways and every comparison downstream has to know that. So: the
+ *    scale's own labels, plus the NN aliases, matched exactly.
+ */
+const STORABLE_GRADES = new Set([...GRADE_SCALE, ...NON_NURSING_GRADE_ALIASES]);
 
-const PROFESSION_IDS = new Set(MOH_PROFESSION_LEAVES.map((leaf) => leaf.id));
+export const isValidGrade = (value) => value === '' || STORABLE_GRADES.has(value);
+
+/**
+ * ⚠️ EVERY id THE PICKER CAN EMIT, not only MOH's. Built from
+ *    `MOH_PROFESSION_LEAVES` alone, this refused `Administrator` — an option the
+ *    picker offers — with "that is not a profession on the MOH allied health list".
+ *    One list now decides what the picker offers AND what the validator accepts.
+ */
+const PROFESSION_IDS = new Set(SELECTABLE_PROFESSION_LEAVES.map((leaf) => leaf.id));
 
 export const isValidProfession = (value) => value === '' || PROFESSION_IDS.has(value);
 
 /** The reader-visible name for a stored profession id, or '' if there is none. */
 export const professionLabel = (value) => {
-    const leaf = MOH_PROFESSION_LEAVES.find((entry) => entry.id === value);
+    const leaf = SELECTABLE_PROFESSION_LEAVES.find((entry) => entry.id === value);
     return leaf ? leaf.name : '';
 };
 
@@ -210,10 +232,131 @@ export const buildGradeUpdate = (grade, current = null, now = null, setBy = null
  */
 export const validateMemberProfile = ({ grade, profession }) => {
     if (!isValidGrade(grade)) {
-        return `"${grade}" is not a grade on the AH7–AH17 scale. Choose one from the list.`;
+        return `"${grade}" is not a grade on the AH7–AH17 scale (NN7–NN10 is accepted for the support grades). Choose one from the list.`;
     }
     if (!isValidProfession(profession)) {
-        return 'That is not a profession on the MOH allied health list. Choose one from the list.';
+        return 'That is not one of the professions or roles in the list. Choose one from the dropdown.';
     }
     return '';
+};
+
+// --- HOW SOMEBODY APPEARS IN THE ROSTER, AND WHICH DUTIES THEY TAKE ----------
+
+/**
+ * ⚠️ A SEPARATE BUILDER FROM `buildMemberProfileUpdate`, AND NOT FOR TIDINESS.
+ *
+ *    `ProfileView` calls that one with the WHOLE profile form object, so every key
+ *    it learns to read becomes a key a person writes to their OWN membership. These
+ *    two must not be:
+ *
+ *      shortName  is how colleagues identify somebody on a shared calendar — the
+ *                 same argument that keeps `displayName` off the self allowlist.
+ *      onlyTasks  is which duties somebody carries. Nobody shortens their own.
+ *
+ *    So both sit in the LEAD's `changedKeys().hasOnly` list in `firestore.rules`
+ *    and not the self one, and they are built here, by the lead's member editor
+ *    alone. Widening the shared builder would have made every ordinary profile save
+ *    fail with `permission-denied` — see the allowlist warning above it.
+ */
+
+/** An acronym has to fit an event title on a phone. Eight is two initials with room. */
+export const SHORT_NAME_MAX = 8;
+
+/**
+ * ⚠️ WHY THESE CHARACTERS ARE REJECTED, STATED HONESTLY.
+ *
+ *    A short name reaches Outlook inside a VEVENT `SUMMARY`, and `,` `;` and `\` are
+ *    RFC 5545 delimiters. An earlier version of this comment claimed rejecting them
+ *    here was "cheaper than escaping them at every exporter", which overstated it:
+ *    `escapeICSText` in `auraEngine.js` already escapes all three, so a comma would
+ *    survive the file intact. This is BELT AND BRACES, not the only defence.
+ *
+ *    It is still worth having. An acronym is meant to be short and glanceable, and
+ *    `A\,B` in an event title is neither; and the CSV exporter and the calendar chip
+ *    do not escape anything, because they never needed to.
+ *
+ *    ⚠️ AND IT IS NOT A SECURITY BOUNDARY. `firestore.rules` allowlists these two
+ *       field NAMES and does not constrain their values, so a lead can write a
+ *       200-character `shortName` or a non-string `onlyTasks` straight to the
+ *       document. Both are handled downstream — the `typeof` guards below and in
+ *       `RosterView`'s map reject a non-string, and `normalizeOnlyTasks` reads a
+ *       non-array as "no restriction" — and neither is worse than the `displayName`
+ *       write that same lead already has.
+ */
+const SHORT_NAME_SHAPE = /^[A-Za-z0-9][A-Za-z0-9 .\-/]*$/;
+
+export const normalizeShortName = (value) =>
+    (typeof value === 'string' ? value : '')
+        .trim()
+        .replace(/\s+/g, ' ')
+        .slice(0, SHORT_NAME_MAX);
+
+/** `''` is VALID and means "use their full name". An acronym is optional, never forced. */
+export const isValidShortName = (value) => {
+    const cleaned = normalizeShortName(value);
+    return cleaned === '' || SHORT_NAME_SHAPE.test(cleaned);
+};
+
+/** No department rosters this many distinct duties; the cap bounds the stored array. */
+export const ONLY_TASKS_MAX = 24;
+
+/**
+ * A typed list or a stored array -> clean, de-duplicated duty names.
+ *
+ * An EMPTY result means "no restriction", which is why the empty case has to stay
+ * distinguishable from a restriction naming nothing: a person limited to zero duties
+ * would simply never be rostered, and that is a way to lose somebody silently.
+ * Callers treat `[]` as absent — see `staffRowsFromMembers`.
+ */
+export const normalizeOnlyTasks = (value) => {
+    const list = Array.isArray(value)
+        ? value
+        : (typeof value === 'string' ? value.split(',') : []);
+    const seen = new Set();
+    const out = [];
+    for (const entry of list) {
+        const name = typeof entry === 'string' ? entry.trim().replace(/\s+/g, ' ') : '';
+        if (name === '') continue;
+        const key = name.toLowerCase();
+        if (seen.has(key)) continue;
+        seen.add(key);
+        out.push(name);
+        if (out.length === ONLY_TASKS_MAX) break;
+    }
+    return out;
+};
+
+/** Why a lead's roster edit was refused, as a sentence, or '' when it is fine. */
+export const validateMemberRoster = ({ shortName }) => {
+    if (!isValidShortName(shortName)) {
+        return `"${String(shortName ?? '').trim()}" will not work as a short name. `
+            + `Up to ${SHORT_NAME_MAX} characters, using letters, numbers, spaces and . - / — `
+            + 'no commas or semicolons, because calendars read those as separators.';
+    }
+    return '';
+};
+
+/**
+ * The membership fields a LEAD may change on this screen, or `null` when nothing moved.
+ *
+ * Built from an allowlist of exactly two keys for the reason stated above the profile
+ * builder: an extra key does not write an extra field, it fails the whole write.
+ */
+export const buildMemberRosterUpdate = ({ shortName, onlyTasks }, current = {}) => {
+    // A safety net rather than the error path — the panel calls `validateMemberRoster`
+    // first so the person reads a sentence instead of `permission-denied`.
+    if (!isValidShortName(shortName)) return null;
+
+    const update = {};
+
+    const nextShort = normalizeShortName(shortName);
+    if (nextShort !== normalizeShortName(current.shortName)) update.shortName = nextShort;
+
+    const nextOnly = normalizeOnlyTasks(onlyTasks);
+    const currentOnly = normalizeOnlyTasks(current.onlyTasks);
+    const sameDuties = nextOnly.length === currentOnly.length
+        && nextOnly.every((name, index) => name === currentOnly[index]);
+    if (!sameDuties) update.onlyTasks = nextOnly;
+
+    return Object.keys(update).length > 0 ? update : null;
 };

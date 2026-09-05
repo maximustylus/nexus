@@ -2105,7 +2105,25 @@ describe('demo mode: the picker is a profession and a shape', () => {
         // taxonomy rather than against a count typed into this file.
         expect(MOH_ALLIED_HEALTH_PROFESSIONS).toHaveLength(28);
         expect(MOH_PROFESSION_LEAF_COUNT).toBe(37);
-        expect(MOH_PROFESSION_OPTIONS).toHaveLength(28);
+
+        /**
+         * ⚠️ 28 MOH ENTRIES **PLUS ONE NON-MOH GROUP**, and the split is the point.
+         *
+         * Administrators, allied health assistants and associates were added on
+         * 2026-08-31 — the roster owner: *"they are the ones who are the roster
+         * masters"* — and they are NOT MOH professions. Merging them into the 28
+         * would make the claim "MOH's own 28", which this repository repeats in the
+         * picker's own copy, false. So they sit in their own labelled group and every
+         * assertion about MOH's list below EXCLUDES it by groupId, which is why this
+         * test still fails if somebody quietly slips a 29th profession in.
+         */
+        const mohEntries = MOH_PROFESSION_OPTIONS.filter((entry) => entry.groupId !== 'support-admin');
+        const supportGroup = MOH_PROFESSION_OPTIONS.find((entry) => entry.groupId === 'support-admin');
+        expect(mohEntries).toHaveLength(28);
+        expect(supportGroup, 'the support/admin group is missing').toBeTruthy();
+        expect(supportGroup.label).toMatch(/not an MOH profession/i);
+        // …and it is LAST, so it can never be mistaken for part of the register.
+        expect(MOH_PROFESSION_OPTIONS[MOH_PROFESSION_OPTIONS.length - 1]).toBe(supportGroup);
 
         // The two professions MOH nests — 12 (Medical Technologist / Physiologist, five
         // sub-disciplines) and 24 (Psychologist, six) — render as <optgroup>s, because
@@ -2114,11 +2132,12 @@ describe('demo mode: the picker is a profession and a shape', () => {
         // to select a group heading, which is the behaviour we want rather than one this
         // component would have to police.
         const groups = Array.from(picker.querySelectorAll('optgroup'));
-        expect(groups.map((group) => group.label).sort()).toEqual([
+        const mohGroups = groups.filter((group) => !/not an MOH profession/i.test(group.label));
+        expect(mohGroups.map((group) => group.label).sort()).toEqual([
             'Medical Technologist / Physiologist',
             'Psychologist (excluding associate psychologist)',
         ]);
-        expect(groups.map((group) => group.querySelectorAll('option').length).sort())
+        expect(mohGroups.map((group) => group.querySelectorAll('option').length).sort())
             .toEqual([5, 6]);
 
         // Every leaf in the taxonomy is reachable as an option, and no group label is.
@@ -2126,8 +2145,12 @@ describe('demo mode: the picker is a profession and a shape', () => {
         for (const leaf of MOH_PROFESSION_LEAVES) {
             expect(values).toContain(leaf.id);
         }
-        // 37 leaves + the "prefer not to say" empty option, and nothing else.
-        expect(values).toHaveLength(MOH_PROFESSION_LEAF_COUNT + 1);
+        // 37 MOH leaves + the "prefer not to say" empty option + the support roles.
+        const supportIds = supportGroup.options.map((role) => role.id);
+        expect(supportIds).toContain('administrator');
+        expect(values).toHaveLength(MOH_PROFESSION_LEAF_COUNT + 1 + supportIds.length);
+        // Every MOH leaf is still reachable and no MOH group label is — unchanged.
+        for (const id of supportIds) expect(values).toContain(id);
         expect(values.filter((value) => value === '')).toHaveLength(1);
         expect(values).not.toContain('medical-technologist-physiologist');
         expect(values).not.toContain('psychologist');
@@ -2147,12 +2170,18 @@ describe('demo mode: the picker is a profession and a shape', () => {
         // own sort, so it cannot be satisfied by hand-ordering the array. That is exactly
         // the failure mode the comparator exists to prevent, and the 29th profession will
         // be added by somebody who has not read `mockData.js`.
-        const names = MOH_PROFESSION_OPTIONS.map((entry) => entry.sortName);
+        // Over MOH's OWN list. The support/admin group is appended after the sort on
+        // purpose — an `Administrator` between `Art Therapist` and `Audiologist` would
+        // read as MOH having registered it — so it is excluded here and pinned as last
+        // in the test above.
+        const names = MOH_PROFESSION_OPTIONS
+            .filter((entry) => entry.groupId !== 'support-admin')
+            .map((entry) => entry.sortName);
         expect(names).toEqual([...names].sort((a, b) => a.localeCompare(b, 'en')));
         expect(names[0]).toBe('Art Therapist');
         expect(names[names.length - 1]).toBe('Speech Therapist');
 
-        // …and within each nesting profession, the same discipline.
+        // …and within each group, including the appended one, the same discipline.
         for (const group of MOH_PROFESSION_OPTIONS.filter((entry) => entry.kind === 'group')) {
             const children = group.options.map((leaf) => leaf.name);
             expect(children).toEqual([...children].sort((a, b) => a.localeCompare(b, 'en')));
@@ -2299,8 +2328,10 @@ describe('demo mode: the picker is a profession and a shape', () => {
         for (const task of LIVE_ROSTER_DEFAULTS.tasks) {
             expect(cepTasks).toContain(task);
         }
-        expect(cepTasks).toContain('VC (PM)');
-        expect(cepTasks).toContain('VC (AM)');
+        // Both consult slots carry ONE name now — the individual consultation — because
+        // every group session is an afternoon and these two are mornings.
+        expect(cepTasks).toContain('Video Consultation Individual');
+        expect(cepTasks).toContain('Video Consultation Group');
     });
 
     it('accepts every shape, and re-audits every finished roster to zero', () => {
@@ -3021,17 +3052,35 @@ describe('demo mode: the graded duty split and the fixed weekday sessions', () =
             .toBeGreaterThan(leadsOf(result, 'Outpatient Musculoskeletal Clinic').length);
     });
 
-    it('fixed weekday sessions: the real duty list, and the Tuesday that needs three', () => {
+    it('fixed weekday sessions: the real duty list, and the day that needs three', () => {
         const fixture = shapeOf('shape-weekday-sessions').config;
         const result = generateRosterV2(fixture);
 
         // The run starts on the Monday the LIVE roster's Sunday start snaps forward to.
         expect(result.effectiveStart).toBe('2026-02-02');
-        // Tuesday carries the four core duties AND the afternoon video consult…
+        // RENAMED AND SPLIT 2026-08-15 — see `LIVE_ROSTER_DEFAULTS`. The six weekday
+        // duties run Mon–Fri; the group sessions and the two consults sit on their own
+        // days, so a weekday carries six duties plus whatever that day adds.
+        const WEEKDAY_SIX = [
+            'Physical Activity Counseling',
+            'Exercise Test',
+            'New Case',
+            'Walk-in',
+            'Individual Session',
+            'Inpatient Exercise',
+        ];
+        // Monday is the six alone.
+        expect(result.roster['2026-02-02'].map((shift) => shift.task)).toEqual(WEEKDAY_SIX);
+        // Tuesday adds the group video consultation…
         expect(result.roster['2026-02-03'].map((shift) => shift.task))
-            .toEqual(['EFT', 'IPT+SKG', 'NC', 'FSG+WI', 'VC (PM)']);
-        // …Saturday carries the morning one and nothing else, and Sunday nothing at all.
-        expect(result.roster['2026-02-07'].map((shift) => shift.task)).toEqual(['VC (AM)']);
+            .toEqual([...WEEKDAY_SIX, 'Video Consultation Group']);
+        // …Thursday adds the individual one, which moved here from Tuesday…
+        expect(result.roster['2026-02-05'].map((shift) => shift.task))
+            .toEqual([...WEEKDAY_SIX, 'Video Consultation Individual']);
+        // …Saturday carries the individual consultation and nothing else, and Sunday
+        // nothing at all.
+        expect(result.roster['2026-02-07'].map((shift) => shift.task))
+            .toEqual(['Video Consultation Individual']);
         expect(result.roster['2026-02-08']).toBeUndefined();
 
         // Somebody holds three duties on that Tuesday, and nobody holds four anywhere.
@@ -3048,9 +3097,13 @@ describe('demo mode: the graded duty split and the fixed weekday sessions', () =
         }
 
         // MUTATION: the 2-a-day cap every other shape uses cannot staff this week.
+        // Was 8 unfilled before the 2026-08-15 rename; 52 after, because two compound
+        // duties became four rows and three more were added. The claim is unchanged and
+        // now stated more loudly — `maxConcurrentPerDay: 3` is this service's own policy,
+        // not a number chosen to make a demo work.
         const capped = without('shape-weekday-sessions', (copy) => { copy.rules.maxConcurrentPerDay = 2; });
         expect(result.unfilled).toHaveLength(0);
-        expect(capped.unfilled.length).toBe(8);
+        expect(capped.unfilled.length).toBe(52);
     });
 });
 

@@ -123,7 +123,17 @@ describe('buildShiftStaffLabel — the one definition of the display string', ()
         // two ever diverge, this fails rather than the ICS export drifting.
         const roster = generateRoster({
             staff: ['Brandon', 'Ying Xian', 'Derlinder', 'Fadzlynn'],
-            tasks: ['EFT', 'IPT+SKG', 'NC', 'FSG+WI'],
+            tasks: [
+            'Physical Activity Counseling',
+            'Exercise Test',
+            'New Case',
+            'Walk-in',
+            'Individual Session',
+            'Inpatient Exercise',
+            'Paediatrics Group Session',
+            'Adolescent Group Session',
+            'Video Consultation Group',
+        ],
             startDate: '2026-02-01',
             weeks: 2,
         });
@@ -985,7 +995,17 @@ describe('findAppliedSwapShift — the read-back that success is conditional on'
 describe('plan → write → verify, on a roster produced by the real generator', () => {
     const config = {
         staff: ['Brandon', 'Ying Xian', 'Derlinder', 'Fadzlynn'],
-        tasks: ['EFT', 'IPT+SKG', 'NC', 'FSG+WI'],
+        tasks: [
+            'Physical Activity Counseling',
+            'Exercise Test',
+            'New Case',
+            'Walk-in',
+            'Individual Session',
+            'Inpatient Exercise',
+            'Paediatrics Group Session',
+            'Adolescent Group Session',
+            'Video Consultation Group',
+        ],
         startDate: '2026-02-01',
         weeks: 1,
     };

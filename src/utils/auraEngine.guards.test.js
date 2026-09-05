@@ -46,7 +46,17 @@ import {
 /** The config RosterView ships in live mode. */
 const liveConfig = (overrides = {}) => ({
     staff: ['Brandon', 'Ying Xian', 'Derlinder', 'Fadzlynn'],
-    tasks: ['EFT', 'IPT+SKG', 'NC', 'FSG+WI'],
+    tasks: [
+        'Physical Activity Counseling',
+        'Exercise Test',
+        'New Case',
+        'Walk-in',
+        'Individual Session',
+        'Inpatient Exercise',
+        'Paediatrics Group Session',
+        'Adolescent Group Session',
+        'Video Consultation Group',
+    ],
     startDate: '2026-02-01',
     weeks: 4,
     ...overrides,
@@ -332,7 +342,7 @@ describe('formatRosterDateKey', () => {
 
 // ─── 1.4 — leaving demo mode restores the live pool ──────────────────────────
 describe('restoreLiveRosterConfig (ROSTER_QC_AUDIT.md M1)', () => {
-    it('ships an EMPTY staff pool — AN14 — and the same tasks as ever', () => {
+    it('ships an EMPTY staff pool — AN14 — and the duty names, spelled out', () => {
         // This pinned the four names the old RosterView useState hardcoded, as a
         // behaviour-preserving proof. `AN14` ended that: the names shipped in the
         // public bundle, so the default pool is now empty and the team's member
@@ -340,7 +350,21 @@ describe('restoreLiveRosterConfig (ROSTER_QC_AUDIT.md M1)', () => {
         // ABSENCE — if a name ever returns here, this fails before the bundle
         // check even runs.
         expect(LIVE_ROSTER_DEFAULTS.staff).toEqual([]);
-        expect(LIVE_ROSTER_DEFAULTS.tasks).toEqual(['EFT', 'IPT+SKG', 'NC', 'FSG+WI']);
+        // RENAMED 2026-08-15 at the roster owner's request: the acronyms meant nothing
+        // to the departments NEXUS is now offered to, and `IPT+SKG` / `FSG+WI` each
+        // held TWO duties in one string, which is why four names became nine. This pin
+        // is the demo-poisoning guard's fixture, so it moves with the defaults.
+        expect(LIVE_ROSTER_DEFAULTS.tasks).toEqual([
+            'Physical Activity Counseling',
+            'Exercise Test',
+            'New Case',
+            'Walk-in',
+            'Individual Session',
+            'Inpatient Exercise',
+            'Paediatrics Group Session',
+            'Adolescent Group Session',
+            'Video Consultation Group',
+        ]);
         expect(LIVE_ROSTER_DEFAULTS.startDate).toBe('2026-02-01');
         expect(LIVE_ROSTER_DEFAULTS.weeks).toBe(4);
     });
@@ -355,6 +379,17 @@ describe('restoreLiveRosterConfig (ROSTER_QC_AUDIT.md M1)', () => {
         const restored = restoreLiveRosterConfig(demoPoisonedConfig());
 
         // The M1 guarantee, unchanged: not one demo character survives the toggle.
+        expect(restored.tasks).toEqual([
+            'Physical Activity Counseling',
+            'Exercise Test',
+            'New Case',
+            'Walk-in',
+            'Individual Session',
+            'Inpatient Exercise',
+            'Paediatrics Group Session',
+            'Adolescent Group Session',
+            'Video Consultation Group',
+        ]);
         ['Steve', 'Peter', 'Charles', 'Jean', 'Tony'].forEach((name) => {
             expect(restored.staff).not.toContain(name);
         });
@@ -364,7 +399,17 @@ describe('restoreLiveRosterConfig (ROSTER_QC_AUDIT.md M1)', () => {
         // colleagues, because the default no longer names anybody. The team's own
         // member list is what refills it (RosterView passes it explicitly).
         expect(restored.staff).toEqual([]);
-        expect(restored.tasks).toEqual(['EFT', 'IPT+SKG', 'NC', 'FSG+WI']);
+        expect(restored.tasks).toEqual([
+            'Physical Activity Counseling',
+            'Exercise Test',
+            'New Case',
+            'Walk-in',
+            'Individual Session',
+            'Inpatient Exercise',
+            'Paediatrics Group Session',
+            'Adolescent Group Session',
+            'Video Consultation Group',
+        ]);
     });
 
     it('restores the ACTIVE TEAM when one is passed — the live path since v2.0', () => {
