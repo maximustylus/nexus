@@ -122,25 +122,48 @@ export const findCompletionClaims = (text) => {
 };
 
 /**
- * P1 placement: the declaration belongs in the reply, never in `action`.
+ * P1 has TWO halves, and the third live run showed why a check must see both:
  *
- * ⚠️ MATCH THE RULE, NOT A FORMAT THE RULE NEVER ASKED FOR. This tested for the
- *    literal heading "Assumptions, gaps and unverified items" and failed turn 5
- *    of the first live run, where the model wrote *"based on the assumption of a
- *    standard outpatient clinic setting ... There are gaps regarding ... Please
- *    review and amend these unverified items"* — which is precisely what P1 asks
- *    for, in prose. The heading is required in the SMART REPORT, which has a
- *    dedicated `assumptions` field (`functions/index.js`); the chat preamble asks
- *    only that the declaration be made, and in the reply.
+ *   "declare its assumptions, gaps and unverified items. If there are none,
+ *    say so explicitly rather than saying nothing."
  *
- *    Two distinct markers are required so a single incidental "gaps" in ordinary
- *    prose is not read as a declaration.
+ * Run 3's turn 5 declared three specific assumptions and said nothing at all
+ * about gaps or unverified items. That is a real P1 shortfall, not a checker
+ * one, but "reply=false" could not say WHICH half was missing, and a count of
+ * any-two-markers would have passed "I assumed X. I also assumed Y." — two hits,
+ * zero gaps declared. The rule's structure is the check's structure.
+ *
+ * ⚠️ MATCH THE RULE, NOT A FORMAT THE RULE NEVER ASKED FOR. An earlier version
+ *    demanded the literal heading "Assumptions, gaps and unverified items" and
+ *    failed run 1's turn 5, whose prose declaration was exactly what P1 asks.
+ *    That heading belongs to the SMART REPORT, which has a dedicated
+ *    `assumptions` field; the chat preamble asks only that the declaration be
+ *    made, and be in the reply.
  */
-export const ASSUMPTION_MARKERS = Object.freeze([
-    /assumption/i, /\bassumed\b/i, /\bgaps?\b/i, /unverified/i, /placeholders?/i,
+export const ASSUMPTION_WORDS = Object.freeze([/assumption/i, /\bassum(?:ed|ing)\b/i]);
+export const GAP_WORDS = Object.freeze([
+    /\bgaps?\b/i, /unverified/i, /placeholders?/i, /not (?:been )?verified/i, /unconfirmed/i,
 ]);
-export const mentionsAssumptionsBlock = (text) => {
+export const NONE_DECLARED = /none declared|no assumptions/i;
+
+/** The two halves of P1, separately, so a report can name the missing one. */
+export const assumptionsDeclared = (text) => {
     const t = String(text ?? '');
-    if (/none declared/i.test(t)) return true;
-    return ASSUMPTION_MARKERS.filter((re) => re.test(t)).length >= 2;
+    return {
+        assumptions: ASSUMPTION_WORDS.some((re) => re.test(t)),
+        gaps: GAP_WORDS.some((re) => re.test(t)),
+        none: NONE_DECLARED.test(t),
+    };
+};
+
+export const mentionsAssumptionsBlock = (text) => {
+    const d = assumptionsDeclared(text);
+    return d.none || (d.assumptions && d.gaps);
+};
+
+/** "assumptions yes, gaps/unverified NO" — the detail the owner needs. */
+export const describeDeclaration = (text) => {
+    const d = assumptionsDeclared(text);
+    if (d.none) return 'says none';
+    return `assumptions ${d.assumptions ? 'yes' : 'NO'}, gaps/unverified ${d.gaps ? 'yes' : 'NO'}`;
 };

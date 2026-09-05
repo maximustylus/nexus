@@ -225,7 +225,7 @@ const runChecks = (names, { raw, parsed, ok, error }) => {
                 const inReply = C.mentionsAssumptionsBlock(reply);
                 const inDoc = C.mentionsAssumptionsBlock(action);
                 add('P1 — assumptions in the reply, not the document', inReply && !inDoc,
-                    `reply=${inReply} document=${inDoc}`);
+                    `reply: ${C.describeDeclaration(reply)}; document: ${inDoc ? 'CARRIES A DECLARATION' : 'clean'}`);
                 break;
             }
             case 'threeBullets': {

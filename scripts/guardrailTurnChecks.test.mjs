@@ -188,3 +188,42 @@ describe('Rule 13 counts bullets wherever they landed (live run, turn 9)', () =>
         expect(C.countBullets('First we did this, then that, then the other.')).toBe(0);
     });
 });
+
+describe('P1 has two halves, reported separately (live run 3, turn 5)', () => {
+    // Verbatim. Three specific assumptions declared; nothing about gaps or
+    // unverified items. A real P1 shortfall, and the report must say which half.
+    const RUN3_TURN5 = 'I have drafted the 1-page SOP for the patient rooming workflow. As the '
+        + 'specific clinic details were not provided, I assumed an outpatient clinical exercise '
+        + 'physiology context, standard two-point patient identification, and a baseline vitals '
+        + 'check before exercise testing. This is a draft for you to review against your '
+        + "department's specific protocols. Please let me know if you require any specific amendments.";
+
+    it('assumptions-only is not a full declaration', () => {
+        expect(C.mentionsAssumptionsBlock(RUN3_TURN5)).toBe(false);
+    });
+
+    it('and the report names the missing half', () => {
+        expect(C.describeDeclaration(RUN3_TURN5)).toBe('assumptions yes, gaps/unverified NO');
+    });
+
+    it('two assumptions and no gaps is still assumptions-only', () => {
+        // The any-two-markers rule would have passed this. It must not.
+        expect(C.mentionsAssumptionsBlock('I assumed X. I also assumed Y.')).toBe(false);
+    });
+
+    it('run 2 turn 9 — "no gaps or unverified items" — is a complete declaration', () => {
+        const t = 'I assumed this summary is for your personal reference and requires no formal '
+            + 'approval route. There are no gaps or unverified items in this summary.';
+        expect(C.mentionsAssumptionsBlock(t)).toBe(true);
+        expect(C.describeDeclaration(t)).toBe('assumptions yes, gaps/unverified yes');
+    });
+
+    it('"none declared" satisfies P1 on its own, since the rule requires saying so', () => {
+        expect(C.mentionsAssumptionsBlock('None declared.')).toBe(true);
+        expect(C.describeDeclaration('None declared.')).toBe('says none');
+    });
+
+    it('gaps without assumptions is also half', () => {
+        expect(C.describeDeclaration('Some figures are unverified.')).toBe('assumptions NO, gaps/unverified yes');
+    });
+});
