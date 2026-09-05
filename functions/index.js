@@ -44,13 +44,40 @@ if (!API_KEY) {
     console.warn('[NEXUS] GEMINI_API_KEY not in environment. Normal during local deploy analysis.');
 }
 
-const MODEL_PRIORITY = [
-    'gemini-2.5-pro',
-    'gemini-2.0-flash',
-    'gemini-1.5-pro',
-    'gemini-1.5-flash',
-];
-const SAFE_FALLBACK_MODEL = 'models/gemini-1.5-flash';
+/**
+ * `AU30` — A MODEL IN THE LIST IS NOT A MODEL YOU MAY CALL. The candidate order,
+ * the fallback and the rule for reading a probe live in one module so the
+ * deployed function and `scripts/verify-guardrail-turns.mjs` cannot disagree
+ * about which model AURA runs on. See `functions/modelAvailability.cjs` for why
+ * an ambiguous refusal must never demote a model.
+ */
+const modelAvailability = require('./modelAvailability.cjs');
+const MODEL_PRIORITY = modelAvailability.MODEL_PRIORITY;
+const SAFE_FALLBACK_MODEL = modelAvailability.SAFE_FALLBACK_MODEL;
+const PROBE_BODY = JSON.stringify(modelAvailability.PROBE_BODY);
+
+/**
+ * Does this model actually generate for THIS key? `'yes'` / `'no'` / `'unknown'`.
+ * A network failure is `'unknown'`, never `'no'` — see `classifyProbe`.
+ */
+async function modelAnswers(modelName) {
+    try {
+        const res = await fetch(
+            'https://generativelanguage.googleapis.com/v1beta/' + modelName + ':generateContent?key=' + API_KEY,
+            {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: PROBE_BODY,
+                signal: AbortSignal.timeout(8000),
+            },
+        );
+        if (res.ok) return 'yes';
+        const body = await res.text().catch(() => '');
+        return modelAvailability.classifyProbe(res.status, body);
+    } catch (e) {
+        return 'unknown';
+    }
+}
 
 let modelResolutionPromise = null;
 
@@ -68,16 +95,16 @@ async function resolveModel() {
              * ⚠️ `AU16` — SERVE THE FALLBACK, NEVER PIN IT. Only the thrown-error
              *    path cleared the cache, so a single non-200 from the model list —
              *    one rate-limited minute at cold start — resolved this promise to
-             *    `gemini-1.5-flash` and every call for the CONTAINER'S LIFE ran on
-             *    the cheapest model, silently. Warm containers live for hours, and
+             *    the fallback and every call for the CONTAINER'S LIFE ran on the
+             *    cheapest model, silently. Warm containers live for hours, and
              *    nothing recorded which model answered (the other half of `AU16`,
              *    closed by `aiProvenance`), so it was invisible end to end.
              *
-             *    Every path that cannot return a discovered model now clears the
-             *    cache before returning the fallback: this call degrades, the next
-             *    call re-discovers. In-flight callers awaiting this same promise
-             *    still get the fallback — correct, their turn must not stall — and
-             *    the provenance field on each response says what they got.
+             *    Every path that cannot return a PROVEN model now clears the cache
+             *    before returning: this call degrades, the next call re-discovers.
+             *    In-flight callers awaiting this same promise still get the
+             *    degraded answer — correct, their turn must not stall — and the
+             *    provenance field on each response says what they got.
              */
             if (!response.ok) {
                 logger.warn('[NEXUS] Model list returned ' + response.status + '. Using fallback once, not caching it.');
@@ -90,10 +117,23 @@ async function resolveModel() {
 
             for (const candidate of MODEL_PRIORITY) {
                 const match = available.find(name => name === 'models/' + candidate);
-                if (match) {
+                if (!match) continue;
+
+                const verdict = await modelAnswers(match);
+                if (verdict === 'yes') {
                     logger.info('[NEXUS] Model resolved: ' + match);
                     return match;
                 }
+                if (verdict === 'no') {
+                    logger.warn('[NEXUS] ' + match + ' is listed but refuses calls. Skipping it.');
+                    continue;
+                }
+                // `AU30` + `AU16`: an inconclusive probe is transient, so serve this
+                // model for THIS call and re-check on the next one. Demoting the best
+                // model because the probe hit a rate limit is the worse failure.
+                logger.warn('[NEXUS] Probe inconclusive for ' + match + '. Using it once, not caching it.');
+                modelResolutionPromise = null;
+                return match;
             }
 
             // A list that answered 200 but names none of our models: also transient

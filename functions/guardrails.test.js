@@ -545,12 +545,19 @@ describe('resolveModel — every fallback path clears the cache (AU16)', () => {
         expect(branch).toContain('modelResolutionPromise = null');
     });
 
-    it('a DISCOVERED model is still cached — the reset must not kill the cache entirely', () => {
+    it('a PROVEN model is still cached — the reset must not kill the cache entirely', () => {
         // The success path returns `match` with no reset: one discovery serves the
         // container. If someone "fixes" AU16 by clearing unconditionally, every
         // call pays an extra round trip forever, and this catches it.
-        const branch = fn.slice(fn.indexOf('for (const candidate'), fn.indexOf('No priority model matched'));
-        expect(branch).toContain('return match');
-        expect(branch).not.toContain('modelResolutionPromise = null');
+        //
+        // `AU30` narrowed what counts as success. Being in the model list is no
+        // longer proof — only a `'yes'` verdict from `modelAnswers()` is — so the
+        // slice below is the PROVEN branch, not the whole candidate loop. The
+        // inconclusive branch beneath it deliberately DOES reset, and asserting
+        // over the loop as a whole would forbid that. `functions/modelAvailability.test.js`
+        // holds the other half: that the inconclusive path resets before returning.
+        const proven = fn.slice(fn.indexOf("if (verdict === 'yes')"), fn.indexOf("if (verdict === 'no')"));
+        expect(proven).toContain('return match');
+        expect(proven).not.toContain('modelResolutionPromise = null');
     });
 });

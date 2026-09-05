@@ -283,13 +283,39 @@ const KEY = process.env.GEMINI_API_KEY;
  *    against its own idea of the system rather than the system. `MODEL_PRIORITY`
  *    is read out of `functions/index.js` so the list cannot drift either.
  */
-const MODEL_PRIORITY = (() => {
-    const from = indexSrc.indexOf('const MODEL_PRIORITY = [');
-    if (from === -1) throw new Error('MODEL_PRIORITY not found in functions/index.js');
-    const open = indexSrc.indexOf('[', from);
-    const close = indexSrc.indexOf('];', open);
-    return new Function(`return ${indexSrc.slice(open, close + 1)}`)();
-})();
+const modelAvailability = require_(resolve(ROOT, 'functions/modelAvailability.cjs'));
+const { MODEL_PRIORITY, PROBE_BODY, classifyProbe } = modelAvailability;
+
+/**
+ * `AU30` — the list is not the contract. `models?key=` happily names
+ * `gemini-2.5-pro` to a key that is then refused at `:generateContent`
+ * ("no longer available to new users"), which produced a run where every one of
+ * the eighteen turns failed identically before AURA saw a word. A candidate is
+ * therefore probed with a real generation before the turns are spent on it.
+ *
+ * `'no'` demotes; anything ambiguous does not, because a rate-limited probe must
+ * not disqualify the model the deployed function will actually use.
+ */
+const probeModel = async (modelName) => {
+    try {
+        const res = await fetch(
+            `https://generativelanguage.googleapis.com/v1beta/${modelName}:generateContent?key=${KEY}`,
+            {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                signal: AbortSignal.timeout(30000),
+                body: JSON.stringify(PROBE_BODY),
+            },
+        );
+        if (res.ok) return { verdict: 'yes' };
+        const body = await res.text();
+        let why = body;
+        try { why = JSON.parse(body)?.error?.message || body; } catch { /* raw body */ }
+        return { verdict: classifyProbe(res.status, body), why };
+    } catch {
+        return { verdict: 'unknown' };
+    }
+};
 
 const resolveModel = async () => {
     if (modelOverride) return modelOverride;
@@ -298,13 +324,30 @@ const resolveModel = async () => {
     const data = await res.json();
     if (!res.ok) throw new Error(`model list failed: ${data?.error?.message || res.status}`);
     const available = (data.models || []).map((m) => m.name);
+
+    const refused = [];
     for (const candidate of MODEL_PRIORITY) {
         const hit = available.find((n) => n === `models/${candidate}`);
-        if (hit) return hit;
+        if (!hit) continue;
+        const { verdict, why } = await probeModel(hit);
+        if (verdict === 'no') {
+            console.log(`  ${hit}: listed, but refuses calls — skipping.`);
+            refused.push(`${hit} (${why})`);
+            continue;
+        }
+        if (verdict === 'unknown') {
+            console.log(`  ${hit}: probe inconclusive, using it anyway.`);
+        }
+        return hit;
     }
+
+    const listed = MODEL_PRIORITY.filter((c) => available.includes(`models/${c}`));
     throw new Error(
-        `none of ${MODEL_PRIORITY.join(', ')} is available to this key. `
-        + `It can see: ${available.slice(0, 8).join(', ')}${available.length > 8 ? ' …' : ''}`,
+        `no model in MODEL_PRIORITY will answer this key.\n`
+        + `  listed but refused: ${refused.length ? refused.join('; ') : 'none'}\n`
+        + `  not listed at all:  ${MODEL_PRIORITY.filter((c) => !listed.includes(c)).join(', ') || 'none'}\n`
+        + `  the key can see:    ${available.slice(0, 10).map((n) => n.replace('models/', '')).join(', ')}`
+        + `${available.length > 10 ? ' …' : ''}`,
     );
 };
 
