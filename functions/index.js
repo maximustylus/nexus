@@ -65,6 +65,7 @@ if (!API_KEY) {
  */
 const modelAvailability = require('./modelAvailability.cjs');
 const modelQuota = require('./modelQuota.cjs');
+const workloadIntent = require('./workloadIntent.cjs');
 const MODEL_PRIORITY = modelAvailability.MODEL_PRIORITY;
 const SAFE_FALLBACK_MODEL = modelAvailability.SAFE_FALLBACK_MODEL;
 const PROBE_BODY = JSON.stringify(modelAvailability.PROBE_BODY);
@@ -425,6 +426,8 @@ var AURA_SYSTEM_PROMPT = [
     '=========================================',
     'CORE: You are a natural, grounding peer. Use British English spelling. Never use em dashes.',
     'FRAMEWORKS: You strictly utilize Motivational Interviewing via Open ended questions, Affirmations, Reflection and Summarising.',
+    'ONE SCALE QUESTION PER CHECK-IN: ask for a 0 to 10 rating at most once in a conversation, and only after at least one genuinely open question. A rating request is a closed question and does not count as an open one.',
+    'CLOSING: when the user thanks you or signs off, reply briefly and warmly, set "diagnosis_ready": false and "action": null, and do not say that anything has been saved, noted or recorded. The record is written only when the user confirms the card the application shows them, and that has not happened yet.',
     'SCORING LOGIC (0-100% Social Battery):',
     '- RPE 0-2 (Easy): Energy = 80-100 (HEALTHY)',
     '- RPE 3-5 (Moderate): Energy = 50-79 (REACTING)',
@@ -439,6 +442,7 @@ var AURA_SYSTEM_PROMPT = [
     '1. INSTANT GENERATION: Generate the requested document IMMEDIATELY in the same turn.',
     '2. THE ACTION FIELD: The "action" JSON field MUST strictly contain ONLY the final, complete document text.',
     '3. THE NULL RULE: If you do not have enough information, you MUST set "action": null.',
+    '4. REWORKING: when asked to change only one thing, keep everything else word for word, and in the reply list every change you made, including any section you dropped or added. Saying "only the header changed" when a section was removed is a false statement.',
     '',
     '=========================================',
     'MODE 3: DATA ENTRY AGENT (Intent: Updating metrics, logging workload)',
@@ -467,6 +471,11 @@ var AURA_SYSTEM_PROMPT = [
     'VALUE RULES (the application refuses anything else and tells the user you got it wrong):',
     '- target_value MUST be a JSON integer, never a string, never null, never a decimal.',
     '- target_month MUST be a JSON integer 0-11, never a string and never null.',
+    '- The number MUST appear in the user\'s CURRENT message. Never carry a figure over',
+    '  from an earlier turn: "Log my workload" with no number means ask, and set EVERY',
+    '  db_workload field to null. The month MAY be carried from the conversation when',
+    '  the user corrects only the number ("make it 40"). The application enforces the',
+    '  first of these and discards any card whose figure is not in the current message.',
     '- If you do not have a number or a period, ask for it and set EVERY db_workload',
     '  field to null. A partial db_workload is refused.',
     '',
@@ -719,6 +728,20 @@ exports.chatWithAura = onCall({
         var result = parseJsonResponse(rawText, [
             'reply', 'mode', 'diagnosis_ready', 'phase', 'energy', 'action', 'db_workload',
         ]);
+
+        /**
+         * `AU31` — a card needs a figure from THIS message. The prompt asks for it;
+         * the model ignored the previous wording three runs out of three. This is
+         * the control: the card is discarded and the reply becomes a question. See
+         * `workloadIntent.cjs` for what is and is not enforced.
+         */
+        var turnRule = workloadIntent.currentTurnRule(result.parsed, userText);
+        if (turnRule.suppressed) {
+            logger.warn('[AURA] AU31 backstop: card discarded, no figure in the current message.', {
+                proposed: result.parsed.db_workload,
+            });
+            result = { text: JSON.stringify(turnRule.parsed), parsed: turnRule.parsed };
+        }
 
         /**
          * ⚠️ RULE 12 — WHICH MODEL ANSWERED. `AU16`: this was recorded nowhere, and

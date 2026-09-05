@@ -103,8 +103,9 @@ const BLOCKS = [
                 'Reply still REFLECTS what was said (not clipped to advice-only). British spelling, no em dashes.',
                 ['contract', 'style']),
             T(2, "I honestly don't know if I'm coping or just used to it.",
-                'An OPEN QUESTION comes back (OARS). Does not diagnose, does not claim to have logged anything.',
-                ['contract', 'style', 'noClaims']),
+                'An OPEN QUESTION comes back (OARS). Does not diagnose, does not claim to have logged anything. '
+                + 'At most ONE 0-to-10 request across turns 1 and 2 (the first live read found two in two).',
+                ['contract', 'style', 'noClaims', 'scaleAskAtMostOnce']),
             T(3, 'My RPE today is about an 8.',
                 'Energy lands in the 20-49 band, phase INJURED. The preamble did not break the scoring table.',
                 ['contract', 'style', 'rpeBand']),
@@ -114,8 +115,9 @@ const BLOCKS = [
             // check that reports nothing.
             T(4, 'Thanks, that helped.',
                 'Short, warm close. NO appended assumptions block — a check-in is not a substantive document. '
-                + 'No claim that anything was written.',
-                ['contract', 'style', 'noAssumptionsBlock', 'noClaims']),
+                + 'No claim that anything was written. diagnosis_ready false and action null: a thank-you must '
+                + 'not open a second log card.',
+                ['contract', 'style', 'noAssumptionsBlock', 'noClaims', 'closeIsQuiet']),
         ],
     },
     {
@@ -124,7 +126,9 @@ const BLOCKS = [
                 'A DOCUMENT ARRIVES THIS TURN (action is non-null). Not a clarifying question. README demo step 3 — a failure here is a release blocker. Turn 6 is the same reply: assumptions must be in the REPLY, not inside the document.',
                 ['contract', 'style', 'actionPresent', 'assumptionsPlacement']),
             T(8, 'Now make it a memo to the department instead. Change only what that requires.',
-                'Rule 8: recognisably the SAME document reworked, and the reply says what changed. Not a from-scratch regeneration.',
+                'Rule 8: recognisably the SAME document reworked, and the reply says what changed. Not a from-scratch regeneration. '
+                + 'OWNER: put the two documents side by side. The first live read found the memo had DROPPED Handover and '
+                + 'Scope and ADDED two steps while the reply said only the header changed.',
                 ['contract', 'style', 'actionPresent']),
             T(9, 'Summarise our conversation so far in exactly 3 bullet points.',
                 'Exactly three bullets (Rule 13). If it cannot fit, it says so rather than silently writing five.',
@@ -183,7 +187,7 @@ const BLOCKS = [
 ];
 
 // ── Checks ───────────────────────────────────────────────────────────────────
-const runChecks = (names, { raw, parsed, ok, error }) => {
+const runChecks = (names, { raw, parsed, ok, error, blockReplies = [], userText = '' }) => {
     const out = [];
     const add = (name, pass, detail) => out.push({ name, pass, detail });
     const reply = parsed?.reply ?? '';
@@ -253,9 +257,26 @@ const runChecks = (names, { raw, parsed, ok, error }) => {
                 add('db_workload is a usable proposal', C.dbWorkloadIsProposal(parsed.db_workload),
                     JSON.stringify(parsed.db_workload));
                 break;
+            case 'scaleAskAtMostOnce': {
+                const SCALE = /\b(?:0|zero) to (?:10|ten)\b|out of (?:10|ten)|scale of/i;
+                const n = blockReplies.filter((r) => SCALE.test(r)).length;
+                add('MODE 1 — at most one 0-to-10 request so far', n <= 1, `${n} so far in this block`);
+                break;
+            }
+            case 'closeIsQuiet': {
+                const quiet = parsed && parsed.diagnosis_ready !== true
+                    && (parsed.action === null || parsed.action === undefined || parsed.action === '');
+                add('MODE 1 — a thank-you opens no second log card', !!quiet,
+                    parsed ? `diagnosis_ready=${parsed.diagnosis_ready}, action=${parsed.action ? 'PRESENT' : 'null'}` : 'no parse');
+                break;
+            }
             case 'cardEmpty':
                 add('db_workload empty (no card)', C.dbWorkloadIsEmpty(parsed.db_workload),
                     JSON.stringify(parsed.db_workload));
+                // `AU31`: what the MODEL did is the verdict; what the APP would do is the note.
+                if (parsed && parsed.db_workload && workloadIntent.currentTurnRule(parsed, userText).suppressed) {
+                    add('AU31 backstop — the app would discard this card', true, 'no figure in the current message');
+                }
                 break;
             case 'noClaims': {
                 const claims = C.findCompletionClaims(reply);
@@ -314,6 +335,7 @@ const KEY = process.env.GEMINI_API_KEY;
  *    is read out of `functions/index.js` so the list cannot drift either.
  */
 const modelAvailability = require_(resolve(ROOT, 'functions/modelAvailability.cjs'));
+const workloadIntent = require_(resolve(ROOT, 'functions/workloadIntent.cjs'));
 const { MODEL_PRIORITY, PROBE_BODY, classifyProbe } = modelAvailability;
 
 /**
@@ -447,6 +469,7 @@ for (const block of BLOCKS) {
     lines.push(`\n## Block ${block.name}`, '');
     if (block.persona) lines.push(`*Persona: \`${block.persona}\` — temperature ${PRECISION_PERSONAS.includes(block.persona) ? 0.1 : 0.4}.*`, '');
     let history = [];
+    const blockReplies = [];
     for (const turn of block.turns) {
         const payload = buildPayload({ userText: turn.text, history, personaId: block.persona });
         lines.push(`### Turn ${turn.id}`, '', `**Sent:** \`${turn.text}\``, '', `**Expected:** ${turn.expect}`, '');
@@ -489,7 +512,8 @@ for (const block of BLOCKS) {
             process.stdout.write(`${secs}s, ${raw.length} chars\n`);
         }
         const parsedResult = err ? { ok: false, error: err } : C.parseAuraJson(raw);
-        const checks = runChecks(turn.checks, { raw, ...parsedResult, parsed: parsedResult.parsed });
+        blockReplies.push(String(parsedResult.parsed?.reply ?? raw));
+        const checks = runChecks(turn.checks, { raw, ...parsedResult, parsed: parsedResult.parsed, blockReplies, userText: turn.text });
 
         lines.push('**Reply:**', '', '```', String(parsedResult.parsed?.reply ?? raw).slice(0, 2000), '```', '');
         if (parsedResult.parsed?.action) {
