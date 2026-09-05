@@ -178,8 +178,14 @@ describe('resolveModel wires the probe in (AU30 + AU16)', () => {
 
     it('a quota refusal at probe time demotes — the registry is TTL-bounded now', () => {
         const probe = src.slice(src.indexOf('async function modelAnswers'), src.indexOf('let modelResolutionPromise'));
-        expect(probe).toContain('modelQuota.isQuotaExhausted(');
-        expect(probe.indexOf('isQuotaExhausted')).toBeLessThan(probe.indexOf('classifyProbe'));
+        // Match the CALLS, not the words: the comment above the quota check
+        // names `classifyProbe` first, and a bare-word search read the prose
+        // as code and failed a correct file (`AC5`, the day it shipped).
+        const quotaCall = probe.indexOf('modelQuota.isQuotaExhausted(');
+        const probeCall = probe.indexOf('modelAvailability.classifyProbe(');
+        expect(quotaCall).toBeGreaterThan(-1);
+        expect(probeCall).toBeGreaterThan(-1);
+        expect(quotaCall).toBeLessThan(probeCall);
     });
 
     it('the list and the fallback come from the shared module, not a second copy', () => {
