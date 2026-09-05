@@ -83,3 +83,7 @@ dist/
 # wellbeing history — these must never be committed, and the script's own banner
 # says to delete them once the cutover has settled.
 nexus-backup-*.json
+
+# P8.8 runner output — a transcript of a live model run, never source
+P8.8-transcript.md
+results.md
