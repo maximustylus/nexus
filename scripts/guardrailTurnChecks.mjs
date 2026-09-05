@@ -100,16 +100,47 @@ export const citationsMarkedRecalled = (text) =>
     /model[- ]recalled|unverified|not verified|cannot verify|check the source/i.test(String(text ?? ''));
 
 /** P7: the model must not claim the write happened. It proposes; a person clicks. */
+/**
+ * ⚠️ THIS LIST IS THE CHECK. A verb missing from it is a claim that passes.
+ *    The first live run proved it: turn 4 replied *"I have noted your energy
+ *    levels for today"* and nothing fired, because `noted` was not here and
+ *    `i have recorded` was absent while `i've recorded` was present. A
+ *    contraction-only entry is half a check.
+ */
 export const CLAIMED_ACTION = Object.freeze([
     "i've logged", 'i have logged', "i've saved", 'i have saved', "i've updated",
-    'i have updated', "i've recorded", 'has been logged', 'has been saved',
-    'has been recorded', 'successfully logged', 'successfully saved',
+    'i have updated', "i've recorded", 'i have recorded', "i've noted", 'i have noted',
+    "i've entered", 'i have entered', "i've added", 'i have added',
+    "i've stored", 'i have stored', "i've filed", 'i have filed',
+    'has been logged', 'has been saved', 'has been recorded', 'has been noted',
+    'has been updated', 'has been entered',
+    'successfully logged', 'successfully saved', 'successfully recorded',
 ]);
 export const findCompletionClaims = (text) => {
     const lower = String(text ?? '').toLowerCase();
     return CLAIMED_ACTION.filter((p) => lower.includes(p));
 };
 
-/** P1 placement: the assumptions block belongs in the reply, never in `action`. */
-export const mentionsAssumptionsBlock = (text) =>
-    /assumptions,?\s*gaps\s*and\s*unverified|none declared/i.test(String(text ?? ''));
+/**
+ * P1 placement: the declaration belongs in the reply, never in `action`.
+ *
+ * ⚠️ MATCH THE RULE, NOT A FORMAT THE RULE NEVER ASKED FOR. This tested for the
+ *    literal heading "Assumptions, gaps and unverified items" and failed turn 5
+ *    of the first live run, where the model wrote *"based on the assumption of a
+ *    standard outpatient clinic setting ... There are gaps regarding ... Please
+ *    review and amend these unverified items"* — which is precisely what P1 asks
+ *    for, in prose. The heading is required in the SMART REPORT, which has a
+ *    dedicated `assumptions` field (`functions/index.js`); the chat preamble asks
+ *    only that the declaration be made, and in the reply.
+ *
+ *    Two distinct markers are required so a single incidental "gaps" in ordinary
+ *    prose is not read as a declaration.
+ */
+export const ASSUMPTION_MARKERS = Object.freeze([
+    /assumption/i, /\bassumed\b/i, /\bgaps?\b/i, /unverified/i, /placeholders?/i,
+]);
+export const mentionsAssumptionsBlock = (text) => {
+    const t = String(text ?? '');
+    if (/none declared/i.test(t)) return true;
+    return ASSUMPTION_MARKERS.filter((re) => re.test(t)).length >= 2;
+};

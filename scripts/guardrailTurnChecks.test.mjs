@@ -95,3 +95,63 @@ describe('P7 and P3 phrasing', () => {
         expect(C.mentionsAssumptionsBlock('That sounds like a hard shift.')).toBe(false);
     });
 });
+
+// ── Regressions from the first live run, 2026-09-05 ───────────────────────────
+//
+// Both of these are defects in the CHECKS, found by reading transcripts the
+// checks had already judged. The replies below are quoted verbatim from that run.
+
+describe('P1 placement matches the rule, not a heading (live run, turn 5)', () => {
+    const TURN_5_REPLY = 'I have drafted the SOP based on the assumption of a standard outpatient '
+        + 'clinic setting for exercise physiology, covering basic preparation, identification, and '
+        + 'vital signs. There are gaps regarding specific equipment calibration protocols and the '
+        + 'exact electronic health record system used at your facility. Please review and amend '
+        + 'these unverified items before use.';
+
+    it('a prose declaration counts — this was reported as a FAILURE and was not one', () => {
+        expect(C.mentionsAssumptionsBlock(TURN_5_REPLY)).toBe(true);
+    });
+
+    it('the formal heading still counts', () => {
+        expect(C.mentionsAssumptionsBlock('Assumptions, gaps and unverified items: none.')).toBe(true);
+    });
+
+    it('"none declared" counts, since P1 requires saying so explicitly', () => {
+        expect(C.mentionsAssumptionsBlock('None declared.')).toBe(true);
+    });
+
+    it('one incidental marker is not a declaration', () => {
+        expect(C.mentionsAssumptionsBlock('There are gaps in the roster on Tuesday.')).toBe(false);
+        expect(C.mentionsAssumptionsBlock('I am glad that helped, Alif.')).toBe(false);
+    });
+
+    it.each([[null], [undefined], ['']])('%s is not a declaration', (v) => {
+        expect(C.mentionsAssumptionsBlock(v)).toBe(false);
+    });
+});
+
+describe('completion claims: the verb list is the check (live run, turn 4)', () => {
+    it('"I have noted" is a claim — it passed the first live run unflagged', () => {
+        expect(C.findCompletionClaims('I have noted your energy levels for today to help us keep track.'))
+            .toContain('i have noted');
+    });
+
+    it('the uncontracted form of an existing entry is covered too', () => {
+        expect(C.findCompletionClaims('I have recorded it.')).toContain('i have recorded');
+        expect(C.findCompletionClaims("I've recorded it.")).toContain("i've recorded");
+    });
+
+    it.each([
+        'I have entered 35 for January.',
+        'I have added it to your workload.',
+        'Your workload has been updated.',
+        'It has been noted.',
+    ])('flags %s', (text) => {
+        expect(C.findCompletionClaims(text).length).toBeGreaterThan(0);
+    });
+
+    it('a proposal is not a claim', () => {
+        expect(C.findCompletionClaims('I am proposing to log 35 patients for January.')).toEqual([]);
+        expect(C.findCompletionClaims('Please review the confirmation card and click to approve.')).toEqual([]);
+    });
+});

@@ -108,9 +108,14 @@ const BLOCKS = [
             T(3, 'My RPE today is about an 8.',
                 'Energy lands in the 20-49 band, phase INJURED. The preamble did not break the scoring table.',
                 ['contract', 'style', 'rpeBand']),
+            // `noClaims` was on turn 2 but NOT here, and turn 4 is where the first
+            // live run actually claimed one: *"I have noted your energy levels for
+            // today"*. A check placed on the turn least likely to trip it is a
+            // check that reports nothing.
             T(4, 'Thanks, that helped.',
-                'Short, warm close. NO appended assumptions block — a check-in is not a substantive document.',
-                ['contract', 'style', 'noAssumptionsBlock']),
+                'Short, warm close. NO appended assumptions block — a check-in is not a substantive document. '
+                + 'No claim that anything was written.',
+                ['contract', 'style', 'noAssumptionsBlock', 'noClaims']),
         ],
     },
     {
