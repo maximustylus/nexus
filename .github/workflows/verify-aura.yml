@@ -1,0 +1,85 @@
+# P8.8 in the cloud: the twenty-turn guardrail runner, triggered by hand from the
+# Actions tab (or a phone), with the key fetched from Secret Manager so nobody has
+# to be at a terminal. The transcript is uploaded as an artifact and rendered in
+# the run's summary page; the mechanical verdict is printed to the log.
+#
+# What this does NOT do: sign the OWNER VERDICT lines. A green run here is the
+# floor, not the read.
+name: Verify AURA turns (P8.8)
+'on':
+  workflow_dispatch:
+    inputs:
+      limit:
+        description: 'Run only the first N turns (blank = all 18)'
+        required: false
+        default: ''
+      model:
+        description: 'Force a model id, e.g. models/gemini-3.1-pro-preview (blank = resolve)'
+        required: false
+        default: ''
+
+permissions:
+  contents: read
+
+jobs:
+  turns:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      # The runner uses only Node built-ins and repo files — no npm install.
+
+      - name: Fetch the Gemini key
+        env:
+          GCP_SA_KEY: '${{ secrets.FIREBASE_SERVICE_ACCOUNT }}'
+          ACTIONS_SECRET: '${{ secrets.GEMINI_API_KEY }}'
+        run: |
+          set -euo pipefail
+          if [ -n "${ACTIONS_SECRET}" ]; then
+            KEY="${ACTIONS_SECRET}"
+            echo "key source: GitHub Actions secret GEMINI_API_KEY"
+          else
+            printf '%s' "${GCP_SA_KEY}" > /tmp/sa.json
+            gcloud auth activate-service-account --key-file=/tmp/sa.json --quiet
+            KEY="$(gcloud secrets versions access latest --secret=GEMINI_API_KEY --project=idc-app-e0c59)"
+            rm -f /tmp/sa.json
+            echo "key source: Secret Manager (idc-app-e0c59/GEMINI_API_KEY, latest)"
+          fi
+          if [ -z "${KEY}" ]; then echo "no key obtained"; exit 1; fi
+          echo "::add-mask::${KEY}"
+          echo "GEMINI_API_KEY=${KEY}" >> "$GITHUB_ENV"
+
+      - name: Run the turns
+        env:
+          LIMIT: '${{ inputs.limit }}'
+          MODEL: '${{ inputs.model }}'
+        run: |
+          set -euo pipefail
+          ARGS="--out=results.md"
+          if [ -n "${LIMIT}" ]; then ARGS="${ARGS} --limit=${LIMIT}"; fi
+          if [ -n "${MODEL}" ]; then ARGS="${ARGS} --model=${MODEL}"; fi
+          node scripts/verify-guardrail-turns.mjs ${ARGS}
+
+      - name: Mechanical verdict
+        if: always()
+        run: |
+          echo "=== turns and failures ==="
+          grep -n "### Turn\|❌" results.md || true
+          echo "=== tail ==="
+          tail -3 results.md
+
+      - name: Render the transcript in the run summary
+        if: always()
+        run: cat results.md >> "$GITHUB_STEP_SUMMARY"
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: P8.8-results
+          path: results.md
+          retention-days: 30

@@ -288,3 +288,38 @@ describe('AU20 — temperature is keyed on the persona id, not on prompt substri
         expect(dflt).toBeLessThan(0.7);
     });
 });
+
+// ── P8.8 read, 2026-09-05 — four lines the live turns asked for ───────────────
+//
+// Presence only. Each of these is a request to the model; `AU31` also has a
+// control (`workloadIntent.cjs`), the other three have the harness watching.
+
+describe('the four prompt lines from the first live read', () => {
+    it('MODE 3: the figure must be in the CURRENT message (AU31)', () => {
+        expect(AURA_PROMPT).toMatch(/number MUST appear in the user\\'s CURRENT message/); // raw source: user\'s
+        expect(AURA_PROMPT).toMatch(/Never carry a figure over/);
+        expect(AURA_PROMPT).toMatch(/month MAY be carried/);
+    });
+
+    it('MODE 1: at most one scale question, and only after an open one (turn 2)', () => {
+        expect(AURA_PROMPT).toMatch(/ONE SCALE QUESTION PER CHECK-IN/);
+        expect(AURA_PROMPT).toMatch(/A rating request is a closed question/);
+    });
+
+    it('MODE 1: a closing pleasantry does not claim a save (AU32)', () => {
+        expect(AURA_PROMPT).toMatch(/CLOSING: when the user thanks you/);
+        expect(AURA_PROMPT).toMatch(/do not say that anything has been saved, noted or recorded/);
+        expect(AURA_PROMPT).toMatch(/"diagnosis_ready": false and "action": null/);
+    });
+
+    it('MODE 2: a delivered document declares BOTH halves of P1 (turn 5, 2 of 4 runs half-declared)', () => {
+        expect(AURA_PROMPT).toMatch(/5\. DECLARE BOTH HALVES:/);
+        expect(AURA_PROMPT).toMatch(/Naming assumptions and staying silent on gaps is half a declaration/);
+        expect(AURA_PROMPT).toMatch(/"no gaps or unverified items"/);
+    });
+
+    it('MODE 2: a rework lists every change, including what was dropped (turn 8)', () => {
+        expect(AURA_PROMPT).toMatch(/4\. REWORKING:/);
+        expect(AURA_PROMPT).toMatch(/including any section you dropped or added/);
+    });
+});
