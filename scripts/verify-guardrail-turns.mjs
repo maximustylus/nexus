@@ -229,8 +229,24 @@ const runChecks = (names, { raw, parsed, ok, error }) => {
                 break;
             }
             case 'threeBullets': {
-                const n3 = C.countBullets(reply);
-                add('Rule 13 — exactly 3 bullets', n3 === 3, `${n3} counted`);
+                /**
+                 * ⚠️ RULE 13 GOVERNS THE ANSWER, NOT THE FIELD IT LANDS IN. This
+                 *    counted the reply only, and reported `0 counted` for a turn
+                 *    whose three bullets were sitting in `action` — correctly
+                 *    formatted, correctly numbered. The model had simply put the
+                 *    list in the document this run and in the reply the run
+                 *    before; the rule is indifferent, so the check must be too.
+                 *
+                 *    Reply first, document as the fallback: a list in both would
+                 *    otherwise sum to six and fail for the wrong reason. WHERE it
+                 *    landed is reported, because moving a chat summary into a
+                 *    downloadable document is a judgement the owner should see.
+                 */
+                const inReply = C.countBullets(reply);
+                const inDoc = C.countBullets(action);
+                const n3 = inReply || inDoc;
+                add('Rule 13 — exactly 3 bullets', n3 === 3,
+                    `${n3} counted (reply ${inReply}, document ${inDoc})`);
                 break;
             }
             case 'cardProposal':

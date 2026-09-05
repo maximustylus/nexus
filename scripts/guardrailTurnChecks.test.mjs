@@ -155,3 +155,36 @@ describe('completion claims: the verb list is the check (live run, turn 4)', () 
         expect(C.findCompletionClaims('Please review the confirmation card and click to approve.')).toEqual([]);
     });
 });
+
+describe('Rule 13 counts bullets wherever they landed (live run, turn 9)', () => {
+    // Verbatim from the second live run. Three correctly formatted bullets, in
+    // `action` rather than the reply, reported as "0 counted".
+    const TURN_9_DOC = [
+        '• Provided a draft one-page Standard Operating Procedure for the patient rooming workflow.',
+        '• Provided a revised draft of the document in a departmental memo format.',
+        '• Included bracketed placeholders for local policies requiring your verification.',
+    ].join('\n');
+    const TURN_9_REPLY = 'I assumed this summary is for your personal reference and requires no '
+        + 'formal approval route. There are no gaps or unverified items in this summary.';
+
+    it('counts the three bullets in the document', () => {
+        expect(C.countBullets(TURN_9_DOC)).toBe(3);
+    });
+
+    it('the reply on its own has none — which is why the check read zero', () => {
+        expect(C.countBullets(TURN_9_REPLY)).toBe(0);
+    });
+
+    it.each([
+        ['hyphens', '- one\n- two\n- three'],
+        ['asterisks', '* one\n* two\n* three'],
+        ['numbered with dots', '1. one\n2. two\n3. three'],
+        ['numbered with brackets', '1) one\n2) two\n3) three'],
+    ])('counts %s', (_label, text) => {
+        expect(C.countBullets(text)).toBe(3);
+    });
+
+    it('prose is not a bullet list', () => {
+        expect(C.countBullets('First we did this, then that, then the other.')).toBe(0);
+    });
+});
