@@ -268,6 +268,15 @@ const args = process.argv.slice(2);
 const dryRun = args.includes('--dry-run');
 const outPath = (args.find((a) => a.startsWith('--out=')) || '--out=P8.8-transcript.md').slice(6);
 const modelOverride = (args.find((a) => a.startsWith('--model=')) || '').slice(8);
+
+/**
+ * `--limit=N` runs the first N turns and stops. Not a shortcut for the read — a
+ * partial run proves nothing about the guardrails and the footer says so — but a
+ * sixty-second answer to "is this configured correctly at all?", which is the
+ * question that had the operator waiting blind through eighteen slow turns.
+ */
+const limitArg = (args.find((a) => a.startsWith('--limit=')) || '').slice(8);
+const LIMIT = limitArg ? Math.max(1, Number.parseInt(limitArg, 10) || 1) : Infinity;
 const KEY = process.env.GEMINI_API_KEY;
 
 /**
@@ -400,6 +409,19 @@ const lines = [
 
 let failures = 0;
 let firstError = null;
+
+/**
+ * ⚠️ A LONG SILENT RUN IS INDISTINGUISHABLE FROM A HUNG ONE. This loop printed
+ *    nothing between `Model resolved:` and `RUN complete`, so eighteen turns
+ *    against a slow reasoning model — minutes of nothing — read to the operator
+ *    as a crash, and the honest response to that is to kill it. Every turn now
+ *    announces itself before the call and reports its own latency after, so
+ *    waiting is a decision rather than a guess.
+ */
+const TOTAL_TURNS = Math.min(BLOCKS.reduce((n, b) => n + b.turns.length, 0), LIMIT);
+let turnsDone = 0;
+if (!dryRun) console.log(`Running ${TOTAL_TURNS} turns. A reasoning model takes ~20-90s each.\n`);
+
 for (const block of BLOCKS) {
     lines.push(`\n## Block ${block.name}`, '');
     if (block.persona) lines.push(`*Persona: \`${block.persona}\` — temperature ${PRECISION_PERSONAS.includes(block.persona) ? 0.1 : 0.4}.*`, '');
@@ -421,16 +443,29 @@ for (const block of BLOCKS) {
             continue;
         }
 
+        if (turnsDone >= LIMIT) {
+            lines.push('*(not run — `--limit` stopped the run here)*', '');
+            continue;
+        }
+
         let raw = '';
         let err = null;
+        turnsDone += 1;
+        const label = `[${String(turnsDone).padStart(2)}/${TOTAL_TURNS}] turn ${turn.id} (${block.name})`;
+        process.stdout.write(`${label} … `);
+        const startedAt = Date.now();
         try {
             raw = await callModel(payload);
         } catch (e) {
             err = e.message;
-            if (!firstError) {
-                firstError = err;
-                console.error(`\n⚠️  Turn ${turn.id} failed: ${err}\n`);
-            }
+            if (!firstError) firstError = err;
+        }
+        const secs = ((Date.now() - startedAt) / 1000).toFixed(1);
+        if (err) {
+            process.stdout.write(`FAILED after ${secs}s\n`);
+            console.error(`    ${err}`);
+        } else {
+            process.stdout.write(`${secs}s, ${raw.length} chars\n`);
         }
         const parsedResult = err ? { ok: false, error: err } : C.parseAuraJson(raw);
         const checks = runChecks(turn.checks, { raw, ...parsedResult, parsed: parsedResult.parsed });
