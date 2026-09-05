@@ -312,6 +312,12 @@ describe('the four prompt lines from the first live read', () => {
         expect(AURA_PROMPT).toMatch(/"diagnosis_ready": false and "action": null/);
     });
 
+    it('MODE 2: a delivered document declares BOTH halves of P1 (turn 5, 2 of 4 runs half-declared)', () => {
+        expect(AURA_PROMPT).toMatch(/5\. DECLARE BOTH HALVES:/);
+        expect(AURA_PROMPT).toMatch(/Naming assumptions and staying silent on gaps is half a declaration/);
+        expect(AURA_PROMPT).toMatch(/"no gaps or unverified items"/);
+    });
+
     it('MODE 2: a rework lists every change, including what was dropped (turn 8)', () => {
         expect(AURA_PROMPT).toMatch(/4\. REWORKING:/);
         expect(AURA_PROMPT).toMatch(/including any section you dropped or added/);
